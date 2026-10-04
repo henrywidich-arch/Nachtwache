@@ -1,17 +1,23 @@
 // Turns the raw ElevenLabs downloads into the game's sound set: picks the chosen variant,
 // trims silence, mixes one-shots to mono, evens out loudness and writes 16-bit WAVs.
+//   node tools/make_sounds.js <raw folder>[;<another raw folder>] <output folder> [--only=name,name]
+// With --only just the named sounds are built (a name also stands for its numbered variants).
 const fs = require('fs');
 const path = require('path');
 const wav = require('./wav_lib.js');
 
-const [rawDir, outDir] = process.argv.slice(2);
-const files = fs.readdirSync(rawDir).filter(f => f.toLowerCase().endsWith('.wav'));
+const [rawDirs, outDir] = process.argv.slice(2);
+const only = (process.argv.find(a => a.startsWith('--only=')) || '').slice(7).split(',').filter(Boolean);
+const files = [];
+for (const dir of rawDirs.split(';')) {
+  for (const f of fs.readdirSync(dir)) if (f.toLowerCase().endsWith('.wav')) files.push({ name: f, full: path.join(dir, f) });
+}
 
 // Raw files are named "<prompt start>_#<variant>-<timestamp>.wav".
 function find(prefix, variant, stamp) {
-  const hits = files.filter(f => f.startsWith(prefix) && f.includes(`_#${variant}-`) && (!stamp || f.includes(stamp)));
+  const hits = files.filter(f => f.name.startsWith(prefix) && f.name.includes(`_#${variant}-`) && (!stamp || f.name.includes(stamp)));
   if (hits.length === 0) throw new Error(`no raw file for ${prefix} #${variant}`);
-  return path.join(rawDir, hits.sort()[0]);
+  return hits.sort((a, b) => a.name < b.name ? -1 : 1)[0].full;
 }
 
 // One-pole filters are enough for gentle tone shaping; `poles` stacks them for a steeper slope.
@@ -118,6 +124,14 @@ function build(spec) {
       return out;
     });
   }
+  // Optional saturation: presses the loud start and the quieter body closer together, so
+  // the sound is denser at the same peak.
+  if (spec.drive) {
+    let top = 0;
+    for (const c of channels) top = Math.max(top, wav.peak(c));
+    const full = Math.tanh(spec.drive);
+    channels = channels.map(c => c.map(v => Math.tanh(v / top * spec.drive) / full * top));
+  }
   // Even loudness across the set, without ever clipping.
   const guide = channels.length === 1 ? channels[0] : channels[0].map((v, i) => (v + channels[1][i]) * 0.5);
   const level = loudness(guide, rate, spec.loop ? 1.0 : 0.2);
@@ -157,8 +171,30 @@ const SET = [
   { name: 'clear', from: 'Short_dark_military__', stereo: true, length: 1.2, fade: 0.25 },
   { name: 'shutter_open', from: 'Heavy_metal_roller_s_', stamp: '1791034009166', length: 1.5, fade: 0.1 },
   { name: 'shutter_close', from: 'Heavy_metal_roller_s_', stamp: '1791034035960', length: 1.5, fade: 0.1 },
+  // The grenade launcher: the loud shot with the hollow thump of a quieter take under it.
+  { name: 'launcher', mix: [
+    { from: 'Grenade_launcher_fir_', variant: 1, gain: 1.0 },
+    { from: 'Grenade_launcher_fir_', variant: 3, gain: 0.5, lowpass: 1400 }
+  ], length: 0.9, fade: 0.3, drive: 1.8, target: -9.5 },
   // Hazards
-  { name: 'explosion', from: 'Short_sharp_grenade__', length: 1.8, fade: 0.3 },
+  // A blast: a deep boom, cut down from a long roar to a hit that rolls away, with the
+  // sharp crack of a shot on top. The raw booms hold their full level for over a second.
+  { name: 'explosion_1', mix: [
+    { from: 'Big_explosion_outdoo_', variant: 1, gain: 1.0 },
+    { from: 'Grenade_launcher_fir_', variant: 4, gain: 1.3, highpass: 300 }
+  ], length: 2.6, decay: 3.2, hold: 0.06, fade: 0.5, target: -10 },
+  { name: 'explosion_2', mix: [
+    { from: 'Big_explosion_outdoo_', variant: 2, gain: 1.0 },
+    { from: 'Grenade_launcher_fir_', variant: 2, gain: 1.3, highpass: 300 }
+  ], length: 2.6, decay: 3.2, hold: 0.06, fade: 0.5, target: -10 },
+  { name: 'explosion_3', mix: [
+    { from: 'Big_explosion_outdoo_', variant: 3, gain: 1.0 },
+    { from: 'Grenade_launcher_fir_', variant: 4, gain: 0.55, highpass: 300 }
+  ], length: 2.6, decay: 3.2, hold: 0.06, fade: 0.5, target: -10 },
+  { name: 'explosion_4', mix: [
+    { from: 'Big_explosion_outdoo_', variant: 4, gain: 1.0 },
+    { from: 'Grenade_launcher_fir_', variant: 2, gain: 1.3, highpass: 300 }
+  ], length: 2.6, decay: 3.2, hold: 0.06, fade: 0.5, target: -10 },
   { name: 'pop_1', from: 'Wet_fleshy_pop,_slim_', variant: 1, length: 0.45 },
   { name: 'pop_2', from: 'Wet_fleshy_pop,_slim_', variant: 4, length: 0.4 },
   { name: 'fuse', from: 'Flesh_swelling_and_s_', length: 1.9, fade: 0.1 },
@@ -279,5 +315,6 @@ const SET = [
 ];
 
 fs.mkdirSync(outDir, { recursive: true });
-for (const spec of SET) build(spec);
-console.log(SET.length, 'sounds written to', outDir);
+const chosen = SET.filter(spec => only.length === 0 || only.some(name => spec.name === name || spec.name.startsWith(name + '_')));
+for (const spec of chosen) build(spec);
+console.log(chosen.length, 'sounds written to', outDir);

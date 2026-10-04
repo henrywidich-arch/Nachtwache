@@ -1560,10 +1560,18 @@ func _newer(game: Node3D) -> void:
 	# --- voices
 	var opening := Radio.pick("mission_start")
 	expect(str(opening.sound) != "" and ResourceLoader.exists(str(opening.sound)) and opening.name == "COLEMAN", "Coleman's radio lines are recorded")
+	# For this check only the first variant of the cue counts as recorded.
+	var horde: Array = Radio.LINES.round_horde[1]
+	var hidden: Array = []
+	for i in range(1, horde.size()):
+		hidden.append("%s%s/round_horde_%d.ogg" % [Radio.VOICE_FOLDER, str(Radio.LINES.round_horde[0]), i + 1])
+		Radio.known[hidden[-1]] = false
 	var same := true
 	for i in range(8):
-		same = same and str(Radio.pick("round_horde").text) == str(Radio.LINES.round_horde[1][0])
-	expect(same, "A cue with one recorded variant is never read from another one")
+		same = same and str(Radio.pick("round_horde").text) == str(horde[0])
+	for path in hidden:
+		Radio.known.erase(path)
+	expect(horde.size() > 1 and same, "A cue with one recorded variant is never read from another one")
 	expect(str(Radio.bark("viper", "reload").sound) != "" and str(Radio.bark("scorpion", "kill").sound) != "" and str(Radio.bark("cru", "contact").sound) != "" and Radio.bark("main", "reload").is_empty(), "The squad and the C.R.U. have recorded calls")
 	game.start_run()
 	game.radio_queue.clear()

@@ -86,6 +86,10 @@ func _ready() -> void:
 			AudioServer.set_bus_send(bus, "Master")
 	for title in VOLUMES:
 		set_volume(title, float(VOLUMES[title]))
+	# A blast, gunfire and voices at once add up to more than the output can carry: a
+	# limiter on everything turns the rest down for that moment instead of distorting.
+	if AudioServer.get_bus_effect_count(0) == 0:
+		AudioServer.add_bus_effect(0, AudioEffectHardLimiter.new())
 	# Rain and wind run through a low-pass so they sound muffled indoors; everything in
 	# the world shares a touch of reverb that tightens inside the house.
 	weather_filter = AudioServer.get_bus_effect(_bus("Weather", AudioEffectLowPassFilter.new()), 0) as AudioEffectLowPassFilter

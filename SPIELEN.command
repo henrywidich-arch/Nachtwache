@@ -5,6 +5,7 @@
 #   export GODOT="/Pfad/zu/Godot.app"
 # eingeben oder den Pfad unten in die Liste PLACES eintragen.
 # Beim ersten Start bereitet Godot die Spieldaten vor; das dauert ein paar Minuten.
+# Nach einem Update (neue Dateien im Ordner) liest Godot beim Start nur das Neue ein.
 #
 # Laesst sich die Datei nicht per Doppelklick starten ("keine Zugriffsrechte" oder
 # "nicht verifizierter Entwickler"): Terminal oeffnen und eingeben
@@ -92,11 +93,32 @@ if [ -z "$FOUND" ]; then
 fi
 
 echo "Godot: $FOUND"
+
+# Der Stand der Spieldaten: Groesse und Datum jeder Datei, die Godot einliest. Ist er ein
+# anderer als beim letzten Start (ein Update wurde geladen), liest Godot die neuen und
+# geaenderten Dateien vor dem Start ein - sonst fehlen sie im Spiel.
+STAMP_FILE="$GAME_DIR/.godot/nachtwache_stand"
+stamp() {
+  ls -lR "$GAME_DIR/assets" "$GAME_DIR/scripts" "$GAME_DIR/scenes" "$GAME_DIR/project.godot" 2>/dev/null \
+    | grep '^-' | grep -v '\.import$' | cksum
+}
+PREPARE=""
 if [ ! -d "$GAME_DIR/.godot/imported" ]; then
+  PREPARE="yes"
   echo
   echo "Erster Start: Die Spieldaten werden vorbereitet. Das dauert ein paar Minuten."
   echo "Bitte dieses Fenster offen lassen, das Spiel startet danach von selbst."
-  "$FOUND" --headless --path "$GAME_DIR" --import
+elif [ "$(stamp)" != "$(cat "$STAMP_FILE" 2>/dev/null)" ]; then
+  PREPARE="yes"
+  echo
+  echo "Neue Spieldaten gefunden: Godot liest sie ein. Das dauert einen Moment."
+  echo "Bitte dieses Fenster offen lassen, das Spiel startet danach von selbst."
+fi
+if [ -n "$PREPARE" ]; then
+  # Der Stand wird erst danach gemerkt: Bricht das Einlesen ab, holt es der naechste Start nach.
+  if "$FOUND" --headless --path "$GAME_DIR" --import; then
+    stamp > "$STAMP_FILE"
+  fi
 fi
 
 echo "Das Spiel startet. Dieses Fenster bleibt offen, solange du spielst."
