@@ -1247,6 +1247,38 @@ func _latest(game: Node3D) -> void:
 	var taken: bool = skills.rank("sweeper_damage") == 3 and not skills.ranks.has("nonsense")
 	skills.reset()
 	expect(taken and skills.value("reload") == 0.0 and player.reserve_cap("rifle") == 180 and game.profile.skills.is_empty(), "Switched off again, the abilities leave no trace; what the profile holds is checked before it is taken in")
+	# --- the M4A4 is the starting rifle: a model with a magazine and iron sights of its own
+	player.equip_weapon("rifle", true)
+	var m4: Node3D = player.weapon
+	var m4_gun: Dictionary = WeaponView.GUNS.rifle
+	var irons := m4.find_child("Sights", true, false) as Node3D
+	var over_irons: Vector3 = WeaponView.VIEWS.rifle.aim
+	var lined: bool = is_equal_approx(over_irons.y, -((m4_gun.mount as Vector3).y + float(m4_gun.irons))) and over_irons.x == 0.0
+	player.fit("rifle", "reddot")
+	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and WeaponView.sight_aim("rifle", "reddot").y > over_irons.y
+	player.fit("rifle", "reddot")
+	expect(str(Survivor.WEAPONS.rifle.label) == "M4A4" and m4.get_node_or_null("Magazine") != null and m4.get_node_or_null("Support") != null and irons != null and irons.visible and lined and folded and (WeaponView.reload_step("rifle", 0.38).magazine as Vector3).length() > 0.2 and Survivor.ATTACHMENTS.has("rifle"), "The starting rifle is the M4A4: its magazine leaves the gun, the eye looks through its iron sights, and they fold away under a fitted sight")
+	# --- five kinds of dead bodies, and model trees at the edge of the open yard
+	var kinds := {}
+	var complete := true
+	for x in range(40):
+		kinds[MissionDirector.corpse_at(Vector3(x * 0.5, 0, 20.0 + x * 1.5))] = true
+	for entry in MissionDirector.CORPSES:
+		complete = complete and ResourceLoader.exists(str(entry.scene)) and (entry.back as Vector3).y > 0.2 and (entry.case as Vector3).y > 0.15
+	var holder := Node3D.new()
+	game.add_child(holder)
+	var spot := Vector3.ZERO
+	for x in range(200):
+		if MissionDirector.CORPSES[MissionDirector.corpse_at(Vector3(x * 0.5, 0, 30.0))].has("loose"):
+			spot = Vector3(x * 0.5, 0, 30.0)
+	var anchors: Dictionary = game.mission._body(holder, spot)
+	var beside: bool = holder.get_node_or_null("Case") != null and anchors.has("loose") and absf((holder.get_node("Case") as Node3D).position.x - (anchors.case as Vector3).x) < 0.001
+	holder.queue_free()
+	expect(MissionDirector.CORPSES.size() == 5 and kinds.size() == 5 and complete and beside and not CabinMap.OUTER_FENCE and cabin.model_trees >= 60, "Five kinds of dead lie on the farm, the new ones with a case stood beside them; the yard has no fence, and %d trees at its edge are models" % cabin.model_trees)
+	# --- the machine gun
+	var owned: bool = player.unlock("mg")
+	var mg: Node3D = player.weapon
+	expect(owned and player.current_weapon == "mg" and player.ammo == 100 and player.max_reserve() == 400 and int(Survivor.WEAPONS.mg.slot) == int(Survivor.WEAPONS.minigun.slot) and Survivor.ORDER.has("mg") and str(Survivor.WEAPONS.mg.group) == "heavy" and mg.get_node_or_null("Magazine") != null and mg.find_child("Feed", true, false) != null and game.sounds.recorded.get("mg", false), "The machine gun carries a hundred rounds in its box and four boxes more, and shares its key with the minigun")
 	game.team_enabled = true
 	game.start_run()
 
@@ -1580,7 +1612,7 @@ func _kit(game: Node3D) -> void:
 	game.resume_run()
 	# --- the magazine really leaves the weapon
 	var half: Dictionary = WeaponView.reload_step("ump", 0.38)
-	expect((half.magazine as Vector3).length() > 0.2 and (WeaponView.reload_step("ump", 0.0).magazine as Vector3) == Vector3.ZERO and (WeaponView.reload_step("ump", 1.0).hand as Vector3) == Vector3.ZERO and (WeaponView.reload_step("ump", 0.83).hand as Vector3).length() > 0.05 and (WeaponView.reload_step("rifle", 0.4).magazine as Vector3) == Vector3.ZERO, "The magazine change has its steps: out, in, and a slap on the cocking handle")
+	expect((half.magazine as Vector3).length() > 0.2 and (WeaponView.reload_step("ump", 0.0).magazine as Vector3) == Vector3.ZERO and (WeaponView.reload_step("ump", 1.0).hand as Vector3) == Vector3.ZERO and (WeaponView.reload_step("ump", 0.83).hand as Vector3).length() > 0.05 and (WeaponView.reload_step("p90", 0.4).magazine as Vector3) == Vector3.ZERO, "The magazine change has its steps: out, in, and a slap on the cocking handle")
 	player.ammo = 4
 	player.start_reload()
 	var out_of_well := 0.0
@@ -1643,7 +1675,7 @@ func _kit(game: Node3D) -> void:
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and widest <= 9 and int(rows.weapons) == 5 and int(rows.mods) == 7, "The shop has six lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and widest <= 10 and int(rows.weapons) == 5 and int(rows.heavy) == 5 and int(rows.mods) == 10, "The shop has six lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")

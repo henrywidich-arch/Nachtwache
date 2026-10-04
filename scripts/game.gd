@@ -282,6 +282,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_gas_check")
+	elif "--scene-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_scene_check")
 	elif "--v9-check" in args:
 		check_mode = true
 		call_deferred("_run_v9_check")
@@ -2241,6 +2245,58 @@ func _run_blast_check() -> void:
 	print("BLAST_CAPTURE_COMPLETE")
 	get_tree().quit()
 
+## Screenshots of what stands and lies around: each kind of dead body (with its case and,
+## for two of them, the blinking tag of an errand), the trees at the edge of the yard, and
+## that edge without its fence.
+func _run_scene_check() -> void:
+	var folder := _capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	start_run()
+	set_process(false)
+	hud.banner_left = 0
+	hud.radio_left = 0
+	mission.plain()
+	preparation_left = 9999.0
+	var south := Vector3(0, 0, 13.0)
+	# One place for each kind of body: the kind follows from where it lies.
+	var places: Array = []
+	for kind in range(MissionDirector.CORPSES.size()):
+		for step in range(400):
+			var pos := south + Vector3(-6.0 + kind * 3.0 + (step % 20) * 0.5, 0, 6.0 + int(step / 20.0) * 0.5)
+			if MissionDirector.corpse_at(pos) == kind:
+				var apart := true
+				for other in places:
+					apart = apart and (other as Vector3).distance_to(pos) > 2.4
+				if apart:
+					places.append(pos)
+					break
+	var yaws: Array = []
+	for place in places:
+		yaws.append(PI * 0.5)
+	mission.lay_bodies(places, yaws)
+	mission._sync_props()
+	print("SCENE bodies: %d of %d kinds, model trees: %d" % [places.size(), MissionDirector.CORPSES.size(), cabin.model_trees])
+	var lamp := OmniLight3D.new()
+	lamp.light_energy = 1.4
+	lamp.omni_range = 6.0
+	add_child(lamp)
+	for i in range(places.size()):
+		var place: Vector3 = places[i]
+		lamp.global_position = place + Vector3(0.6, 2.2, -0.8)
+		await _capture_from(folder, "scene_corpse_%d.png" % (i + 1), place + Vector3(1.9, 2.3, -1.9), place + Vector3(0, 0.15, 0.1), 50.0)
+	lamp.queue_free()
+	# Two of them carry what an errand asks for: the tag blinks on the lid of the case.
+	mission._start_task("samples")
+	mission._sync_props()
+	await _shot_at(folder, "scene_corpses_errand.png", south + Vector3(0.0, 0, 1.5), south + Vector3(0.5, 0.2, 7.5), 0.9)
+	mission.clear()
+	# The edge of the yard, where the fence stood, and the trees beyond it.
+	await _shot_at(folder, "scene_edge_south.png", Vector3(-12.0, 0, 38.0), Vector3(-20.0, 3.0, 60.0), 1.0)
+	await _shot_at(folder, "scene_edge_west.png", Vector3(-34.0, 0, 8.0), Vector3(-60.0, 4.0, 2.0), 0.8)
+	await _shot_at(folder, "scene_trees_from_house.png", Vector3(0, 0, 11.0), Vector3(14.0, 5.0, 60.0), 0.8)
+	print("SCENE_CAPTURE_COMPLETE")
+	get_tree().quit()
+
 ## Screenshots of the gas: a bank in the yard as it spreads (from the ground, from above
 ## and from inside), gas over a side of the yard, the edge beyond the fence, a gas grenade's
 ## cloud and the flooded ground floor. Then the launcher's arc while it is aimed.
@@ -2376,6 +2432,8 @@ func _run_gun_check() -> void:
 		foe.position = Vector3((gap - 20.0) * 0.12, 0.05, 12.5 + gap)
 		foe.rotation.y = 0.0
 	var looks := [["1_plain", []], ["2_reddot", ["reddot"]], ["3_scope", ["scope"]], ["4_silencer", ["scope", "reddot", "silencer"]]]
+	if not Survivor.ATTACHMENTS.has(id):
+		looks = [["1_plain", []]]
 	for entry in looks:
 		for part in entry[1]:
 			player.fit(id, str(part))
@@ -2389,11 +2447,13 @@ func _run_gun_check() -> void:
 	player.ammo = 3
 	player.start_reload()
 	var waits := [0.2, 0.25, 0.28, 0.38, 0.33, 0.24, 0.16, 0.16]
+	# The moments are those of a reload of two and a half seconds.
+	var pace: float = float(Survivor.WEAPONS[id].reload_time) / 2.5
 	for i in range(waits.size()):
-		await get_tree().create_timer(float(waits[i])).timeout
+		await get_tree().create_timer(float(waits[i]) * pace).timeout
 		await _capture(folder, "%s_5_reload_%d.png" % [id, i + 1])
-	await get_tree().create_timer(0.9).timeout
-	print("SHOT gun=%s ammo=%d sound=%s parts=%s" % [id, player.ammo, str(player.gun().sound), str(player.inventory[id].fitted)])
+	await get_tree().create_timer(0.9 * pace).timeout
+	print("SHOT gun=%s ammo=%d sound=%s parts=%s" % [id, player.ammo, str(player.gun().sound), str(player.inventory[id].get("fitted", {}))])
 	print("GUN_CAPTURE_COMPLETE")
 	get_tree().quit()
 

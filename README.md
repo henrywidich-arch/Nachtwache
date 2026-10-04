@@ -25,8 +25,8 @@ Die Hauptszene ist `scenes/main.tscn`. Die Karte wird von `scripts/cabin.gd` erz
 | Leertaste | Springen |
 | E | Station / Waffenshop benutzen, Teammitglied, Mitspieler oder Nadja aufhelfen |
 | F | Taschenlampe |
-| 1 / 2 / 3 / 4 / Mausrad | Sturmgewehr und AK-47 (die **1** wechselt zwischen beiden) / P90 und UMP45 (die **2** wechselt) / Honey Badger / Schrotflinte. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
-| 5 / 6 / 7 / 8 / 9 / 0 | Pistole / Magnum / Auto-Schrotflinte / Scharfschützengewehr / Granatwerfer / Minigun (alle aus dem Shop) |
+| 1 / 2 / 3 / 4 / Mausrad | M4A4 und AK-47 (die **1** wechselt zwischen beiden) / P90 und UMP45 (die **2** wechselt) / Honey Badger / Schrotflinte. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
+| 5 / 6 / 7 / 8 / 9 / 0 | Pistole / Magnum / Auto-Schrotflinte / Scharfschützengewehr / Granatwerfer / Maschinengewehr und Minigun (die **0** wechselt) – alle aus dem Shop |
 | X / C / V | Befehl an das Team: Position halten / bei mir bleiben / frei bewegen |
 | G / T / B | Splittergranate / Blendgranate / Claymore (aus dem Shop). Granaten: **Taste halten** zeigt die Flugbahn und wo sie aufschlägt, **loslassen** wirft. Kurz antippen wirft sofort. Mit einer Granate in der Hand kannst du nicht schießen |
 | E halten | Auftragsgegenstand benutzen (Code bergen, Generator starten, Sicherung, Kiste, Hack-Modul anbringen oder neu starten) |
@@ -54,7 +54,7 @@ Unter dem Hof liegt ein geheimes Labor der **Helix Corporation** – des Konzern
 
 Die Nacht dauert damit acht oder neun Runden (neun, wenn ein früher Auftrag misslingt); die letzte zählt für die Bestenliste immer als Runde 10. Ohne die Geschichte (Karten ohne Labor, automatische Tests) bleibt es bei zehn Runden bis zum Helikopter.
 
-Die Infizierten kommen aus dem Gas durch die Lücken im Zaun – immer von der Seite des Hofs, auf der du gerade bist – und dringen durch **Vordertür, Hintertür, Seitentür und das Loch in der Küchenwand** ins Haus ein (durch die Seitentür erst, wenn das Kaminzimmer offen ist). Über die **Treppe im Haus** und die **Außentreppe zum Balkon** kommen sie auch ins Obergeschoss, sobald es offen ist. Durch Fenster und über Geländer kannst du schießen, durchklettern kann niemand.
+Die Infizierten kommen aus dem Wald über den offenen Rand des Hofs (der Zaun rundherum ist weg) – immer von der Seite des Hofs, auf der du gerade bist – und dringen durch **Vordertür, Hintertür, Seitentür und das Loch in der Küchenwand** ins Haus ein (durch die Seitentür erst, wenn das Kaminzimmer offen ist). Über die **Treppe im Haus** und die **Außentreppe zum Balkon** kommen sie auch ins Obergeschoss, sobald es offen ist. Durch Fenster und über Geländer kannst du schießen, durchklettern kann niemand.
 
 ### Runden und Aufträge
 
@@ -67,7 +67,7 @@ Nicht jede Runde ist gleich. Ab Runde 3 würfelt das Spiel für jede Nacht neu a
 | **Mutanten** | wenige Infizierte, dafür fast nur Spezialgegner |
 | **C.R.U.** (ab Runde 4) | kaum Infizierte, dafür ein ganzer Trupp Helix-Soldaten |
 | **Infizierte + C.R.U.** (ab Runde 4) | beides zugleich |
-| **Hinterhalt** (ab Runde 5) | mitten in einer Runde kommt ein kleiner C.R.U.-Trupp über den Zaun |
+| **Hinterhalt** (ab Runde 5) | mitten in einer Runde kommt ein kleiner C.R.U.-Trupp aus dem Wald |
 
 Dazu kommen **Aufträge** an zufälligen Orten (Marker mit Entfernung auf dem Bildschirm, Liste oben links). Sie bringen Vorrat, Score und einen Hinweis; solange einer offen ist, kommen weiter Infizierte nach.
 
@@ -90,7 +90,7 @@ Gas verletzt dich nach drei Sekunden und dann jede Sekunde weiter. Die **Gasmask
 
 | Wo | Wann | Was hilft |
 |---|---|---|
-| **Hinter dem Zaun** | immer | nicht hingehen |
+| **Am Waldrand, jenseits des Hofs** | immer | nicht hingehen. Einen Zaun gibt es dort nicht mehr: Die Grenze ist die Baumreihe und der Dunst davor |
 | **Gasbänke im Hof** | ab Runde 2 eine, ab Runde 3 zwei, ab Runde 6 drei gleichzeitig | Dünner Dunst, der sich **ausbreitet**: Eine Bank beginnt als ein Fleck von rund 17 m Breite und wächst alle paar Sekunden um einen weiteren daneben, bis sie aus vier bis sieben Flecken besteht – bis zu 40 m lang. Drei Bänke bedecken zusammen bis zu einem Drittel des Hofs. Eine Bank liegt gut eine Minute, dünnt aus und quillt woanders wieder auf – nie auf dem Landeplatz, nie in Gebäuden und nie direkt auf dir (sie kann aber zu dir hin wachsen). Umgehen, im Haus warten oder mit Maske durchlaufen |
 | **Giftnebel über einer Hofseite** | ab Runde 4, manchmal | Eine ganze Seite (Nord, Süd, Ost, West) liegt für die Runde unter demselben dünnen Dunst. In den Gebäuden bist du sicher |
 | **Gasalarm im Haus** | ab Runde 4, manchmal, sobald das Obergeschoss offen ist | Zehn Sekunden Warnung, dann steht das **Erdgeschoss** des Farmhauses gut eine halbe Minute unter Gas. **Oben ist die Luft sauber**: rauf auf die Galerie, in die Zimmer oder auf den Balkon – oder Maske auf und unten bleiben. Keller und Nebengebäude bleiben frei |
@@ -143,7 +143,7 @@ Der **Waffenshop** in der Halle ist **vor der ersten und nach jeder überstanden
 - **Blut:** Kopfschüsse und schwere Treffer können Kopf oder Arm abreißen, Leichen bluten aus, Blut bleibt an Boden und Wänden.
 - Weit entfernte Infizierte **beeilen sich**, damit niemand auf Nachzügler warten muss.
 - Abschüsse bringen **Score** und **Vorrat**; Kopfschuss-Kills geben 50 Punkte extra. Jede überstandene Runde bringt 100 Vorrat und 20 HP. Gefallene lassen gelegentlich **Munition** (beige) oder ein **Verbandspäckchen** (grün) fallen.
-- Zum **Giftgas** siehe den nächsten Abschnitt: hinter dem Zaun steht es immer, im Hof und im Haus kommt und geht es.
+- Zum **Giftgas** siehe den nächsten Abschnitt: am Waldrand steht es immer, im Hof und im Haus kommt und geht es.
 
 ### C.R.U. – Containment Response Unit
 
@@ -172,8 +172,8 @@ Je höher die Schwierigkeit, desto schneller reagieren sie, desto besser treffen
 
 | Waffe | Preis | Magazin | Besonderheit |
 |---|---|---|---|
-| Sturmgewehr | Startwaffe | 30 | Solide auf jede Entfernung |
-| AK-47 | 300 | 30 | Kaliber 7,62: knapp ein Drittel mehr Schaden pro Kugel als das Sturmgewehr und etwas schneller, dafür mehr Rückstoß und Streuung. Teilt sich die Taste **1** mit dem Sturmgewehr. Das Magazin wird sichtbar gewechselt, und sie nimmt **Aufsätze** |
+| M4A4 | Startwaffe | 30 | Solide auf jede Entfernung. Ein Modell mit eigenem Magazin, das beim Nachladen sichtbar gewechselt wird, und mit **Kimme und Korn**: Beim Zielen schaust du durch die Lochkimme auf den Kornstift. Nimmt **Aufsätze**; mit einem Visier klappen Kimme und Korn weg |
+| AK-47 | 300 | 30 | Kaliber 7,62: knapp ein Drittel mehr Schaden pro Kugel als das M4A4 und etwas schneller, dafür mehr Rückstoß und Streuung. Teilt sich die Taste **1** mit dem M4A4. Das Magazin wird sichtbar gewechselt, und sie nimmt **Aufsätze** |
 | P90 | 100 | 50 | Sehr schnell, streut mehr |
 | UMP45 | 220 | 25 | Schwere MP: langsamer als die P90, dafür trifft jede Kugel härter. Das Magazin wird sichtbar gewechselt. Nimmt **Aufsätze** (siehe unten) |
 | Schrotflinte | 250 | 6 | Neun Schrotkugeln pro Schuss, wuchtiger Rückstoß, Vorderschaft-Repetieren; auf kurze Distanz tödlich, ab etwa 25 m fast wirkungslos |
@@ -183,11 +183,12 @@ Je höher die Schwierigkeit, desto schneller reagieren sie, desto besser treffen
 | .44 Magnum | 220 | 6 | Sechs Schuss, jeder ein Hammer |
 | Scharfschützengewehr | 450 | 5 | Zielfernrohr (rechte Maustaste), Repetierer; die Kugel geht durch bis zu vier Körper |
 | Granatwerfer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. Das Geschoss fliegt im **Bogen**: Gerade gehalten kommt es nach rund 20 m herunter, für weitere Ziele hältst du höher. Die **rechte Maustaste** zeigt Flugbahn und Einschlagpunkt; der Werfer bleibt dabei neben der Sichtlinie. **Erst nach Runde 4** im Shop |
+| Maschinengewehr | 800 | 100 | Gurtgefüttert aus einem Kasten unter der Waffe: **100 Schuss und 400 in Reserve**, 700 Schuss pro Minute, etwas mehr Schaden pro Kugel als das M4A4. Dafür streut es aus der Hüfte, und der Kastenwechsel dauert gut vier Sekunden. Teilt sich die Taste **0** mit der Minigun. **Erst nach Runde 3** im Shop |
 | Minigun | 1500 | 200 | Läuft kurz an und feuert dann 1300 Schuss pro Minute; macht langsam. **Erst nach Runde 6** im Shop |
 
-### Aufsätze für UMP45 und AK-47
+### Aufsätze für M4A4, UMP45 und AK-47
 
-In der Shop-Liste **Aufsätze**, für jede der beiden Waffen eigens zu kaufen. Einmal gekauft, lässt sich ein Teil dort beliebig oft kostenlos anbringen und wieder abnehmen. Pro Platz sitzt immer nur ein Teil auf der Waffe: ein Visier auf der Schiene, ein Schalldämpfer an der Mündung.
+In der Shop-Liste **Aufsätze**, für jede der drei Waffen eigens zu kaufen. Einmal gekauft, lässt sich ein Teil dort beliebig oft kostenlos anbringen und wieder abnehmen. Pro Platz sitzt immer nur ein Teil auf der Waffe: ein Visier auf der Schiene, ein Schalldämpfer an der Mündung.
 
 | Aufsatz | Preis | Wirkung |
 |---|---|---|
@@ -370,6 +371,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 
 ## Stand und Grenzen
 
+**v0.12** bringt das **M4A4** als Startgewehr (mit Magazin, Kimme und Korn, die eigens dafür gebaut wurden) und ein **Maschinengewehr** mit 100-Schuss-Kasten, drei weitere **tote Forscher und Wachleute** (jetzt fünf verschiedene, die neuen mit einem Koffer daneben), **Laubbäume** als Modelle zwischen den Tannen am Rand des Hofs – und der **Zaun um den Hof ist weg**, damit die Infizierten von überall kommen.
+
 **v0.11** macht das **Gas** zu einem dünnen Dunst, der sich in großen Bänken über den Hof ausbreitet statt als grelle Wolke an einer Stelle zu stehen, gibt dem **Granatwerfer** eine gebogene Flugbahn samt Anzeige, dem **Rotpunktvisier** eine feinere Marke, den **Bots** 129 neue Sprüche und neue Anlässe zu rufen, und zeigt im Menü die drei Wege der **Fähigkeiten** – noch in Wartung.
 
 **v0.10** bringt den **C.R.U. Elite** mit AK-47 und Gasgranaten, die **AK-47** als kaufbares Gewehr mit Magazinwechsel und Aufsätzen, ein Rotpunktvisier und ein Zielfernrohr, durch die man deutlich mehr sieht, einen Medic, dessen Gas flach über den Boden kriecht und Infizierte sichtbar verstärkt, tote Forscher, die von Anfang an auf dem Hof liegen, eine neue Granatexplosion (Feuerwolken, Funken, Glut, Rauch) samt richtigem 40-mm-Geschoss, Granaten mit Flugbahn-Anzeige, **Musik**, die der Nacht folgt, eine neue Oberfläche mit Einstellungen für Ton und Bild und 81 zusätzliche Aufnahmen für Funk und Rufe (Coleman allein 58), dazu einen neuen Schuss für den Granatwerfer und neue Explosionen.
@@ -392,13 +395,13 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 - Das Honey-Badger-Modell hat rund 700.000 Eckpunkte. Auf deiner Grafikkarte ist das kein Problem; für schwächere Rechner sollte es später vereinfacht werden.
 - Aufsätze gibt es bisher nur für die UMP45. Für andere Waffen genügt ein Eintrag in `ATTACHMENTS` und ein Modell des Teils an der Waffe; der Magazinwechsel der anderen Waffen läuft weiter unterhalb des Bildes ab.
 - Wie die UMP klingt, ist aus vorhandenen Schüssen abgeleitet (`ump.wav`, `ump_sil.wav`) und nicht probegehört.
-- Das Sturmgewehr ist weiterhin aus einfachen Formen gebaut, bis es ein eigenes Modell bekommt. Die sechs neuen Waffen, der Helikopter und das Hack-Modul sind schlichte Blender-Modelle – als Platzhalter gedacht, falls du eigene hast.
+- Das Startgewehr ist seit v0.12 das M4A4-Modell (in der Hand der C.R.U.-Soldaten und der Bots steckt weiter das alte, aus einfachen Formen gebaute Gewehr). Die sechs neuen Waffen, der Helikopter und das Hack-Modul sind schlichte Blender-Modelle – als Platzhalter gedacht, falls du eigene hast.
 - Auf dem Balkon, der Galerie und am Treppenkopf passen nur etwa sechs Infizierte gleichzeitig an einen Überlebenden; der Rest staut sich dahinter.
 - Es werden keine Combat-Arms-Dateien verwendet.
 
 ## Prüfung
 
-399 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins – und die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug.
+402 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins – und die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug.
 
 ```text
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test
@@ -418,4 +421,4 @@ Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --mp-hos
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --mp-join-test
 ```
 
-Screenshots: `--story-check` (alle Stationen der Geschichte), `--intro-check` (die Ankunft), `--v9-check` (Medic, Schild-Soldat, Elite, Gas, tote Forscher, Explosion), `--gun-check --gun=ak` oder `--gun=ump` (Waffe an der Hüfte, durch jedes Visier, Magazinwechsel), `--blast-check` (die Explosion in sechs Augenblicken), `--gas-check` (eine Gasbank von außen, von weitem und von innen, eine Hofseite unter Gas, der Zaun, die Gasgranate, das Erdgeschoss, die Flugbahn des Granatwerfers), `--ump-check` (UMP, Aufsätze, Magazinwechsel, Shop), `--cru-check`, `--weapons-check`, `--visual-check`, `--map-tour`, `--team-check`, `--ripper-check`, `--shotgun-check`, `--mission-check`, `--gear-check`, `--models-check`, `--menu-check`, jeweils mit `--capture-dir=ORDNER`. Mit `--scale=0.5` rechnet ein Start das 3D-Bild mit halber Auflösung, mit `--squad=raven,viper` wählt er die beiden Bots – beides, ohne etwas zu speichern. Automatische Läufe (alles, was auf `-check` oder `-test` endet, und alles ohne Fenster) lesen und ändern dein gespeichertes Profil und deine Einstellungen nicht. Nach neuen Skripten mit `class_name` oder neuen Dateien in `assets` einmal den Editor öffnen (oder `--headless --import` ausführen), damit Godot sie kennt.
+Screenshots: `--story-check` (alle Stationen der Geschichte), `--intro-check` (die Ankunft), `--v9-check` (Medic, Schild-Soldat, Elite, Gas, tote Forscher, Explosion), `--gun-check --gun=ak` oder `--gun=ump` (Waffe an der Hüfte, durch jedes Visier, Magazinwechsel), `--blast-check` (die Explosion in sechs Augenblicken), `--gun-check --gun=rifle` und `--gun=mg` (M4A4 und Maschinengewehr), `--scene-check` (alle fünf Leichen, die Bäume, der offene Rand des Hofs), `--gas-check` (eine Gasbank von außen, von weitem und von innen, eine Hofseite unter Gas, der Rand des Hofs, die Gasgranate, das Erdgeschoss, die Flugbahn des Granatwerfers), `--ump-check` (UMP, Aufsätze, Magazinwechsel, Shop), `--cru-check`, `--weapons-check`, `--visual-check`, `--map-tour`, `--team-check`, `--ripper-check`, `--shotgun-check`, `--mission-check`, `--gear-check`, `--models-check`, `--menu-check`, jeweils mit `--capture-dir=ORDNER`. Mit `--scale=0.5` rechnet ein Start das 3D-Bild mit halber Auflösung, mit `--squad=raven,viper` wählt er die beiden Bots – beides, ohne etwas zu speichern. Automatische Läufe (alles, was auf `-check` oder `-test` endet, und alles ohne Fenster) lesen und ändern dein gespeichertes Profil und deine Einstellungen nicht. Nach neuen Skripten mit `class_name` oder neuen Dateien in `assets` einmal den Editor öffnen (oder `--headless --import` ausführen), damit Godot sie kennt.

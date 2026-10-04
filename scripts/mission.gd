@@ -1083,7 +1083,14 @@ func _readout(prop: Node3D, at: Vector3) -> void:
 ## on a case. back: where the ID tag blinks on the body. case: the lid of that case.
 const CORPSES := [
 	{"scene": "res://assets/models/corpse1.glb", "back": Vector3(-0.24, 0.389, 0.38), "case": Vector3(-0.27, 0.185, 1.26)},
-	{"scene": "res://assets/models/corpse2.glb", "back": Vector3(0.0, 0.397, 0.1), "case": Vector3(0.29, 0.201, 1.28)}
+	{"scene": "res://assets/models/corpse2.glb", "back": Vector3(0.0, 0.397, 0.1), "case": Vector3(0.29, 0.201, 1.28)},
+	# Three more, so that the same two do not lie everywhere: a man in a suit and a guard
+	# on their backs, a man in shirt sleeves face down. They bring no case of their own:
+	# one is stood beside them (loose: the turn it stands at, in degrees), and `case` is
+	# the middle of its lid.
+	{"scene": "res://assets/models/corpse3.glb", "back": Vector3(0.025, 0.254, 0.301), "case": Vector3(0.652, 0.21, 0.545), "loose": -85.3},
+	{"scene": "res://assets/models/corpse4.glb", "back": Vector3(0.02, 0.301, 0.399), "case": Vector3(-0.495, 0.21, 0.059), "loose": 90.0},
+	{"scene": "res://assets/models/corpse5.glb", "back": Vector3(0.008, 0.316, 0.363), "case": Vector3(-0.619, 0.21, 0.623), "loose": 89.9}
 ]
 ## The same places on the boxes that stand in where the models are missing.
 const CORPSE_BOXES := {"back": Vector3(0.12, 0.235, -0.1), "case": Vector3(0.71, 0.31, -0.15)}
@@ -1104,8 +1111,26 @@ func _body(prop: Node3D, pos: Vector3) -> Dictionary:
 		corpse_scenes[path] = load(path)
 	var body := (corpse_scenes[path] as PackedScene).instantiate() as Node3D
 	prop.add_child(body)
+	if data.has("loose"):
+		_case(prop, Vector3((data.case as Vector3).x, 0, (data.case as Vector3).z), deg_to_rad(float(data.loose)))
 	_stain(prop, Vector3(0.05, 0.02, 0.1), 2.6, corpse_at(pos))
 	return data
+
+## A dark hard-shell carrying case that stands on the ground beside a body: 46 cm long,
+## 30 deep, 20 high, with a seam, two ribs on its lid, two catches and a handle.
+func _case(prop: Node3D, at: Vector3, yaw: float) -> void:
+	var case := Node3D.new()
+	case.name = "Case"
+	case.position = at
+	case.rotation.y = yaw
+	prop.add_child(case)
+	_box(case, Vector3(0.46, 0.2, 0.3), Vector3(0, 0.1, 0), Color("2a2d30"), 0.0, 0.3)
+	for z in [-0.075, 0.075]:
+		_box(case, Vector3(0.4, 0.012, 0.035), Vector3(0, 0.203, z), Color("1b1d1f"), 0.0, 0.3)
+	_box(case, Vector3(0.468, 0.022, 0.308), Vector3(0, 0.11, 0), Color("0f1011"), 0.0, 0.4)
+	for x in [-0.15, 0.15]:
+		_box(case, Vector3(0.045, 0.05, 0.016), Vector3(x, 0.11, 0.156), Color("8f9599"), 0.0, 0.8)
+	_box(case, Vector3(0.15, 0.022, 0.03), Vector3(0, 0.125, 0.17), Color("0c0d0e"), 0.0, 0.3)
 
 ## Blood that has run out under a body: a ragged pool soaked into the ground, made of the
 ## same marks as every other blood stain of the game.

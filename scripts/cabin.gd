@@ -23,6 +23,18 @@ const CELLAR_TOP := -0.6  # underside of the basement's ceiling
 const UPPER_TOP := 6.2    # top of the upper storey walls
 const RIDGE := 10.8
 const YARD := Rect2(-44, -40, 88, 88)
+## Whether the split-rail fence around the yard stands. Without it the infected reach the
+## house from every side instead of through its gaps.
+const OUTER_FENCE := false
+## Trees that are models instead of the forest's simple pines: the files (each a tree of
+## TREE_MODEL_HEIGHT metres with its foot at the origin), how far out from the yard such
+## trees stand, which share of the trees there they are, and how much darker than their
+## daylight paint they are drawn.
+const TREE_MODELS := ["res://assets/models/tree1.glb", "res://assets/models/tree2.glb"]
+const TREE_MODEL_HEIGHT := 12.0
+const TREE_MODEL_REACH := 30.0
+const TREE_MODEL_SHARE := 0.5
+const TREE_TINT := Color(0.42, 0.46, 0.44)
 const GAS_MARGIN := 1.6
 ## Sides of the yard that gas can drift across for a round. The buildings stay safe.
 const GAS_ZONES := {
@@ -148,6 +160,8 @@ var random := RandomNumberGenerator.new()
 var chunks: Dictionary = {}
 var chunk_shadows: Dictionary = {}
 var batch: MeshBatch = MeshBatch.new()
+## How many trees of the forest are models (see TREE_MODELS).
+var model_trees := 0
 var body: StaticBody3D
 var rails: StaticBody3D
 var mats: Dictionary = {}
@@ -2046,15 +2060,22 @@ func _build_shed() -> void:
 # ---------------------------------------------------------------- yard
 
 ## Split-rail fence; it stops bodies, shots pass between the rails.
-func _fence(from: Vector2, to: Vector2) -> void:
-	_yard_chunk(Vector3((from.x + to.x) * 0.5, 0, (from.y + to.y) * 0.5))
+## A fence that is not `standing` is worked out but not built. That is what became of the
+## fence around the yard, which was taken away so that the infected can come in from
+## everywhere: everything random that is built after it stays exactly where it was.
+func _fence(from: Vector2, to: Vector2, standing: bool = true) -> void:
+	if standing:
+		_yard_chunk(Vector3((from.x + to.x) * 0.5, 0, (from.y + to.y) * 0.5))
 	var length := from.distance_to(to)
 	var direction := (to - from) / length
 	var along_x := absf(direction.x) > 0.5
 	var count := int(ceil(length / 2.4))
 	for i in range(count + 1):
 		var p := from + direction * (length * i / count)
-		batch.box(mats["plank_v"], Vector3(p.x, 0.62, p.y), Vector3(0.12, 1.3, 0.12), _vary(Color("3b362f"), 0.04), Basis.from_euler(Vector3(deg_to_rad(random.randf_range(-5, 5)), 0, deg_to_rad(random.randf_range(-5, 5)))))
+		var paint := _vary(Color("3b362f"), 0.04)
+		var lean := Basis.from_euler(Vector3(deg_to_rad(random.randf_range(-5, 5)), 0, deg_to_rad(random.randf_range(-5, 5))))
+		if standing:
+			batch.box(mats["plank_v"], Vector3(p.x, 0.62, p.y), Vector3(0.12, 1.3, 0.12), paint, lean)
 	for height in [0.42, 0.98]:
 		for i in range(count):
 			if random.randf() < 0.13:
@@ -2064,10 +2085,16 @@ func _fence(from: Vector2, to: Vector2) -> void:
 			var mid := (a + b) * 0.5
 			var span := a.distance_to(b) + 0.12
 			var sag := deg_to_rad(random.randf_range(-2.5, 2.5))
+			var lift := random.randf_range(-0.03, 0.03)
+			var tint := _vary(Color("464037"), 0.05)
+			if not standing:
+				continue
 			if along_x:
-				batch.box(mats["siding"], Vector3(mid.x, height + random.randf_range(-0.03, 0.03), mid.y), Vector3(span, 0.11, 0.035), _vary(Color("464037"), 0.05), Basis(Vector3.BACK, sag))
+				batch.box(mats["siding"], Vector3(mid.x, height + lift, mid.y), Vector3(span, 0.11, 0.035), tint, Basis(Vector3.BACK, sag))
 			else:
-				batch.box(mats["siding"], Vector3(mid.x, height + random.randf_range(-0.03, 0.03), mid.y), Vector3(0.035, 0.11, span), _vary(Color("464037"), 0.05), Basis(Vector3.RIGHT, sag))
+				batch.box(mats["siding"], Vector3(mid.x, height + lift, mid.y), Vector3(0.035, 0.11, span), tint, Basis(Vector3.RIGHT, sag))
+	if not standing:
+		return
 	var centre := (from + to) * 0.5
 	_rail_solid(Vector3(centre.x, 0.65, centre.y), Vector3(length, 1.3, 0.14) if along_x else Vector3(0.14, 1.3, length))
 
@@ -2166,19 +2193,20 @@ func _trailer(pos: Vector3, yaw: float) -> void:
 	_solid(frame * Vector3(0, 1.0, 0), Vector3(2.2, 2.0, 3.7), true, yaw)
 
 func _build_yard() -> void:
-	# Fence around the safe yard, with gaps the infected pour through.
+	# Where the fence around the yard used to stand. It is gone (see _fence): the yard lies
+	# open to the forest, and the infected come in wherever they like.
 	var x0 := YARD.position.x
 	var x1 := YARD.end.x
 	var z0 := YARD.position.y
 	var z1 := YARD.end.y
 	for span in [[-44, -30], [-26, -14], [-14, -2], [2, 14], [14, 25], [29, 44]]:
-		_fence(Vector2(span[0], z0), Vector2(span[1], z0))
+		_fence(Vector2(span[0], z0), Vector2(span[1], z0), OUTER_FENCE)
 	for span in [[-44, -29], [-25, -14], [-14, -3], [3, 13], [13, 23], [27, 44]]:
-		_fence(Vector2(span[0], z1), Vector2(span[1], z1))
+		_fence(Vector2(span[0], z1), Vector2(span[1], z1), OUTER_FENCE)
 	for span in [[-40, -27], [-23, -10], [-10, 3], [7, 19], [19, 31], [35, 48]]:
-		_fence(Vector2(x0, span[0]), Vector2(x0, span[1]))
+		_fence(Vector2(x0, span[0]), Vector2(x0, span[1]), OUTER_FENCE)
 	for span in [[-40, -36], [-32, -16], [-16, 0], [4, 16], [16, 28], [32, 48]]:
-		_fence(Vector2(x1, span[0]), Vector2(x1, span[1]))
+		_fence(Vector2(x1, span[0]), Vector2(x1, span[1]), OUTER_FENCE)
 	# Gate over the road with the farm sign; the broken gate lies beside it.
 	_yard_chunk(Vector3(0, 0, 48))
 	for x in [-3.2, 3.2]:
@@ -3280,6 +3308,26 @@ func _build_forest() -> void:
 	var trunks: Array[Transform3D] = []
 	var cones: Array[Transform3D] = []
 	var clearing := YARD.grow(3.5)
+	# Near the yard a share of the trees are models; each kind: its mesh, where that mesh
+	# sits inside its file, and the places it is planted at. Which tree becomes one is
+	# decided by dice of its own, so that every other tree stays as it was.
+	var kinds: Array = []
+	for path in TREE_MODELS:
+		if not ResourceLoader.exists(path):
+			continue
+		var scene: Node = (load(path) as PackedScene).instantiate()
+		var parts := scene.find_children("*", "MeshInstance3D", true, false)
+		if not parts.is_empty():
+			var inside := Transform3D.IDENTITY
+			var node: Node = parts[0]
+			while node != scene:
+				inside = (node as Node3D).transform * inside
+				node = node.get_parent()
+			kinds.append([(parts[0] as MeshInstance3D).mesh, inside, []])
+		scene.free()
+	var chooser := RandomNumberGenerator.new()
+	chooser.seed = 1907
+	var near := YARD.grow(3.5 + TREE_MODEL_REACH)
 	for i in range(1050):
 		var pos := Vector3(random.randf_range(-128, 128), 0, random.randf_range(-124, 132))
 		if clearing.has_point(Vector2(pos.x, pos.z)) or (absf(pos.x) < 4.5 and pos.z > 46.0):
@@ -3291,10 +3339,40 @@ func _build_forest() -> void:
 		if near_spawn:
 			continue
 		var height := random.randf_range(9.0, 18.0)
-		trunks.append(Transform3D(Basis.from_scale(Vector3(1.0, height * 0.85, 1.0)), pos + Vector3(0, height * 0.42, 0)))
+		var model := -1
+		if not kinds.is_empty() and near.has_point(Vector2(pos.x, pos.z)) and chooser.randf() < TREE_MODEL_SHARE:
+			model = chooser.randi() % kinds.size()
+			var planted := Transform3D(Basis(Vector3.UP, chooser.randf() * TAU).scaled(Vector3.ONE * (height / TREE_MODEL_HEIGHT)), pos)
+			(kinds[model][2] as Array).append(planted * (kinds[model][1] as Transform3D))
+		else:
+			trunks.append(Transform3D(Basis.from_scale(Vector3(1.0, height * 0.85, 1.0)), pos + Vector3(0, height * 0.42, 0)))
 		for tier in range(4):
 			var width := height * (0.25 - tier * 0.05)
-			cones.append(Transform3D(Basis(Vector3.UP, random.randf() * TAU).scaled(Vector3(width, height * 0.36, width)), pos + Vector3(0, height * (0.38 + tier * 0.17), 0)))
+			var turn := random.randf() * TAU
+			if model < 0:
+				cones.append(Transform3D(Basis(Vector3.UP, turn).scaled(Vector3(width, height * 0.36, width)), pos + Vector3(0, height * (0.38 + tier * 0.17), 0)))
+	for kind in kinds:
+		var places: Array = kind[2]
+		if places.is_empty():
+			continue
+		var many := MultiMesh.new()
+		many.transform_format = MultiMesh.TRANSFORM_3D
+		many.mesh = kind[0]
+		many.instance_count = places.size()
+		for i in range(places.size()):
+			many.set_instance_transform(i, places[i])
+		var grove := MultiMeshInstance3D.new()
+		grove.name = "ModelTrees"
+		grove.multimesh = many
+		grove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# The files are painted for daylight; here they stand in a forest at night.
+		var paint := (kind[0] as Mesh).surface_get_material(0) as BaseMaterial3D
+		if paint != null:
+			paint = paint.duplicate() as BaseMaterial3D
+			paint.albedo_color = TREE_TINT
+			grove.material_override = paint
+		add_child(grove)
+		model_trees += places.size()
 	for group in [[trunk, trunks, "Trunks"], [cone, cones, "Needles"]]:
 		var transforms: Array = group[1]
 		var multimesh := MultiMesh.new()

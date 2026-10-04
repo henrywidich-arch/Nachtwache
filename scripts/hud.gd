@@ -15,7 +15,7 @@ const INK := Color("0f1317")
 const SHOP_NOTES := {
 	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action, brutal auf kurze Distanz",
 	"pistol": "Leicht, schnell gezogen", "revolver": "Sechs Schuss, jeder ein Hammer", "autoshotgun": "Halbautomatisch, Kastenmagazin",
-	"sniper": "Zielfernrohr, durchschlägt mehrere Körper", "launcher": "40-mm-Granaten, zünden beim Aufschlag", "minigun": "Läuft an, dann mäht sie alles nieder"
+	"sniper": "Zielfernrohr, durchschlägt mehrere Körper", "launcher": "40-mm-Granaten, zünden beim Aufschlag", "mg": "100 Schuss im Kasten und vier Kästen Reserve", "minigun": "Läuft an, dann mäht sie alles nieder"
 }
 ## The lists of the shop.
 const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "SCHWER"], ["mods", "AUFSÄTZE"], ["gear", "AUSRÜSTUNG"], ["use", "VERBRAUCH"]]
@@ -302,7 +302,7 @@ func _build_play_ui() -> void:
 	weapon_box.alignment = BoxContainer.ALIGNMENT_END
 	weapon_box.add_theme_constant_override("separation", -8)
 	_anchored(weapon_box, Control.PRESET_BOTTOM_RIGHT, -380, -150, -32, -26)
-	rifle_label = label("STURMGEWEHR", 15, MUTED, true)
+	rifle_label = label("M4A4", 15, MUTED, true)
 	rifle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	weapon_box.add_child(rifle_label)
 	var ammo_row := HBoxContainer.new()
@@ -844,7 +844,7 @@ func show_menu(mode: String) -> void:
 			first = _menu_skins(column)
 		"skills":
 			first = _menu_skills(column)
-	var version := label("SOLO + KOOP   ·   v0.11", 12, MUTED, true)
+	var version := label("SOLO + KOOP   ·   v0.12", 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
 	modal.add_child(version)

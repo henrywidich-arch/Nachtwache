@@ -914,7 +914,10 @@ func _check_bodies() -> void:
 		"through a window": [point("window_in"), Vector3(-1, 0, 0), 3.5],
 		"over the gallery railing": [point("gallery"), Vector3(1, 0, 0), 3.5],
 		"over the balcony railing": [point("balcony"), Vector3(1, 0, 0), 3.5],
-		"through the yard fence": [Vector3(-42.0, 0, 15.0), Vector3(-1, 0, 0), 4.0],
+		"through the paddock fence": [Vector3(26.5, 0, -3.0), Vector3(0, 0, -1), 4.0],
+		# The fence around the yard is gone (CabinMap.OUTER_FENCE): a negative limit means
+		# the body has to get at least that far.
+		"across the edge of the yard": [Vector3(-42.0, 0, 15.0), Vector3(-1, 0, 0), 4.0 if CabinMap.OUTER_FENCE else -8.0],
 		"over the stair rail": [point("stairs_bottom") + Vector3(-2.0, 0.9, 0.3), Vector3(0, 0, 1), 3.0],
 		"through the bulletproof glass": [point("lab_glass"), Vector3(-1, 0, 0), 2.0],
 		"into the lattice of the mast": [point("antenna") + Vector3(0, 0, 0.9), Vector3(1, 0, 0), 2.4]
@@ -947,7 +950,11 @@ func _check_bodies() -> void:
 		var body: Walker = pushed[title]
 		var start: Vector3 = pushes[title][0]
 		var moved := Vector2(body.global_position.x - start.x, body.global_position.z - start.z).length()
-		expect(moved < float(pushes[title][2]) and absf(body.global_position.y - start.y) < 1.0, "a body pushed %s is held back (moved %.2f m, y %.2f)" % [title, moved, body.global_position.y])
+		var limit := float(pushes[title][2])
+		if limit < 0.0:
+			expect(moved > -limit, "a body pushed %s walks on (moved %.2f m)" % [title, moved])
+		else:
+			expect(moved < limit and absf(body.global_position.y - start.y) < 1.0, "a body pushed %s is held back (moved %.2f m, y %.2f)" % [title, moved, body.global_position.y])
 		body.queue_free()
 	# Every barrier holds a body while its area is locked and lets it pass afterwards.
 	var gates := {

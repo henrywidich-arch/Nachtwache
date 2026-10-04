@@ -5,7 +5,7 @@ extends CharacterBody3D
 const BASE_FOV := 74.0
 ## slot: number key. price: cost in the weapon shop. flash: size of the muzzle flash.
 const WEAPONS := {
-	"rifle": {"label": "STURMGEWEHR", "slot": 1, "price": 0, "sound": "shot", "magazine": 30, "reserve_max": 180, "reload_time": 1.75, "interval": 0.115, "damage": 28.0, "head_multiplier": 2.7, "spread": 0.011, "kick": 0.011, "flash": 1.0},
+	"rifle": {"label": "M4A4", "slot": 1, "price": 0, "sound": "shot", "magazine": 30, "reserve_max": 180, "reload_time": 1.75, "interval": 0.115, "damage": 28.0, "head_multiplier": 2.7, "spread": 0.011, "kick": 0.011, "flash": 1.0, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	# The AK-47 shares key 1 with the carbine: harder hits, more kick. Parts: see ATTACHMENTS.
 	"ak": {"label": "AK-47", "slot": 1, "price": 300, "sound": "ak", "magazine": 30, "reserve_max": 180, "reload_time": 2.5, "interval": 0.1, "damage": 36.0, "head_multiplier": 2.6, "spread": 0.014, "kick": 0.014, "flash": 1.1, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	"p90": {"label": "P90", "slot": 2, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
@@ -27,17 +27,25 @@ const WEAPONS := {
 	# grenade: fires 40 mm shells that go off where they land.
 	"launcher": {"label": "GRANATWERFER", "slot": 9, "price": 900, "group": "heavy", "from_round": 4, "sound": "launcher", "magazine": 6, "reserve_max": 18, "reload_time": 3.4, "interval": 0.75, "damage": 0.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.05, "flash": 0.9, "punch": 2.2, "settle": 0.8, "grenade": true},
 	# spin: seconds the barrels need to come up to speed before the first shot.
+	# The machine gun: a hundred rounds in the box and four boxes more. Shares its key with
+	# the minigun.
+	"mg": {"label": "MASCHINENGEWEHR", "slot": 0, "price": 800, "group": "heavy", "from_round": 3, "sound": "mg", "magazine": 100, "reserve_max": 400, "reload_time": 4.2, "interval": 0.085, "damage": 30.0, "head_multiplier": 2.2, "spread": 0.022, "kick": 0.0085, "flash": 1.2, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
 	"minigun": {"label": "MINIGUN", "slot": 0, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
 const QUIET_SOUNDS := ["badger", "ump_sil"]
-const ORDER := ["rifle", "ak", "p90", "ump", "badger", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "launcher", "minigun"]
+const ORDER := ["rifle", "ak", "p90", "ump", "badger", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "launcher", "mg", "minigun"]
 ## Parts the shop sells for a weapon. slot: only one part per slot is on the weapon at a
 ## time. set: values of the weapon's table that the part replaces (aim_spread: how much of
 ## the scatter is left when aiming; zoom: field of view when aiming; scope: field of view
 ## through a telescopic sight; scope_turn: how much slower the view turns through it).
 ## scale: values it multiplies.
 const ATTACHMENTS := {
+	"rifle": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "badger", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	},
 	"ump": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt: freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
@@ -207,7 +215,8 @@ func _ready() -> void:
 	camera.add_child(fill)
 
 func _build_weapon() -> void:
-	weapon_models["rifle"] = WeaponView.build_rifle()
+	weapon_models["rifle"] = WeaponView.build_gun("rifle")
+	weapon_models["mg"] = WeaponView.build_gun("mg")
 	weapon_models["p90"] = WeaponView.build_p90()
 	weapon_models["badger"] = WeaponView.build_badger()
 	weapon_models["shotgun"] = WeaponView.build_shotgun()
@@ -417,6 +426,10 @@ func _show_parts() -> void:
 	for node in weapon.get_children():
 		if str(node.name).begins_with("Mod_"):
 			(node as Node3D).visible = on.has(str(node.name).trim_prefix("Mod_"))
+	# Iron sights that fold lie down when a sight is fitted.
+	var irons := weapon.find_child("Sights", true, false) as Node3D
+	if irons != null and WeaponView.GUNS.has(current_weapon) and WeaponView.GUNS[current_weapon].get("folding", false):
+		irons.visible = fitted("sight") == ""
 	var muzzle: Vector3 = WeaponView.VIEWS[current_weapon].muzzle
 	if on.has("silencer"):
 		muzzle.z -= WeaponView.SILENCER_LENGTH

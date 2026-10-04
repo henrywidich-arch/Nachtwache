@@ -44,6 +44,23 @@ const GUNS := {
 		"rail": 0.1186, "optic": -0.105, "irons": 0.1339,
 		"support": Vector3(0, 0.079, -0.33), "handle": Vector3(0.0398, 0.0926, -0.2084),
 		"magazine_out": Vector3(0, -0.94, -0.34), "magazine_foot": Vector3(0, -0.1416, -0.2486)
+	},
+	# The M4A4, the starting rifle. Its iron sights are a node of their own ("Sights");
+	# folding: they are laid down (hidden) when a sight is fitted, which then sits low on
+	# the rail instead of above them. The hand works the bolt catch on the left.
+	"rifle": {
+		"scene": "res://assets/models/m4a4.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.13, -0.6123), "bore": 0.0125,
+		"rail": 0.1747, "optic": -0.125, "irons": 0.2105, "folding": true,
+		"support": Vector3(0, 0.119, -0.3251), "handle": Vector3(-0.022, 0.1697, -0.0066),
+		"magazine_out": Vector3(0, -0.9724, -0.2334), "magazine_foot": Vector3(0.0016, -0.0745, -0.2086)
+	},
+	# The machine gun: fed from a box that hangs under it on the left, which comes off
+	# sideways; the cocking handle is on the right.
+	"mg": {
+		"scene": "res://assets/models/mg.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0.0005, 0.1217, -0.6683), "bore": 0.0109,
+		"rail": 0.17, "optic": -0.15, "irons": 0.1897, "metal": 0.85, "rough": 0.5,
+		"support": Vector3(0, 0.0907, -0.3539), "handle": Vector3(0.0377, 0.1327, -0.1011),
+		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.008, -0.053, -0.18)
 	}
 }
 ## The glass of the reflex sight (width, height) and how far behind it the eye is when
@@ -59,9 +76,18 @@ const SLEEVE := Color("343b2c")
 
 ## Hip and aimed positions are in camera space; angles are degrees.
 const VIEWS := {
+	# The M4A4 (build_gun): aimed, the eye is on the line through its aperture and its front
+	# post, 13 cm behind the aperture.
 	"rifle": {
-		"hip": Vector3(0.125, -0.152, -0.44), "hip_angles": Vector3(0.5, 6.5, -2.5),
-		"aim": Vector3(0.0, -0.0905, -0.36), "muzzle": Vector3(0, 0.006, -0.68)
+		"hip": Vector3(0.12, -0.155, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.1305, -0.1735), "muzzle": Vector3(0, 0.05, -0.5323),
+		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The machine gun (build_gun), aimed over its aperture and ringed front post.
+	"mg": {
+		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.1047, -0.207), "muzzle": Vector3(0.0005, 0.0367, -0.5833),
+		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	"p90": {
 		"hip": Vector3(0.135, -0.15, -0.38), "hip_angles": Vector3(1.0, 7.5, -2.5),
@@ -393,6 +419,12 @@ static func build_gun(id: String) -> Node3D:
 			if source.albedo_texture != null:
 				if not gun_materials.has(id):
 					gun_materials[id] = tune(source.duplicate() as BaseMaterial3D)
+					# A gun whose paint came out like polished chrome is taken down a little.
+					if gun.has("metal"):
+						(gun_materials[id] as BaseMaterial3D).metallic = float(gun.metal)
+					if gun.has("rough"):
+						(gun_materials[id] as BaseMaterial3D).roughness_texture = null
+						(gun_materials[id] as BaseMaterial3D).roughness = float(gun.rough)
 				mesh.set_surface_override_material(surface, gun_materials[id])
 			else:
 				mesh.set_surface_override_material(surface, shotgun_material(source, true, id + "/"))
@@ -491,7 +523,8 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 ## sights, so that they do not stand in the picture.
 static func sight_height(id: String, sight: String) -> float:
 	var gun: Dictionary = GUNS[id]
-	var clear := maxf(float(gun.irons) - float(gun.rail), 0.0) + 0.006
+	# Iron sights that fold away leave nothing for a sight to clear.
+	var clear := (0.0 if gun.get("folding", false) else maxf(float(gun.irons) - float(gun.rail), 0.0)) + 0.006
 	return float(gun.rail) + clear + (REFLEX_GLASS.y * 0.5 if sight == "reddot" else 0.0195)
 
 ## Where the weapon sits when the eye is behind a fitted sight.
