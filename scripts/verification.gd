@@ -1274,7 +1274,7 @@ func _latest(game: Node3D) -> void:
 	var anchors: Dictionary = game.mission._body(holder, spot)
 	var beside: bool = holder.get_node_or_null("Case") != null and anchors.has("loose") and absf((holder.get_node("Case") as Node3D).position.x - (anchors.case as Vector3).x) < 0.001
 	holder.queue_free()
-	expect(MissionDirector.CORPSES.size() == 5 and kinds.size() == 5 and complete and beside and not CabinMap.OUTER_FENCE and cabin.model_trees >= 60, "Five kinds of dead lie on the farm, the new ones with a case stood beside them; the yard has no fence, and %d trees at its edge are models" % cabin.model_trees)
+	expect(MissionDirector.CORPSES.size() == 5 and kinds.size() == 5 and complete and beside and not CabinMap.OUTER_FENCE and cabin.model_trees >= 60 and cabin.tree_kinds == CabinMap.TREE_MODELS.size() and cabin.tree_kinds >= 7, "Five kinds of dead lie on the farm, the new ones with a case stood beside them; the yard has no fence, and %d trees at its edge are models of %d kinds" % [cabin.model_trees, cabin.tree_kinds])
 	# --- the machine gun
 	var owned: bool = player.unlock("mg")
 	var mg: Node3D = player.weapon

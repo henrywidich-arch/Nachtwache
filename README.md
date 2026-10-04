@@ -371,6 +371,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 
 ## Stand und Grenzen
 
+**v0.13** stellt **Kiefern und tote Bäume** aus dem freien *Stylized Nature MegaKit* von Quaternius zwischen die einfachen Tannen am Rand des Hofs – zusammen mit deinen beiden Laubbäumen sind es sieben Arten, rund 115 Bäume. Das Paket ist gemeinfrei (CC0); die Lizenz liegt in `assets/models/trees/LIZENZ_Quaternius_CC0.txt`, das ganze Paket (68 Modelle, auch Büsche, Gras und Steine) entpackt in `Nachtwache-Modelle/quaternius`. Weitere Bäume: Datei nach `assets/models/trees` legen und in `TREE_MODELS` in `scripts/cabin.gd` eintragen – Größe und Helligkeit passt das Spiel selbst an.
+
 **v0.12** bringt das **M4A4** als Startgewehr (mit Magazin, Kimme und Korn, die eigens dafür gebaut wurden) und ein **Maschinengewehr** mit 100-Schuss-Kasten, drei weitere **tote Forscher und Wachleute** (jetzt fünf verschiedene, die neuen mit einem Koffer daneben), **Laubbäume** als Modelle zwischen den Tannen am Rand des Hofs – und der **Zaun um den Hof ist weg**, damit die Infizierten von überall kommen.
 
 **v0.11** macht das **Gas** zu einem dünnen Dunst, der sich in großen Bänken über den Hof ausbreitet statt als grelle Wolke an einer Stelle zu stehen, gibt dem **Granatwerfer** eine gebogene Flugbahn samt Anzeige, dem **Rotpunktvisier** eine feinere Marke, den **Bots** 129 neue Sprüche und neue Anlässe zu rufen, und zeigt im Menü die drei Wege der **Fähigkeiten** – noch in Wartung.

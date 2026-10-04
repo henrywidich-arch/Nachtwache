@@ -26,11 +26,17 @@ const YARD := Rect2(-44, -40, 88, 88)
 ## Whether the split-rail fence around the yard stands. Without it the infected reach the
 ## house from every side instead of through its gaps.
 const OUTER_FENCE := false
-## Trees that are models instead of the forest's simple pines: the files (each a tree of
-## TREE_MODEL_HEIGHT metres with its foot at the origin), how far out from the yard such
-## trees stand, which share of the trees there they are, and how much darker than their
-## daylight paint they are drawn.
-const TREE_MODELS := ["res://assets/models/tree1.glb", "res://assets/models/tree2.glb"]
+## Trees that are models instead of the forest's simple pines: the files (each a tree with
+## its foot at the origin; whatever its size, it is fitted to TREE_MODEL_HEIGHT metres),
+## how far out from the yard such trees stand, which share of the trees there they are,
+## and how much darker than their daylight paint they are drawn.
+## The first two are the user's own; the others come from the Stylized Nature MegaKit by
+## Quaternius (CC0, see assets/models/trees/LIZENZ_Quaternius_CC0.txt).
+const TREE_MODELS := [
+	"res://assets/models/tree1.glb", "res://assets/models/tree2.glb",
+	"res://assets/models/trees/Pine_1.gltf", "res://assets/models/trees/Pine_4.gltf", "res://assets/models/trees/Pine_5.gltf",
+	"res://assets/models/trees/DeadTree_2.gltf", "res://assets/models/trees/DeadTree_4.gltf"
+]
 const TREE_MODEL_HEIGHT := 12.0
 const TREE_MODEL_REACH := 30.0
 const TREE_MODEL_SHARE := 0.5
@@ -160,8 +166,9 @@ var random := RandomNumberGenerator.new()
 var chunks: Dictionary = {}
 var chunk_shadows: Dictionary = {}
 var batch: MeshBatch = MeshBatch.new()
-## How many trees of the forest are models (see TREE_MODELS).
+## How many trees of the forest are models (see TREE_MODELS), and of how many kinds.
 var model_trees := 0
+var tree_kinds := 0
 var body: StaticBody3D
 var rails: StaticBody3D
 var mats: Dictionary = {}
@@ -3308,23 +3315,33 @@ func _build_forest() -> void:
 	var trunks: Array[Transform3D] = []
 	var cones: Array[Transform3D] = []
 	var clearing := YARD.grow(3.5)
-	# Near the yard a share of the trees are models; each kind: its mesh, where that mesh
-	# sits inside its file, and the places it is planted at. Which tree becomes one is
-	# decided by dice of its own, so that every other tree stays as it was.
+	# Near the yard a share of the trees are models; each kind: its meshes (each with where
+	# it sits inside its file, brought to the common height), and the places it is planted
+	# at. Which tree becomes one is decided by dice of its own, so that every other tree
+	# stays as it was.
 	var kinds: Array = []
 	for path in TREE_MODELS:
 		if not ResourceLoader.exists(path):
 			continue
 		var scene: Node = (load(path) as PackedScene).instantiate()
-		var parts := scene.find_children("*", "MeshInstance3D", true, false)
-		if not parts.is_empty():
+		var meshes: Array = []
+		var top := 0.0
+		for part in scene.find_children("*", "MeshInstance3D", true, false):
 			var inside := Transform3D.IDENTITY
-			var node: Node = parts[0]
+			var node: Node = part
 			while node != scene:
 				inside = (node as Node3D).transform * inside
 				node = node.get_parent()
-			kinds.append([(parts[0] as MeshInstance3D).mesh, inside, []])
+			var box: AABB = inside * (part as MeshInstance3D).mesh.get_aabb()
+			top = maxf(top, box.end.y)
+			meshes.append([_night_tree((part as MeshInstance3D).mesh), inside])
 		scene.free()
+		if meshes.is_empty() or top <= 0.1:
+			continue
+		var fit := Transform3D(Basis.from_scale(Vector3.ONE * (TREE_MODEL_HEIGHT / top)), Vector3.ZERO)
+		for entry in meshes:
+			entry[1] = fit * (entry[1] as Transform3D)
+		kinds.append([meshes, null, []])
 	var chooser := RandomNumberGenerator.new()
 	chooser.seed = 1907
 	var near := YARD.grow(3.5 + TREE_MODEL_REACH)
@@ -3342,8 +3359,7 @@ func _build_forest() -> void:
 		var model := -1
 		if not kinds.is_empty() and near.has_point(Vector2(pos.x, pos.z)) and chooser.randf() < TREE_MODEL_SHARE:
 			model = chooser.randi() % kinds.size()
-			var planted := Transform3D(Basis(Vector3.UP, chooser.randf() * TAU).scaled(Vector3.ONE * (height / TREE_MODEL_HEIGHT)), pos)
-			(kinds[model][2] as Array).append(planted * (kinds[model][1] as Transform3D))
+			(kinds[model][2] as Array).append(Transform3D(Basis(Vector3.UP, chooser.randf() * TAU).scaled(Vector3.ONE * (height / TREE_MODEL_HEIGHT)), pos))
 		else:
 			trunks.append(Transform3D(Basis.from_scale(Vector3(1.0, height * 0.85, 1.0)), pos + Vector3(0, height * 0.42, 0)))
 		for tier in range(4):
@@ -3355,24 +3371,20 @@ func _build_forest() -> void:
 		var places: Array = kind[2]
 		if places.is_empty():
 			continue
-		var many := MultiMesh.new()
-		many.transform_format = MultiMesh.TRANSFORM_3D
-		many.mesh = kind[0]
-		many.instance_count = places.size()
-		for i in range(places.size()):
-			many.set_instance_transform(i, places[i])
-		var grove := MultiMeshInstance3D.new()
-		grove.name = "ModelTrees"
-		grove.multimesh = many
-		grove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		# The files are painted for daylight; here they stand in a forest at night.
-		var paint := (kind[0] as Mesh).surface_get_material(0) as BaseMaterial3D
-		if paint != null:
-			paint = paint.duplicate() as BaseMaterial3D
-			paint.albedo_color = TREE_TINT
-			grove.material_override = paint
-		add_child(grove)
+		for entry in kind[0]:
+			var many := MultiMesh.new()
+			many.transform_format = MultiMesh.TRANSFORM_3D
+			many.mesh = entry[0]
+			many.instance_count = places.size()
+			for i in range(places.size()):
+				many.set_instance_transform(i, (places[i] as Transform3D) * (entry[1] as Transform3D))
+			var grove := MultiMeshInstance3D.new()
+			grove.name = "ModelTrees"
+			grove.multimesh = many
+			grove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			add_child(grove)
 		model_trees += places.size()
+		tree_kinds += 1
 	for group in [[trunk, trunks, "Trunks"], [cone, cones, "Needles"]]:
 		var transforms: Array = group[1]
 		var multimesh := MultiMesh.new()
@@ -3386,6 +3398,25 @@ func _build_forest() -> void:
 		instance.multimesh = multimesh
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
+
+## A copy of a tree's mesh as it stands in the forest at night: the files are painted for
+## daylight, so every surface is drawn darker; leaves that are cut out of a texture are cut
+## with a hard edge (no blending, which a few hundred trees could not afford) and are seen
+## from both sides.
+func _night_tree(mesh: Mesh) -> Mesh:
+	var own: Mesh = mesh.duplicate()
+	for surface in range(own.get_surface_count()):
+		var paint := own.surface_get_material(surface) as BaseMaterial3D
+		if paint == null:
+			continue
+		paint = paint.duplicate() as BaseMaterial3D
+		paint.albedo_color = Color(paint.albedo_color.r * TREE_TINT.r, paint.albedo_color.g * TREE_TINT.g, paint.albedo_color.b * TREE_TINT.b, paint.albedo_color.a)
+		if paint.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+			paint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			paint.alpha_scissor_threshold = 0.5
+			paint.cull_mode = BaseMaterial3D.CULL_DISABLED
+		own.surface_set_material(surface, paint)
+	return own
 
 func _build_grass() -> void:
 	var vertices := PackedVector3Array()
