@@ -1,0 +1,2106 @@
+extends Node
+## Run with Godot --headless --path <project> -- --smoke-test.
+var failures := 0
+var checks := 0
+
+func expect(condition: bool, description: String) -> void:
+	checks += 1
+	if condition:
+		print("PASS: " + description)
+	else:
+		failures += 1
+		push_error("FAIL: " + description)
+		print("FAIL: " + description)
+
+func frames(count: int) -> void:
+	for i in range(count):
+		await get_tree().physics_frame
+
+func wait(seconds: float) -> void:
+	await get_tree().create_timer(seconds).timeout
+
+func face(game: Node3D, pos: Vector3, yaw: float) -> void:
+	game.player.position = pos
+	game.player.velocity = Vector3.ZERO
+	game.player.rotation = Vector3(0, yaw, 0)
+	game.player.camera.rotation = Vector3.ZERO
+
+## A place to stand in front of a station: one metre from it, towards `room`.
+func beside(game: Node3D, kind: String, room: Vector3, index: int = 0) -> Vector3:
+	var found := 0
+	for station in game.cabin.stations:
+		if station.kind == kind:
+			if found == index:
+				var pos: Vector3 = station.pos
+				return pos + pos.direction_to(Vector3(room.x, pos.y, room.z)) + Vector3(0, 0.05, 0)
+			found += 1
+	return Vector3.ZERO
+
+func run(game: Node3D) -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	game.set_process(false)
+	# The rule checks below count exact kills and damage, so they run without the squad.
+	game.team_enabled = false
+	# --only=threats runs one of the later blocks on its own (handy while working on it).
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--only="):
+			await call("_" + arg.trim_prefix("--only="), game)
+			game.sounds.stop_all()
+			await wait(0.2)
+			print("INTEGRATION_RESULT: %d checks, %d failures (only %s)" % [checks, failures, arg.trim_prefix("--only=")])
+			get_tree().call_deferred("quit", 0 if failures == 0 else 1)
+			return
+	var cabin: CabinMap = game.cabin
+	expect(game.state == "menu", "Project opens on the menu")
+	var spots: Dictionary = cabin.points
+	var lift := Vector3(0, 0.1, 0)
+	var kinds := {}
+	for station in cabin.stations:
+		kinds[station.kind] = int(kinds.get(station.kind, 0)) + 1
+	expect(cabin.stations.size() == 7 and kinds.get("shop") == 1 and kinds.get("upgrade") == 1 and kinds.get("ammo") == 3 and kinds.get("health") == 2 and cabin.level_of(cabin.stations[6].pos) == 1, "Supply stations in the house and the outbuildings, a workbench and a weapon shop exist")
+	# --- navigation
+	var rooms := ["hall", "lounge", "kitchen", "dining", "supply", "stair_hall", "gallery", "upper_landing", "upper_west", "upper_east", "upper_northwest", "upper_northeast", "balcony", "barn", "garage", "guest_cabin", "shed"]
+	for point in cabin.spawn_points:
+		var path: PackedVector3Array = cabin.path_between(point, spots.hall)
+		expect(path.size() > 2 and path[path.size() - 1].distance_to(spots.hall) < 0.4, "Spawn has a complete path into the house: " + str(point))
+	for room in rooms:
+		var target: Vector3 = spots[room]
+		var path: PackedVector3Array = cabin.path_between(cabin.spawn_points[0], target)
+		# A named place may sit next to furniture: the way ends on the nearest free spot.
+		expect(path.size() > 2 and path[path.size() - 1].distance_to(target) < 0.8, "The infected can reach the " + room)
+	var highest := 0.0
+	for step in cabin.path_between(spots.hall, spots.upper_west):
+		highest = maxf(highest, step.y)
+	expect(absf(highest - CabinMap.STOREY) < 0.1 and cabin.level_of(spots.upper_west) == 1 and cabin.level_of(spots.hall) == 0, "The way to the upper floor leads over a staircase")
+	expect(cabin.is_toxic(spots.gas) and not cabin.is_toxic(spots.yard_south) and not cabin.is_toxic(spots.barn) and not cabin.is_toxic(Vector3.ZERO), "Gas lies beyond the fence; the yard and the house are safe")
+	# --- the infected come from the side of the yard where the survivor is
+	game.player.position = (spots.barn as Vector3) + lift
+	var gaps: Array = []
+	for point in cabin.spawn_points:
+		gaps.append(point.distance_to(spots.barn))
+	gaps.sort()
+	var near_only := true
+	var repeated := false
+	for i in range(30):
+		var pick: int = game._pick_spawn()
+		near_only = near_only and cabin.spawn_points[pick].distance_to(spots.barn) <= float(gaps[6]) + 0.01
+		repeated = repeated or pick == game.last_spawn
+		game.last_spawn = pick
+	expect(near_only and not repeated, "The infected arrive through the nearer gaps in the fence, never twice through the same one")
+	# --- movement
+	game.start_run()
+	await frames(12)
+	expect(game.player.is_on_floor(), "Player stands on the floor")
+	expect(game.player.health == 100 and game.player.ammo == 30, "Fresh match restores health and weapon")
+	var start_z: float = game.player.position.z
+	Input.action_press("move_forward")
+	await frames(24)
+	Input.action_release("move_forward")
+	expect(game.player.position.z > start_z + 0.8, "WASD input drives the physical player controller")
+	await frames(10)
+	Input.action_press("jump")
+	await frames(2)
+	Input.action_release("jump")
+	await frames(8)
+	expect(game.player.position.y > 0.3, "Jump lifts the player off the floor")
+	await frames(35)
+	# --- every infected model is rigged and animated
+	game.begin_wave()
+	var expected_bones := {"mauler_hazmat": 25, "mauler_female": 68, "striker": 68, "crusher": 28, "charger": 19, "normalzombie": 22, "normalzombie2": 22, "zombiehelm": 22, "leech": 22}
+	var owners := {"mauler_hazmat": "mauler", "mauler_female": "mauler", "striker": "striker", "crusher": "crusher", "charger": "charger", "normalzombie": "mauler", "normalzombie2": "mauler", "zombiehelm": "mauler", "leech": "leech"}
+	for visual in expected_bones:
+		var specimen: Infected = game.spawn_enemy(owners[visual], visual)
+		specimen.set_physics_process(false)
+		var model: InfectedVisual = specimen.model
+		var rig: Dictionary = model.rig
+		expect(model.skeleton.get_bone_count() == expected_bones[visual] and rig.arms.size() == 2 and rig.legs.size() == 2 and rig.spine.size() >= 2, "%s has a skeleton with detected spine, arms and legs" % visual)
+		var thigh: int = rig.legs[0].thigh.index
+		model.animate(0.3, 3.0)
+		var before := model.skeleton.get_bone_pose_rotation(thigh)
+		model.animate(0.17, 3.0)
+		expect(before.angle_to(model.skeleton.get_bone_pose_rotation(thigh)) > 0.05, "%s run cycle moves real skeleton bones" % visual)
+		var library: AnimationLibrary = InfectedVisual.libraries[visual]
+		var wanted_clips := ["mutant_walk", "slam", "leap", "mutant_death"] if visual == "crusher" else ["run", "stumble", "death_back", "death_from_left", "kick", "swipe_left"]
+		var complete := true
+		for clip in wanted_clips:
+			complete = complete and library.has_animation(clip)
+		expect(complete and library.get_animation_list().size() >= 9, "%s carries the retargeted Mixamo clips, mirrored variants included" % visual)
+		# Feet stay near the ground through the whole run cycle.
+		var lowest := INF
+		for step in range(12):
+			model.animate(0.07, 3.0)
+			for leg in rig.legs:
+				lowest = minf(lowest, model.skeleton.get_bone_global_pose(leg.foot.index).origin.y)
+		var rest_foot: float = model.skeleton.get_bone_global_rest(rig.legs[0].foot.index).origin.y
+		expect(absf(lowest - rest_foot) < 0.08, "%s keeps its feet on the ground while running" % visual)
+		specimen.queue_free()
+	game.alive_count = 0
+	game.boss = null
+	await frames(2)
+	expect(game.sounds.recorded["shot"] and game.sounds.recorded["badger"] and game.sounds.recorded["growl"] and game.sounds.recorded["rain"] and (game.sounds.clips["growl"] as Array).size() == 3, "Recorded sound effects are loaded, with variants")
+	var fresh := true
+	for sound in ["shotgun", "shotgun_pump", "shell_in", "dog_growl", "dog_bite", "dog_death", "gore_burst", "headpop", "bodyfall", "striker_attack", "crusher_death", "bot_hurt_male", "bot_hurt_female"]:
+		fresh = fresh and bool(game.sounds.recorded.get(sound, false))
+	expect(fresh, "The recordings for the shotgun, the hound, the squad and the gore are loaded")
+	# --- hit reactions: flinch, stumble with knock-back, falling
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var lurker: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	lurker.position = Vector3(0, 0.05, 19.0)
+	lurker.lurk_left = 30.0
+	await wait(1.0)
+	expect(not lurker.alert and lurker.position.z > 17.9 and lurker.position.z < 18.9, "A distant Mauler shambles slowly until it notices the survivor")
+	lurker.receive_hit(1.0, Vector3.BACK)
+	expect(lurker.alert, "A shot wakes a shambling Mauler")
+	lurker.position = Vector3(0, 0.05, 7.0)
+	# Moved by hand, so its old route is void.
+	lurker.repath_left = 0.0
+	await wait(0.6)
+	var stumble_from: float = lurker.position.z
+	expect(stumble_from < 6.6 and lurker.model.gait == str(lurker.model.moves.run), "An alert Mauler runs at the survivor")
+	lurker.receive_hit(lurker.max_health * 0.5, Vector3.BACK)
+	expect(lurker.held_left > 0.5 and lurker.model.state == "stagger" and lurker.model.flinch > 0.5, "Concentrated fire makes a Mauler stumble")
+	await wait(0.8)
+	expect(lurker.position.z > stumble_from + 0.2, "The stumble really knocks the body backwards")
+	lurker.cooldown = 0.0
+	lurker.attack_clock = 0.1
+	lurker._stagger(false)
+	expect(lurker.attack_clock < 0.0, "A stagger breaks off an attack")
+	var lurker_model: InfectedVisual = lurker.model
+	lurker.receive_hit(9999, Vector3.BACK)
+	await wait(1.9)
+	expect(lurker_model.dying and lurker_model.head_position().y < 0.75, "A killed Mauler falls and stays on the ground")
+	# --- far from the fight the infected hurry
+	var straggler: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	straggler.position = Vector3(0, 0.05, 44.0)
+	straggler.receive_hit(1.0, Vector3.BACK)
+	await wait(1.6)
+	var hurried: float = straggler.get_real_velocity().length()
+	straggler.position = Vector3(0, 0.05, 8.0)
+	straggler.repath_left = 0.0
+	await wait(0.6)
+	expect(hurried > straggler.speed * 1.5 and straggler.get_real_velocity().length() < straggler.speed * 1.15, "An infected far from its prey hurries and slows to its own pace when it gets close")
+	straggler.receive_hit(9999, Vector3.BACK)
+	game.kills = 0
+	game.credits = 120
+	game.score = 0
+	# --- shooting
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var enemy: Infected = game.spawn_enemy("mauler")
+	enemy.set_physics_process(false)
+	enemy.position = Vector3(0, 0.05, 4.0)
+	await frames(3)
+	game.player.shoot()
+	expect(is_equal_approx(enemy.health, enemy.max_health - 28.0 * 2.7), "Real camera raycast scores a headshot with the head multiplier")
+	await frames(10)
+	game.player.shoot()
+	expect(enemy.dead and game.kills == 1, "A second headshot kills the Mauler")
+	expect(game.player.ammo == 28 and game.credits == 145 and game.score == 150, "Shots consume ammo; the kill awards supplies and score with headshot bonus")
+	game.player.start_reload()
+	await wait(1.9)
+	expect(game.player.ammo == 30 and game.player.reserve == 178, "Reload transfers exactly the missing rounds from reserve")
+	# --- walls and windows
+	var blocked: Infected = game.spawn_enemy("mauler")
+	blocked.set_physics_process(false)
+	blocked.position = (spots.wall_out as Vector3) + Vector3(0, 0.05, 0)
+	face(game, (spots.wall_in as Vector3) + Vector3(0, 0.05, 0), PI)
+	await frames(3)
+	game.player.shoot()
+	expect(blocked.health == blocked.max_health, "The house wall blocks rifle fire")
+	var health_before: float = game.player.health
+	blocked.cooldown = 0
+	for i in range(8):
+		blocked._physics_process(0.1)
+	expect(game.player.health == health_before and blocked.attack_clock < 0.0, "The house wall blocks melee attacks")
+	blocked.position = (spots.window_out as Vector3) + Vector3(0, 0.05, 0)
+	face(game, (spots.window_in as Vector3) + Vector3(0, 0.05, 0), PI / 2)
+	await frames(12)
+	game.player.shoot()
+	expect(blocked.health < blocked.max_health, "Shots pass through a window opening")
+	Input.action_press("move_forward")
+	await frames(50)
+	Input.action_release("move_forward")
+	expect(game.player.position.x > -CabinMap.HX + 0.3 and game.player.position.x < float(spots.window_in.x) - 0.3, "The window sill keeps the player inside")
+	blocked.receive_hit(9999, Vector3.FORWARD)
+	# --- melee with a wind-up
+	face(game, Vector3(0, 0.05, 3.0), PI)
+	var mauler: Infected = game.spawn_enemy("mauler")
+	mauler.set_physics_process(false)
+	mauler.position = Vector3(0, 0.05, 3.9)
+	await frames(3)
+	health_before = game.player.health
+	mauler.cooldown = 0
+	mauler._physics_process(0.016)
+	expect(mauler.attack_clock >= 0.0 and game.player.health == health_before, "A Mauler winds up before its claws land")
+	for i in range(5):
+		mauler._physics_process(0.1)
+	expect(game.player.health == health_before - 9.0, "The Mauler's strike inflicts real melee damage")
+	mauler.receive_hit(9999, Vector3.FORWARD)
+	# --- Charger
+	game.player.health = 100
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var charger: Infected = game.spawn_enemy("charger")
+	charger.position = Vector3(0, 0.05, 3.0)
+	var alive_before: int = game.alive_count
+	var kills_before: int = game.kills
+	await wait(1.0)
+	expect(not is_instance_valid(charger) and game.player.health < 100 and game.alive_count == alive_before - 1 and game.kills == kills_before, "A Charger that reaches the player detonates and hurts; nobody is credited")
+	expect(game.hud.splatter_left > 0.0 and game.fx.decals.size() >= 12, "A Charger bursting nearby covers the room and the screen in blood")
+	game.player.health = 100
+	face(game, Vector3(0, 0.05, -5.0), PI)
+	var bomb: Infected = game.spawn_enemy("charger")
+	bomb.set_physics_process(false)
+	bomb.position = Vector3(0, 0.05, 4.5)
+	var bystander: Infected = game.spawn_enemy("mauler")
+	bystander.set_physics_process(false)
+	bystander.position = Vector3(1.4, 0.05, 4.5)
+	await frames(3)
+	bomb.receive_hit(9999, Vector3.BACK)
+	expect(bomb.dead and is_instance_valid(bomb), "A shot Charger swells for a moment before it bursts")
+	await wait(0.5)
+	expect(not is_instance_valid(bomb) and bystander.health < bystander.max_health and game.player.health == 100, "A shot Charger explodes, tears into infected nearby and spares a distant player")
+	if not bystander.dead:
+		bystander.receive_hit(9999, Vector3.FORWARD)
+	# --- Striker
+	face(game, Vector3(0, 0.05, 3.0), PI)
+	var striker: Infected = game.spawn_enemy("striker")
+	striker.set_physics_process(false)
+	striker.position = Vector3(0, 0.05, 4.6)
+	await frames(3)
+	striker.receive_hit(striker.max_health * 0.6, Vector3.BACK)
+	expect(game.fx.growths.size() == 1 and not striker.dead, "A wounded Striker sheds one explosive growth")
+	striker.receive_hit(9999, Vector3.BACK)
+	expect(game.fx.growths.size() == 4, "A killed Striker drops three more growths")
+	game.player.health = 100
+	await wait(3.6)
+	expect(game.fx.growths.is_empty() and game.player.health < 100, "The growths burst after a short fuse and injure a player who stays close")
+	# --- Crusher
+	game.player.health = 100
+	face(game, Vector3(0, 0.05, 3.0), PI)
+	# One that comes before the last round is not yet fully grown.
+	var early_round: int = game.wave
+	game.wave = 6
+	var young: Infected = game.spawn_enemy("crusher")
+	young.set_physics_process(false)
+	game.wave = game.ROUNDS.size()
+	var crusher: Infected = game.spawn_enemy("crusher")
+	game.wave = early_round
+	crusher.set_physics_process(false)
+	crusher.position = Vector3(0, 0.05, 5.2)
+	expect(game.boss == crusher and crusher.max_health >= 2000 and young.max_health < crusher.max_health * 0.6 and int(game.ROUNDS[5].get("crusher", 0)) == 1, "The Crusher is tracked as the boss with a deep health pool; an early one is weaker")
+	young._retire()
+	young.queue_free()
+	game.alive_count -= 1
+	expect(crusher.is_headshot(crusher.global_position + Vector3(0, 2.3, 0)) and not crusher.is_headshot(crusher.global_position + Vector3(0, 1.7, 0)), "The Crusher's head sits above a normal survivor")
+	crusher.set_physics_process(true)
+	await frames(6)
+	expect(crusher.head_box.global_position.y > 2.1, "The Crusher's head hit zone follows its skull above the body capsule")
+	crusher.set_physics_process(false)
+	face(game, Vector3(0, 0.05, 3.0), PI)
+	game.player.camera.look_at(crusher.head_box.global_position)
+	var crusher_health: float = crusher.health
+	await frames(8)
+	game.player.shoot()
+	expect(is_equal_approx(crusher.health, crusher_health - 28.0 * maxf(1.0, 2.7 * 0.55)), "A shot at the Crusher's head counts as a resisted headshot")
+	crusher.receive_hit(crusher.max_health * 0.52, Vector3.BACK)
+	expect(crusher.enraged and not crusher.dead, "A Crusher that has lost half its health goes berserk")
+	crusher.receive_hit(99999, Vector3.BACK)
+	expect(crusher.dead and game.boss == null and game.fx.clouds.size() == 1, "A dead Crusher leaves an acid cloud")
+	await wait(1.2)
+	expect(game.fx.in_acid(game.player.global_position) and game.player.health < 100, "Standing in the acid cloud burns the player")
+	# --- stations
+	game.start_run()
+	game.player.position = beside(game, "ammo", spots.supply)
+	game.credits = 60
+	game.player.reserve = 0
+	game.interact()
+	expect(game.player.reserve == 180 and game.credits == 0, "Ammo station refills reserve and charges 60")
+	game.player.ammo = 0
+	game.player.reserve = 0
+	game.interact()
+	expect(game.player.reserve == 30 and game.credits == 0, "Emergency reserve prevents an ammunition softlock")
+	game.player.position = beside(game, "health", spots.supply)
+	game.credits = 100
+	game.player.health = 20
+	game.interact()
+	expect(game.player.health == 70 and game.credits == 0, "Medical station heals 50 and charges 100")
+	game.player.position = beside(game, "upgrade", spots.garage)
+	game.credits = 1000
+	for i in range(4): game.interact()
+	expect(game.player.weapon_level == 3 and game.credits == 250, "Upgrade station caps at level three without overcharging")
+	game.player.position = Vector3(11.5, 0.05, -6.0)
+	expect(game.closest_station().kind == "health", "Between two stations the nearer one answers")
+	game.player.position = beside(game, "ammo", spots.barn, 1)
+	game.credits = 60
+	game.player.reserve = 0
+	game.interact()
+	expect(game.player.reserve == 180 and game.credits == 0, "The barn has a second ammunition station")
+	game.player.position = Vector3(0, CabinMap.STOREY + 0.05, -2.2)
+	expect(game.closest_station().is_empty(), "A station cannot be used through the floor from the storey above")
+	# --- gas
+	game.player.position = (spots.gas as Vector3) + lift
+	game.player.health = 100
+	game.player._update_mist(3.1)
+	expect(game.player.health == 94, "Toxic gas damages a player who stays beyond the fence")
+	game.player.position = Vector3(0, 0.1, 0)
+	game.player._update_mist(0.1)
+	expect(game.player.mist_exposure == 0, "Returning to the yard stops the gas exposure")
+	# --- pause
+	game.pause_run()
+	var seconds: float = game.elapsed
+	await get_tree().process_frame
+	expect(get_tree().paused and not game.player.controlled and game.elapsed == seconds, "Pause freezes gameplay and releases control")
+	game.resume_run()
+	expect(not get_tree().paused and game.player.controlled, "Resume restores control and simulation")
+	game.return_to_menu()
+	game.start_run()
+	# --- the infected physically walk in through the entrances
+	game.begin_wave()
+	for entrance in [["front_door", "hall", "the front door"], ["breach", "kitchen", "the breach in the kitchen wall"], ["back_door", "stair_hall", "the back door"], ["side_door", "lounge", "the side door"]]:
+		var outside: Vector3 = spots[entrance[0] + "_out"]
+		var inside: Vector3 = spots[entrance[0] + "_in"]
+		var walker: Infected = game.spawn_enemy("mauler")
+		walker.position = outside + lift
+		game.player.position = (spots[entrance[1]] as Vector3) + lift
+		game.player.health = 100
+		await wait(3.2)
+		expect(walker.position.distance_to(inside) < walker.position.distance_to(outside) - 1.0, "A Mauler walks in through " + entrance[2] + " using navigation and collision")
+		walker.receive_hit(9999, Vector3.FORWARD)
+	# --- both staircases carry the infected up, and the survivor too
+	for way in [["stairs", "upper_landing", "the staircase in the house"], ["outer_stairs", "balcony", "the outer stairs to the balcony"]]:
+		var climber: Infected = game.spawn_enemy("mauler")
+		climber.position = (spots[way[0] + "_bottom"] as Vector3) + lift
+		game.player.position = (spots[way[1]] as Vector3) + lift
+		game.player.health = 100
+		climber.receive_hit(1.0, Vector3.BACK)
+		await wait(6.0)
+		expect(climber.position.y > CabinMap.STOREY - 0.3 and climber.position.distance_to(game.player.position) < 4.0, "A Mauler climbs " + way[2] + " to reach a survivor upstairs")
+		climber.receive_hit(9999, Vector3.FORWARD)
+	game.player.health = 100
+	face(game, (spots.stairs_bottom as Vector3) + lift, PI / 2)
+	Input.action_press("move_forward")
+	await frames(150)
+	Input.action_release("move_forward")
+	expect(game.player.position.y > CabinMap.STOREY - 0.2 and game.player.is_on_floor(), "The survivor walks up the stairs to the upper floor")
+	face(game, (spots.gallery as Vector3) + lift, PI)
+	await frames(20)
+	expect(game.player.is_on_floor() and absf(game.player.position.y - CabinMap.STOREY) < 0.15 and cabin.is_indoors(game.player.position), "The gallery above the hall carries the survivor")
+	# --- all ten rounds
+	game.return_to_menu()
+	game.start_run()
+	var total := 0
+	game.mission.plain()
+	for round_index in range(game.ROUNDS.size()):
+		game.begin_wave()
+		var count: int = game.remaining_to_spawn
+		var roster: Dictionary = game.ROUNDS[round_index]
+		var planned := 0
+		for kind in roster:
+			planned += int(roster[kind])
+		expect(count == planned, "Round %d has the specified population of %d" % [round_index + 1, planned])
+		if round_index == 4:
+			expect("striker" in game.spawn_queue, "Strikers join in round five")
+		if round_index == game.ROUNDS.size() - 1:
+			expect("crusher" in game.spawn_queue, "The Crusher arrives in the final round")
+		total += count
+		for i in range(count):
+			var target: Infected = game.spawn_enemy()
+			target.receive_hit(99999, Vector3.FORWARD)
+		expect(game.alive_count == 0 and game.remaining_to_spawn == 0, "Round %d can be cleared" % (round_index + 1))
+		game.complete_wave()
+		if round_index < game.ROUNDS.size() - 1:
+			expect(game.phase == "preparing", "A cleared round opens a resupply interval")
+	expect(game.state == "win" and game.kills == total, "All ten rounds end in victory with %d kills" % total)
+	game.start_run()
+	await frames(4)
+	expect(game.kills == 0 and game.score == 0 and game.enemies.get_child_count() == 0 and game.player.weapon_level == 0 and game.fx.growths.is_empty(), "Restart clears enemies, hazards, score and upgrades")
+	# --- weapon shop: open between rounds, shuttered during them
+	expect(cabin.shop_open and game.phase == "preparing", "The weapon shop is open before the first round")
+	expect(not game.player.equip_weapon("p90") and game.player.current_weapon == "rifle", "P90 cannot be equipped before purchase")
+	game.player.ammo = 7
+	game.player.reserve = 17
+	game.player.weapon_level = 2
+	game.player.position = (spots.shop as Vector3) + lift
+	game.credits = 99
+	game.interact()
+	expect(game.state == "shop" and get_tree().paused, "E at the open weapon shop opens its menu and pauses combat")
+	expect(not game.buy_weapon("p90") and game.credits == 99, "Insufficient funds cannot buy the P90")
+	game.credits = 120
+	expect(game.buy_weapon("p90") and game.credits == 20, "P90 purchase deducts exactly 100 supplies")
+	expect(game.player.current_weapon == "p90" and game.player.ammo == 50 and game.player.reserve == 250, "Purchased P90 is equipped with its own 50-round magazine")
+	expect(not game.buy_weapon("p90") and game.credits == 20, "Repeated purchase never charges again")
+	game.credits = 349
+	expect(not game.buy_weapon("badger") and not game.player.inventory.has("badger"), "The Honey Badger costs more than 349 supplies")
+	game.credits = 350
+	expect(game.buy_weapon("badger") and game.credits == 0 and game.player.current_weapon == "badger" and game.player.ammo == 30 and game.player.reserve == 210, "Honey Badger purchase deducts 350 and equips it fully loaded")
+	game.resume_run()
+	game.player.equip_weapon("rifle")
+	expect(game.player.ammo == 7 and game.player.reserve == 17 and game.player.weapon_level == 2, "Switching restores the rifle's separate ammo and upgrade")
+	game.player._select_slot(3)
+	expect(game.player.current_weapon == "badger", "Key 3 selects the Honey Badger")
+	game.player._cycle(1)
+	expect(game.player.current_weapon == "rifle", "The mouse wheel cycles through owned weapons")
+	game.player._select_slot(2)
+	expect(game.player.current_weapon == "p90" and game.player.weapon_level == 0, "P90 has its own upgrade level")
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	game.begin_wave()
+	expect(not cabin.shop_open, "The shop shutter comes down when a round begins")
+	game.player.position = (spots.shop as Vector3) + lift
+	game.interact()
+	expect(game.state == "playing" and "geschlossen" in game.interaction_prompt(), "A closed shop cannot be opened during a round")
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var p90_target: Infected = game.spawn_enemy("mauler")
+	p90_target.set_physics_process(false)
+	p90_target.position = Vector3(0, 0.05, 4.0)
+	await frames(20)
+	game.player.shoot()
+	expect(is_equal_approx(p90_target.health, p90_target.max_health - 23.0 * 3.0) and game.player.ammo == 49, "P90 fires a real damaging shot and consumes its own ammo")
+	game.player.equip_weapon("badger")
+	p90_target.health = p90_target.max_health
+	await frames(20)
+	game.player.shoot()
+	expect(is_equal_approx(p90_target.health, p90_target.max_health - 34.0 * 2.6) and game.player.ammo == 29, "The suppressed Honey Badger hits harder than the other weapons")
+	game.player.equip_weapon("p90")
+	game.player.ammo = 1
+	game.player.reserve = 2
+	game.player.start_reload()
+	await wait(2.3)
+	expect(game.player.ammo == 3 and game.player.reserve == 0 and game.player.reload_cue == 3, "P90 reload plays its three steps and cannot create ammunition")
+	game.player.ammo = 10
+	game.player.reserve = 20
+	game.player.start_reload()
+	game.player.equip_weapon("rifle")
+	game.player.equip_weapon("p90")
+	expect(game.player.reload_left == 0 and game.player.ammo == 10 and game.player.reserve == 20, "Switching during reload cancels it without transferring rounds")
+	game.player.position = beside(game, "ammo", spots.supply)
+	game.credits = 60
+	game.interact()
+	expect(game.player.reserve == 250 and game.credits == 0, "Ammo station uses the equipped P90's reserve capacity")
+	game.spawn_queue.clear()
+	p90_target.receive_hit(9999, Vector3.FORWARD)
+	game.complete_wave()
+	expect(cabin.shop_open and game.phase == "preparing", "The shop reopens as soon as the round is survived")
+	game.start_run()
+	expect(not game.player.inventory.has("p90") and game.player.current_weapon == "rifle", "Restart resets purchased weapons cleanly")
+	# --- gear from the shop
+	game.start_run()
+	game.credits = 2000
+	game.player.position = (spots.shop as Vector3) + lift
+	game.interact()
+	expect(game.item_price("grenade") == 60 and game.buy_item("grenade") and game.buy_item("grenade") and game.player.items.grenade == 2 and game.credits == 1880, "Grenades are bought one at a time")
+	for i in range(4):
+		game.buy_item("grenade")
+	expect(game.player.items.grenade == 4 and game.item_price("grenade") == -1 and game.credits == 1760, "The pockets hold four grenades and no more")
+	expect(game.buy_item("vest") and game.player.armor == 50.0 and game.buy_item("armor") and game.player.armor == 100.0 and not game.buy_item("vest") and game.credits == 1310, "A vest gives 50 armour, heavy armour 100")
+	expect(game.buy_item("mask") and game.buy_item("mask") and game.player.mask_level == 2 and game.item_price("mask") == 400 and game.credits == 910, "The gas mask is bought level by level")
+	expect(game.buy_item("mags") and game.player.magazine_size() == 45 and game.player.ammo == 45 and not game.buy_item("mags") and game.credits == 710, "Bigger magazines hold half as much again")
+	expect(game.buy_item("flashbang") and game.buy_item("claymore") and game.buy_item("revive") and not game.buy_item("revive") and game.credits == 275, "Flashbangs, mines and one adrenaline shot are on sale too")
+	game.resume_run()
+	game.player.receive_damage(20.0, Vector3(0, 0, 5))
+	expect(game.player.health == 92.0 and game.player.armor == 88.0, "Armour takes 60 % of a hit")
+	# Grenade: the blast, and the throw itself.
+	face(game, Vector3(0, 0.05, 0.0), PI)
+	var pack: Array[Infected] = []
+	for i in range(3):
+		var victim: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+		victim.set_physics_process(false)
+		victim.position = Vector3(-1.0 + i, 0.05, 7.5)
+		pack.append(victim)
+	await frames(3)
+	var health_then: float = game.player.health
+	game.blast(Vector3(0, 0.3, 7.5), Throwable.BLAST[0], Throwable.BLAST[1], Throwable.BLAST[2])
+	expect(pack[0].dead and pack[1].dead and pack[2].dead and game.player.health == health_then, "A grenade blast kills the pack around it and spares who keeps away")
+	game.player.throw("grenade")
+	expect(game.player.items.grenade == 3 and game.ordnance.get_child_count() == 1, "G throws a grenade")
+	game.player.throw("grenade")
+	expect(game.player.items.grenade == 3, "A second throw has to wait a moment")
+	await wait(2.9)
+	expect(game.ordnance.get_child_count() == 0, "The grenade goes off when its fuse has burnt down")
+	# Flashbang: stuns what can see it.
+	var dazed: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	dazed.set_physics_process(false)
+	dazed.position = Vector3(1.0, 0.05, 6.0)
+	var shielded: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	shielded.set_physics_process(false)
+	shielded.position = (spots.wall_out as Vector3) + Vector3(0, 0.05, 0)
+	await frames(3)
+	game.flash_bang((spots.wall_in as Vector3) + Vector3(0, 1.0, 0))
+	var behind_wall: float = shielded.held_left
+	game.flash_bang(Vector3(0, 1.0, 3.0))
+	expect(dazed.held_left > 3.5 and behind_wall == 0.0, "A flashbang stuns the infected that can see it, not those behind a wall")
+	dazed.receive_hit(9999, Vector3.BACK)
+	shielded.receive_hit(9999, Vector3.BACK)
+	# Claymore.
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	await frames(4)
+	game.player.throw_cooldown = 0.0
+	game.player.place_claymore()
+	expect(game.player.items.claymore == 0 and game.ordnance.get_child_count() == 1, "B sets a mine down in front of the survivor")
+	var walker_in: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	walker_in.position = Vector3(0, 0.05, 8.0)
+	walker_in.receive_hit(1.0, Vector3.BACK)
+	var tripped := false
+	for i in range(360):
+		await get_tree().physics_frame
+		if game.ordnance.get_child_count() == 0:
+			tripped = true
+			break
+	expect(tripped and walker_in.dead, "The mine goes off when an infected walks in front of it")
+	# Adrenaline.
+	game.player.health = 30
+	game.player.armor = 0.0
+	game.player.receive_damage(500.0)
+	expect(game.player.health == 50.0 and not game.player.down and game.state == "playing" and game.player.items.revive == 0, "The adrenaline shot saves the survivor once")
+	# Gas mask and drifting gas.
+	game.player.health = 100
+	game.player.position = (spots.gas as Vector3) + lift
+	game.player._update_mist(5.0)
+	expect(game.player.filter_left == 15.0 and game.player.mist_exposure == 0.0 and game.player.health == 100.0, "A gas mask keeps the air clean while its filter lasts")
+	game.player._update_mist(16.0)
+	game.player._update_mist(3.1)
+	expect(game.player.filter_left == 0.0 and game.player.health == 94.0, "With the filter used up the gas hurts again")
+	game.player.position = Vector3(0, 0.1, 0)
+	game.player._update_mist(10.0)
+	expect(is_equal_approx(game.player.filter_left, 6.0), "In clean air the filter recovers")
+	cabin.set_gas("north")
+	expect(cabin.is_toxic(spots.yard_north) and not cabin.is_toxic(spots.barn) and not cabin.is_toxic(spots.yard_south) and not cabin.is_toxic(spots.stair_hall), "Drifting gas covers one side of the yard; buildings stay safe")
+	cabin.set_gas("")
+	expect(not cabin.is_toxic(spots.yard_north), "The gas clears again")
+	game.mission.plan[0] = {"wave": "classic", "tasks": [], "gas": "east"}
+	game.begin_wave()
+	var drifted: String = cabin.gas_zone
+	game.spawn_queue.clear()
+	game.complete_wave()
+	expect(drifted == "east" and cabin.gas_zone == "" and cabin.gas_cloud != null and not cabin.gas_cloud.visible, "A round can bring gas, and it is gone when the round is over")
+	# --- missions: round kinds and tasks
+	game.start_run()
+	var mission: MissionDirector = game.mission
+	var plain: bool = mission.plan.size() == game.ROUNDS.size()
+	for index in [0, 1, game.ROUNDS.size() - 1]:
+		plain = plain and mission.plan[index].wave == "classic" and (mission.plan[index].tasks as Array).is_empty()
+	expect(plain, "The night is planned in advance; the first two rounds and the last stay plain")
+	mission.plan[0] = {"wave": "horde", "tasks": ["codes"]}
+	game.begin_wave()
+	expect(mission.wave_kind == "horde" and game.remaining_to_spawn == 11 + 1, "A horde round brings far more Maulers")
+	game.spawn_queue.clear()
+	var codes: Dictionary = mission.tasks[0]
+	var outside := true
+	for item in codes.items:
+		var place: Vector3 = item.pos
+		outside = outside and not (absf(place.x) < CabinMap.HX and absf(place.z) < CabinMap.HZ) and not cabin.is_toxic(place) and cabin.path_between(spots.hall, place).size() > 2
+	expect(mission.tasks.size() == 1 and codes.items.size() == 2 and outside and not mission.round_clear() and mission.markers().size() == 2, "Dead Helix researchers lie somewhere on the farm, within reach")
+	mission.update(0.1)
+	expect(mission.props.size() == 2 and "Zugangscodes bergen  0/2" in mission.summary()[0], "A task shows in the world and on the HUD")
+	mission.trickle_left = 0.0
+	game.alive_count = 0
+	mission.update(0.1)
+	expect(game.remaining_to_spawn == 1, "While a task is open, more infected keep coming")
+	game.spawn_queue.clear()
+	var supplies_before: int = game.credits
+	game.player.position = (codes.items[0].pos as Vector3) + Vector3(0.8, 0.1, 0)
+	expect("Zugangscode bergen" in game.interaction_prompt(), "Near a task item the prompt says what to do")
+	Input.action_press("interact")
+	for index in range(2):
+		game.player.position = (codes.items[index].pos as Vector3) + Vector3(0.8, 0.1, 0)
+		for step in range(4):
+			mission.update(0.4)
+	Input.action_release("interact")
+	expect(codes.state == "done" and mission.round_clear() and game.credits == supplies_before + 150 and game.stats.objectives == 1 and mission.markers().is_empty(), "Holding E at each body recovers the codes; the task pays out")
+	# Generator: start it, the infected attack it, it stalls and is restarted.
+	game.complete_wave()
+	mission.plan[1] = {"wave": "classic", "tasks": ["generator"]}
+	game.begin_wave()
+	game.spawn_queue.clear()
+	var defence: Dictionary = mission.tasks[0]
+	var machine: Dictionary = defence.items[0]
+	mission.update(0.1)
+	var dummy: Node3D = mission.targets.values()[0]
+	expect(game.survivors.size() == 2 and not dummy.is_targetable() and "starten" in mission.summary()[0], "A generator waits in the yard to be started")
+	game.player.position = (machine.pos as Vector3) + Vector3(1.5, 0.1, 0)
+	Input.action_press("interact")
+	for step in range(5):
+		mission.update(0.4)
+	Input.action_release("interact")
+	expect(machine.state == "running" and defence.left == MissionDirector.GENERATOR_SECONDS and dummy.is_targetable(), "Holding E starts the generator and its clock")
+	game.player.position = (spots.hall as Vector3) + lift
+	var raider: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	raider.position = (machine.pos as Vector3) + Vector3(2.4, 0.05, 0.4)
+	await wait(3.2)
+	expect(float(machine.health) < MissionDirector.GENERATOR_HEALTH and raider.prey == dummy, "The infected go for a running generator and beat on it")
+	raider.receive_hit(9999, Vector3.BACK)
+	mission.damage_item(machine, 9999.0)
+	mission.update(1.0)
+	expect(machine.state == "stalled" and defence.left == MissionDirector.GENERATOR_SECONDS and "AUSGEFALLEN" in mission.summary()[0] and not dummy.is_targetable(), "A wrecked generator stalls and its clock stops")
+	game.player.position = (machine.pos as Vector3) + Vector3(1.5, 0.1, 0)
+	expect("neu starten" in game.interaction_prompt(), "A stalled generator can be restarted")
+	Input.action_press("interact")
+	for step in range(5):
+		mission.update(0.4)
+	Input.action_release("interact")
+	defence.left = 0.5
+	mission.update(1.0)
+	expect(machine.state == "done" and defence.state == "done" and game.stats.objectives == 2 and mission.round_clear(), "A generator that has run its time completes the task")
+	# Blackout in a mutant round.
+	game.complete_wave()
+	mission.plan[2] = {"wave": "elite", "tasks": ["power"]}
+	game.begin_wave()
+	expect(mission.wave_kind == "elite" and game.remaining_to_spawn == 5 + 3 + 3, "A mutant round brings few infected, most of them special")
+	game.spawn_queue.clear()
+	# The lamps follow on the next drawn frame.
+	await wait(0.2)
+	var dark := not cabin.powered
+	for entry in cabin.flickers:
+		if entry.wired:
+			dark = dark and (entry.light as Light3D).light_energy == 0.0
+	expect(dark and mission.tasks[0].items.size() == 3, "A blackout takes every wired lamp on the farm")
+	Input.action_press("interact")
+	for breaker in mission.tasks[0].items:
+		game.player.position = (breaker.pos as Vector3) + Vector3(0.8, 0.1, 0)
+		for step in range(3):
+			mission.update(0.4)
+	Input.action_release("interact")
+	await wait(0.2)
+	expect(cabin.powered and mission.tasks[0].state == "done" and game.stats.objectives == 3, "Resetting all three breakers brings the light back")
+	# Supply crate, and a second task that runs out of time.
+	game.complete_wave()
+	mission.plan[3] = {"wave": "classic", "tasks": ["crate", "codes"]}
+	game.begin_wave()
+	game.spawn_queue.clear()
+	var copy := MissionDirector.new()
+	copy.game = game
+	copy.adopt(mission.export_state())
+	expect(copy.tasks.size() == 2 and copy.tasks[0].kind == "crate" and copy.tasks[1].items.size() == 2 and (copy.tasks[1].items[1].pos as Vector3) == (mission.tasks[1].items[1].pos as Vector3), "The tasks reach a co-op guest as the host has them")
+	copy.free()
+	game.player.position = (mission.tasks[0].items[0].pos as Vector3) + Vector3(1.4, 0.1, 0)
+	Input.action_press("interact")
+	for step in range(6):
+		mission.update(0.4)
+	Input.action_release("interact")
+	expect(mission.tasks[0].state == "done" and game.pickups.get_child_count() >= 3 and game.stats.objectives == 4, "Opening the supply crate spills ammunition and a dressing")
+	mission.tasks[1].left = 0.3
+	mission.update(0.5)
+	expect(mission.tasks[1].state == "failed" and mission.round_clear() and game.stats.objectives == 4, "A task that runs out of time is lost, and the round can end")
+	game.start_run()
+	expect(game.mission.tasks.is_empty() and game.mission.props.is_empty() and game.survivors.size() == 1 and cabin.powered, "A new night clears every task away")
+	# --- the Leech
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var leech: Infected = game.spawn_enemy("leech")
+	leech.position = Vector3(0, 0.05, 4.0)
+	var clung := false
+	for i in range(180):
+		await get_tree().physics_frame
+		if game.player.clung_by == leech:
+			clung = true
+			break
+	expect(clung and leech.clung_to == game.player and leech.global_position.distance_to(game.player.global_position) < 1.0, "A Leech jumps on the survivor and holds on")
+	var health_clung: float = game.player.health
+	var from_z: float = game.player.position.z
+	Input.action_press("move_forward")
+	await frames(45)
+	Input.action_release("move_forward")
+	var dragged: float = game.player.position.z - from_z
+	expect(game.player.health < health_clung and dragged > 0.6 and dragged < 2.3 and "abschütteln" in game.interaction_prompt(), "It gnaws at the survivor, who can still move, but slowly (%.1f m)" % dragged)
+	for press in range(7):
+		game.interact()
+	expect(game.player.clung_by == null and leech.clung_to == null and leech.health == leech.max_health - 15.0 and leech.held_left > 0.5, "Hammering E shakes the Leech off, hurt and dazed")
+	leech.cling_cooldown = 0.0
+	leech.held_left = 0.0
+	clung = false
+	for i in range(240):
+		await get_tree().physics_frame
+		if game.player.clung_by == leech:
+			clung = true
+			break
+	leech.receive_hit(9999, Vector3.BACK)
+	expect(clung and leech.dead and game.player.clung_by == null, "A Leech that is shot lets go")
+	game.player.health = 100
+	# --- the Stalker
+	mission = game.mission
+	game.begin_wave()
+	game.spawn_queue.clear()
+	face(game, Vector3(0, 0.05, 16.0), PI)
+	await frames(3)
+	var watcher: Infected = mission.stage_sighting("watch")
+	expect(watcher != null and watcher.kind == "stalker" and watcher.haunt == "watch" and game.alive_count == 0 and watcher.global_position.distance_to(game.player.global_position) > 14.0, "The Stalker appears in the distance and is no part of the round")
+	var stood: Vector3 = watcher.global_position
+	game.player.rotation.y += PI
+	await wait(0.6)
+	expect(is_instance_valid(watcher) and not watcher.dead and watcher.global_position.distance_to(stood) < 0.3 and game.player.health == 100.0, "It only stands and watches")
+	game.player.look_at(Vector3(stood.x, game.player.global_position.y, stood.z))
+	await wait(1.3)
+	expect(not is_instance_valid(watcher) or watcher.dead, "Looked at for a moment, it is gone")
+	await frames(10)
+	var shot_at: Infected = game.spawn_stalker(Vector3(0, 0, 34.0), "watch", game.player)
+	var supplies_then: int = game.credits
+	var kills_then: int = game.kills
+	shot_at.receive_hit(50.0, Vector3.BACK)
+	expect(shot_at.dead and game.credits == supplies_then and game.kills == kills_then and mission.stalker_health == 900.0, "Shot while it watches, it vanishes unharmed and nobody is paid")
+	await frames(10)
+	# Creeping up: it moves while nobody looks and stands still while it is watched.
+	face(game, Vector3(0, 0.05, 16.0), 0.0)
+	var hunter: Infected = game.spawn_stalker(Vector3(0, 0, 34.0), "hunt", game.player)
+	await wait(1.5)
+	var crept: float = 34.0 - hunter.global_position.z
+	game.player.rotation.y = PI
+	await wait(0.4)
+	var frozen_at: Vector3 = hunter.global_position
+	await wait(1.0)
+	expect(crept > 6.0 and hunter.global_position.distance_to(frozen_at) < 0.3, "A hunting Stalker creeps up unseen and freezes when it is looked at (%.1f m)" % crept)
+	game.player.rotation.y = 0.0
+	var grabbed := false
+	for i in range(420):
+		await get_tree().physics_frame
+		if game.player.health < 100.0:
+			grabbed = true
+			break
+	await wait(1.2)
+	expect(grabbed and game.player.health == 70.0 and (not is_instance_valid(hunter) or hunter.dead), "It gets its prey by the throat and is gone again")
+	game.player.health = 100
+	await frames(10)
+	var driven_off: Infected = game.spawn_stalker(Vector3(0, 0, 34.0), "hunt", game.player)
+	driven_off.receive_hit(230.0, Vector3.BACK)
+	await frames(10)
+	var returned: Infected = game.spawn_stalker(Vector3(0, 0, 34.0), "hunt", game.player)
+	expect(driven_off.dead and mission.stalker_health == 670.0 and returned.health == 670.0 and not mission.stalker_dead, "Enough fire drives it off, and it comes back wounded")
+	returned.vanish()
+	await frames(10)
+	# Sprinting through the view.
+	var runner: Infected = game.spawn_stalker(Vector3(-8.0, 0, 24.0), "dash", game.player)
+	runner.dash_to = Vector3(8.0, 0, 24.0)
+	await wait(0.6)
+	var sprinted: float = runner.global_position.x + 8.0 if is_instance_valid(runner) else 0.0
+	await wait(2.5)
+	expect(sprinted > 3.5 and (not is_instance_valid(runner) or runner.dead), "It sprints across the view and vanishes (%.1f m in 0.6 s)" % sprinted)
+	await frames(10)
+	# The rare scare at the shop counter.
+	face(game, (spots.shop as Vector3) + lift, 0.0)
+	var scare: Infected = mission.shop_scare(true)
+	expect(scare != null and game.player.health == 90.0 and scare.global_position.distance_to(game.player.global_position) < 1.2 and mission.scare_done, "Very rarely the Stalker stands right in front of whoever leaves the shop")
+	await wait(1.2)
+	expect(not is_instance_valid(scare) or scare.dead, "After the scare it is gone")
+	await frames(10)
+	var last_visit: Infected = game.spawn_stalker(Vector3(0, 0.0, 6.0), "hunt", game.player)
+	supplies_then = game.credits
+	last_visit.receive_hit(9999.0, Vector3.BACK)
+	expect(mission.stalker_dead and game.credits == supplies_then + 500 and mission.stage_sighting("watch") == null and mission.shop_scare(true) == null, "Killed for good, the Stalker does not come back that night")
+	game.start_run()
+	# --- difficulty: more than tougher skin
+	expect(game.rules.label == "NORMAL" and game.price(60) == 60 and not game.profile.stored, "Checks run on normal difficulty and leave the saved profile alone")
+	game.profile.difficulty = "hard"
+	game.start_run()
+	expect(game.rules.label == "SCHWER" and game.price(60) == 70 and game.price(250) == 300 and (cabin.stations[0].label as Label3D).text.ends_with("70 VORRAT"), "A harder night raises the prices, on the signs too")
+	game.begin_wave()
+	expect(game.remaining_to_spawn == 9 + 2, "A harder night brings more infected, above all special ones")
+	game.spawn_queue.clear()
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var tough: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	tough.set_physics_process(false)
+	tough.position = Vector3(0, 0.05, 4.0)
+	expect(tough.max_health == 95.0, "A harder night does not make the infected bullet sponges")
+	await frames(3)
+	game.player.shoot()
+	await frames(10)
+	game.player.shoot()
+	expect(tough.dead and game.score == 225 and game.stats.kills == 1 and game.stats.special_kills == 0, "A harder night multiplies the score")
+	game.player.position = beside(game, "health", spots.supply)
+	game.credits = 200
+	game.player.health = 20
+	game.interact()
+	expect(game.player.health == 60 and game.credits == 80, "On hard, first aid costs 120 and restores 40")
+	game.player.position = (spots.gas as Vector3) + lift
+	game.player._update_mist(2.5)
+	expect(is_equal_approx(game.player.health, 60.0 - 9.6), "On hard, the gas bites sooner and deeper")
+	game.player.position = Vector3(0, 0.1, 0)
+	game.player._update_mist(0.1)
+	game.profile.difficulty = "easy"
+	game.start_run()
+	game.begin_wave()
+	expect(game.rules.label == "LEICHT" and game.remaining_to_spawn == 6 + 1 and game.price(100) == 85, "An easy night is smaller and cheaper")
+	game.profile.difficulty = "normal"
+	game.start_run()
+	# --- leaderboard
+	var board := Profile.new()
+	board.stored = false
+	var first: int = board.record("normal", {"score": 500, "round": 3, "seconds": 200, "victory": false, "kills": 20})
+	var second: int = board.record("normal", {"score": 900, "round": 10, "seconds": 700, "victory": true, "kills": 250, "revives": 2})
+	var third: int = board.record("normal", {"score": 700, "round": 6, "seconds": 400, "victory": false, "kills": 90})
+	expect(first == 1 and second == 1 and third == 2 and board.best("normal").size() == 3 and int(board.best("normal")[0].score) == 900 and int(board.best("normal")[2].score) == 500, "Finished runs are ranked by score")
+	expect(board.totals.missions == 3 and board.totals.victories == 1 and board.totals.kills == 360 and board.totals.revives == 2, "The career totals add up over all runs")
+	for i in range(12):
+		board.record("hard", {"score": i * 10, "round": 1, "seconds": 60, "victory": false, "kills": i})
+	expect(board.best("hard").size() == Profile.KEEP and int(board.best("hard")[0].score) == 110 and board.record("hard", {"score": 1, "round": 1, "seconds": 60, "victory": false, "kills": 0}) == 0 and board.best("easy").is_empty(), "Each difficulty keeps its own ten best runs")
+	game.finish(false)
+	expect(game.state == "lose" and game.last_place >= 1 and game.profile.best("normal").size() >= 2, "A finished night is filed on the leaderboard of its difficulty")
+	game.start_run()
+	# --- shotgun
+	game.credits = 250
+	game.player.position = (spots.shop as Vector3) + lift
+	game.interact()
+	expect(game.buy_weapon("shotgun") and game.credits == 0 and game.player.current_weapon == "shotgun" and game.player.ammo == 6 and game.player.reserve == 42, "Shotgun purchase deducts 250 and equips it with six shells")
+	game.resume_run()
+	game.player._select_slot(1)
+	game.player._select_slot(4)
+	expect(game.player.current_weapon == "shotgun", "Key 4 selects the shotgun")
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var close_target: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	close_target.set_physics_process(false)
+	close_target.position = Vector3(0, 0.05, 4.0)
+	var far_target: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	far_target.set_physics_process(false)
+	far_target.position = Vector3(0, 0.05, 27.0)
+	await frames(20)
+	var pitch_before: float = game.player.camera.rotation.x
+	game.player.shoot()
+	expect(close_target.dead and game.player.ammo == 5, "One shotgun blast at close range kills a Mauler")
+	expect(game.player.camera.rotation.x > pitch_before + 0.04 and game.player.pump_clock >= 0.0 and game.player.trauma > 0.2, "The blast kicks the view and the pump has to be worked")
+	game.player.shoot()
+	expect(game.player.ammo == 5, "The shotgun cannot fire again before the pump stroke is done")
+	await wait(1.1)
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	await frames(3)
+	game.player.shoot()
+	var far_loss: float = far_target.max_health - far_target.health
+	expect(not far_target.dead and far_loss > 0.0 and far_loss < 9 * 17.0 * 1.5 * 0.4, "At long range the shot has lost most of its force")
+	far_target.receive_hit(9999, Vector3.BACK)
+	await wait(1.1)
+	game.player.ammo = 2
+	var shells_before: int = game.player.reserve
+	game.player.start_reload()
+	await wait(1.0)
+	expect(game.player.ammo == 3 and game.player.loading_shells, "Shells go into the tube one at a time")
+	await wait(2.2)
+	expect(game.player.ammo == 6 and game.player.reserve == shells_before - 4 and not game.player.loading_shells, "The reload stops when the tube is full and uses exactly four shells")
+	game.player.ammo = 1
+	game.player.start_reload()
+	await wait(1.0)
+	game.player.shoot()
+	expect(game.player.ammo == 2 and not game.player.loading_shells and game.player.reload_left == 0.0, "Firing breaks off a half-finished shotgun reload")
+	# --- Ripper
+	game.player.health = 100
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var hound: Infected = game.spawn_enemy("ripper")
+	hound.position = Vector3(0, 0.05, 7.5)
+	# Its first leap normally waits a random moment; here it must come at once.
+	hound.special_cooldown = 0.0
+	var hound_model: InfectedVisual = hound.model
+	expect(hound_model is RipperVisual and hound_model.skeleton.get_bone_count() == 29, "The Ripper is a four-legged model with its own skeleton")
+	var leapt := false
+	var peak := 0.0
+	for i in range(170):
+		await get_tree().physics_frame
+		if hound.leap == "air":
+			leapt = true
+			peak = maxf(peak, hound.global_position.y)
+	expect(leapt and peak > 0.3, "A Ripper leaps at its prey from a distance")
+	expect(game.player.health < 100, "The Ripper's pounce and bite hurt the survivor")
+	hound.receive_hit(9999, Vector3.BACK)
+	var hound_dead: bool = hound.dead
+	await wait(1.5)
+	expect(hound_dead and is_instance_valid(hound_model) and hound_model.dying, "A shot Ripper goes down")
+	# --- gore
+	game.player.health = 100
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var torn: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	torn.set_physics_process(false)
+	torn.position = Vector3(0, 0.05, 4.0)
+	await frames(3)
+	var torn_model: InfectedVisual = torn.model
+	var marks: int = game.fx.decals.size()
+	torn.receive_hit(9999, Vector3.BACK, true)
+	expect(torn_model.skeleton.get_bone_pose_scale(torn_model.rig.head.index).x < 0.01 and not torn_model.eyes.visible, "An overkill headshot tears the head off")
+	await wait(1.3)
+	expect(game.fx.decals.size() >= mini(marks + 3, CombatEffects.MAX_DECALS) and game.fx.decals.size() <= CombatEffects.MAX_DECALS, "Blood stays on the floor where an infected died, within the decal budget")
+	# --- squad
+	game.team_enabled = true
+	game.start_run()
+	await frames(4)
+	expect(game.team.size() == 2 and game.survivors.size() == 3 and game.team[0].label == "VIPER" and game.team[1].label == "SCORPION", "Viper and Scorpion join a solo match")
+	game.begin_wave()
+	expect(game.remaining_to_spawn == int(round(7 * 1.7)) + int(round(1 * 1.7)), "A squad of three draws a bigger horde")
+	game.spawn_queue.clear()
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var prey: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	prey.position = Vector3(0, 0.05, 7.5)
+	var supplies: int = game.credits
+	var fell := false
+	for i in range(480):
+		await get_tree().physics_frame
+		if not is_instance_valid(prey) or prey.dead:
+			fell = true
+			break
+	expect(fell and game.kills == 0 and game.team[0].kills + game.team[1].kills == 1 and game.credits == supplies + 25, "The squad shoots infected on its own; the supplies go to the team")
+	# --- the squad keeps its distance
+	var buddy: Teammate = game.team[1]
+	game.player.position = buddy.global_position + Vector3(0.35, 0, 0.1)
+	await wait(1.6)
+	expect(Vector2(buddy.global_position.x - game.player.position.x, buddy.global_position.z - game.player.position.z).length() > 1.7, "A teammate makes room when the survivor stands right next to it")
+	face(game, (spots.front_door_out as Vector3) + Vector3(0, 0.1, 7.0), PI)
+	await wait(5.0)
+	var nearest := INF
+	var furthest := 0.0
+	for follower in game.team:
+		var space: float = Vector2(follower.global_position.x - game.player.position.x, follower.global_position.z - game.player.position.z).length()
+		nearest = minf(nearest, space)
+		furthest = maxf(furthest, space)
+	expect(furthest < 7.0 and nearest > 1.8, "The squad catches up with the survivor and stops a few steps away (%.1f to %.1f m)" % [nearest, furthest])
+	# --- squad orders
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	for follower in game.team:
+		follower.global_position = Vector3(2.4 * signf(follower.slot.x), 0.05, -0.6)
+	game.player.camera.rotation.x = deg_to_rad(-25.0)
+	await frames(3)
+	game.command_squad("hold")
+	var post: Vector3 = game.hold_marker.global_position
+	expect(game.team[0].order == "hold" and game.squad_order == "hold" and game.hold_marker.visible and absf(post.z - 4.6) < 0.5 and absf(post.x) < 0.3, "The hold order marks the floor under the crosshair")
+	await wait(3.0)
+	face(game, (spots.front_door_out as Vector3) + Vector3(0, 0.1, 7.0), PI)
+	await wait(2.5)
+	var held := true
+	for follower in game.team:
+		held = held and Vector2(follower.global_position.x - post.x, follower.global_position.z - post.z).length() < 2.0
+	expect(held, "A squad told to hold stays at its post when the survivor walks away")
+	# Standing there, nobody turns with the survivor: one can walk around them.
+	var looks: Array = []
+	for follower in game.team:
+		looks.append(follower.rotation.y)
+	game.player.rotation.y += 2.2
+	await wait(1.0)
+	var steady := true
+	for i in range(game.team.size()):
+		steady = steady and absf(angle_difference(game.team[i].rotation.y, float(looks[i]))) < 0.05
+	expect(steady, "A squad member that stands does not turn when the survivor turns")
+	game.command_squad("follow")
+	await wait(5.0)
+	var back := true
+	for follower in game.team:
+		back = back and follower.global_position.distance_to(game.player.global_position) < 7.5
+	expect(back and not game.hold_marker.visible and game.team[1].order == "follow", "Told to follow, the squad comes back to the survivor")
+	var lure: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	lure.set_physics_process(false)
+	# Out of sight in the shed, so nobody can simply shoot it from where they stand.
+	lure.position = (spots.shed as Vector3) + Vector3(0, 0.05, 0)
+	var before: Array = []
+	for follower in game.team:
+		before.append(follower.global_position.distance_to(lure.position))
+	await wait(1.5)
+	var stayed: float = absf(game.team[1].global_position.distance_to(lure.position) - float(before[1]))
+	game.command_squad("free")
+	await wait(3.0)
+	expect(stayed < 2.0 and (not is_instance_valid(lure) or lure.dead or game.team[1].global_position.distance_to(lure.position) < float(before[1]) - 5.0), "A squad set free goes after the infected on its own")
+	if is_instance_valid(lure) and not lure.dead:
+		lure.receive_hit(9999, Vector3.BACK)
+	game.command_squad("follow")
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	for follower in game.team:
+		follower.global_position = Vector3(2.4 * signf(follower.slot.x), 0.05, -0.6)
+	var mate: Teammate = game.team[0]
+	mate.receive_damage(999.0, mate.global_position + Vector3(0, 0, 3))
+	expect(mate.down and not mate.is_targetable(), "A teammate without health goes down and is left alone by the infected")
+	game.player.position = mate.global_position + Vector3(0.8, 0, 0)
+	await frames(3)
+	expect(game.fallen_mate() == mate and "aufhelfen" in game.interaction_prompt(), "A fallen teammate can be helped up")
+	game.interact()
+	expect(not mate.down and mate.health == 60.0 and game.stats.revives == 1, "E helps the teammate back on its feet")
+	# --- the squad rescues the player
+	game.player.health = 100
+	game.player.receive_damage(500.0)
+	expect(game.player.down and game.state == "playing" and not game.player.is_targetable() and "Hilfe" in game.interaction_prompt(), "With a squad standing, the survivor goes down instead of dying")
+	var rescued := false
+	for i in range(720):
+		await get_tree().physics_frame
+		if not game.player.down:
+			rescued = true
+			break
+	expect(rescued and game.player.health == 50.0 and game.stats.revives == 2, "A teammate runs over and helps the survivor up")
+	game.team[1].receive_damage(999.0)
+	game.complete_wave()
+	expect(not game.team[1].down and game.team[1].health == 100.0, "A survived round puts the whole squad back on its feet")
+	for follower in game.team:
+		follower.rising_left = 0.0
+		follower.receive_damage(999.0)
+	game.player.health = 100
+	game.player.receive_damage(500.0)
+	expect(game.state == "lose", "With the whole squad down, the survivor's fall ends the night")
+	game.team_enabled = false
+	game.start_run()
+	expect(game.team.is_empty() and game.survivors.size() == 1 and game.mates.get_child_count() == 0, "Without a squad the survivor fights alone")
+	game.player.receive_damage(150)
+	expect(game.state == "lose" and not game.player.controlled, "Zero health ends the run")
+	await _newer(game)
+	await _story(game)
+	await _kit(game)
+	await _threats(game)
+	await _later(game)
+	game.sounds.stop_all()
+	await wait(0.2)
+	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
+	get_tree().call_deferred("quit", 0 if failures == 0 else 1)
+
+## What came with v0.10: the AK-47 and its parts, the C.R.U. Elite and his gas, grenades
+## that are readied and aimed before they fly, music that follows the night, the settings
+## and the readouts of the new interface.
+func _later(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var mission: MissionDirector = game.mission
+	game.team_enabled = false
+	game.start_run()
+	mission.plain()
+	game.preparation_left = 9999.0
+	game.credits = 3000
+	# --- the AK-47, bought at the shop
+	player.position = (game.cabin.points.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	var bought: bool = game.buy_weapon("ak")
+	var view: Node3D = player.weapon
+	expect(bought and game.credits == 2700 and player.current_weapon == "ak" and int(Survivor.WEAPONS.ak.slot) == int(Survivor.WEAPONS.rifle.slot) and view.get_node_or_null("Magazine") != null and view.get_node_or_null("Support") != null and not (view.get_node("Mod_reddot") as Node3D).visible and float(Survivor.WEAPONS.ak.damage) > float(Survivor.WEAPONS.rifle.damage), "The AK-47 is a rifle of its own on the carbine's key: it hits harder, and its magazine leaves the gun")
+	var purse: int = game.credits
+	var glass: Vector3 = WeaponView.sight_aim("ak", "reddot")
+	expect(game.buy_part("ak", "reddot") and player.fitted("sight") == "reddot" and (view.get_node("Mod_reddot") as Node3D).visible and game.credits == purse - 120 and float(player.gun().zoom) == 40.0 and glass.y < (WeaponView.VIEWS.ak.aim as Vector3).y - 0.003 and glass.z > -0.2 and (WeaponView.reload_step("ak", 0.38).magazine as Vector3).length() > 0.2, "The AK-47 takes parts like the UMP; through the reflex sight the eye is above the iron sights and close to the glass")
+	game.resume_run()
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	# --- the C.R.U. Elite
+	var elite := game.spawn_enemy("cru_elite") as CruSoldier
+	elite.set_physics_process(false)
+	elite.position = Vector3(3.0, 0.05, 34.0)
+	var grunt := game.spawn_enemy("cru_assault") as CruSoldier
+	grunt.set_physics_process(false)
+	grunt.position = Vector3(-3.0, 0.05, 34.0)
+	await frames(2)
+	expect(str(elite.spec.role) == "elite" and elite.max_health > grunt.max_health and float(elite.role.damage) > float(grunt.role.damage) and float(elite.role.armour) < float(grunt.role.armour) and elite.grenades == 2 and str(elite.body.soldier.config.weapon) == "ak" and elite.body.find_child("Lenses", true, false) != null and mission.squad(9.0).has("cru_elite"), "The C.R.U. Elite is tougher and hits harder than an ordinary soldier, carries an AK-47 and wears a mask whose lenses glow")
+	var clouds: int = game.gas.pockets.size()
+	elite.throw_grenade(player.global_position + Vector3(0, 0, 3.0), 12.0, true)
+	await wait(0.7)
+	var canister: Throwable = null
+	for node in game.ordnance.get_children():
+		if node is Throwable and str(node.kind) == "gas":
+			canister = node
+	var thrown: bool = canister != null and canister.hostile and elite.grenades == 1
+	if canister != null:
+		canister.fuse = 0.0
+	await frames(4)
+	var cloud: Dictionary = game.gas.pockets[game.gas.pockets.size() - 1] if game.gas.pockets.size() > clouds else {}
+	var spreads := false
+	if not cloud.is_empty():
+		cloud.strength = 1.0
+		var middle: Vector3 = cloud.pos
+		spreads = bool(cloud.indoors) and bool(cloud.thrown) and float(cloud.radius) < GasField.POCKET_RADIUS and game.gas.toxic_at(middle + Vector3(1.0, 0.1, 0)) and not game.gas.toxic_at(middle + Vector3(6.0, 0.1, 0))
+	expect(thrown and spreads, "The Elite throws gas grenades: where one comes to rest, a small cloud spreads that fills a room as well")
+	game.gas.clear()
+	for foe in [elite, grunt]:
+		foe.receive_hit(99999.0, Vector3.BACK)
+	# --- a grenade is readied, aimed and thrown
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.items.grenade = 2
+	player.throw_cooldown = 0.0
+	var rounds: int = player.ammo
+	Input.action_press("throw_grenade")
+	player.ready_throw("grenade")
+	await wait(0.45)
+	player.shoot()
+	var path: PackedVector3Array = player.throw_path("grenade")
+	var held: bool = player.throw_kind == "grenade" and int(player.items.grenade) == 2 and player.throw_pose > 0.5 and path.size() > 8 and game.fx.arc_dots != null and game.fx.arc_dots.visible and player.ammo == rounds
+	Input.action_release("throw_grenade")
+	await wait(0.45)
+	var flying := false
+	for node in game.ordnance.get_children():
+		if node is Throwable and str(node.kind) == "grenade" and not node.hostile:
+			flying = true
+			node.queue_free()
+	expect(held and flying and player.throw_kind == "" and int(player.items.grenade) == 1 and not game.fx.arc_dots.visible, "A grenade is taken in the hand, its flight is shown while the key is held, and it is thrown when the key is let go")
+	# --- music that follows the night
+	var music: MusicDirector = game.music
+	var parts := 0
+	for key in MusicDirector.PHASES:
+		if not music.tracks_for(key).is_empty():
+			parts += 1
+	var heard: Array = []
+	for step in [["preparing", 2], ["wave", 2], ["wave", 6], ["wave", game.ROUNDS.size() - 1], ["wave", game.ROUNDS.size()]]:
+		game.phase = str(step[0])
+		game.wave = int(step[1])
+		heard.append(music.current_phase())
+	game.phase = "preparing"
+	game.wave = 1
+	expect(parts == MusicDirector.PHASES.size() and heard == ["anfang", "welle", "harte_welle", "kurz_vor_ende", "letzte_runde"], "The music follows the night: calm between the rounds, harder as they go on, tracks of its own for the last one (%s)" % str(heard))
+	# --- settings and readouts
+	game.sounds.set_volume("Music", 0.25)
+	var quarter: bool = absf(game.sounds.volume("Music") - 0.25) < 0.01
+	game.sounds.set_volume("Music", 0.0)
+	var silent: bool = game.sounds.volume("Music") == 0.0
+	game.sounds.set_volume("Music", float(FieldAudio.VOLUMES.Music))
+	game.hud.show_menu("settings")
+	var sliders: int = game.hud.modal.find_children("*", "HSlider", true, false).size()
+	game.hud.hide_menu()
+	expect(quarter and silent and sliders == 5 and AudioServer.get_bus_index("Voice") > 0 and AudioServer.get_bus_send(AudioServer.get_bus_index("Field")) == &"SFX", "Everything, the music, the effects and the voices can be turned up and down on their own")
+	# Every menu and every list of the shop can be built.
+	var built := 0
+	for mode in ["main", "pause", "win", "lose", "settings", "host", "join", "board", "skins"]:
+		game.hud.show_menu(mode)
+		if game.hud.current_menu == mode and game.hud.modal.find_children("*", "Button", true, false).size() > 0:
+			built += 1
+	for tab in SurvivalHUD.SHOP_TABS:
+		game.hud._open_tab(str(tab[0]))
+		if game.hud.shop_tab == str(tab[0]) and game.hud.modal.find_children("*", "ScrollContainer", true, false).size() == 1:
+			built += 1
+	game.hud.hide_menu()
+	expect(built == 9 + SurvivalHUD.SHOP_TABS.size(), "Every menu and every list of the shop can be opened (%d)" % built)
+	game.hud._process(0.1)
+	var tile: Array = game.hud.tiles.grenade
+	game.hud.loadout()
+	expect((tile[1] as Label).text == "1" and game.hud.loadout_box.get_child_count() >= 2 and game.hud.loadout_left > 0.0, "What is in the pockets shows as tiles beside the weapon, and changing weapons lists what is carried")
+	game.team_enabled = true
+	game.start_run()
+
+## What came with v0.9: the Medic and its cloud, the C.R.U. shield bearer, a Crusher before
+## the last round, gas that comes and goes, errands upstairs, a blast worth the name.
+func _threats(game: Node3D) -> void:
+	var cabin: CabinMap = game.cabin
+	var spots: Dictionary = cabin.points
+	var player: Survivor = game.player
+	var mission: MissionDirector = game.mission
+	game.team_enabled = false
+	game.start_run()
+	mission.plain()
+	game.preparation_left = 9999.0
+	# --- the Medic
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var medic: Infected = game.spawn_enemy("healer")
+	medic.position = Vector3(0, 0.05, 29.5)
+	var hurt: Infected = game.spawn_enemy("mauler")
+	hurt.position = medic.wisp_position(1)
+	hurt.health = 40.0
+	hurt.alert = false
+	var far: Infected = game.spawn_enemy("mauler")
+	far.set_physics_process(false)
+	far.position = medic.position + Vector3(12.0, 0, 3.0)
+	far.health = 40.0
+	await wait(1.2)
+	expect(medic.cloud != null and medic.cloud.get_child_count() == Infected.WISPS.size() and hurt.health > 44.0 and hurt.warded > 0.0 and hurt.model.buffed and far.health == 40.0 and far.warded <= 0.0 and not far.model.buffed and hurt.get_collision_exceptions().has(medic), "A Medic's gas strengthens every infected it touches, and nobody else: it mends, one sees it, and nobody gets stuck behind the Medic")
+	hurt.set_physics_process(false)
+	var mended := hurt.health
+	hurt.receive_hit(20.0, Vector3.FORWARD)
+	expect(is_equal_approx(mended - hurt.health, 20.0 * Infected.CLOUD_WARD) and medic.global_position.distance_to(player.global_position) > 6.5, "Whoever the gas has strengthened takes less harm, and the Medic itself keeps back")
+	var beside_medic := medic.wisp_position(3)
+	expect(game.toxic_at(beside_medic) and not game.toxic_at(medic.global_position + Vector3(-9.0, 0, 0)) and player.health == 100.0, "The gas poisons the air for survivors inside it")
+	# Away from the gas the strength lasts a while and then wears off.
+	hurt.set_physics_process(true)
+	hurt.position = medic.position + Vector3(14.0, 0, -4.0)
+	hurt.warded = 0.4
+	await wait(0.7)
+	expect(hurt.warded <= 0.0 and not hurt.model.buffed, "Out of the gas the strength wears off again")
+	hurt.set_physics_process(false)
+	medic.receive_hit(9999.0, Vector3.FORWARD)
+	await frames(3)
+	expect(medic.dead and medic.cloud == null and not game.toxic_at(beside_medic), "With the Medic dead its gas lifts")
+	for foe in [hurt, far]:
+		foe.receive_hit(9999.0, Vector3.FORWARD)
+	# --- the shield bearer
+	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
+	bearer.set_physics_process(false)
+	bearer.position = Vector3(0, 0.05, 28.0)
+	bearer.model.rotation.y = 0.0
+	await frames(2)
+	var full := bearer.health
+	bearer.receive_hit(60.0, Vector3.BACK)
+	var after_front := bearer.health
+	bearer.receive_hit(60.0, Vector3.RIGHT)
+	var after_side := bearer.health
+	expect(after_front == full and after_side < full and bearer.blocks(Vector3.BACK) and not bearer.blocks(Vector3.FORWARD) and (bearer.model as CruVisual).shield != null, "A shield stops what comes from the front, and nothing else")
+	game.explode(bearer.position + Vector3(0, 0.5, -2.0), 5.0, 0.0, 100.0, "blast")
+	expect(bearer.health < after_side and not game.blasting and player.health == 100.0, "A blast goes round the shield")
+	# He comes round slowly: whoever runs past him has his back for a while.
+	bearer.set_physics_process(true)
+	face(game, Vector3(0, 0.05, 34.0), 0.0)
+	var yaw_before: float = bearer.model.rotation.y
+	await wait(1.0)
+	var turned := absf(angle_difference(yaw_before, bearer.model.rotation.y))
+	expect(turned > 0.4 and turned < 1.3 and not bearer.blocks((bearer.global_position - player.global_position).normalized()), "The shield bearer turns slowly: a second after being passed his back is still open (%.2f rad)" % turned)
+	var behind: Vector3 = bearer.facing()
+	bearer.receive_hit(9999.0, behind)
+	expect(bearer.dead and MissionDirector.SQUAD_ORDER[1] == "cru_shield", "Shot in the back he falls; every squad of the C.R.U. brings one")
+	# --- the Crusher before the last round
+	game.wave = 5
+	game.begin_wave()
+	var early: bool = game.spawn_queue.has("crusher")
+	var medics: int = game.spawn_queue.count("healer")
+	game.spawn_queue.clear()
+	game.wave = 5
+	mission.plan[5] = {"wave": "cru", "tasks": []}
+	game.begin_wave()
+	expect(early and medics == 1 and not game.spawn_queue.has("crusher"), "A Crusher and a Medic come in round six, but no Crusher into a round of the C.R.U.")
+	game.spawn_queue.clear()
+	mission.wave_kind = "classic"
+	game.phase = "preparing"
+	game.preparation_left = 9999.0
+	game.gas.clear()
+	# --- gas that comes and goes
+	expect(GasField.pockets_for(1) == 0 and GasField.pockets_for(2) == 1 and GasField.pockets_for(5) == 2 and GasField.pockets_for(8) == 3, "Pockets of gas come with the rounds")
+	var where: Vector3 = (spots.yard_south as Vector3) + Vector3(5.0, 0, 6.0)
+	var pocket: Dictionary = game.gas._add(where, 60.0, 1.0)
+	expect(game.gas.toxic_at(where + Vector3(2.0, 0.05, 0)) and game.toxic_at(where) and not game.gas.toxic_at(where + Vector3(9.5, 0, 0)) and not game.gas.toxic_at(where + Vector3(0, 3.4, 0)) and (mission.export_state()[2] as Array).size() == 3 and (game.gas.export_state()[1] as Array).size() == 1, "A pocket of gas poisons the yard where it lies, and the other player is told")
+	face(game, where + Vector3(1.0, 0.05, 0), 0.0)
+	player.health = 100.0
+	player.mask_level = 0
+	player.filter_left = 0.0
+	await wait(4.6)
+	expect(player.health < 100.0 and str(game.interaction_prompt()).contains("Wolke"), "Without a mask the pocket hurts after a few breaths")
+	player.health = 100.0
+	player.mask_level = 2
+	player.filter_left = player.filter_capacity()
+	await wait(2.0)
+	expect(player.health == 100.0 and player.filter_left < player.filter_capacity() - 1.0, "A gas mask keeps its wearer safe while the filter lasts")
+	pocket.going = true
+	pocket.strength = 0.01
+	# Long enough for the last of it to go whatever the frame rate is.
+	await wait(0.3)
+	expect(game.gas.pockets.is_empty() and not game.toxic_at(where), "A pocket thins out and is gone")
+	player.mask_level = 0
+	player.filter_left = 0.0
+	game.gas._set_flood("on", 30.0)
+	game.gas.flood_strength = 1.0
+	face(game, (spots.hall as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	await frames(6)
+	expect(game.toxic_at(player.global_position) and not game.toxic_at(spots.gallery) and not game.toxic_at((spots.barn as Vector3) + Vector3(0, 0.1, 0)) and not game.toxic_at(spots.lab) and str(game.interaction_prompt()).contains("Nach oben"), "Gas on the ground floor leaves the upper floor, the cellar and the outbuildings clear")
+	game.gas.end_round()
+	await wait(1.8)
+	expect(game.gas.flood_state == "" and not game.toxic_at(player.global_position), "When the round is over the gas goes")
+	cabin.lock_all()
+	var planned := false
+	for i in range(30):
+		game.gas.begin_round(8)
+		planned = planned or game.gas.flood_wait > 0.0
+	var barred := planned
+	cabin.unlock("upper", true)
+	for i in range(40):
+		game.gas.begin_round(8)
+		planned = planned or game.gas.flood_wait > 0.0
+	expect(not barred and planned and game.gas.wanted == 3, "The gas alarm in the house only comes once the upper floor is open")
+	game.gas.clear()
+	# --- the dead lie on the farm all night
+	mission.clear()
+	mission._lay_bodies()
+	mission._sync_props()
+	var lying: int = mission.bodies.size()
+	var all_there: bool = mission.body_props.size() == lying
+	var loot: Dictionary = mission._start_task("codes")
+	var on_the_dead := true
+	for item in loot.items:
+		var found := false
+		for body in mission.bodies:
+			if (body.pos as Vector3).is_equal_approx(item.pos) and body.codes:
+				found = true
+		on_the_dead = on_the_dead and found
+	var told: Array = mission.export_state()[2]
+	mission._drop_tasks()
+	mission._sync_props()
+	expect(lying == MissionDirector.BODY_COUNT and all_there and on_the_dead and told.size() == 3 and (told[2] as Array).size() == lying and mission.bodies.size() == lying and mission.body_props.size() == lying and is_instance_valid(mission.body_props[0]), "The dead scientists lie on the farm all night: an errand sends the squad to them, and they stay when it is over")
+	# --- errands upstairs
+	mission.upstairs_share = 1.0
+	var codes: Dictionary = mission._start_task("codes")
+	var high: Vector3 = codes.items[0].pos
+	expect(cabin.level_of(high) == 1 and cabin.level_of(codes.items[1].pos) == 0 and not cabin.path_between(spots.hall, high).is_empty(), "One of the dead can lie on the upper floor of the farmhouse")
+	cabin.lock_all()
+	var grounded: Dictionary = mission._start_task("codes")
+	expect(cabin.level_of(grounded.items[0].pos) == 0, "While the upper floor is barred nothing is put up there")
+	for area in cabin.AREAS:
+		cabin.unlock(area, true)
+	mission.upstairs_share = 0.0
+	mission.clear()
+	# --- the blast of a grenade, and the shell that brings it
+	game.fx.explosion(Vector3(0, 0.4, 40.0), 6.5, "blast")
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.unlock("launcher")
+	await wait(0.4)
+	player.shoot()
+	await frames(2)
+	var shell: Throwable = null
+	for node in game.ordnance.get_children():
+		if node is Throwable and node.impact:
+			shell = node
+	expect(game.fx.ring_texture != null and game.fx.puff_textures.size() == 3 and shell != null and shell.shell != null and shell.lock_rotation and shell.find_children("*", "CPUParticles3D", false, false).size() == 1, "A grenade's blast throws a ring over the ground, and a shell from the launcher draws smoke behind it")
+	await wait(1.6)
+	# --- the picture: the 3D resolution from the menu
+	var view: Viewport = game.get_viewport()
+	game.set_render_scale(0.5, false)
+	var halved: bool = is_equal_approx(view.scaling_3d_scale, 0.5) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_FSR
+	game.set_render_scale(0.05, false)
+	var bounded: bool = is_equal_approx(view.scaling_3d_scale, 0.3)
+	game.set_render_scale(1.0, false)
+	var first: float = game.default_render_scale()
+	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
+	game.team_enabled = true
+	game.start_run()
+
+## What came with v0.8: the UMP and the parts for it, ballistic plates, lamps on the C.R.U.
+func _kit(game: Node3D) -> void:
+	var spots: Dictionary = game.cabin.points
+	var player: Survivor = game.player
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	# --- the UMP at the shop
+	game.credits = 3000
+	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	expect(game.buy_weapon("ump") and player.current_weapon == "ump" and player.magazine_size() == 25 and game.credits == 2780, "The shop sells the UMP")
+	var view: Node3D = player.weapon_models["ump"]
+	var clip := view.get_node_or_null("Magazine") as Node3D
+	var hand := view.get_node_or_null("Support") as Node3D
+	expect(clip != null and hand != null and clip.get_child_count() == 1 and not (view.get_node("Mod_reddot") as Node3D).visible and not (view.get_node("Mod_silencer") as Node3D).visible, "The UMP has a magazine and a hand of their own, and nothing fitted when new")
+	expect(not game.buy_part("p90", "reddot") and not game.buy_part("ump", "bayonet") and game.credits == 2780, "Parts are only sold for the weapons that take them")
+	var plain_kick := float(player.gun().kick)
+	var plain_muzzle: Vector3 = player.flash.position
+	expect(game.buy_part("ump", "reddot") and player.fitted("sight") == "reddot" and game.credits == 2660 and (view.get_node("Mod_reddot") as Node3D).visible and float(player.gun().zoom) == 40.0 and not Survivor.WEAPONS.ump.has("zoom"), "A red dot is bought, fitted and changes how the UMP aims")
+	expect(game.buy_part("ump", "scope") and player.fitted("sight") == "scope" and game.credits == 2400 and player.gun().has("scope") and not player.gun().has("zoom") and (view.get_node("Mod_scope") as Node3D).visible and not (view.get_node("Mod_reddot") as Node3D).visible, "A second sight takes the place of the first")
+	expect(game.buy_part("ump", "reddot") and player.fitted("sight") == "reddot" and game.credits == 2400 and game.buy_part("ump", "reddot") and player.fitted("sight") == "" and game.credits == 2400 and not player.gun().has("zoom"), "A part that is owned goes on and comes off for nothing")
+	expect(game.buy_part("ump", "silencer") and game.credits == 2220 and str(player.gun().sound) == "ump_sil" and player.gun().quiet and float(player.gun().kick) < plain_kick and absf(player.flash.position.z - (plain_muzzle.z - WeaponView.SILENCER_LENGTH)) < 0.001 and Survivor.QUIET_SOUNDS.has("ump_sil") and str(Survivor.WEAPONS.ump.sound) == "ump", "A suppressor changes the sound, the recoil and where the muzzle is")
+	expect(game.sounds.clips.has("ump") and game.sounds.clips.has("ump_sil"), "The UMP has its own shot, with and without suppressor")
+	# --- two weapons on one key take turns
+	expect(game.buy_weapon("p90") and player.current_weapon == "p90", "The P90 is bought as well")
+	player._select_slot(2)
+	var second := player.current_weapon
+	player._select_slot(2)
+	expect(second == "ump" and player.current_weapon == "p90" and player.fitted("sight") == "" and player.flash.position.is_equal_approx(WeaponView.VIEWS.p90.muzzle), "Two weapons on one key take turns, each with its own muzzle")
+	player._select_slot(2)
+	game.resume_run()
+	# --- the magazine really leaves the weapon
+	var half: Dictionary = WeaponView.reload_step("ump", 0.38)
+	expect((half.magazine as Vector3).length() > 0.2 and (WeaponView.reload_step("ump", 0.0).magazine as Vector3) == Vector3.ZERO and (WeaponView.reload_step("ump", 1.0).hand as Vector3) == Vector3.ZERO and (WeaponView.reload_step("ump", 0.83).hand as Vector3).length() > 0.05 and (WeaponView.reload_step("rifle", 0.4).magazine as Vector3) == Vector3.ZERO, "The magazine change has its steps: out, in, and a slap on the cocking handle")
+	player.ammo = 4
+	player.start_reload()
+	var out_of_well := 0.0
+	var moved_hand := 0.0
+	for i in range(170):
+		await get_tree().physics_frame
+		out_of_well = maxf(out_of_well, clip.position.length())
+		moved_hand = maxf(moved_hand, hand.position.length())
+	expect(out_of_well > 0.2 and moved_hand > 0.2 and player.ammo == 25 and clip.position.length() < 0.001 and hand.position.length() < 0.001, "Reloading the UMP pulls its magazine out and puts a full one in")
+	# --- ballistic plates
+	game.credits = 1000
+	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	expect(game.item_price("plates") == 160 and game.buy_item("plates") and game.buy_item("plates") and player.plate_level == 2 and game.credits == 580 and game.buy_item("plates") and game.item_price("plates") == -1 and not game.buy_item("plates") and game.credits == 180, "Ballistic plates are bought in three levels")
+	game.resume_run()
+	player.plate_level = 2
+	player.health = 100.0
+	player.armor = 0.0
+	player.receive_damage(40.0, Vector3.ZERO, "bullet")
+	var after_bullet := player.health
+	player.receive_damage(20.0, Vector3.ZERO, "frag")
+	var after_frag := player.health
+	player.receive_damage(10.0)
+	expect(is_equal_approx(after_bullet, 76.0) and is_equal_approx(after_frag, 64.0) and is_equal_approx(player.health, 54.0), "Plates take 40 % off bullets and fragments, and nothing off a bite")
+	player.health = 100.0
+	player.armor = 50.0
+	player.receive_damage(40.0, Vector3.ZERO, "bullet")
+	expect(is_equal_approx(player.health, 90.4) and is_equal_approx(player.armor, 35.6), "Armour takes its share of what the plates let through")
+	# --- what the C.R.U. shoot is a bullet, and they can be seen
+	player.armor = 0.0
+	player.health = 100.0
+	player.plate_level = 3
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var trooper := game.spawn_enemy("cru_assault") as CruSoldier
+	trooper.set_physics_process(false)
+	trooper.position = Vector3(0, 0.05, 28.0)
+	await frames(3)
+	var body := trooper.model as CruVisual
+	expect(body.lamp != null and body.lamp.visible and body.lamp.get_parent() == body.soldier.gun and body.beacons.size() == 3, "A C.R.U. soldier carries a weapon lamp and a red marker light")
+	trooper.ammo = 60
+	for i in range(40):
+		if player.health < 100.0:
+			break
+		trooper.rounds_left = 1
+		trooper._fire(player.global_position, false)
+	var harm: float = float(trooper.role.damage) * float(game.rules.harm)
+	expect(player.health < 100.0 and is_equal_approx(100.0 - player.health, harm * 0.45), "A C.R.U. bullet is stopped by the plates as far as they go")
+	trooper.receive_hit(9999.0, Vector3.FORWARD)
+	expect(trooper.dead and not body.lamp.visible and not body.beacons[0].visible, "His lamps go out with him")
+	# --- nothing in the shop runs off the screen
+	var rows := {}
+	for id in Survivor.ORDER:
+		if int(Survivor.WEAPONS[id].price) > 0:
+			var tab := str(Survivor.WEAPONS[id].get("group", "weapons"))
+			rows[tab] = int(rows.get(tab, 0)) + 1
+	for id in Survivor.GOODS:
+		rows[Survivor.GOODS[id].group] = int(rows.get(Survivor.GOODS[id].group, 0)) + 1
+	for id in Survivor.ATTACHMENTS:
+		rows["mods"] = int(rows.get("mods", 0)) + (Survivor.ATTACHMENTS[id] as Dictionary).size()
+	var widest := 0
+	for tab in rows:
+		widest = maxi(widest, int(rows[tab]))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and widest <= 9 and int(rows.weapons) == 5 and int(rows.mods) == 7, "The shop has six lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	game.team_enabled = true
+	game.start_run()
+	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
+
+## Holds [E] on whatever task item is in reach for a few seconds of mission time.
+func _hold(game: Node3D, seconds: float = 3.2) -> void:
+	Input.action_press("interact")
+	var steps := int(ceil(seconds / 0.4))
+	for step in range(steps):
+		game.mission.update(0.4)
+	Input.action_release("interact")
+
+## Lets a device of the story run until its task is over, restarting it whenever it
+## stalls. Returns how often that was.
+func _run_device(game: Node3D, task: Dictionary) -> int:
+	var stalls := 0
+	for step in range(600):
+		if task.state != "active":
+			break
+		if str(task.items[0].state) == "stalled":
+			stalls += 1
+			_hold(game, 2.4)
+		game.mission.update(0.5)
+	return stalls
+
+## The story, from the first clue to the helicopter. Only on a map that has the lab.
+func _story(game: Node3D) -> void:
+	var cabin: CabinMap = game.cabin
+	if not cabin.has_method("unlock") or not cabin.points.has("nadja_hack"):
+		print("SKIP: this map has no lab, the story is not checked")
+		return
+	var mission: MissionDirector = game.mission
+	var story: StoryDirector = game.story
+	var spots: Dictionary = cabin.points
+	var lift := Vector3(0, 0.05, 0)
+	game.story_in_checks = true
+	game.intro_skipped = true
+	game.team_enabled = false
+	game.start_run()
+	mission.plain()
+	expect(story.enabled and game.player.global_position.distance_to(spots.landing) < 1.0 and is_instance_valid(story.nadja_npc), "With the story on, the squad starts at the landing zone and Nadja waits in the lab")
+	expect(cabin.is_locked("upper") and cabin.is_locked("wing") and cabin.is_locked("cellar") and cabin.path_between(spots.hall, spots.upper_west).is_empty() and cabin.path_between(spots.hall, spots.lab).is_empty() and not cabin.path_between(spots.landing, spots.hall).is_empty(), "At first the upper floor, a wing and the cellar are closed")
+	# Rounds one to three: the house opens up.
+	game.begin_wave()
+	game.spawn_queue.clear()
+	game.complete_wave()
+	expect(not cabin.is_locked("wing") and cabin.is_locked("upper") and not cabin.path_between(spots.hall, spots.wing).is_empty(), "After the first round more rooms open")
+	for i in range(2):
+		game.begin_wave()
+		game.spawn_queue.clear()
+		game.complete_wave()
+	expect(not cabin.is_locked("upper") and not cabin.path_between(spots.hall, spots.upper_west).is_empty() and cabin.is_locked("cellar"), "After the third round the stairs are free")
+	# Finished errands are clues.
+	for i in range(3):
+		mission._finish(mission._start_task("crate"), true)
+	expect(story.intel == 3 and story.contact and story.errand("codes") == "samples", "Three finished errands give Nadja away, and she takes over the errands")
+	# Round four: the hack module comes by helicopter.
+	game.begin_wave()
+	game.spawn_queue.clear()
+	var drop: Dictionary = mission.task_of("module")
+	expect(story.stage == "module" and not drop.is_empty() and str(drop.items[0].state) == "falling", "The helicopter drops the hack module")
+	mission.update(0.1)
+	expect(is_instance_valid(story.heli) and story.heli_job == "pass" and mission.nearest_item().is_empty(), "The crate hangs on its parachute while the helicopter passes")
+	for step in range(40):
+		mission.update(0.5)
+	face(game, (drop.items[0].pos as Vector3) + Vector3(1.2, 0.05, 0), 0.0)
+	expect(str(drop.items[0].state) == "" and not mission.nearest_item().is_empty(), "The crate lands and can be opened")
+	_hold(game)
+	mission.update(0.1)
+	var hack: Dictionary = mission.task_of("hack")
+	expect(drop.state == "done" and not hack.is_empty() and str(hack.items[0].state) == "", "With the module in hand, the cellar door asks for it")
+	face(game, (spots.cellar_door as Vector3) + lift, 0.0)
+	expect((spots.cellar_door as Vector3).distance_to(spots.cellar_hack) < MissionDirector.USE_RANGE and not mission.targets.is_empty(), "The module is put on from where one stands at the door")
+	_hold(game)
+	expect(str(hack.items[0].state) == "running" and float(hack.left) > 60.0 and mission.targets.values()[0].is_targetable(), "The module runs once it is clamped on, and draws the infected")
+	var stalls := _run_device(game, hack)
+	expect(hack.state == "done" and stalls >= 1 and not cabin.is_locked("cellar") and story.stage == "lab" and not cabin.path_between(spots.hall, spots.lab).is_empty(), "The hack jams, is restarted and opens the cellar")
+	game.complete_wave()
+	# Round five: down into the lab.
+	game.begin_wave()
+	game.spawn_queue.clear()
+	var drives: Dictionary = mission.task_of("drives")
+	expect(not drives.is_empty() and drives.items.size() == 3 and cabin.level_of(drives.items[0].pos) == 2, "Nadja asks for the drives in the lab")
+	face(game, (spots.lab_glass as Vector3) + lift, 0.0)
+	mission.update(0.2)
+	mission.update(0.2)
+	expect(story.entered and story.met and cabin.is_locked("lab_room"), "Down in the lab the squad finds Nadja behind glass")
+	for item in drives.items:
+		face(game, (item.pos as Vector3) + Vector3(0.9, 0.05, 0), 0.0)
+		_hold(game)
+	expect(drives.state == "done", "The drives are pulled")
+	game.complete_wave()
+	# Round six: her door.
+	game.begin_wave()
+	game.spawn_queue.clear()
+	var rescue: Dictionary = mission.task_of("rescue")
+	expect(story.stage == "rescue" and mission.wave_kind == "mixed" and not rescue.is_empty(), "Two rounds after the cellar, her door is next and Helix sends everything")
+	face(game, (spots.nadja_door as Vector3) + lift, 0.0)
+	expect((spots.nadja_door as Vector3).distance_to(spots.nadja_hack) < MissionDirector.USE_RANGE, "The module reaches her door from where one stands")
+	_hold(game)
+	var jams := _run_device(game, rescue)
+	game.spawn_queue.clear()
+	expect(rescue.state == "done" and jams >= 2 and not cabin.is_locked("tunnel") and not cabin.is_locked("lab_room") and story.stage == "escort", "Her door opens after two jams, and the C.R.U. has blown the tunnel")
+	expect(is_instance_valid(story.nadja) and story.nadja.unarmed and not is_instance_valid(story.nadja_npc) and game.survivors.has(story.nadja) and not game.team.has(story.nadja), "Nadja is out and follows the squad, unarmed")
+	game.complete_wave()
+	# The last round: to the helicopter.
+	game.begin_wave()
+	game.spawn_queue.clear()
+	var evac: Dictionary = mission.task_of("evac")
+	expect(game.wave == game.ROUNDS.size() and story.stage == "evac" and not evac.is_empty(), "With Nadja out, the next round is the last")
+	mission.update(0.1)
+	expect(is_instance_valid(story.heli) and story.heli_job == "evac" and not story.everyone_aboard(spots.landing), "The helicopter is on its way to the landing zone")
+	for step in range(90):
+		mission.update(1.0)
+	expect(str(evac.items[0].state) == "landed" and game.state == "playing", "The helicopter lands and waits")
+	story.nadja.global_position = (spots.landing as Vector3) + Vector3(1.5, 0.05, 0)
+	face(game, (spots.landing as Vector3) + Vector3(-1.0, 0.05, 0), 0.0)
+	mission.update(0.5)
+	expect(game.state == "win" and story.stage == "done", "With everyone at the helicopter the night is won")
+	game.story_in_checks = false
+	game.intro_skipped = false
+	game.start_run()
+	expect(not game.story.enabled and not cabin.is_locked("cellar") and not is_instance_valid(game.story.nadja), "A night without the story has every door open")
+
+## What came with v0.7: voices, the C.R.U., six more weapons, more errands, skins.
+func _newer(game: Node3D) -> void:
+	var cabin: CabinMap = game.cabin
+	var mission: MissionDirector = game.mission
+	# --- voices
+	var opening := Radio.pick("mission_start")
+	expect(str(opening.sound) != "" and ResourceLoader.exists(str(opening.sound)) and opening.name == "COLEMAN", "Coleman's radio lines are recorded")
+	var same := true
+	for i in range(8):
+		same = same and str(Radio.pick("round_horde").text) == str(Radio.LINES.round_horde[1][0])
+	expect(same, "A cue with one recorded variant is never read from another one")
+	expect(str(Radio.bark("viper", "reload").sound) != "" and str(Radio.bark("scorpion", "kill").sound) != "" and str(Radio.bark("cru", "contact").sound) != "" and Radio.bark("main", "reload").is_empty(), "The squad and the C.R.U. have recorded calls")
+	game.start_run()
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game._say("round_begin")
+	game._say("round_clear")
+	expect(game.radio_queue.size() == 1 and game.radio_busy > 1.0, "A radio line waits until the one before is over")
+	game._run_radio(60.0)
+	expect(game.radio_queue.is_empty(), "A waiting radio line follows when the channel is free")
+	expect(game.bark(game.player, "viper", "reload") and not game.bark(game.player, "viper", "kill"), "Nobody calls out two things at once")
+	# --- the C.R.U.
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var trooper := game.spawn_enemy("cru_assault") as CruSoldier
+	# It keeps its grenade until the check asks for it.
+	trooper.grenades = 0
+	expect(trooper != null and trooper.model is CruVisual and trooper.spec.human, "A C.R.U. soldier is an armed human")
+	trooper.position = Vector3(0, 0.05, 35.0)
+	await wait(4.5)
+	expect(trooper.ammo < int(trooper.role.magazine) and game.player.health < 100.0, "A C.R.U. soldier shoots at a survivor it can see")
+	trooper.roll_wait = 0.0
+	trooper.threatened(true)
+	expect(trooper.roll_left > 0.0, "A near miss makes a C.R.U. soldier throw itself aside")
+	await wait(1.0)
+	trooper.grenades = 1
+	var bombs_before: int = game.ordnance.get_child_count()
+	trooper.throw_grenade(game.player.global_position, 13.0, true)
+	await wait(0.7)
+	var thrown: Throwable = null
+	for node in game.ordnance.get_children():
+		if node is Throwable and node.hostile:
+			thrown = node
+	expect(thrown != null and game.ordnance.get_child_count() == bombs_before + 1 and trooper.grenades == 0, "A C.R.U. soldier throws a grenade")
+	if thrown != null:
+		thrown.queue_free()
+	var cru_before: int = game.stats.cru_kills
+	trooper.receive_hit(9999.0, Vector3.FORWARD)
+	expect(trooper.dead and game.stats.cru_kills == cru_before + 1, "A fallen C.R.U. soldier is counted on its own")
+	game.wave = 6
+	mission.wave_kind = "cru"
+	var squad := mission.squad()
+	expect(squad.size() == 5 and squad.has("cru_elite") and squad.has("cru_marksman") and game.mission.squad(9.0).has("cru_commander"), "A C.R.U. squad grows with the rounds and brings specialists")
+	mission.plan[6] = {"wave": "cru", "tasks": []}
+	game.spawn_queue.clear()
+	game.begin_wave()
+	var soldiers := 0
+	for kind in game.spawn_queue:
+		if kind.begins_with("cru_"):
+			soldiers += 1
+	expect(mission.wave_kind == "cru" and soldiers == 6 and game.spawn_queue.size() - soldiers <= 3, "A C.R.U. round brings a squad and hardly any infected")
+	game.spawn_queue.clear()
+	mission.wave_kind = "classic"
+	expect(float(Profile.DIFFICULTIES.hard.tactics) > float(Profile.DIFFICULTIES.easy.tactics), "A harder night makes the C.R.U. sharper")
+	# --- the newer weapons
+	game.start_run()
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var first: Infected = game.spawn_enemy("mauler")
+	var second: Infected = game.spawn_enemy("mauler")
+	first.position = Vector3(0, 0.05, 30.0)
+	second.position = Vector3(0, 0.05, 33.0)
+	first.set_physics_process(false)
+	second.set_physics_process(false)
+	await frames(4)
+	var player: Survivor = game.player
+	expect(player.unlock("sniper") and player.current_weapon == "sniper" and player.ammo == 5, "The sniper rifle can be taken in hand")
+	player.shot_cooldown = 0.0
+	player.shoot()
+	expect(first.dead and second.dead and player.ammo == 4 and player.bolt_clock >= 0.0, "A sniper bullet goes through two bodies, then the bolt is worked")
+	player.unlock("launcher")
+	player.shot_cooldown = 0.0
+	var shells_before: int = game.ordnance.get_child_count()
+	player.shoot()
+	var shell: Throwable = game.ordnance.get_child(game.ordnance.get_child_count() - 1) as Throwable
+	expect(game.ordnance.get_child_count() == shells_before + 1 and shell != null and shell.impact and player.ammo == 5, "The launcher fires a grenade that goes off on impact")
+	if shell != null:
+		shell.queue_free()
+	player.unlock("minigun")
+	var cold: bool = player.spin < 1.0
+	player._spin(0.3, true)
+	player._spin(0.3, true)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	expect(cold and player.spin >= 1.0 and player.ammo == 199, "The rotary gun fires once its barrels are up to speed")
+	player.unlock("autoshotgun")
+	player.shot_cooldown = 0.0
+	player.shoot()
+	expect(player.ammo == 7 and player.pump_clock < 0.0, "The automatic shotgun needs no pump stroke")
+	expect(player.unlock("pistol") and player.ammo == 15 and player.unlock("revolver") and player.ammo == 6 and int(Survivor.WEAPONS.minigun.from_round) > int(Survivor.WEAPONS.launcher.from_round), "Two handguns are on sale, the heaviest weapons only late in the night")
+	# --- holding a position
+	game.start_run()
+	var hold: Dictionary = mission._start_task("zone")
+	var ground: Vector3 = hold.items[0].pos
+	face(game, Vector3(0, 0.05, 2.5), PI)
+	mission.update(1.0)
+	expect(float(hold.items[0].use) == 0.0 and "Position halten" in mission.summary()[0], "A position waits for somebody to stand on it")
+	face(game, ground + Vector3(1.0, 0.05, 0), 0.0)
+	for step in range(100):
+		if hold.state == "active":
+			mission.update(0.5)
+	expect(hold.state == "done" and game.stats.objectives == 1, "Standing on the marked ground long enough holds the position")
+	# --- skins
+	var profile: Profile = game.profile
+	var wins: int = profile.totals.victories
+	profile.totals.victories = 0
+	var locked: bool = not profile.unlocked("raven")
+	profile.enlist("raven")
+	var kept: bool = not profile.squad.has("raven")
+	profile.totals.victories = 1
+	profile.enlist("raven")
+	profile.wear("raven")
+	expect(locked and kept and profile.squad.has("raven") and profile.skin == "raven" and profile.squad.size() == 2, "Finishing a night unlocks Raven for the squad, and wearing her skin does not take her out of it")
+	game.team_enabled = true
+	game.start_run()
+	var looks: Array = []
+	for mate in game.team:
+		looks.append(mate.look)
+	expect(looks.has("raven") and looks.size() == 2, "The chosen squad comes along")
+	game.team_enabled = false
+	profile.totals.victories = wins
+	profile.skin = "main"
+	profile.squad = ["viper", "scorpion"]
+	game.start_run()
+
+## Run with -- --bot-check [--bot-seconds=180] [--bot-pos=x,z] [--bot-round=1]
+## [--bot-speed=4]. With a window (no --headless) it also reports the frame rate; use
+## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
+## position while the real spawner runs, which exercises navigation, special infected and
+## round flow over a long stretch and reports infected that get stuck on the way.
+func bot(game: Node3D) -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	var limit := 180.0
+	var post := Vector3(0, 0.05, 2.6)
+	var first_round := 1
+	var pace := 4.0
+	var frames_seen := 0
+	var frame_time := 0.0
+	var slowest := 0.0
+	var hitches := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--bot-round="):
+			first_round = int(arg.trim_prefix("--bot-round="))
+		if arg.begins_with("--bot-seconds="):
+			limit = float(arg.trim_prefix("--bot-seconds="))
+		if arg.begins_with("--bot-pos="):
+			var parts := arg.trim_prefix("--bot-pos=").split(",")
+			post = Vector3(float(parts[0]), 0.05, float(parts[1]))
+		if arg.begins_with("--bot-speed="):
+			pace = maxf(0.25, float(arg.trim_prefix("--bot-speed=")))
+	Engine.time_scale = pace
+	await wait(1.0)
+	game.start_run()
+	# The bot holds one spot and cannot do tasks: plain rounds, unless asked otherwise.
+	if not "--bot-tasks" in OS.get_cmdline_user_args():
+		game.mission.plain()
+	game.wave = first_round - 1
+	game.player.position = post
+	# The bot does not run from gas in the house, so it gets the best mask there is.
+	game.player.mask_level = 4
+	game.player.filter_left = game.player.filter_capacity()
+	var heals := 0
+	var blasts := 0
+	var watched := {}
+	var stuck := {}
+	var next_report := 15.0
+	var seen := {"mauler": 0, "charger": 0, "striker": 0, "ripper": 0, "crusher": 0}
+	var counted := {}
+	var last_phase := "preparing"
+	var wave_began := 0.0
+	var durations: Array[String] = []
+	var last_tick := Time.get_ticks_usec()
+	var last_frame := Engine.get_process_frames()
+	while game.state == "playing" and game.elapsed < limit:
+		await get_tree().physics_frame
+		# Frame times of rendered frames, once the first second of loading is over.
+		if Engine.get_process_frames() != last_frame:
+			var now := Time.get_ticks_usec()
+			var spent := (now - last_tick) / 1000.0 / float(Engine.get_process_frames() - last_frame)
+			last_tick = now
+			last_frame = Engine.get_process_frames()
+			if game.elapsed > 0.5:
+				frames_seen += 1
+				frame_time += spent
+				slowest = maxf(slowest, spent)
+				if spent > 60.0 and hitches < 12:
+					hitches += 1
+					var newest := "-"
+					if game.enemies.get_child_count() > 0:
+						var last_one := game.enemies.get_child(game.enemies.get_child_count() - 1) as Infected
+						newest = "%s/%s" % [last_one.kind, last_one.visual_kind]
+					print("BOT_HITCH %.0f ms at t=%.1f round=%d alive=%d spawned=%d growths=%d clouds=%d decals=%d flash=%.2f brownout=%.2f newest=%s process=%.1f ms physics=%.1f ms" % [spent, game.elapsed, game.wave, game.alive_count, game.spawned_this_wave, game.fx.growths.size(), game.fx.clouds.size(), game.fx.decals.size(), game.cabin.flash_left, game.cabin.brownout_left, newest, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
+		if game.phase == "preparing":
+			game.preparation_left = minf(game.preparation_left, 1.0)
+		if game.phase != last_phase:
+			if game.phase == "wave":
+				wave_began = game.elapsed
+			else:
+				durations.append("%d:%ds" % [game.wave, int(game.elapsed - wave_began)])
+			last_phase = game.phase
+		if game.player.health < 40:
+			game.player.health = 100
+			heals += 1
+		if game.player.reserve == 0:
+			game.player.reserve = game.player.max_reserve()
+		blasts = maxi(blasts, game.fx.growths.size())
+		var best: Infected = null
+		var best_distance := 40.0
+		for node in get_tree().get_nodes_in_group("infected"):
+			var enemy := node as Infected
+			var id := enemy.get_instance_id()
+			if not counted.has(id):
+				counted[id] = true
+				seen[enemy.kind] = int(seen.get(enemy.kind, 0)) + 1
+			var distance := enemy.global_position.distance_to(game.player.global_position)
+			# An infected that barely moves for a long while, far from its target, is stuck.
+			var record: Dictionary = watched.get(id, {"pos": enemy.global_position, "since": game.elapsed})
+			if record.pos.distance_to(enemy.global_position) > 0.6:
+				record = {"pos": enemy.global_position, "since": game.elapsed}
+			elif game.elapsed - float(record.since) > 7.0 and distance > 3.5 and not stuck.has(id) and enemy.kind != "stalker" and not (enemy.kind == "healer" and distance < Infected.CLOUD_KEEP + 1.0):
+				stuck[id] = "%s at %s (player %.1f m away) state=%s alert=%s held=%.1f attack=%.1f path=%d/%d floor=%s speed=%.2f" % [enemy.kind, enemy.global_position.snapped(Vector3.ONE * 0.1), distance, enemy.model.state, str(enemy.alert), enemy.held_left, enemy.attack_clock, enemy.path_index, enemy.path.size(), str(enemy.is_on_floor()), enemy.get_real_velocity().length()]
+				for i in range(enemy.get_slide_collision_count()):
+					var other: Object = enemy.get_slide_collision(i).get_collider()
+					if other is Infected:
+						var blocker := other as Infected
+						stuck[id] += " | blocked by %s at %s dead=%s state=%s held=%.1f attack=%.1f cd=%.1f hp=%d dist=%.1f fuse=%.1f" % [blocker.kind, blocker.global_position.snapped(Vector3.ONE * 0.1), str(blocker.dead), blocker.model.state, blocker.held_left, blocker.attack_clock, blocker.cooldown, int(blocker.health), blocker.global_position.distance_to(game.player.global_position), blocker.fuse_left]
+					elif other != null:
+						stuck[id] += " | touching %s (%s)" % [str(other.get("name")), other.get_class()]
+			watched[id] = record
+			var eye: Vector3 = game.player.camera.global_position
+			var aim: Vector3 = enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.62, 0)
+			var query := PhysicsRayQueryParameters3D.create(eye, aim, 1)
+			if distance < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
+				best = enemy
+				best_distance = distance
+		if best != null:
+			var to: Vector3 = best.global_position + Vector3(0, float(best.spec.height) * 0.62, 0) - game.player.camera.global_position
+			game.player.rotation.y = atan2(-to.x, -to.z)
+			game.player.camera.rotation.x = atan2(to.y, Vector2(to.x, to.z).length())
+			game.player.shoot()
+		game.player.position.x = post.x
+		game.player.position.z = post.z
+		if game.elapsed >= next_report:
+			next_report += 15.0
+			print("BOT t=%03d round=%d alive=%d queued=%d kills=%d score=%d hp=%d heals=%d" % [int(game.elapsed), game.wave, game.alive_count, game.remaining_to_spawn, game.kills, game.score, int(game.player.health), heals])
+	# Rain and wind are short loops; after minutes of play they must still be running.
+	var squad_kills := 0
+	for mate in game.team:
+		squad_kills += mate.kills
+	print("BOT_RESULT state=%s round=%d kills=%d squad_kills=%d score=%d heals=%d seen=%s stuck=%d weather_loops=%s" % [game.state, game.wave, game.kills, squad_kills, game.score, heals, str(seen), stuck.size(), str(game.sounds.rain.playing and game.sounds.ambience.playing)])
+	print("BOT_ROUNDS ", " ".join(PackedStringArray(durations)))
+	if frames_seen > 0 and DisplayServer.get_name() != "headless":
+		print("BOT_FRAMES speed=%.1f average=%.1f ms (%.0f fps) slowest=%.0f ms frames=%d draw_calls=%d" % [pace, frame_time / frames_seen, 1000.0 * frames_seen / frame_time, slowest, frames_seen, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
+	for id in stuck:
+		print("BOT_STUCK ", stuck[id])
+	game.sounds.stop_all()
+	Engine.time_scale = 1.0
+	await wait(0.2)
+	get_tree().call_deferred("quit", 0)
+
+## Shoots the nearest infected in sight, like the bot run does. Returns true if it fired.
+func _snap_shot(game: Node3D) -> bool:
+	var best: Infected = null
+	var best_distance := 45.0
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if enemy.dead:
+			continue
+		var distance := enemy.global_position.distance_to(game.player.global_position)
+		var aim: Vector3 = enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.62, 0)
+		var query := PhysicsRayQueryParameters3D.create(game.player.camera.global_position, aim, 1)
+		if distance < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
+			best = enemy
+			best_distance = distance
+	if best == null:
+		return false
+	var to: Vector3 = best.global_position + Vector3(0, float(best.spec.height) * 0.62, 0) - game.player.camera.global_position
+	game.player.rotation.y = atan2(-to.x, -to.z)
+	game.player.camera.rotation.x = atan2(to.y, Vector2(to.x, to.z).length())
+	game.player.shoot()
+	return true
+
+## Nobody is to attack while the story is walked through.
+func _sweep(game: Node3D) -> void:
+	game.spawn_queue.clear()
+	game.mission.ambush_left = -1.0
+	for foe in game.enemies.get_children():
+		if foe is Infected and not foe.dead:
+			foe.receive_hit(99999, Vector3.BACK)
+
+## A quiet round for the story walk: begun, and over at once.
+func _quiet_round(game: Node3D, finish: bool) -> void:
+	game.begin_wave()
+	game.spawn_queue.clear()
+	await wait(0.5)
+	if finish:
+		for task in game.mission.tasks:
+			if task.state == "active":
+				task.state = "done"
+		game.complete_wave()
+		game.preparation_left = 9999.0
+
+## The story in a co-op match. The host walks through its stations without a fight, the
+## guest reports what of it arrived. Run both instances with --mp-story added.
+func coop_story(game: Node3D, as_host: bool, tag: String) -> void:
+	var cabin: CabinMap = game.cabin
+	var story: StoryDirector = game.story
+	var pad: Vector3 = cabin.points.landing
+	if not as_host:
+		var stages: Array = []
+		var kinds: Array = []
+		var puppet := false
+		var machine := false
+		var shut_at_first := false
+		var first := true
+		var patience := 0.0
+		while game.state == "playing" and patience < 70.0:
+			await wait(0.1)
+			patience += 0.1
+			if first and story.enabled:
+				first = false
+				shut_at_first = cabin.is_locked("upper") and cabin.is_locked("wing") and cabin.is_locked("cellar")
+			if story.enabled and not stages.has(story.stage):
+				stages.append(story.stage)
+			for task in game.mission.tasks:
+				if not kinds.has(task.kind):
+					kinds.append(task.kind)
+			puppet = puppet or is_instance_valid(story.nadja_puppet)
+			machine = machine or is_instance_valid(story.heli)
+			# The helicopter does not leave without the guest.
+			if story.stage == "evac":
+				game.player.position = pad + Vector3(2.0, 0.05, 2.5)
+		await wait(0.5)
+		print("%s_STORY state=%s enabled=%s shut_at_first=%s stages=%s tasks=%s open=%s nadja_seen=%s helicopter_seen=%s start=%s" % [tag, game.state, str(story.enabled), str(shut_at_first), str(stages), str(kinds), str(story.export_state()[3]), str(puppet), str(machine), str(game.player.position.distance_to(pad) < 12.0)])
+		game.sounds.stop_all()
+		await wait(0.3)
+		get_tree().call_deferred("quit", 0)
+		return
+	var mission: MissionDirector = game.mission
+	mission.plain()
+	game.preparation_left = 9999.0
+	await wait(1.5)
+	print("%s story enabled=%s cellar_shut=%s" % [tag, str(story.enabled), str(cabin.is_locked("cellar"))])
+	# Three rounds open the house, three errands give Nadja away.
+	for i in range(3):
+		await _quiet_round(game, true)
+	for i in range(3):
+		mission._finish(mission._start_task("crate"), true)
+	await wait(0.6)
+	# The module comes down, goes onto the cellar door and opens it.
+	await _quiet_round(game, false)
+	var drop: Dictionary = mission.task_of("module")
+	drop.items[0].health = 0.2
+	await wait(0.8)
+	mission.apply_use(int(drop.id), 0, 99.0)
+	await wait(0.6)
+	var hack: Dictionary = mission.task_of("hack")
+	mission.apply_use(int(hack.id), 0, 99.0)
+	hack.jams = []
+	hack.left = 0.3
+	await wait(1.2)
+	print("%s cellar open=%s stage=%s" % [tag, str(not cabin.is_locked("cellar")), story.stage])
+	game.complete_wave()
+	game.preparation_left = 9999.0
+	# The drives, then her door: the tunnel is blown on the way, and she comes out.
+	await _quiet_round(game, true)
+	await _quiet_round(game, false)
+	var rescue: Dictionary = mission.task_of("rescue")
+	mission.apply_use(int(rescue.id), 0, 99.0)
+	rescue.jams = []
+	rescue.left = float(rescue.total) * 0.702
+	await wait(0.8)
+	_sweep(game)
+	rescue.left = 0.3
+	await wait(1.2)
+	_sweep(game)
+	print("%s rescue stage=%s nadja=%s tunnel_open=%s" % [tag, story.stage, str(is_instance_valid(story.nadja)), str(not cabin.is_locked("tunnel"))])
+	await wait(2.0)
+	# The last round: everybody to the helicopter. The host waits in the house until it
+	# has landed and the guest stands beside it.
+	game.player.position = (cabin.points.hall as Vector3) + Vector3(0, 0.05, 0)
+	game.complete_wave()
+	await _quiet_round(game, false)
+	var evac: Dictionary = mission.task_of("evac")
+	await wait(0.5)
+	if not evac.is_empty():
+		evac.left = 1.0
+	await wait(2.2)
+	var waiting: bool = game.state == "playing" and not evac.is_empty() and str(evac.items[0].state) == "landed"
+	var guest_there: bool = is_instance_valid(game.net.remote) and game.net.remote.global_position.distance_to(pad) < 9.0
+	print("%s helicopter waits=%s guest_at_pad=%s" % [tag, str(waiting), str(guest_there)])
+	game.player.position = pad + Vector3(-2.0, 0.05, 2.0)
+	if is_instance_valid(story.nadja):
+		story.nadja.global_position = pad + Vector3(1.5, 0.05, -2.0)
+	var patience := 0.0
+	while game.state == "playing" and patience < 12.0:
+		await wait(0.1)
+		patience += 0.1
+		_sweep(game)
+	await wait(0.5)
+	print("%s_STORY state=%s stage=%s wave=%d open=%s partner_aboard=%s" % [tag, game.state, story.stage, game.wave, str(story.export_state()[3]), str(guest_there)])
+	game.sounds.stop_all()
+	await wait(0.3)
+	get_tree().call_deferred("quit", 0)
+
+## Run two instances: one with -- --mp-host-test, one with -- --mp-join-test.
+## Each plays the first rounds with a simple aim-bot and prints what it saw of the other.
+func coop(game: Node3D, as_host: bool) -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	var tag := "MP_HOST" if as_host else "MP_GUEST"
+	# With --mp-story the two play the story instead of a fight.
+	var story_run := "--mp-story" in OS.get_cmdline_user_args()
+	if story_run:
+		game.story_in_checks = true
+		game.intro_skipped = true
+	var seconds := 26.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--mp-seconds="):
+			seconds = float(arg.trim_prefix("--mp-seconds="))
+	await wait(0.5)
+	if as_host:
+		game.host_match()
+	else:
+		game.join_match("127.0.0.1")
+	var waited := 0.0
+	while waited < 45.0 and (game.net.partner == 0 if as_host else game.state != "playing"):
+		await wait(0.25)
+		waited += 0.25
+	print("%s connected=%s after %.1fs phase=%s" % [tag, str(game.net.partner != 0), waited, game.net.phase])
+	if game.net.partner == 0:
+		print("%s_RESULT no partner" % tag)
+		get_tree().call_deferred("quit", 1)
+		return
+	if as_host:
+		await wait(0.6)
+		game.start_run()
+		await wait(1.0)
+		if not story_run:
+			game.mission.plan[0] = {"wave": "classic", "tasks": ["codes"]}
+			game.begin_wave()
+	if story_run:
+		await coop_story(game, as_host, tag)
+		return
+	var post := Vector3(-0.8, 0.05, 2.6) if as_host else Vector3(0.9, 0.05, 2.6)
+	var home := post
+	var working := false
+	game.player.position = post
+	var clock := 0.0
+	var seen_peak := 0
+	var shots := 0
+	var lowest_health := 100.0
+	var partner_moved := false
+	var skipped := false
+	var partner_downed := false
+	var revived := false
+	var bought := false
+	var soldier_sent := false
+	var cru_seen := false
+	var cru_fired := false
+	var cru_walked := 0.0
+	var cru_last := Vector3.INF
+	while clock < seconds and game.state == "playing":
+		await get_tree().physics_frame
+		clock += get_physics_process_delta_time()
+		seen_peak = maxi(seen_peak, get_tree().get_nodes_in_group("infected").size())
+		lowest_health = minf(lowest_health, game.player.health)
+		if game.player.reserve == 0:
+			game.player.reserve = game.player.max_reserve()
+		if _snap_shot(game):
+			shots += 1
+		game.player.position.x = post.x
+		game.player.position.z = post.z
+		if is_instance_valid(game.net.remote):
+			partner_moved = partner_moved or game.net.remote.global_position.distance_to(Vector3.ZERO) > 0.5
+			partner_downed = partner_downed or game.net.remote.down
+		# Early on the guest buys ammunition: the team's supplies are kept by the host.
+		if not as_host and clock > seconds * 0.2 and not bought:
+			bought = true
+			var before: int = game.credits
+			game.player.position = beside(game, "ammo", game.cabin.points.supply)
+			game.player.reserve = 0
+			game.interact()
+			print("MP_GUEST bought ammunition: credits %d -> %d reserve=%d" % [before, game.credits, game.player.reserve])
+		# Later the guest walks out to the first dead researcher and holds [E] there.
+		if not as_host and clock > seconds * 0.64 and clock < seconds * 0.64 + 3.0 and not game.mission.tasks.is_empty() and not game.player.down:
+			post = (game.mission.tasks[0].items[0].pos as Vector3) + Vector3(0.8, 0.05, 0)
+			game.player.health = 100
+			Input.action_press("interact")
+			working = true
+		elif working:
+			working = false
+			Input.action_release("interact")
+			post = home
+		# Halfway through, the guest lets itself be struck down to try the help-up path.
+		if not as_host and clock > seconds * 0.45 and not skipped:
+			skipped = true
+			game.player.receive_damage(500.0)
+			print("MP_GUEST down=%s health=%.0f" % [str(game.player.down), game.player.health])
+		# Past the middle the host lets a C.R.U. soldier in at the front door; both sides
+		# note what they see of it.
+		if as_host and clock > seconds * 0.55 and not soldier_sent:
+			soldier_sent = true
+			var soldier: Infected = game.spawn_enemy("cru_assault")
+			soldier.position = (game.cabin.points.front_door_out as Vector3) + Vector3(0, 0.05, 2.0)
+			soldier.health = 700.0
+		for foe in game.enemies.get_children():
+			if foe is CruSoldier and not foe.dead:
+				cru_seen = true
+				cru_fired = cru_fired or foe.volley > 0
+				if cru_last != Vector3.INF:
+					cru_walked += foe.global_position.distance_to(cru_last)
+				cru_last = foe.global_position
+		if as_host and game.partner_needs_help() and not revived:
+			revived = true
+			game.interact()
+			print("MP_HOST helped the partner up")
+	# The host calls the night off; the guest has to hear about it.
+	if as_host:
+		game.finish(false)
+	else:
+		var patience := 0.0
+		while game.state == "playing" and patience < 6.0:
+			await wait(0.1)
+			patience += 0.1
+	await wait(0.5)
+	var items_done := 0
+	var items_total := 0
+	for task in game.mission.tasks:
+		for item in task.items:
+			items_total += 1
+			if item.done:
+				items_done += 1
+	print("%s_TASKS tasks=%d items=%d done=%d props=%d" % [tag, game.mission.tasks.size(), items_total, items_done, game.mission.props.size()])
+	var partner_at := Vector3.ZERO
+	var partner_health := -1.0
+	if is_instance_valid(game.net.remote):
+		partner_at = game.net.remote.global_position
+		partner_health = game.net.remote.health
+	print("%s_RESULT state=%s wave=%d phase=%s infected_peak=%d shots=%d kills=%d credits=%d score=%d own_health=%.0f lowest=%.0f down=%s partner_at=%s partner_health=%.0f partner_seen_down=%s partner_moved=%s pickups=%d" % [tag, game.state, game.wave, game.phase, seen_peak, shots, game.kills, game.credits, game.score, game.player.health, lowest_health, str(game.player.down), str(partner_at.snapped(Vector3.ONE * 0.1)), partner_health, str(partner_downed), str(partner_moved), game.pickups.get_child_count()])
+	print("%s_CRU seen=%s fired=%s walked=%.1f team_kills=%d team_cru_kills=%d" % [tag, str(cru_seen), str(cru_fired), cru_walked, int(game.stats.kills), int(game.stats.cru_kills)])
+	game.sounds.stop_all()
+	await wait(0.3)
+	get_tree().call_deferred("quit", 0)

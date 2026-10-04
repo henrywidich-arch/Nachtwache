@@ -1,0 +1,15 @@
+Musik fuer Nachtwache
+=====================
+
+Der Anfang des Dateinamens sagt, zu welchem Teil der Nacht ein Stueck gehoert:
+
+  anfang_         Hauptmenue, Ankunft, Pausen zwischen den Runden
+  welle_          die fruehen Runden
+  harte_welle_    ab Runde 5 und wenn die C.R.U. oder eine Horde kommt
+  auftrag_        solange ein Geraet laeuft oder eine Stellung zu halten ist
+  kurz_vor_ende_  die beiden Runden vor der letzten
+  letzte_runde_   die letzte Runde und die Evakuierung
+
+Neue Stuecke: als MP3 oder OGG hier hineinlegen und so benennen, z. B. welle_3.mp3.
+Beim naechsten Start des Spiels sind sie dabei. Gibt es mehrere Stuecke fuer einen
+Teil, wechselt das Spiel ab.

@@ -1,0 +1,5 @@
+# Every file is stored exactly as it is; only the start scripts get the line ends their
+# systems need, whatever machine checks them out.
+* -text
+*.command text eol=lf
+*.cmd text eol=crlf

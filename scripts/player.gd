@@ -1,0 +1,1007 @@
+class_name Survivor
+extends CharacterBody3D
+## Input and local weapon behaviour. Damage and rewards are resolved by Game.
+
+const BASE_FOV := 74.0
+## slot: number key. price: cost in the weapon shop. flash: size of the muzzle flash.
+const WEAPONS := {
+	"rifle": {"label": "STURMGEWEHR", "slot": 1, "price": 0, "sound": "shot", "magazine": 30, "reserve_max": 180, "reload_time": 1.75, "interval": 0.115, "damage": 28.0, "head_multiplier": 2.7, "spread": 0.011, "kick": 0.011, "flash": 1.0},
+	# The AK-47 shares key 1 with the carbine: harder hits, more kick. Parts: see ATTACHMENTS.
+	"ak": {"label": "AK-47", "slot": 1, "price": 300, "sound": "ak", "magazine": 30, "reserve_max": 180, "reload_time": 2.5, "interval": 0.1, "damage": 36.0, "head_multiplier": 2.6, "spread": 0.014, "kick": 0.014, "flash": 1.1, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	"p90": {"label": "P90", "slot": 2, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
+	# cues: when in its reload each step is heard. Parts for it: see ATTACHMENTS.
+	"ump": {"label": "UMP45", "slot": 2, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	# quiet: a suppressed shot gives nobody the direction it came from.
+	"badger": {"label": "HONEY BADGER", "slot": 3, "price": 350, "quiet": true, "sound": "badger", "magazine": 30, "reserve_max": 210, "reload_time": 1.9, "interval": 0.082, "damage": 34.0, "head_multiplier": 2.6, "spread": 0.008, "kick": 0.0085, "flash": 0.4},
+	# pellets: shots per blast, each doing `damage`. shells: loaded one at a time, `reload_time`
+	# each. punch: how hard the weapon slams back. settle: share of the muzzle climb that
+	# comes back down by itself.
+	"shotgun": {"label": "SCHROTFLINTE", "slot": 4, "price": 250, "sound": "shotgun", "magazine": 6, "reserve_max": 42, "reload_time": 0.52, "interval": 0.95, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.05, "kick": 0.062, "flash": 1.8, "pellets": 9, "shells": true, "punch": 2.7, "settle": 0.72},
+	# group: the shop tab it is sold on. from_round: the round after which the shop has it.
+	"pistol": {"label": "M9 PISTOLE", "slot": 5, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
+	"revolver": {"label": ".44 MAGNUM", "slot": 6, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
+	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 7, "price": 500, "group": "heavy", "sound": "shotgun", "magazine": 8, "reserve_max": 56, "reload_time": 2.3, "interval": 0.3, "damage": 14.0, "head_multiplier": 1.5, "spread": 0.06, "kick": 0.036, "flash": 1.7, "pellets": 8, "punch": 1.9, "settle": 0.7},
+	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
+	# through. bolt: the action is worked by hand after every shot.
+	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 8, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
+	# grenade: fires 40 mm shells that go off where they land.
+	"launcher": {"label": "GRANATWERFER", "slot": 9, "price": 900, "group": "heavy", "from_round": 4, "sound": "launcher", "magazine": 6, "reserve_max": 18, "reload_time": 3.4, "interval": 0.75, "damage": 0.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.05, "flash": 0.9, "punch": 2.2, "settle": 0.8, "grenade": true},
+	# spin: seconds the barrels need to come up to speed before the first shot.
+	"minigun": {"label": "MINIGUN", "slot": 0, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55}
+}
+## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
+const QUIET_SOUNDS := ["badger", "ump_sil"]
+const ORDER := ["rifle", "ak", "p90", "ump", "badger", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "launcher", "minigun"]
+## Parts the shop sells for a weapon. slot: only one part per slot is on the weapon at a
+## time. set: values of the weapon's table that the part replaces (aim_spread: how much of
+## the scatter is left when aiming; zoom: field of view when aiming; scope: field of view
+## through a telescopic sight; scope_turn: how much slower the view turns through it).
+## scale: values it multiplies.
+const ATTACHMENTS := {
+	"ump": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt: freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ump_sil", "flash": 0.32, "quiet": true}, "scale": {"kick": 0.75, "spread": 0.9, "damage": 0.95}}
+	},
+	"ak": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt: freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	}
+}
+## What the shop sells besides weapons. group: its tab in the shop. max: how many fit in
+## the pockets. The mask is bought level by level.
+const GOODS := {
+	"grenade": {"label": "SPLITTERGRANATE", "price": 60, "max": 4, "group": "use", "note": "Taste G. Reißt alles im Umkreis mit – auch dich."},
+	"flashbang": {"label": "BLENDGRANATE", "price": 45, "max": 4, "group": "use", "note": "Taste T. Betäubt Infizierte für einige Sekunden."},
+	"claymore": {"label": "CLAYMORE", "price": 90, "max": 4, "group": "use", "note": "Taste B. Zündet, sobald etwas davor läuft."},
+	"revive": {"label": "ADRENALINSPRITZE", "price": 300, "max": 1, "group": "use", "note": "Rettet dich einmal, wenn dein Leben auf null fällt."},
+	"vest": {"label": "SCHUTZWESTE", "price": 150, "group": "gear", "note": "50 Rüstung. Rüstung fängt 60 % jedes Treffers ab."},
+	"armor": {"label": "SCHWERE RÜSTUNG", "price": 300, "group": "gear", "note": "100 Rüstung."},
+	"plates": {"label": "BALLISTISCHE WESTE", "prices": [160, 260, 400], "group": "gear", "note": "C.R.U.-Kugeln und -Granaten: 25 / 40 / 55 % weniger Schaden"},
+	"mags": {"label": "GRÖSSERE MAGAZINE", "price": 200, "group": "mods", "note": "+50 % Magazin für die Waffe in deiner Hand."},
+	"mask": {"label": "GASMASKE", "prices": [150, 250, 400, 600], "group": "gear", "note": "Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas."}
+}
+## Seconds of clean air a mask of each level holds.
+const MASK_SECONDS := [0.0, 8.0, 20.0, 45.0, 120.0]
+## Share of a hit that armour takes instead of the body.
+const ARMOR_SHARE := 0.6
+## Share of what the C.R.U. shoot and throw that ballistic plates of each level take away.
+const PLATE_SHARES := [0.0, 0.25, 0.4, 0.55]
+## Moments of the shotgun's pump stroke after a shot, in seconds: back, then forward again.
+const PUMP_BACK := 0.26
+const PUMP_DONE := 0.56
+const PUMP_TRAVEL := 0.09
+## Moments of a reload, as a share of its duration, and the sound each one makes.
+const RELOAD_CUES := [[0.07, "mag_out"], [0.56, "mag_in"], [0.84, "bolt"]]
+var current_weapon := "rifle"
+var inventory: Dictionary = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
+var weapon_models: Dictionary = {}
+var game: Node3D
+var camera: Camera3D
+var weapon: Node3D
+var flash: Node3D
+var flash_light: OmniLight3D
+var flash_mesh: MeshInstance3D
+var flashlight: SpotLight3D
+var health := 100.0
+var ammo: int:
+	get: return int(inventory[current_weapon].ammo)
+	set(value): inventory[current_weapon].ammo = value
+var reserve: int:
+	get: return int(inventory[current_weapon].reserve)
+	set(value): inventory[current_weapon].reserve = value
+var weapon_level: int:
+	get: return int(inventory[current_weapon].level)
+	set(value): inventory[current_weapon].level = value
+var sensitivity := 0.0022
+var controlled := false
+## A menu lies over a running co-op match: no input, but the world goes on.
+var menu_open := false
+## Co-op: out of the fight until the partner helps or the round ends.
+var down := false
+var items := {"grenade": 0, "flashbang": 0, "claymore": 0, "revive": 0}
+var armor := 0.0
+## Level of the ballistic plates, 0 to 3.
+var plate_level := 0
+var mask_level := 0
+var filter_left := 0.0
+var throw_cooldown := 0.0
+## A grenade held ready ("grenade" or "flashbang", "" for none), how long it has been
+## held, the seconds left until it leaves the hand once the key is let go (-1: still
+## held), and how far the weapon has dipped out of the way (0 to 1).
+const THROW_SWING := 0.16
+const THROW_AIM_AFTER := 0.2
+var throw_kind := ""
+var throw_held := 0.0
+var throw_swing := -1.0
+var throw_pose := 0.0
+## The Leech that is hanging on to this survivor, if any.
+var clung_by: Infected
+var reload_left := 0.0
+var reload_cue := 0
+var shot_cooldown := 0.0
+var recoil := 0.0
+## Muzzle climb that still has to settle back down.
+var climb := 0.0
+## Shotgun: seconds since the last blast while the pump is being worked; negative when idle.
+var pump_clock := -1.0
+var pump_cued := false
+## Sniper rifle: seconds since the shot while the bolt is still to be worked.
+var bolt_clock := -1.0
+## Rotary gun: 0 at rest, 1 when the barrels are up to speed. Other weapons stay at 1.
+var spin := 1.0
+var spin_voice: AudioStreamPlayer
+## Shell-by-shell reload: the chamber was empty, so the reload ends with a pump stroke.
+var chamber_empty := false
+var loading_shells := false
+var jolt := 0.0
+var reload_pose := 0.0
+var hurt_amount := 0.0
+var acid_amount := 0.0
+var bob_time := 0.0
+var step_time := 0.0
+var flash_left := 0.0
+var mist_exposure := 0.0
+var mist_damage_left := 0.0
+var trauma := 0.0
+var shake_clock := 0.0
+var aim_blend := 0.0
+var sprint_blend := 0.0
+var look_delta := Vector2.ZERO
+var sway := Vector2.ZERO
+var landing := 0.0
+var airborne := false
+var shake_noise := FastNoiseLite.new()
+
+func _ready() -> void:
+	collision_layer = 2
+	# World, infected and railings.
+	collision_mask = 1 | 4 | 16
+	floor_snap_length = 0.25
+	shake_noise.frequency = 1.6
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.32
+	capsule.height = 1.75
+	var shape := CollisionShape3D.new()
+	shape.shape = capsule
+	shape.position.y = 0.88
+	add_child(shape)
+	camera = Camera3D.new()
+	camera.name = "Eyes"
+	camera.position.y = 1.62
+	camera.near = 0.05
+	camera.far = 240
+	camera.fov = BASE_FOV
+	add_child(camera)
+	_build_weapon()
+	flashlight = SpotLight3D.new()
+	flashlight.name = "Flashlight"
+	flashlight.position = Vector3(0.12, -0.12, -0.1)
+	flashlight.light_color = Color("e6ecd8")
+	flashlight.light_energy = 3.2
+	flashlight.spot_range = 30
+	flashlight.spot_angle = 27
+	flashlight.spot_attenuation = 1.1
+	flashlight.spot_angle_attenuation = 0.7
+	flashlight.shadow_enabled = true
+	flashlight.shadow_bias = 0.06
+	flashlight.light_volumetric_fog_energy = 0.3
+	# The beam sits just beside the weapon, so it must not light the viewmodel itself.
+	flashlight.light_cull_mask = 1
+	camera.add_child(flashlight)
+	var fill := OmniLight3D.new()
+	fill.name = "ViewmodelFill"
+	fill.position = Vector3(-0.1, 0.12, 0.05)
+	fill.light_color = Color("aebdd0")
+	fill.light_energy = 0.9
+	fill.omni_range = 2.0
+	fill.light_cull_mask = 2
+	fill.light_volumetric_fog_energy = 0.0
+	camera.add_child(fill)
+
+func _build_weapon() -> void:
+	weapon_models["rifle"] = WeaponView.build_rifle()
+	weapon_models["p90"] = WeaponView.build_p90()
+	weapon_models["badger"] = WeaponView.build_badger()
+	weapon_models["shotgun"] = WeaponView.build_shotgun()
+	weapon_models["ump"] = WeaponView.build_gun("ump")
+	weapon_models["ak"] = WeaponView.build_gun("ak")
+	for id in WeaponView.MODELS:
+		weapon_models[id] = WeaponView.build_model(id)
+	for id in weapon_models:
+		var view: Node3D = weapon_models[id]
+		camera.add_child(view)
+		view.position = WeaponView.VIEWS[id].hip
+		view.hide()
+	weapon = weapon_models["rifle"]
+	weapon.show()
+	flash = Node3D.new()
+	flash.name = "Flash"
+	flash_light = OmniLight3D.new()
+	flash_light.light_color = Color("ffd39b")
+	flash_light.light_energy = 3.5
+	flash_light.omni_range = 7
+	flash_light.light_cull_mask = 1
+	flash.add_child(flash_light)
+	flash_mesh = WeaponView.build_flash()
+	flash.add_child(flash_mesh)
+	flash.visible = false
+	weapon.add_child(flash)
+	flash.position = WeaponView.VIEWS["rifle"].muzzle
+
+## The infected only chase survivors who are still on their feet.
+func is_targetable() -> bool:
+	return health > 0.0
+
+## Hazards hurt the survivors of the machine they run on; a co-op partner checks their own.
+func takes_local_damage() -> bool:
+	return true
+
+func magazine_size() -> int:
+	var size := int(WEAPONS[current_weapon].magazine)
+	return size * 3 / 2 if inventory[current_weapon].get("mags", false) else size
+
+func filter_capacity() -> float:
+	return MASK_SECONDS[mask_level]
+
+## Takes what was bought at the shop counter.
+func take_item(id: String) -> void:
+	match id:
+		"vest":
+			armor = maxf(armor, 50.0)
+		"armor":
+			armor = 100.0
+		"plates":
+			plate_level = mini(PLATE_SHARES.size() - 1, plate_level + 1)
+		"mags":
+			inventory[current_weapon]["mags"] = true
+			ammo = magazine_size()
+		"mask":
+			mask_level = mini(4, mask_level + 1)
+			filter_left = filter_capacity()
+		_:
+			items[id] = int(items[id]) + 1
+
+## Takes a grenade or a flashbang in the hand. It is thrown when the key is let go;
+## while it is held, a line shows where it will fly.
+func ready_throw(kind: String) -> void:
+	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0 or throw_kind != "":
+		return
+	throw_kind = kind
+	throw_held = 0.0
+	throw_swing = -1.0
+	game.sounds.play_sound("equip", -6.0, 1.5)
+
+## What a grenade thrown now would do: the points of its flight up to the first thing it
+## strikes (or until its fuse runs out).
+func throw_path(kind: String) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	var at := camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15
+	var speed := -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5
+	var space := get_world_3d().direct_space_state
+	var step := 0.05
+	points.append(at)
+	for i in range(int(float(Throwable.KINDS[kind].fuse) / step)):
+		speed += Vector3.DOWN * 9.8 * step
+		speed *= 1.0 - 0.3 * step
+		var next := at + speed * step
+		var query := PhysicsRayQueryParameters3D.create(at, next, 1 | 16)
+		var hit := space.intersect_ray(query)
+		if not hit.is_empty():
+			points.append(hit.position)
+			break
+		points.append(next)
+		at = next
+	return points
+
+func _hold_throw(delta: float) -> void:
+	if throw_kind == "":
+		return
+	if down:
+		throw_kind = ""
+		return
+	throw_held += delta
+	var action := "throw_grenade" if throw_kind == "grenade" else "throw_flash"
+	if throw_swing < 0.0 and not Input.is_action_pressed(action):
+		throw_swing = THROW_SWING
+	if throw_swing >= 0.0:
+		throw_swing -= delta
+		if throw_swing <= 0.0:
+			var kind := throw_kind
+			throw_kind = ""
+			throw_swing = -1.0
+			throw(kind)
+
+## Throws a grenade or a flashbang where the survivor looks.
+func throw(kind: String) -> void:
+	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0:
+		return
+	items[kind] = int(items[kind]) - 1
+	throw_cooldown = 0.7
+	var body := Throwable.new()
+	body.game = game
+	body.kind = kind
+	game.ordnance.add_child(body)
+	body.global_position = camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15
+	body.linear_velocity = -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5
+	body.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
+	recoil = 0.6
+	game.sounds.play_sound("swipe", -3.0, 1.5)
+
+## Sets a mine down a step ahead, pointing where the survivor faces.
+func place_claymore() -> void:
+	if down or int(items.claymore) <= 0 or throw_cooldown > 0.0 or not is_on_floor():
+		return
+	items.claymore = int(items.claymore) - 1
+	throw_cooldown = 0.7
+	# The weapon dips while the mine is set down.
+	throw_pose = 1.0
+	var mine := Claymore.new()
+	mine.game = game
+	mine.facing = Vector3(-sin(rotation.y), 0, -cos(rotation.y))
+	game.ordnance.add_child(mine)
+	mine.global_position = global_position + mine.facing * 0.9
+	game.sounds.play_sound("bolt", -2.0)
+
+func max_reserve() -> int:
+	return int(WEAPONS[current_weapon].reserve_max)
+
+## The weapon in hand as it shoots now: its values from the table, changed by whatever is
+## fitted to it.
+func gun() -> Dictionary:
+	var record: Dictionary = inventory[current_weapon]
+	var on: Dictionary = record.get("fitted", {})
+	if on.is_empty():
+		return WEAPONS[current_weapon]
+	if not record.has("tuned"):
+		var data: Dictionary = (WEAPONS[current_weapon] as Dictionary).duplicate()
+		for slot in on:
+			var part: Dictionary = ATTACHMENTS[current_weapon][on[slot]]
+			var replaced: Dictionary = part.get("set", {})
+			for key in replaced:
+				data[key] = replaced[key]
+			var scaled: Dictionary = part.get("scale", {})
+			for key in scaled:
+				data[key] = float(data[key]) * float(scaled[key])
+		record["tuned"] = data
+	return record.tuned
+
+## The part in a slot ("sight", "muzzle") of the weapon in hand, or "".
+func fitted(slot: String) -> String:
+	return str((inventory[current_weapon].get("fitted", {}) as Dictionary).get(slot, ""))
+
+func owns_part(id: String, part: String) -> bool:
+	return inventory.has(id) and (inventory[id].get("mods", []) as Array).has(part)
+
+## Puts a part on a weapon the survivor owns, in place of what sat in its slot; a part
+## that is on already comes off again.
+func fit(id: String, part: String) -> void:
+	var record: Dictionary = inventory[id]
+	var owned: Array = record.get("mods", [])
+	if not owned.has(part):
+		owned.append(part)
+	record["mods"] = owned
+	var on: Dictionary = record.get("fitted", {})
+	var slot := str(ATTACHMENTS[id][part].slot)
+	if str(on.get(slot, "")) == part:
+		on.erase(slot)
+	else:
+		on[slot] = part
+	record["fitted"] = on
+	record.erase("tuned")
+	if id == current_weapon:
+		_show_parts()
+
+## Shows what is fitted to the weapon in hand and puts the muzzle flash at its muzzle.
+func _show_parts() -> void:
+	var on: Array = (inventory[current_weapon].get("fitted", {}) as Dictionary).values()
+	for node in weapon.get_children():
+		if str(node.name).begins_with("Mod_"):
+			(node as Node3D).visible = on.has(str(node.name).trim_prefix("Mod_"))
+	var muzzle: Vector3 = WeaponView.VIEWS[current_weapon].muzzle
+	if on.has("silencer"):
+		muzzle.z -= WeaponView.SILENCER_LENGTH
+	flash.position = muzzle
+
+func weapon_label() -> String:
+	return WEAPONS[current_weapon].label
+
+## Adds a bought weapon with a full load and takes it in hand.
+func unlock(id: String) -> bool:
+	if inventory.has(id) or not WEAPONS.has(id): return false
+	inventory[id] = {"ammo": int(WEAPONS[id].magazine), "reserve": int(WEAPONS[id].reserve_max), "level": 0}
+	equip_weapon(id)
+	return true
+
+func equip_weapon(id: String, silent: bool = false) -> bool:
+	if not inventory.has(id): return false
+	if id == current_weapon: return true
+	# Cancelling a reload never transfers rounds; each weapon owns its ammo.
+	reload_left = 0
+	loading_shells = false
+	pump_clock = -1.0
+	bolt_clock = -1.0
+	spin = 0.0
+	flash_left = 0
+	recoil = 0
+	shot_cooldown = 0.25
+	weapon.hide()
+	current_weapon = id
+	weapon = weapon_models[id]
+	weapon.show()
+	# The new weapon rises into view from below.
+	weapon.position = (WeaponView.VIEWS[id].hip as Vector3) + Vector3(0.02, -0.2, 0.06)
+	weapon.rotation = Vector3(0.6, 0.2, 0)
+	flash.reparent(weapon, false)
+	_show_parts()
+	throw_kind = ""
+	if not silent:
+		game.sounds.play_sound("equip")
+		if game.hud != null:
+			game.hud.loadout()
+	return true
+
+## Number keys: the weapon in that slot, or a hint where to get it.
+## Weapons that share a key take turns.
+func _select_slot(slot: int) -> void:
+	var sharing: Array = ORDER.filter(func(id: String) -> bool: return int(WEAPONS[id].slot) == slot)
+	var owned: Array = sharing.filter(func(id: String) -> bool: return inventory.has(id))
+	if owned.is_empty():
+		var first: Dictionary = WEAPONS[sharing[0]]
+		game.hud.announce("%s IM WAFFENSHOP" % first.label, "Im Hauptraum neben dem Flur · %d Vorrat · offen zwischen den Runden" % int(first.price), 2.5)
+		return
+	equip_weapon(owned[(owned.find(current_weapon) + 1) % owned.size()])
+
+## Mouse wheel: the next weapon the survivor owns.
+func _cycle(step: int) -> void:
+	var owned: Array = ORDER.filter(func(id: String) -> bool: return inventory.has(id))
+	if owned.size() > 1:
+		equip_weapon(owned[posmod(owned.find(current_weapon) + step, owned.size())])
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not controlled or menu_open:
+		return
+	if down:
+		# Looking around is all that is left.
+		if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			rotate_y(-event.relative.x * sensitivity)
+			camera.rotation.x = clampf(camera.rotation.x - event.relative.y * sensitivity, -0.6, 1.0)
+		return
+	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		var factor := 1.0
+		if Input.is_action_pressed("aim"):
+			factor = float(gun().get("scope_turn", 0.2)) if gun().has("scope") else 0.6
+		rotate_y(-event.relative.x * sensitivity * factor)
+		camera.rotation.x = clampf(camera.rotation.x - event.relative.y * sensitivity * factor, -1.35, 1.35)
+		look_delta += event.relative
+	if event.is_action_pressed("reload"):
+		start_reload()
+	if event.is_action_pressed("flashlight"):
+		flashlight.visible = not flashlight.visible
+		game.sounds.play_sound("click", -6.0, 1.5)
+	if event.is_action_pressed("interact"):
+		game.interact()
+	for slot in range(10):
+		if event.is_action_pressed("weapon_%d" % slot):
+			_select_slot(slot)
+	if event.is_action_pressed("throw_grenade"):
+		ready_throw("grenade")
+	if event.is_action_pressed("throw_flash"):
+		ready_throw("flashbang")
+	if event.is_action_pressed("place_claymore"):
+		place_claymore()
+	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		_cycle(-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
+
+func _physics_process(delta: float) -> void:
+	shot_cooldown = maxf(0, shot_cooldown - delta)
+	throw_cooldown = maxf(0, throw_cooldown - delta)
+	_hold_throw(delta)
+	throw_pose = move_toward(throw_pose, 1.0 if throw_kind != "" else 0.0, delta * (9.0 if throw_kind != "" else 4.5))
+	# The line of the throw, once the key has been held for a moment.
+	if throw_kind != "" and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
+		game.fx.show_arc(throw_path(throw_kind))
+	else:
+		game.fx.hide_arc()
+	flash_left = maxf(0, flash_left - delta)
+	flash.visible = flash_left > 0
+	hurt_amount = move_toward(hurt_amount, 0, delta * 1.5)
+	acid_amount = move_toward(acid_amount, 0, delta * 1.2)
+	recoil = move_toward(recoil, 0, delta * 9)
+	jolt = move_toward(jolt, 0, delta * 7)
+	landing = move_toward(landing, 0, delta * 5)
+	_shake(delta)
+	if not controlled:
+		return
+	# The muzzle comes back down after a heavy kick.
+	if climb > 0.0:
+		var back := minf(climb, delta * (0.12 + climb * 4.0))
+		camera.rotation.x -= back
+		climb -= back
+	if pump_clock >= 0.0:
+		pump_clock += delta
+		if not pump_cued and pump_clock >= PUMP_BACK - 0.06:
+			pump_cued = true
+			game.sounds.play_sound("shotgun_pump")
+			game.fx.spent_shell(camera.global_transform * Vector3(0.16, -0.1, -0.35), global_basis.x * 2.2 + Vector3.UP * 1.6 + velocity)
+		if pump_clock >= PUMP_DONE:
+			pump_clock = -1.0
+	if bolt_clock >= 0.0:
+		bolt_clock += delta
+		if bolt_clock >= 0.4:
+			bolt_clock = -1.0
+			jolt = 1.0
+			game.sounds.play_sound("bolt")
+	if reload_left > 0 and loading_shells:
+		reload_left = maxf(0, reload_left - delta)
+		if reload_left == 0:
+			# One shell slides into the tube; carry on until it is full.
+			ammo += 1
+			reserve -= 1
+			jolt = 1.0
+			game.sounds.play_sound("shell_in")
+			if ammo < magazine_size() and reserve > 0:
+				reload_left = float(WEAPONS[current_weapon].reload_time)
+			else:
+				loading_shells = false
+				if chamber_empty:
+					pump_clock = PUMP_BACK - 0.1
+					pump_cued = false
+					shot_cooldown = 0.4
+	elif reload_left > 0:
+		reload_left = maxf(0, reload_left - delta)
+		# Magazine out, magazine in, bolt: each step is heard and nudges the weapon.
+		var done := 1.0 - reload_left / float(WEAPONS[current_weapon].reload_time)
+		var cues: Array = WEAPONS[current_weapon].get("cues", RELOAD_CUES)
+		while reload_cue < cues.size() and done >= float(cues[reload_cue][0]):
+			game.sounds.play_sound(cues[reload_cue][1])
+			jolt = 1.0
+			reload_cue += 1
+		if reload_left == 0:
+			var count := mini(magazine_size() - ammo, reserve)
+			ammo += count
+			reserve -= count
+	var blocked := menu_open or down
+	camera.position.y = lerpf(camera.position.y, 0.42 if down else 1.62, minf(1.0, delta * 6.0))
+	weapon.visible = not down
+	var input := Vector2.ZERO if blocked else Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var direction := transform.basis * Vector3(input.x, 0, input.y)
+	var aiming := Input.is_action_pressed("aim") and reload_left <= 0 and not blocked
+	var sprint := Input.is_action_pressed("sprint") and not aiming and input.y < -0.1 and clung_by == null
+	var speed := 6.6 if sprint else 4.3
+	if aiming:
+		speed = 2.6
+	if WEAPONS[current_weapon].has("spin"):
+		# The rotary gun weighs as much as a small child.
+		speed *= 0.72
+	if clung_by != null:
+		# With a Leech hanging on, every step is a struggle.
+		speed *= 0.55
+		trauma = maxf(trauma, 0.28)
+	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 30)
+	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 30)
+	if not is_on_floor():
+		velocity.y -= 22 * delta
+		airborne = true
+	elif Input.is_action_just_pressed("jump") and not blocked:
+		velocity.y = 5.5
+	else:
+		velocity.y = 0
+		if airborne:
+			airborne = false
+			landing = 1.0
+			_footstep(4.0)
+	move_and_slide()
+	_update_mist(delta)
+	if position.y < -10:
+		position = game.cabin.player_start
+	var firing: bool = Input.is_action_pressed("fire") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not blocked and not (sprint and input.length() > 0.1)
+	_spin(delta, firing)
+	if firing and spin >= 1.0:
+		shoot()
+	var moving := input.length() > 0.1 and is_on_floor()
+	if moving:
+		bob_time += delta * (12.5 if sprint else 8.5)
+		step_time -= delta
+		if step_time <= 0:
+			_footstep(2.0 if sprint else 0.0)
+			step_time = 0.3 if sprint else 0.45
+	_animate_weapon(delta, aiming, sprint and moving, moving)
+	# Through the telescopic sight only the picture in the lens is left.
+	var sights: Dictionary = gun()
+	var scoped := smoothstep(0.7, 1.0, aim_blend) if sights.has("scope") else 0.0
+	game.hud.scope(scoped)
+	if scoped > 0.6:
+		weapon.hide()
+	var zoom := float(sights.get("scope", sights.get("zoom", 50.0))) if aiming else (BASE_FOV + 5.0 if sprint and moving else BASE_FOV)
+	camera.fov = lerpf(camera.fov, zoom, minf(1, delta * 11))
+
+## The rotary gun has to come up to speed before it fires; every other weapon is ready.
+func _spin(delta: float, firing: bool) -> void:
+	var data: Dictionary = WEAPONS[current_weapon]
+	if not data.has("spin"):
+		spin = 1.0
+		if spin_voice != null and spin_voice.playing:
+			spin_voice.stop()
+		return
+	spin = move_toward(spin, 1.0 if firing and ammo > 0 and reload_left <= 0 else 0.0, delta / float(data.spin))
+	var barrels := weapon.find_child("Barrels", true, false) as Node3D
+	if barrels != null:
+		barrels.rotation.z -= spin * 34.0 * delta
+	if spin_voice == null:
+		spin_voice = AudioStreamPlayer.new()
+		var whir := game.sounds.clips["minigun_spin"][0] as AudioStreamWAV
+		whir.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		whir.loop_begin = 0
+		whir.loop_end = int(whir.get_length() * whir.mix_rate)
+		spin_voice.stream = whir
+		add_child(spin_voice)
+	if spin > 0.02 and not game.sounds.hush:
+		if not spin_voice.playing:
+			spin_voice.play()
+		spin_voice.pitch_scale = 0.45 + spin * 0.75
+		spin_voice.volume_db = -24.0 + spin * 12.0
+	elif spin_voice.playing:
+		spin_voice.stop()
+
+## Fires a 40 mm shell that goes off where it lands.
+func _launch(data: Dictionary) -> void:
+	var shell := Throwable.new()
+	shell.game = game
+	shell.kind = "grenade"
+	shell.impact = true
+	game.ordnance.add_child(shell)
+	shell.global_position = camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12
+	shell.linear_velocity = -camera.global_basis.z * 34.0 + Vector3.UP * 1.6
+	game.fx.launch_smoke(shell.global_position, -camera.global_basis.z)
+	var kick: float = float(data.kick)
+	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
+	climb += kick * float(data.get("settle", 0.0))
+	if game.net.active:
+		game.net.send_shot(camera.global_position, camera.global_position - camera.global_basis.z * 30.0, str(data.sound))
+
+## A heavy bullet goes on through the body it hit: whoever stands behind is struck too,
+## a little less hard each time. Returns where the bullet finally stops.
+func _pierce(data: Dictionary, direction: Vector3, first: Infected, struck: Dictionary, from: Vector3) -> Vector3:
+	var through: Array[RID] = [get_rid(), first.get_rid(), first.head_box.get_rid()]
+	var force := 0.75
+	var stop := from
+	for i in range(int(data.pierce)):
+		var query := PhysicsRayQueryParameters3D.create(from, from + direction * 60.0, 1 | 4 | 8, through)
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			return from + direction * 60.0
+		stop = hit.position
+		var target: Object = hit.collider
+		var head_zone: bool = target.has_meta("infected")
+		if head_zone:
+			target = target.get_meta("infected")
+		if not target is Infected:
+			game.fx.dust(stop, hit.normal)
+			return stop
+		var enemy := target as Infected
+		var headshot := head_zone or enemy.is_headshot(stop)
+		var damage: float = float(data.damage) * force
+		if headshot:
+			damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
+		var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
+		entry.damage += damage
+		entry.headshot = entry.headshot or headshot
+		struck[enemy] = entry
+		game.fx.blood(stop, direction, true)
+		through.append(enemy.get_rid())
+		through.append(enemy.head_box.get_rid())
+		force *= 0.75
+	return stop
+
+## Floorboards inside the house, wet grass in the yard.
+func _footstep(volume: float) -> void:
+	game.sounds.play_sound("step_wood" if game.cabin.is_indoors(position) else "step_grass", volume)
+
+func _shake(delta: float) -> void:
+	trauma = maxf(0, trauma - delta * 1.7)
+	shake_clock += delta * 28.0
+	var power := trauma * trauma
+	camera.h_offset = shake_noise.get_noise_1d(shake_clock) * power * 0.06
+	camera.v_offset = shake_noise.get_noise_1d(shake_clock + 50.0) * power * 0.06
+	camera.rotation.z = shake_noise.get_noise_1d(shake_clock + 100.0) * power * 0.05
+
+func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) -> void:
+	var view: Dictionary = WeaponView.VIEWS[current_weapon]
+	aim_blend = move_toward(aim_blend, 1.0 if aiming else 0.0, delta * 7.5)
+	sprint_blend = move_toward(sprint_blend, 1.0 if sprinting else 0.0, delta * 6.0)
+	var aimed := smoothstep(0.0, 1.0, aim_blend)
+	var loose := 1.0 - aimed * 0.85
+	# A sight that was fitted has its own place for the eye.
+	var sight := fitted("sight")
+	var aim_at: Vector3 = WeaponView.sight_aim(current_weapon, sight) if sight != "" else view.aim
+	var target: Vector3 = (view.hip as Vector3).lerp(aim_at, aimed)
+	var angles: Vector3 = (view.hip_angles as Vector3) * (PI / 180.0) * (1.0 - aimed)
+	if not inventory[current_weapon].get("fitted", {}).has("sight"):
+		angles += (view.get("aim_angles", Vector3.ZERO) as Vector3) * (PI / 180.0) * aimed
+	target += Vector3(0.012, -0.04, 0.035) * sprint_blend
+	angles += Vector3(-0.22, 0.45, -0.14) * sprint_blend
+	if moving:
+		var stride := 1.7 if sprinting else 1.0
+		target += Vector3(sin(bob_time) * 0.0065, -absf(cos(bob_time)) * 0.0065 + 0.003, 0) * loose * stride
+		angles.z += sin(bob_time) * 0.012 * loose * stride
+	target.y += sin(Time.get_ticks_msec() * 0.0017) * 0.0013 * loose
+	# The weapon lags slightly behind the view when turning.
+	sway = sway.lerp((look_delta * 0.0003).limit_length(0.03), minf(1, delta * 9))
+	look_delta = Vector2.ZERO
+	target += Vector3(-sway.x, sway.y, 0) * loose
+	angles += Vector3(sway.y * 1.4, -sway.x * 1.8, -sway.x * 1.4) * loose
+	target += Vector3(0, -velocity.y * 0.0035 - landing * 0.018, recoil * (0.018 if aiming else 0.03))
+	angles.x += recoil * (0.018 if aiming else 0.045)
+	if loading_shells:
+		# Held low and tilted while the shells go in, one nudge per shell.
+		reload_pose = move_toward(reload_pose, 1.0, delta * 5.0)
+	elif reload_left > 0:
+		reload_pose = sin((1.0 - reload_left / float(WEAPONS[current_weapon].reload_time)) * PI)
+	else:
+		reload_pose = move_toward(reload_pose, 0.0, delta * 5.0)
+	if reload_pose > 0.0:
+		var low := Vector3(0.02, -0.075, 0.02) if loading_shells or WEAPONS[current_weapon].has("shells") else Vector3(0.025, -0.12, 0.03)
+		var turn := Vector3(0.3, 0.2, -0.75) if loading_shells or WEAPONS[current_weapon].has("shells") else Vector3(0.55, 0.25, -0.6)
+		target += (view.get("reload_low", low) as Vector3) * reload_pose
+		angles += (view.get("reload_turn", turn) as Vector3) * reload_pose
+	# A magazine that really leaves the weapon, and the hand that changes it.
+	var clip := weapon.get_node_or_null("Magazine") as Node3D
+	if clip != null:
+		var done := 1.0
+		if reload_left > 0.0 and not loading_shells:
+			done = 1.0 - reload_left / float(WEAPONS[current_weapon].reload_time)
+		var step: Dictionary = WeaponView.reload_step(current_weapon, done)
+		clip.position = step.magazine
+		(weapon.get_node("Support") as Node3D).position = step.hand
+	# The pump hand drags the forend back and shoves it forward again.
+	var slide := weapon.get_node_or_null("Slide") as Node3D
+	if slide != null:
+		var stroke := 0.0
+		if pump_clock >= 0.0:
+			stroke = smoothstep(PUMP_BACK - 0.14, PUMP_BACK, pump_clock) * (1.0 - smoothstep(PUMP_BACK + 0.06, PUMP_DONE - 0.04, pump_clock))
+			target += Vector3(0.0, -0.012, 0.012) * stroke
+			angles += Vector3(0.06, 0.03, -0.12) * stroke
+		slide.position.z = stroke * PUMP_TRAVEL
+	# A grenade in the other hand: the weapon dips out of the way.
+	if throw_pose > 0.0:
+		var dip := smoothstep(0.0, 1.0, throw_pose)
+		target += Vector3(0.03, -0.17, 0.06) * dip
+		angles += Vector3(0.45, 0.2, -0.25) * dip
+	# Each reload step knocks the weapon for a moment.
+	target += Vector3(0.0, -0.014, 0.008) * jolt
+	angles += Vector3(0.05, 0.0, -0.09) * jolt
+	weapon.position = weapon.position.lerp(target, minf(1, delta * 18))
+	weapon.rotation = weapon.rotation.lerp(angles, minf(1, delta * 16))
+
+func _update_mist(delta: float) -> void:
+	mist_damage_left = maxf(0, mist_damage_left - delta)
+	if game.toxic_at(position):
+		if filter_left > 0.0:
+			# A gas mask keeps the air clean for as long as its filter lasts.
+			filter_left = maxf(0.0, filter_left - delta)
+			mist_exposure = 0
+			return
+		mist_exposure += delta
+		# A harder night: the gas bites sooner and deeper.
+		var gas: float = game.rules.gas
+		if mist_exposure > 3.0 / sqrt(gas) and mist_damage_left <= 0:
+			receive_damage(6.0 * gas, Vector3.INF, "gas")
+			mist_damage_left = 1.0
+	else:
+		mist_exposure = 0
+		# In clean air the filter slowly recovers.
+		filter_left = minf(filter_capacity(), filter_left + delta * 0.6)
+
+## Where the muzzle appears on screen, expressed as a world position for tracers.
+func _visible_muzzle() -> Vector3:
+	var local := camera.to_local(flash.global_position)
+	var ratio := tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(WeaponView.VIEW_FOV) * 0.5)
+	return camera.to_global(Vector3(local.x * ratio, local.y * ratio, local.z))
+
+func shoot() -> void:
+	var data: Dictionary = gun()
+	if loading_shells and ammo > 0 and shot_cooldown <= 0:
+		# A half-loaded shotgun can fire at once: the reload is simply broken off.
+		loading_shells = false
+		reload_left = 0.0
+		shot_cooldown = 0.25
+		return
+	# No shooting with a grenade in the hand.
+	if throw_kind != "":
+		return
+	if shot_cooldown > 0 or reload_left > 0:
+		return
+	if ammo <= 0:
+		if reserve > 0:
+			start_reload()
+		else:
+			shot_cooldown = 0.4
+			game.sounds.play_sound("click")
+		return
+	var aiming := Input.is_action_pressed("aim")
+	ammo -= 1
+	shot_cooldown = float(data.interval)
+	# A suppressor leaves only a small, dim flash; a shotgun lights up the room.
+	var blaze: float = data.flash
+	flash_left = 0.03 if blaze < 0.5 else (0.075 if blaze > 1.5 else 0.045)
+	flash_mesh.rotation.z = randf() * TAU
+	flash_mesh.scale = Vector3.ONE * randf_range(0.75, 1.3) * blaze
+	flash_light.light_energy = 3.5 * blaze
+	var punch: float = data.get("punch", 1.0)
+	recoil = punch
+	game.sounds.play_sound(data.sound)
+	if data.has("pellets"):
+		# The blast shoves the whole view; a pump gun has to be worked before the next shot.
+		trauma = minf(1.0, trauma + (0.34 if data.has("shells") else 0.18))
+		camera.fov += 3.5 if data.has("shells") else 1.8
+		if data.has("shells"):
+			pump_clock = 0.0
+			pump_cued = false
+	if data.has("bolt"):
+		bolt_clock = 0.0
+	if data.has("grenade"):
+		_launch(data)
+		return
+	var origin := camera.global_position
+	var muzzle := _visible_muzzle()
+	var pellets := int(data.get("pellets", 1))
+	# Scripted checks fire dead centre; live fire scatters from the hip.
+	var spread := 0.0 if game.check_mode else float(data.spread) * ((0.6 if pellets > 1 else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0)
+	# Everything one blast does to the same infected is added up and lands as a single hit.
+	var struck := {}
+	var endpoint := origin - camera.global_basis.z * 90
+	var marks := 0
+	for pellet in range(pellets):
+		var direction := (-camera.global_basis.z + camera.global_basis.x * randf_range(-spread, spread) + camera.global_basis.y * randf_range(-spread, spread)).normalized()
+		endpoint = origin + direction * 90
+		var query := PhysicsRayQueryParameters3D.create(origin, endpoint, 1 | 4 | 8, [get_rid()])
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if not hit.is_empty():
+			endpoint = hit.position
+			var target: Object = hit.collider
+			var head_zone: bool = target.has_meta("infected")
+			if head_zone:
+				target = target.get_meta("infected")
+			if target is Infected and (target as Infected).blocks(direction):
+				# It rings off a shield: no blood, no harm, and the bullet stops there.
+				if marks < 4:
+					game.fx.dust(endpoint, hit.normal)
+					game.sounds.play_at("bolt", endpoint, 0.0, randf_range(1.5, 1.9))
+			elif target is Infected:
+				var enemy := target as Infected
+				var headshot := head_zone or enemy.is_headshot(hit.position)
+				var damage: float = float(data.damage) + weapon_level * (10.0 / pellets)
+				if pellets > 1:
+					# Shot spreads and slows: full force up close, a third of it at long range.
+					damage *= clampf(1.0 - (origin.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
+				if headshot:
+					damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
+				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
+				entry.damage += damage
+				entry.headshot = entry.headshot or headshot
+				struck[enemy] = entry
+				if marks < 4:
+					game.fx.blood(endpoint, direction, headshot or pellets > 1)
+			elif marks < 4:
+				game.fx.dust(endpoint, hit.normal)
+			marks += 1
+			if data.has("pierce") and target is Infected and not (target as Infected).blocks(direction):
+				endpoint = _pierce(data, direction, target as Infected, struck, endpoint)
+		if pellet < 5:
+			game.fx.tracer(muzzle, endpoint)
+	var any_head := false
+	for enemy in struck:
+		var entry: Dictionary = struck[enemy]
+		any_head = any_head or entry.headshot
+		if game.net.joined:
+			# The host decides what the hit does; show the flinch right away.
+			game.net.report_hit(enemy, entry.damage, entry.direction, entry.headshot)
+			(enemy as Infected).show_cue("hit", [1.0, float(entry.damage) / (enemy as Infected).max_health * 2.5])
+		else:
+			(enemy as Infected).receive_hit(entry.damage, entry.direction, entry.headshot)
+	if not struck.is_empty():
+		game.hud.hit_marker(any_head)
+	# A suppressed shot gives nobody the direction it came from.
+	if not data.get("quiet", false):
+		game.alarm(origin, -camera.global_basis.z)
+	if game.net.active:
+		game.net.send_shot(origin, endpoint, str(data.sound))
+	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0)
+	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
+	climb += kick * float(data.get("settle", 0.0))
+	rotate_y(randf_range(-kick, kick) * 0.35)
+
+func start_reload() -> void:
+	if reload_left <= 0 and ammo < magazine_size() and reserve > 0:
+		reload_left = float(WEAPONS[current_weapon].reload_time)
+		reload_cue = 0
+		loading_shells = WEAPONS[current_weapon].has("shells")
+		chamber_empty = ammo == 0
+		if loading_shells:
+			# The first shell takes a moment longer: the weapon has to be turned over.
+			reload_left += 0.25
+
+func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "") -> void:
+	if not controlled or health <= 0:
+		return
+	# Ballistic plates take the edge off whatever the C.R.U. shoot and throw.
+	var hostile := kind in ["bullet", "frag"]
+	if hostile:
+		amount *= 1.0 - float(PLATE_SHARES[plate_level])
+		kind = ""
+	if armor > 0.0 and kind == "":
+		var absorbed := minf(armor, amount * ARMOR_SHARE)
+		armor -= absorbed
+		amount -= absorbed
+	health = maxf(0, health - amount)
+	hurt_amount = minf(1.0, hurt_amount + 0.45 + amount * 0.02)
+	if kind == "acid":
+		acid_amount = 1.0
+	else:
+		trauma = minf(1.0, trauma + 0.3 + amount * 0.012)
+	game.sounds.play_sound("hurt")
+	if from != Vector3.INF and kind == "":
+		game.hud.damage_from(from)
+	if health <= 0:
+		if int(items.revive) > 0:
+			# The adrenaline shot keeps the survivor standing, once.
+			items.revive = int(items.revive) - 1
+			health = 50.0
+			hurt_amount = 0.3
+			game.hud.announce("ADRENALIN", "Die Spritze hält dich auf den Beinen.", 2.5)
+			game.sounds.play_sound("equip")
+		# With a partner or a standing squad the survivor goes down and can be helped up.
+		elif (game.net.active and game.net.partner != 0) or game.rescuer() != null:
+			go_down()
+		else:
+			game.finish(false)
+
+## Co-op: out of the fight, but the match goes on while the partner still stands.
+func go_down() -> void:
+	down = true
+	reload_left = 0.0
+	var helper: Teammate = game.rescuer()
+	if helper != null and not game.net.active:
+		game.hud.announce("DU BIST AM BODEN", "%s kommt dir zu Hilfe." % helper.label, 5.0)
+	else:
+		game.hud.announce("DU BIST AM BODEN", "Dein Mitspieler kann dir aufhelfen. Nach der Runde stehst du wieder.", 5.0)
+
+func get_up() -> void:
+	down = false
+	health = 50.0
+	hurt_amount = 0.0
+	game.hud.announce("WIEDER AUF DEN BEINEN", "", 2.0)
+
+## Camera shake that fades with distance from its source.
+func shake_from(source: Vector3, strength: float, reach: float) -> void:
+	trauma = minf(1.0, trauma + strength * clampf(1.0 - global_position.distance_to(source) / reach, 0.0, 1.0))
+
+func reset_survivor() -> void:
+	position = game.cabin.player_start
+	rotation = Vector3(0, PI, 0)
+	camera.rotation = Vector3.ZERO
+	velocity = Vector3.ZERO
+	health = 100
+	equip_weapon("rifle", true)
+	inventory = {"rifle": {"ammo": int(WEAPONS.rifle.magazine), "reserve": int(WEAPONS.rifle.reserve_max), "level": 0}}
+	reload_left = 0
+	loading_shells = false
+	pump_clock = -1.0
+	climb = 0.0
+	shot_cooldown = 0
+	hurt_amount = 0
+	acid_amount = 0
+	trauma = 0
+	mist_exposure = 0
+	mist_damage_left = 0
+	items = {"grenade": 0, "flashbang": 0, "claymore": 0, "revive": 0}
+	armor = 0.0
+	plate_level = 0
+	clung_by = null
+	mask_level = 0
+	filter_left = 0.0
+	down = false
+	menu_open = false
+	flashlight.visible = true
