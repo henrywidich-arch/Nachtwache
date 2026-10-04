@@ -88,6 +88,10 @@ var stats := {"kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "obj
 ## Place of the last finished run on the leaderboard, 0 if it did not make the list.
 var last_place := 0
 var squad_order := "follow"
+## The squad has said that the round's first infected are in sight; and the seconds until
+## one of them says something into the quiet between two rounds (negative: nothing due).
+var round_called := false
+var idle_wait := -1.0
 ## She runs the weapon shop and stands behind its counter.
 var shopkeeper: NpcVisual
 ## Radio lines wait their turn: [cue, seconds]. radio_busy counts down while one is heard.
@@ -105,7 +109,10 @@ var story: StoryDirector
 ## Gas that comes and goes in the yard and in the house.
 var gas: GasField
 ## True while a blast is being worked out: a shield does not stop that.
+## (Also set for a bullet that an ability lets through a shield.)
 var blasting := false
+## The player's abilities; out of service for now (see Skills).
+var skills := Skills.new()
 ## The round in which the Medic was last called out.
 var medic_round := 0
 ## What Coleman has already said once this night.
@@ -213,6 +220,7 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		profile.stored = false
 	profile.open()
+	skills.adopt(profile.skills)
 	if profile.stored:
 		# What the player chose in the menu.
 		var settings := ConfigFile.new()
@@ -270,6 +278,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_blast_check")
+	elif "--gas-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_gas_check")
 	elif "--v9-check" in args:
 		check_mode = true
 		call_deferred("_run_v9_check")
@@ -420,6 +432,12 @@ func _process(delta: float) -> void:
 		return
 	if phase == "preparing":
 		preparation_left -= delta
+		if idle_wait > 0.0:
+			idle_wait -= delta
+			if idle_wait <= 0.0 and preparation_left > 4.0:
+				var talker := squad_voice()
+				if talker != null and randf() < 0.55:
+					bark(talker, talker.look, "idle")
 		if preparation_left <= 0:
 			begin_wave()
 	elif phase == "wave":
@@ -523,6 +541,8 @@ func begin_wave() -> void:
 	if wave >= ROUNDS.size() or net.joined:
 		return
 	wave += 1
+	round_called = false
+	idle_wait = -1.0
 	phase = "wave"
 	spawn_queue.clear()
 	mission.begin_round(wave)
@@ -687,6 +707,9 @@ func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node
 		_check_squad_gone()
 	elif enemy.kind != "mauler":
 		stats.special_kills += 1
+		# An ability: a special infected the player put down gives some health back.
+		if killer == null and not player.down:
+			player.health = minf(100.0, player.health + skills.value("trophy"))
 	if killer == null:
 		kills += 1
 		hud.kill_feed(str(enemy.spec.label), points, headshot)
@@ -759,6 +782,7 @@ func complete_wave() -> void:
 		return
 	phase = "preparing"
 	preparation_left = BREAK_SECONDS
+	idle_wait = randf_range(8.0, 12.0)
 	for mate in team:
 		mate.revive(true)
 	present_wave_done()
@@ -1095,7 +1119,7 @@ func interaction_prompt() -> String:
 	if player.mist_exposure > 0:
 		if gas.flood_strength > GasField.BITE and absf(player.position.x) < CabinMap.HX and absf(player.position.z) < CabinMap.HZ:
 			return "GIFTGAS · Nach oben!"
-		return "GIFTGAS · Raus aus der Wolke!" if not cabin.is_toxic(player.position) else "GIFTGAS · Zurück zum Haus!"
+		return "GIFTGAS · Raus aus dem Gas!" if not cabin.is_toxic(player.position) else "GIFTGAS · Zurück zum Haus!"
 	if player.down:
 		var helper := rescuer()
 		if helper != null and not net.active:
@@ -1230,6 +1254,29 @@ func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0) -> boo
 	var length := sounds.speak_at(str(line.sound), who.global_position + Vector3(0, 1.6, 0), volume)
 	bark_until[key] = now + int((length + (1.6 if speaker == "cru" else 0.5)) * 1000.0)
 	return length > 0.0
+
+## The member of the squad nearest to a place calls something out about it, if one stands
+## within `reach` of it. Not more often than every few seconds for the same thing.
+func squad_call(cue: String, at: Vector3, reach: float, pause: float = 12.0) -> bool:
+	var now := Time.get_ticks_msec()
+	if now < int(bark_until.get("call_" + cue, 0)):
+		return false
+	var nearest: Teammate = null
+	for mate in team:
+		if not mate.down and mate.global_position.distance_to(at) < reach and (nearest == null or mate.global_position.distance_to(at) < nearest.global_position.distance_to(at)):
+			nearest = mate
+	if nearest == null or not bark(nearest, nearest.look, cue):
+		return false
+	bark_until["call_" + cue] = now + int(pause * 1000.0)
+	return true
+
+## Spends a point on an ability and keeps it in the profile. True if it could be spent.
+func learn_skill(id: String) -> bool:
+	if not skills.learn(id, profile.totals):
+		return false
+	profile.skills = skills.ranks.duplicate()
+	profile.save()
+	return true
 
 ## One member of the squad that is on its feet, picked at random; null if there is none.
 func squad_voice() -> Teammate:
@@ -1682,7 +1729,7 @@ func _run_menu_check() -> void:
 	await get_tree().create_timer(0.3).timeout
 	await _capture(folder, "menu_join.png")
 	hud.show_menu("main")
-	for mode in ["settings", "skins"]:
+	for mode in ["settings", "skins", "skills"]:
 		hud.show_menu(mode)
 		await get_tree().create_timer(0.3).timeout
 		await _capture(folder, "menu_%s.png" % mode)
@@ -2192,6 +2239,72 @@ func _run_blast_check() -> void:
 		await get_tree().create_timer(float(moments[i])).timeout
 		await _capture(folder, "blast_%d.png" % (i + 1))
 	print("BLAST_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Screenshots of the gas: a bank in the yard as it spreads (from the ground, from above
+## and from inside), gas over a side of the yard, the edge beyond the fence, a gas grenade's
+## cloud and the flooded ground floor. Then the launcher's arc while it is aimed.
+func _run_gas_check() -> void:
+	var folder := _capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	start_run()
+	set_process(false)
+	hud.banner_left = 0
+	hud.radio_left = 0
+	mission.plain()
+	preparation_left = 9999.0
+	var south := Vector3(0, 0, 13.0)
+	var start := south + Vector3(6.0, 0, 16.0)
+	var bank: Dictionary = gas._start_bank(start)
+	bank.heading = 0.4
+	bank.grow = 5
+	await _shot_at(folder, "gas_1_first_patch.png", south + Vector3(-6.0, 0, 2.0), start + Vector3(0, 0.8, 0), 6.0)
+	for i in range(5):
+		gas._spread(bank)
+	print("GAS patches: %d, covered %d m2" % [gas.pockets.size(), int(gas.covered())])
+	await _shot_at(folder, "gas_2_bank.png", south + Vector3(-6.0, 0, 2.0), start + Vector3(4.0, 0.8, 2.0), 6.5)
+	# From above, to see how far it reaches.
+	await _shot_at(folder, "gas_3_bank_far.png", Vector3(2.0, 0, 10.5), start + Vector3(5.0, 0.6, 3.0), 0.8)
+	# Standing in it, without a mask: the haze, the warning and the first harm.
+	var inside: Vector3 = (gas.pockets[1] as Dictionary).pos
+	await _shot_at(folder, "gas_4_inside.png", inside + Vector3(0.5, 0, 0.5), south + Vector3(0, 1.4, -4.0), 4.2, false)
+	# With a mask on.
+	player.mask_level = 2
+	player.filter_left = player.filter_capacity()
+	player.health = 100.0
+	await _shot_at(folder, "gas_5_inside_mask.png", inside + Vector3(0.5, 0, 0.5), start + Vector3(12.0, 1.0, 6.0), 1.6, false)
+	player.mask_level = 0
+	player.filter_left = 0.0
+	player.health = 100.0
+	gas.clear()
+	# Gas over a whole side of the yard, seen from the house door.
+	cabin.set_gas("south")
+	await _shot_at(folder, "gas_6_side.png", Vector3(0, 0, 11.0), Vector3(4.0, 1.0, 34.0), 1.5)
+	cabin.set_gas("")
+	# The edge of the yard.
+	await _shot_at(folder, "gas_7_fence.png", Vector3(-30.0, 0, 30.0), Vector3(-52.0, 1.5, 44.0), 0.8)
+	# The cloud of a gas grenade.
+	gas.burst(south + Vector3(-5.0, 0, 6.0))
+	await get_tree().create_timer(3.5).timeout
+	await _shot_at(folder, "gas_8_grenade.png", south + Vector3(-0.5, 0, 1.5), south + Vector3(-5.0, 1.0, 6.0), 0.4)
+	gas.clear()
+	# The ground floor under gas.
+	gas._set_flood("on", 600.0)
+	gas.flood_strength = 1.0
+	player.health = 100.0
+	await _shot_at(folder, "gas_9_flood_hall.png", Vector3(0, 0, 6.0), Vector3(0, 1.3, -2.0), 2.4, false)
+	await _shot_at(folder, "gas_10_flood_gallery.png", cabin.points.gallery, Vector3(1.5, 0.5, 2.0), 1.0, false)
+	gas._set_flood("", 0.0)
+	gas.flood_strength = 0.0
+	# The launcher, aimed: the arc of its shell.
+	player.health = 100.0
+	player.unlock("launcher")
+	_place_player(south + Vector3(0, 0.05, 0), 180, 4.0)
+	Input.action_press("aim")
+	await get_tree().create_timer(0.8).timeout
+	await _capture(folder, "gas_11_launcher_arc.png")
+	Input.action_release("aim")
+	print("GAS_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Screenshots of the UMP: from the hip, through each sight, the magazine change, and the

@@ -43,6 +43,9 @@ var totals := {"missions": 0, "victories": 0, "kills": 0, "special_kills": 0, "c
 ## come along.
 var skin := "main"
 var squad: Array = ["viper", "scorpion"]
+## Ranks bought in the trees of abilities (see Skills); empty while those are out of
+## service, and then it is not written to the file at all.
+var skills: Dictionary = {}
 
 func open() -> void:
 	if not stored or not FileAccess.file_exists(PATH):
@@ -67,13 +70,18 @@ func open() -> void:
 			both = both and SKINS.has(str(id)) and bool(SKINS[str(id)].bot) and unlocked(str(id))
 		if both and str(parsed.squad[0]) != str(parsed.squad[1]):
 			squad = [str(parsed.squad[0]), str(parsed.squad[1])]
+	if parsed.get("skills") is Dictionary:
+		skills = parsed.skills
 
 func save() -> void:
 	if not stored:
 		return
+	var kept := {"difficulty": difficulty, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
+	if not skills.is_empty():
+		kept["skills"] = skills
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"difficulty": difficulty, "runs": runs, "totals": totals, "skin": skin, "squad": squad}, "\t"))
+		file.store_string(JSON.stringify(kept, "\t"))
 
 func unlocked(id: String) -> bool:
 	var data: Dictionary = SKINS[id]

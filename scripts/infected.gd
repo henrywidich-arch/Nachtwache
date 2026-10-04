@@ -673,7 +673,7 @@ func _physics_process(delta: float) -> void:
 		if not struck and attack_clock >= strike_time:
 			struck = true
 			if distance < attack_reach * 1.25 and same_floor and _clear_line(target):
-				prey.receive_damage(attack_damage * float(game.rules.harm), global_position)
+				prey.receive_damage(attack_damage * float(game.rules.harm), global_position, "", Skills.kind_of(self))
 			if kind == "crusher":
 				game.sounds.play_at("thud", global_position, 4.0)
 				game.player.shake_from(global_position, 0.9, 14.0)
@@ -725,6 +725,8 @@ func _cling(delta: float, target: Vector3, distance: float, same_floor: bool) ->
 		clung_to = prey
 		prey.clung_by = self
 		shaken = 0.0
+		if prey == game.player:
+			game.squad_call("leech", global_position, 18.0)
 		cling_tick = 0.4
 		# Hanging on, nothing in the world gets in its way and it does not shove its
 		# victim about; it can still be shot.
@@ -744,7 +746,7 @@ func _cling(delta: float, target: Vector3, distance: float, same_floor: bool) ->
 	cling_tick -= delta
 	if cling_tick <= 0.0:
 		cling_tick = 0.5
-		clung_to.receive_damage(float(spec.cling_damage) * 0.5 * float(game.rules.harm), global_position)
+		clung_to.receive_damage(float(spec.cling_damage) * 0.5 * float(game.rules.harm), global_position, "", "special")
 		cue("attack", ["punch" if randf() < 0.5 else "punch_left", 0.45, 0.2])
 	return true
 
@@ -752,7 +754,8 @@ func _cling(delta: float, target: Vector3, distance: float, same_floor: bool) ->
 func shake() -> void:
 	if clung_to == null or dead:
 		return
-	shaken += SHAKE_STEP
+	# An ability of the player it hangs on makes every press count for more.
+	shaken += SHAKE_STEP * (1.0 + (game.skills.value("shake") if clung_to == game.player else 0.0))
 	if shaken >= 1.0:
 		release(true)
 
@@ -869,7 +872,7 @@ func _haunt(delta: float) -> void:
 ## It has its prey by the throat for a moment, then it is gone.
 func grab(scare: bool = false) -> void:
 	cue("grab")
-	prey.receive_damage((10.0 if scare else float(spec.damage)) * float(game.rules.harm), global_position)
+	prey.receive_damage((10.0 if scare else float(spec.damage)) * float(game.rules.harm), global_position, "", Skills.kind_of(self))
 	grabbing = 0.8
 
 ## Gone in a puff of smoke, without a kill for anyone.
@@ -944,7 +947,7 @@ func _pounce(delta: float, target: Vector3, distance: float, same_floor: bool) -
 			var chest: Vector3 = prey.global_position + Vector3(0, 0.9, 0)
 			if not leap_hit and chest.distance_to(global_position + Vector3(0, 0.5, 0)) < 1.25:
 				leap_hit = true
-				prey.receive_damage(float(spec.pounce_damage) * float(game.rules.harm), global_position)
+				prey.receive_damage(float(spec.pounce_damage) * float(game.rules.harm), global_position, "", Skills.kind_of(self))
 				cue("bite")
 				velocity.x *= 0.15
 				velocity.z *= 0.15

@@ -93,9 +93,11 @@ const VIEWS := {
 		"hip": Vector3(0.13, -0.17, -0.36), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.046, -0.115), "muzzle": Vector3(0, -0.01, -0.687)
 	},
+	# The launcher is not aimed over its sight: it stays beside the line of sight, so that
+	# the arc of its shell can be seen (see Survivor.launch_path).
 	"launcher": {
 		"hip": Vector3(0.14, -0.2, -0.36), "hip_angles": Vector3(1.0, 6.5, -2.5),
-		"aim": Vector3(0.0, -0.139, -0.43), "muzzle": Vector3(0, 0.06, -0.348)
+		"aim": Vector3(0.115, -0.185, -0.4), "aim_angles": Vector3(0.5, 5.0, -2.0), "muzzle": Vector3(0, 0.06, -0.348)
 	},
 	"minigun": {
 		"hip": Vector3(0.2, -0.3, -0.46), "hip_angles": Vector3(2.0, 8.0, -3.0),
@@ -473,7 +475,7 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 	result.albedo_color = color
 	var band := Gradient.new()
 	band.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0), Color(1, 1, 1, 0)])
-	band.offsets = PackedFloat32Array([0.0, 0.74, 0.84, 0.94, 1.0])
+	band.offsets = PackedFloat32Array([0.0, 0.85, 0.895, 0.94, 1.0])
 	var circle := GradientTexture2D.new()
 	circle.gradient = band
 	circle.fill = GradientTexture2D.FILL_RADIAL
@@ -530,8 +532,10 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 	for mesh in batch.commit(reflex, "Part", false):
 		mesh.layers = 2
 	_view_quad(reflex, Vector3(0, dot, z - 0.019), REFLEX_GLASS, _view_glow("lens", Color(0.55, 0.75, 0.8, 0.045), false))
-	_view_quad(reflex, Vector3(0, dot, z - 0.0188), Vector2(0.0105, 0.0105), _view_ring("ring", Color(2.2, 0.18, 0.11, 0.6)))
-	_view_quad(reflex, Vector3(0, dot, z - 0.0187), Vector2(0.003, 0.003), _view_glow("dot", Color(3.2, 0.24, 0.14, 1.0), true))
+	# The mark is small and dim on purpose: a fine dot that does not cover the target, in a
+	# hair-thin ring that is only just there.
+	_view_quad(reflex, Vector3(0, dot, z - 0.0188), Vector2(0.0082, 0.0082), _view_ring("ring", Color(1.0, 0.1, 0.06, 0.22)))
+	_view_quad(reflex, Vector3(0, dot, z - 0.0187), Vector2(0.0015, 0.0015), _view_glow("dot", Color(1.35, 0.12, 0.07, 1.0), true))
 	# --- Telescopic sight, four times: tube, bell and eyepiece on two rings.
 	var scope := Node3D.new()
 	scope.name = "Mod_scope"

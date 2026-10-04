@@ -177,7 +177,11 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 			block_wait = 0.09
 			cue("block")
 		return
-	super.receive_hit(amount * float(role.armour), direction, headshot, source)
+	# What the armour stops; an ability of the player's makes it stop less of his own fire.
+	var stopped := 1.0 - float(role.armour)
+	if source == null:
+		stopped *= game.skills.armour_left()
+	super.receive_hit(amount * (1.0 - stopped), direction, headshot, source)
 	if dead or puppet:
 		return
 	threatened()

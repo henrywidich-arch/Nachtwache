@@ -440,7 +440,12 @@ func _draw_reticle() -> void:
 		var colour := Color(0.95, 0.2, 0.12, minf(1.0, hurt_left * 1.6))
 		reticle.draw_arc(centre, 118, hurt_angle - 0.42, hurt_angle + 0.42, 20, colour, 9.0, true)
 	var gap: float = 6.0 + game.player.recoil * 8 + (1.0 - game.player.aim_blend) * 3.0
-	var color := Color(0.93, 0.95, 0.86, 0.85 * (1.0 - game.player.aim_blend * 0.75))
+	# Behind a fitted sight its own mark does the aiming: the crosshair makes room for it.
+	# Over iron sights a trace of it stays; the launcher, aimed beside its sight, keeps it.
+	var fade := 1.0 if game.player.fitted("sight") != "" else 0.75
+	if Survivor.WEAPONS[game.player.current_weapon].has("grenade"):
+		fade = 0.2
+	var color := Color(0.93, 0.95, 0.86, 0.85 * (1.0 - game.player.aim_blend * fade))
 	reticle.draw_circle(centre, 1.3, color)
 	for direction in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 		reticle.draw_line(centre + direction * gap, centre + direction * (gap + 6), color, 1.6)
@@ -598,7 +603,9 @@ func _process(delta: float) -> void:
 		(tile[0] as Control).modulate = Color(1.0, 0.82, 0.45, 1.0) if ready else Color(1, 1, 1, 1.0 if carried > 0 else 0.32)
 	var extras: Array[String] = []
 	if player.mask_level > 0:
-		extras.append("MASKE %d s" % ceili(player.filter_left))
+		# The gas is hard to see: the mask says when its filter is at work.
+		extras.append(("IM GAS  ·  MASKE %d s" if player.in_gas else "MASKE %d s") % ceili(player.filter_left))
+	gear_label.modulate = AMBER if player.in_gas and player.mask_level > 0 else Color.WHITE
 	if int(player.items.revive) > 0:
 		extras.append("ADRENALIN")
 	gear_label.text = "     ".join(extras)
@@ -632,11 +639,11 @@ func _process(delta: float) -> void:
 	# Red vignette for wounds, a slow heartbeat when badly hurt.
 	var heartbeat := (0.16 + 0.1 * sin(pulse * 5.5)) if low else 0.0
 	damage_overlay.modulate.a = clampf(player.hurt_amount * 0.55 + heartbeat, 0.0, 1.0)
-	var gas := clampf(player.mist_exposure / 3.0, 0.0, 1.0) * 0.3
+	var gas := clampf(player.mist_exposure / 3.0, 0.0, 1.0) * 0.2
 	if player.acid_amount > gas:
 		tint_overlay.color = Color(0.1, 0.3, 0.9, player.acid_amount * 0.3)
 	else:
-		tint_overlay.color = Color(0.35, 0.6, 0.1, gas)
+		tint_overlay.color = Color(0.38, 0.56, 0.16, gas)
 	splatter_left = maxf(0, splatter_left - delta * 0.32)
 	splatter_overlay.modulate.a = minf(1.0, splatter_left)
 	flash_left = maxf(0, flash_left - delta * 0.9)
@@ -797,7 +804,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["shop", "settings", "skins", "board"]
+	var wide: bool = mode in ["shop", "settings", "skins", "board", "skills"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -835,7 +842,9 @@ func show_menu(mode: String) -> void:
 			first = _menu_board(column)
 		"skins":
 			first = _menu_skins(column)
-	var version := label("SOLO + KOOP   ·   v0.10", 12, MUTED, true)
+		"skills":
+			first = _menu_skills(column)
+	var version := label("SOLO + KOOP   ·   v0.11", 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
 	modal.add_child(version)
@@ -854,8 +863,8 @@ func _menu_main(column: VBoxContainer) -> Control:
 	column.add_child(label("     mit %s und %s   ·   Stufe %s" % [Profile.SKINS[squad[0]].label, Profile.SKINS[squad[1]].label, game.profile.rules().label], 15, MUTED))
 	column.add_child(_pair(_button("KOOP HOSTEN", game.host_match), _button("KOOP BEITRETEN", show_menu.bind("join"))))
 	column.add_child(_pair(_button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty), _button("TRUPP & SKINS", show_menu.bind("skins"))))
-	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button("EINSTELLUNGEN", _open_settings.bind("main"))))
-	column.add_child(_button("BEENDEN", game.quit_game))
+	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button("FÄHIGKEITEN", show_menu.bind("skills"))))
+	column.add_child(_pair(_button("EINSTELLUNGEN", _open_settings.bind("main")), _button("BEENDEN", game.quit_game)))
 	return start
 
 func _menu_pause(column: VBoxContainer) -> Control:
@@ -1023,6 +1032,92 @@ func _menu_skins(column: VBoxContainer) -> Control:
 		join.disabled = not open or not bool(data.bot)
 		grid.add_child(join)
 	column.add_child(grid)
+	_gap(column, 8)
+	var back := _button("ZURÜCK", show_menu.bind("main"), true)
+	column.add_child(back)
+	return back
+
+func _learn(id: String) -> void:
+	game.learn_skill(id)
+	show_menu("skills")
+
+## The three trees of abilities side by side. While they are out of service (Skills) the
+## page only shows what is to come: nothing can be bought.
+func _menu_skills(column: VBoxContainer) -> Control:
+	var skills: Skills = game.skills
+	var totals: Dictionary = game.profile.totals
+	var head := HBoxContainer.new()
+	head.add_theme_constant_override("separation", 22)
+	head.add_child(label("FÄHIGKEITEN", 46, IVORY, true))
+	if not Skills.IN_SERVICE:
+		var mark := label("IN WARTUNG", 18, INK, true)
+		var plate := StyleBoxFlat.new()
+		plate.bg_color = AMBER
+		plate.set_corner_radius_all(2)
+		plate.content_margin_left = 10
+		plate.content_margin_right = 10
+		plate.content_margin_top = 2
+		plate.content_margin_bottom = 2
+		mark.add_theme_stylebox_override("normal", plate)
+		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		head.add_child(mark)
+	column.add_child(head)
+	if Skills.IN_SERVICE:
+		_text(column, "Drei Wege mit je einem Schwerpunkt. Jede Stufe bringt einen Punkt; nicht alles lässt sich ausbauen.", 15)
+	else:
+		_text(column, "Drei Wege mit je einem Schwerpunkt. Noch nicht in Betrieb: Hier steht, was kommt. Punkte lassen sich\nerst vergeben, wenn alles fertig ist – bis dahin ändert nichts davon einen Einsatz. Die Zahlen gelten je Rang.", 15)
+	var earned := Skills.experience(totals)
+	var level := Skills.level_of(earned)
+	var status := "STUFE %d   ·   %d Erfahrung" % [level, earned]
+	if level < Skills.LEVELS:
+		status += "   ·   nächste Stufe bei %d" % Skills.needed(level + 1)
+	status += "   ·   %d %s" % [level - 1, "Punkt" if level == 2 else "Punkte"]
+	if Skills.IN_SERVICE:
+		status += ", davon %d frei" % skills.points_left(totals)
+	column.add_child(label(status, 17, MINT, true))
+	_gap(column, 4)
+	var trees := HBoxContainer.new()
+	trees.add_theme_constant_override("separation", 12)
+	column.add_child(trees)
+	for tree_id in Skills.TREES:
+		var tree: Dictionary = Skills.TREES[tree_id]
+		var panel := PanelContainer.new()
+		var back_plate := _plate(0.55)
+		back_plate.border_color = tree.color
+		back_plate.border_width_top = 3
+		panel.add_theme_stylebox_override("panel", back_plate)
+		panel.custom_minimum_size = Vector2(296, 0)
+		var list := VBoxContainer.new()
+		list.add_theme_constant_override("separation", 2)
+		panel.add_child(list)
+		list.add_child(label(str(tree.label), 28, tree.color, true))
+		list.add_child(label(str(tree.focus), 14, MUTED))
+		var tier := 0
+		for skill in tree.skills:
+			if int(skill.tier) != tier:
+				tier = int(skill.tier)
+				_gap(list, 4)
+				var need: int = Skills.TIER_NEEDS[tier - 1]
+				list.add_child(label("REIHE %d%s" % [tier, "" if need == 0 else "   ·   ab %d Punkten in diesem Weg" % need], 12, AMBER, true))
+			var have := skills.rank(str(skill.id))
+			var row := HBoxContainer.new()
+			row.add_theme_constant_override("separation", 8)
+			var title := label(str(skill.label), 17, IVORY if have > 0 or not Skills.IN_SERVICE else MUTED, true)
+			title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			row.add_child(title)
+			row.add_child(label("●".repeat(have) + "○".repeat(int(skill.ranks) - have), 14, tree.color))
+			if Skills.IN_SERVICE:
+				var more := _chip("+", _learn.bind(str(skill.id)), false, 34)
+				more.custom_minimum_size = Vector2(34, 26)
+				more.disabled = skills.barred(str(skill.id), totals) != ""
+				more.tooltip_text = skills.barred(str(skill.id), totals)
+				row.add_child(more)
+			list.add_child(row)
+			var note := label(Skills.note(skill, maxi(1, have)), 13, MUTED)
+			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			note.custom_minimum_size.x = 270
+			list.add_child(note)
+		trees.add_child(panel)
 	_gap(column, 8)
 	var back := _button("ZURÜCK", show_menu.bind("main"), true)
 	column.add_child(back)

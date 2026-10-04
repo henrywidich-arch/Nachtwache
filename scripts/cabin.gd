@@ -3383,14 +3383,11 @@ void fragment() {
 			grass.visibility_range_end_margin = 4.0
 			add_child(grass)
 
-## Glowing gas banks beyond the fence mark the edge of the survivable area.
+## Banks of gas beyond the fence mark the edge of the survivable area: the same pale haze
+## as the gas in the yard, only thicker, so that the edge can be made out.
 func _build_gas() -> void:
-	var gas := FogMaterial.new()
-	gas.density = 0.22
-	gas.albedo = Color(0.55, 0.78, 0.3)
-	gas.emission = Color(0.08, 0.17, 0.03)
-	gas.height_falloff = 0.25
-	gas.edge_fade = 0.6
+	var gas := GasField.haze(0.3, 0.22, false)
+	gas.set_shader_parameter("amount", 1.0)
 	var safe := YARD.grow(GAS_MARGIN)
 	var bands := [
 		[Vector3(safe.get_center().x, 2.5, safe.position.y - 7.0), Vector3(safe.size.x + 28.0, 6, 14)],
@@ -3474,12 +3471,8 @@ func is_toxic(pos: Vector3) -> bool:
 func set_gas(zone: String) -> void:
 	gas_zone = zone if GAS_ZONES.has(zone) else ""
 	if gas_cloud == null:
-		var gas := FogMaterial.new()
-		gas.density = 0.3
-		gas.albedo = Color(0.55, 0.78, 0.3)
-		gas.emission = Color(0.1, 0.2, 0.04)
-		gas.height_falloff = 0.5
-		gas.edge_fade = 0.35
+		var gas := GasField.haze(0.2, 0.15, false)
+		gas.set_shader_parameter("amount", 1.0)
 		gas_cloud = FogVolume.new()
 		gas_cloud.name = "DriftingGas"
 		gas_cloud.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
@@ -3489,8 +3482,8 @@ func set_gas(zone: String) -> void:
 	if gas_zone != "":
 		# The cloud lies on the ground and does not reach into it: the basement stays clear.
 		var area: Rect2 = GAS_ZONES[gas_zone].rect
-		gas_cloud.size = Vector3(area.size.x, 4.5, area.size.y)
-		gas_cloud.position = Vector3(area.get_center().x, 2.25, area.get_center().y)
+		gas_cloud.size = Vector3(area.size.x, 3.6, area.size.y)
+		gas_cloud.position = Vector3(area.get_center().x, 1.55, area.get_center().y)
 
 ## True inside any building, on any storey, in the bunker and everywhere in the basement.
 func is_indoors(pos: Vector3) -> bool:

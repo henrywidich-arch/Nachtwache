@@ -46,6 +46,8 @@ var shot_left := 0.0
 var burst_left := 5
 var pause_left := 0.0
 var hurt_sound_left := 0.0
+## Has said that it is badly hurt; it says so again only after it has recovered.
+var hurt_called := false
 var target: Infected
 var head_aim := false
 var think_left := 0.0
@@ -199,10 +201,16 @@ func _physics_process(delta: float) -> void:
 			if target != null and spot_wait <= 0.0:
 				if target is CruSoldier:
 					spot_wait = 25.0
-					game.bark(self, look, "cru")
+					game.bark(self, look, "shield" if (target as CruSoldier).role.get("shield", false) else "cru")
 				elif target.kind in ["crusher", "charger", "striker", "healer"] and randf() < 0.5:
 					spot_wait = 20.0
-					game.bark(self, look, "special")
+					game.bark(self, look, "medic" if target.kind == "healer" else "special")
+				elif not game.round_called:
+					# The first of a round to come into view; said once, by whoever sees them.
+					game.round_called = true
+					if randf() < 0.6:
+						spot_wait = 8.0
+						game.bark(self, look, "round")
 	var player: Survivor = game.player
 	var anchor: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * slot
 	var to_player := player.global_position - global_position
@@ -390,12 +398,16 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 		victim.receive_hit(struck[enemy].damage, struck[enemy].direction, struck[enemy].headshot, self)
 		if was_alive and victim.dead:
 			kills += 1
-			if randf() < 0.22:
+			# A special infected put down is worth a word more often than one of the many.
+			var big: bool = victim.kind != "mauler" and not victim.spec.get("human", false)
+			if big and randf() < 0.55:
+				game.bark(self, look, "big_kill")
+			elif randf() < 0.22:
 				game.bark(self, look, "kill")
 	visual.shot()
 	game.sounds.play_at(str(visual.config.shot), muzzle, -7.0 if pellets == 1 else -5.0)
 
-func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = "") -> void:
+func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
 	if not is_targetable():
 		return
 	health = maxf(0.0, health - amount * ARMOUR)
@@ -408,6 +420,12 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = 
 		game.sounds.play_at(str(visual.config.voice), eye())
 	if health <= 0.0:
 		_go_down(from)
+	elif health < 45.0 and not hurt_called:
+		# Badly hurt: said once, until the wounds have been seen to.
+		hurt_called = true
+		game.bark(self, look, "hurt", 1.0)
+	elif health > 70.0:
+		hurt_called = false
 
 func _go_down(from: Vector3) -> void:
 	down = true
@@ -438,6 +456,7 @@ func _recover(delta: float) -> void:
 
 ## Helps the teammate back on its feet; `full` restores all health (between rounds).
 func revive(full: bool = false) -> void:
+	hurt_called = false
 	if not down:
 		if full:
 			health = 100.0

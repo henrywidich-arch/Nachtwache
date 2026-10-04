@@ -106,10 +106,16 @@ var armor := 0.0
 var plate_level := 0
 var mask_level := 0
 var filter_left := 0.0
+## True while the survivor stands in gas, with or without a mask.
+var in_gas := false
 var throw_cooldown := 0.0
 ## A grenade held ready ("grenade" or "flashbang", "" for none), how long it has been
 ## held, the seconds left until it leaves the hand once the key is let go (-1: still
 ## held), and how far the weapon has dipped out of the way (0 to 1).
+## A shell from the launcher: how fast it leaves, and how much it is lobbed upwards. Slow
+## enough to be seen flying, and it comes down in an arc instead of going straight.
+const LAUNCH_SPEED := 25.0
+const LAUNCH_LIFT := 2.6
 const THROW_SWING := 0.16
 const THROW_AIM_AFTER := 0.2
 var throw_kind := ""
@@ -243,7 +249,7 @@ func magazine_size() -> int:
 	return size * 3 / 2 if inventory[current_weapon].get("mags", false) else size
 
 func filter_capacity() -> float:
-	return MASK_SECONDS[mask_level]
+	return MASK_SECONDS[mask_level] * (1.0 + game.skills.value("filter"))
 
 ## Takes what was bought at the shop counter.
 func take_item(id: String) -> void:
@@ -273,20 +279,18 @@ func ready_throw(kind: String) -> void:
 	throw_swing = -1.0
 	game.sounds.play_sound("equip", -6.0, 1.5)
 
-## What a grenade thrown now would do: the points of its flight up to the first thing it
-## strikes (or until its fuse runs out).
-func throw_path(kind: String) -> PackedVector3Array:
+## The points of a flight that starts at `at` with `speed`, up to the first thing it strikes
+## or until `seconds` have passed. `pull` is the share of gravity, `damp` the drag of the air.
+func _flight(at: Vector3, speed: Vector3, seconds: float, pull: float, damp: float, mask: int) -> PackedVector3Array:
 	var points := PackedVector3Array()
-	var at := camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15
-	var speed := -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5
 	var space := get_world_3d().direct_space_state
 	var step := 0.05
 	points.append(at)
-	for i in range(int(float(Throwable.KINDS[kind].fuse) / step)):
-		speed += Vector3.DOWN * 9.8 * step
-		speed *= 1.0 - 0.3 * step
+	for i in range(int(seconds / step)):
+		speed += Vector3.DOWN * 9.8 * pull * step
+		speed *= 1.0 - damp * step
 		var next := at + speed * step
-		var query := PhysicsRayQueryParameters3D.create(at, next, 1 | 16)
+		var query := PhysicsRayQueryParameters3D.create(at, next, mask)
 		var hit := space.intersect_ray(query)
 		if not hit.is_empty():
 			points.append(hit.position)
@@ -294,6 +298,16 @@ func throw_path(kind: String) -> PackedVector3Array:
 		points.append(next)
 		at = next
 	return points
+
+## What a grenade thrown now would do: the points of its flight up to the first thing it
+## strikes (or until its fuse runs out).
+func throw_path(kind: String) -> PackedVector3Array:
+	return _flight(camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15, -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5, float(Throwable.KINDS[kind].fuse), 1.0, 0.3, 1 | 16)
+
+## Where a shell fired from the launcher now would fly: a shallow arc, a little above the
+## line of sight at first and then falling under it.
+func launch_path() -> PackedVector3Array:
+	return _flight(camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12, -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT, 3.5, Throwable.SHELL_PULL, Throwable.SHELL_DAMP, 1 | 4 | 16)
 
 func _hold_throw(delta: float) -> void:
 	if throw_kind == "":
@@ -345,7 +359,11 @@ func place_claymore() -> void:
 	game.sounds.play_sound("bolt", -2.0)
 
 func max_reserve() -> int:
-	return int(WEAPONS[current_weapon].reserve_max)
+	return reserve_cap(current_weapon)
+
+## How much ammunition for a weapon fits into the pockets; an ability makes them deeper.
+func reserve_cap(id: String) -> int:
+	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.value("reserve"))))
 
 ## The weapon in hand as it shoots now: its values from the table, changed by whatever is
 ## fitted to it.
@@ -410,7 +428,7 @@ func weapon_label() -> String:
 ## Adds a bought weapon with a full load and takes it in hand.
 func unlock(id: String) -> bool:
 	if inventory.has(id) or not WEAPONS.has(id): return false
-	inventory[id] = {"ammo": int(WEAPONS[id].magazine), "reserve": int(WEAPONS[id].reserve_max), "level": 0}
+	inventory[id] = {"ammo": int(WEAPONS[id].magazine), "reserve": reserve_cap(id), "level": 0}
 	equip_weapon(id)
 	return true
 
@@ -502,6 +520,10 @@ func _physics_process(delta: float) -> void:
 	# The line of the throw, once the key has been held for a moment.
 	if throw_kind != "" and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
 		game.fx.show_arc(throw_path(throw_kind))
+	elif controlled and not down and not menu_open and WEAPONS[current_weapon].has("grenade") and ammo > 0 and reload_left <= 0.0 and Input.is_action_pressed("aim"):
+		# Aiming with the launcher shows the arc of its shell.
+		# The first points lie right in front of the eye and would only be in the way.
+		game.fx.show_arc(launch_path().slice(5))
 	else:
 		game.fx.hide_arc()
 	flash_left = maxf(0, flash_left - delta)
@@ -653,7 +675,7 @@ func _launch(data: Dictionary) -> void:
 	shell.impact = true
 	game.ordnance.add_child(shell)
 	shell.global_position = camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12
-	shell.linear_velocity = -camera.global_basis.z * 34.0 + Vector3.UP * 1.6
+	shell.linear_velocity = -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT
 	game.fx.launch_smoke(shell.global_position, -camera.global_basis.z)
 	var kick: float = float(data.kick)
 	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
@@ -663,11 +685,11 @@ func _launch(data: Dictionary) -> void:
 
 ## A heavy bullet goes on through the body it hit: whoever stands behind is struck too,
 ## a little less hard each time. Returns where the bullet finally stops.
-func _pierce(data: Dictionary, direction: Vector3, first: Infected, struck: Dictionary, from: Vector3) -> Vector3:
+func _pierce(data: Dictionary, passes: int, direction: Vector3, first: Infected, struck: Dictionary, from: Vector3) -> Vector3:
 	var through: Array[RID] = [get_rid(), first.get_rid(), first.head_box.get_rid()]
 	var force := 0.75
 	var stop := from
-	for i in range(int(data.pierce)):
+	for i in range(passes):
 		var query := PhysicsRayQueryParameters3D.create(from, from + direction * 60.0, 1 | 4 | 8, through)
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
 		if hit.is_empty():
@@ -685,6 +707,7 @@ func _pierce(data: Dictionary, direction: Vector3, first: Infected, struck: Dict
 		var damage: float = float(data.damage) * force
 		if headshot:
 			damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
+		damage *= game.skills.damage_factor(enemy, headshot)
 		var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
 		entry.damage += damage
 		entry.headshot = entry.headshot or headshot
@@ -777,7 +800,12 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 
 func _update_mist(delta: float) -> void:
 	mist_damage_left = maxf(0, mist_damage_left - delta)
-	if game.toxic_at(position):
+	var breathing: bool = game.toxic_at(position)
+	if breathing and not in_gas and controlled and not game.sounds.hush:
+		# The gas is hard to see: the first breath of it is heard.
+		game.sounds.play_sound("hiss", -9.0, 1.25)
+	in_gas = breathing
+	if breathing:
 		if filter_left > 0.0:
 			# A gas mask keeps the air clean for as long as its filter lasts.
 			filter_left = maxf(0.0, filter_left - delta)
@@ -864,7 +892,10 @@ func shoot() -> void:
 			var head_zone: bool = target.has_meta("infected")
 			if head_zone:
 				target = target.get_meta("infected")
-			if target is Infected and (target as Infected).blocks(direction):
+			var shielded: bool = target is Infected and (target as Infected).blocks(direction)
+			# A shield stops a bullet, unless an ability lets this weapon shoot through it.
+			var share: float = game.skills.shield_share(current_weapon) if shielded else 1.0
+			if shielded and share <= 0.0:
 				# It rings off a shield: no blood, no harm, and the bullet stops there.
 				if marks < 4:
 					game.fx.dust(endpoint, hit.normal)
@@ -878,17 +909,22 @@ func shoot() -> void:
 					damage *= clampf(1.0 - (origin.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
 				if headshot:
 					damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
-				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
+				damage *= share * game.skills.damage_factor(enemy, headshot)
+				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction, "through": false})
 				entry.damage += damage
 				entry.headshot = entry.headshot or headshot
+				entry.through = entry.through or shielded
 				struck[enemy] = entry
 				if marks < 4:
 					game.fx.blood(endpoint, direction, headshot or pellets > 1)
 			elif marks < 4:
 				game.fx.dust(endpoint, hit.normal)
 			marks += 1
-			if data.has("pierce") and target is Infected and not (target as Infected).blocks(direction):
-				endpoint = _pierce(data, direction, target as Infected, struck, endpoint)
+			var passes := int(data.get("pierce", 0))
+			if passes == 0 and target is Infected and current_weapon in Skills.RIFLES and Skills.kind_of(target as Infected) == "common" and game.skills.value("pierce_common") > 0.0:
+				passes = 1
+			if passes > 0 and target is Infected and (not shielded or share > 0.0):
+				endpoint = _pierce(data, passes, direction, target as Infected, struck, endpoint)
 		if pellet < 5:
 			game.fx.tracer(muzzle, endpoint)
 	var any_head := false
@@ -897,10 +933,13 @@ func shoot() -> void:
 		any_head = any_head or entry.headshot
 		if game.net.joined:
 			# The host decides what the hit does; show the flinch right away.
-			game.net.report_hit(enemy, entry.damage, entry.direction, entry.headshot)
+			game.net.report_hit(enemy, entry.damage, entry.direction, entry.headshot, bool(entry.get("through", false)))
 			(enemy as Infected).show_cue("hit", [1.0, float(entry.damage) / (enemy as Infected).max_health * 2.5])
 		else:
+			# A bullet that went through a shield is not stopped by it a second time.
+			game.blasting = bool(entry.get("through", false))
 			(enemy as Infected).receive_hit(entry.damage, entry.direction, entry.headshot)
+			game.blasting = false
 	if not struck.is_empty():
 		game.hud.hit_marker(any_head)
 	# A suppressed shot gives nobody the direction it came from.
@@ -915,7 +954,7 @@ func shoot() -> void:
 
 func start_reload() -> void:
 	if reload_left <= 0 and ammo < magazine_size() and reserve > 0:
-		reload_left = float(WEAPONS[current_weapon].reload_time)
+		reload_left = float(WEAPONS[current_weapon].reload_time) * (1.0 - minf(0.6, game.skills.value("reload")))
 		reload_cue = 0
 		loading_shells = WEAPONS[current_weapon].has("shells")
 		chamber_empty = ammo == 0
@@ -923,9 +962,12 @@ func start_reload() -> void:
 			# The first shell takes a moment longer: the weapon has to be turned over.
 			reload_left += 0.25
 
-func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "") -> void:
+## `kind`: "bullet" and "frag" (the C.R.U.'s), "gas", "acid", or "" for a blow. `by`: what
+## kind of enemy dealt it ("common", "special", "cru"), where that is known.
+func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "", by: String = "") -> void:
 	if not controlled or health <= 0:
 		return
+	amount *= game.skills.harm_factor(kind, by)
 	# Ballistic plates take the edge off whatever the C.R.U. shoot and throw.
 	var hostile := kind in ["bullet", "frag"]
 	if hostile:
@@ -985,7 +1027,7 @@ func reset_survivor() -> void:
 	velocity = Vector3.ZERO
 	health = 100
 	equip_weapon("rifle", true)
-	inventory = {"rifle": {"ammo": int(WEAPONS.rifle.magazine), "reserve": int(WEAPONS.rifle.reserve_max), "level": 0}}
+	inventory = {"rifle": {"ammo": int(WEAPONS.rifle.magazine), "reserve": reserve_cap("rifle"), "level": 0}}
 	reload_left = 0
 	loading_shells = false
 	pump_clock = -1.0
@@ -1002,6 +1044,7 @@ func reset_survivor() -> void:
 	clung_by = null
 	mask_level = 0
 	filter_left = 0.0
+	in_gas = false
 	down = false
 	menu_open = false
 	flashlight.visible = true

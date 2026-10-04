@@ -1030,10 +1030,225 @@ func run(game: Node3D) -> void:
 	await _kit(game)
 	await _threats(game)
 	await _later(game)
+	await _latest(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
 	get_tree().call_deferred("quit", 0 if failures == 0 else 1)
+
+## What came with v0.11: gas that lies over the yard as wide, thin banks and spreads, a
+## launcher that lobs its shell, a finer mark in the reflex sight, more calls for the
+## squad, and the trees of abilities (which are out of service: the checks switch them on
+## for themselves and off again).
+func _latest(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var cabin: CabinMap = game.cabin
+	var spots: Dictionary = cabin.points
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	game.gas.clear()
+	# --- a bank of gas spreads over the yard
+	var seed_at: Vector3 = (spots.yard_south as Vector3) + Vector3(6.0, 0, 14.0)
+	var bank: Dictionary = game.gas._start_bank(seed_at)
+	bank.heading = 0.4
+	bank.grow = 5
+	var alone: int = game.gas.pockets.size()
+	for i in range(5):
+		game.gas._spread(bank)
+	var patches: int = game.gas.pockets.size()
+	var joined := true
+	var outdoors := true
+	for i in range(1, patches):
+		var nearest := INF
+		for j in range(i):
+			nearest = minf(nearest, (game.gas.pockets[i].pos as Vector3).distance_to(game.gas.pockets[j].pos) - float(game.gas.pockets[j].radius))
+		# Each new patch overlaps one that was there before, and none lies under a roof.
+		joined = joined and nearest < float(game.gas.pockets[i].radius) * 0.5
+		outdoors = outdoors and not cabin.is_indoors(game.gas.pockets[i].pos)
+	var material: ShaderMaterial = (game.gas.pockets[0].volume as FogVolume).material as ShaderMaterial
+	expect(alone == 1 and patches >= 4 and joined and outdoors and game.gas.covered() > 500.0 and material != null and material.shader.get_mode() == Shader.MODE_FOG and float(GasField.YARD_HAZE) < 0.35, "A bank of gas spreads patch by patch over the yard, as a thin haze (%d patches, %d m2)" % [patches, int(game.gas.covered())])
+	for pocket in game.gas.pockets:
+		pocket.strength = 1.0
+	var middle: Vector3 = game.gas.pockets[patches - 1].pos
+	face(game, middle + Vector3(0, 0.05, 0), 0.0)
+	player.health = 100.0
+	player.mask_level = 2
+	player.filter_left = player.filter_capacity()
+	await frames(4)
+	game.hud._process(0.1)
+	var warned: bool = player.in_gas and game.hud.gear_label.text.contains("IM GAS") and player.health == 100.0
+	face(game, (spots.hall as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	await frames(4)
+	game.hud._process(0.1)
+	expect(warned and not player.in_gas and not game.hud.gear_label.text.contains("IM GAS") and game.toxic_at(middle + Vector3(0, 0.1, 0)) and not game.toxic_at(spots.hall), "The gas is hard to see, so the mask says when its filter is at work; the house stays clear")
+	game.gas.end_round()
+	var leaving := true
+	for pocket in game.gas.pockets:
+		leaving = leaving and bool(pocket.going)
+	expect(leaving and game.gas.banks.is_empty(), "When the round is over the bank thins out")
+	game.gas.clear()
+	player.mask_level = 0
+	player.filter_left = 0.0
+	# --- the launcher lobs its shell
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.unlock("launcher")
+	await frames(3)
+	var flight: PackedVector3Array = player.launch_path()
+	var top := -INF
+	for point in flight:
+		top = maxf(top, point.y)
+	var landing: Vector3 = flight[flight.size() - 1]
+	var reach := Vector2(landing.x - flight[0].x, landing.z - flight[0].z).length()
+	Input.action_press("aim")
+	await frames(5)
+	var shown: bool = game.fx.arc_dots != null and game.fx.arc_dots.visible
+	Input.action_release("aim")
+	await frames(4)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	await frames(2)
+	var shell: Throwable = null
+	for node in game.ordnance.get_children():
+		if node is Throwable and node.impact:
+			shell = node
+	var lobbed: bool = shell != null and is_equal_approx(shell.gravity_scale, Throwable.SHELL_PULL) and shell.linear_velocity.y > 1.0 and shell.linear_velocity.length() < 28.0
+	if shell != null:
+		shell.queue_free()
+	expect(top > flight[0].y + 0.2 and landing.y < 0.4 and reach > 14.0 and reach < 30.0 and shown and not game.fx.arc_dots.visible and lobbed, "The launcher lobs its shell in an arc, and aiming shows where it will come down (%.1f m when held level)" % reach)
+	# --- the mark of the reflex sight
+	player.unlock("ak")
+	player.equip_weapon("ak", true)
+	var smallest := INF
+	for node in (player.weapon.get_node("Mod_reddot") as Node3D).get_children():
+		if node is MeshInstance3D and (node as MeshInstance3D).mesh is QuadMesh:
+			smallest = minf(smallest, ((node as MeshInstance3D).mesh as QuadMesh).size.x)
+	expect(smallest < 0.002 and (WeaponView.materials.dot as StandardMaterial3D).albedo_color.r < 2.0, "The dot of the reflex sight is fine and dim (%.1f mm)" % (smallest * 1000.0))
+	# --- more calls for the squad
+	var rich := true
+	for cue in ["reload", "kill", "special", "cru", "grenade", "down", "thanks", "rescue", "stalker", "clear", "leech", "order_follow", "order_hold", "order_free", "round", "hurt", "gas", "idle"]:
+		for speaker in ["viper", "scorpion", "raven"]:
+			rich = rich and (Radio.BARKS[cue][speaker] as Array).size() >= 3
+	for cue in ["medic", "shield", "big_kill"]:
+		for speaker in ["viper", "scorpion", "raven"]:
+			rich = rich and (Radio.BARKS[cue][speaker] as Array).size() >= 2
+	game.round_called = true
+	game.phase = "preparing"
+	game.begin_wave()
+	var fresh: bool = not game.round_called
+	game.spawn_queue.clear()
+	game.phase = "preparing"
+	game.preparation_left = 9999.0
+	expect(rich and fresh and (Radio.BARKS.gas.cru as Array).size() == 2 and not game.squad_call("gas", player.global_position, 20.0), "The squad has at least three ways to say most things, and new things to say")
+	# --- the trees of abilities: out of service
+	var skills: Skills = game.skills
+	var totals := {"kills": 1697, "special_kills": 635, "cru_kills": 91, "objectives": 28, "revives": 10, "victories": 3}
+	var counted := true
+	var ids := {}
+	for tree in Skills.TREES:
+		var ranks := 0
+		var tier := 1
+		for skill in Skills.TREES[tree].skills:
+			ranks += int(skill.ranks)
+			counted = counted and str(skill.id).begins_with(tree + "_") and not ids.has(skill.id) and int(skill.tier) >= tier and int(skill.tier) <= 3 and Skills.note(skill, 1) != "" and not Skills.note(skill, 1).contains("%s")
+			tier = int(skill.tier)
+			ids[skill.id] = true
+		counted = counted and ranks == 14 and (Skills.TREES[tree].skills as Array).size() == 6
+	expect(counted and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with six abilities each; a career gives experience and levels")
+	game.hud.show_menu("skills")
+	var marked := false
+	for node in game.hud.modal.find_children("*", "Label", true, false):
+		marked = marked or (node as Label).text == "IN WARTUNG"
+	var chips := 0
+	for node in game.hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text == "+":
+			chips += 1
+	game.hud.hide_menu()
+	expect(not Skills.IN_SERVICE and not skills.active and marked and chips == 0 and not game.learn_skill("sweeper_damage") and skills.barred("sweeper_damage", totals) == "In Wartung" and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are under maintenance: the menu shows them, nothing can be bought and nothing has an effect")
+	# --- what they will do, switched on for the checks only
+	skills.active = true
+	var early: String = skills.barred("breacher_shield", totals)
+	var bought := 0
+	for id in ["breacher_armour", "breacher_armour", "breacher_armour", "breacher_shield", "breacher_plates"]:
+		if skills.learn(id, totals):
+			bought += 1
+	var poor: bool = not skills.learn("breacher_plates", totals) and skills.barred("breacher_plates", totals) == "Kein Punkt frei"
+	expect(early.begins_with("Erst 3 Punkte") and bought == 5 and poor and skills.spent("breacher") == 5 and skills.spent("sweeper") == 0 and skills.points_left(totals) == 0 and skills.rank("breacher_armour") == 3 and not skills.learn("breacher_armour", {"kills": 999999}), "Points open an ability rank by rank; the higher rows need points in their tree first")
+	# A shield and the sniper rifle.
+	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
+	bearer.set_physics_process(false)
+	bearer.position = Vector3(0, 0.05, 30.0)
+	bearer.model.rotation.y = 0.0
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.unlock("sniper")
+	await frames(3)
+	var sound: float = bearer.health
+	skills.active = false
+	player.climb = 0.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	await frames(2)
+	var stopped: bool = bearer.health == sound and bearer.blocks(Vector3.BACK)
+	skills.active = true
+	# The kick of the first shot has lifted the muzzle: level it again.
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.climb = 0.0
+	player.shot_cooldown = 0.0
+	player.bolt_clock = -1.0
+	player.shoot()
+	await frames(2)
+	expect(stopped and bearer.health < sound and not game.blasting and is_equal_approx(skills.shield_share("ak"), 0.0) and skills.shield_share("sniper") == 1.0, "With the ability the sniper rifle shoots through a shield that stops it otherwise")
+	bearer.receive_hit(99999.0, Vector3.FORWARD)
+	# Armour, and what the survivor takes.
+	var elite := game.spawn_enemy("cru_elite") as CruSoldier
+	elite.set_physics_process(false)
+	elite.position = Vector3(4.0, 0.05, 30.0)
+	await frames(2)
+	var whole: float = elite.health
+	elite.receive_hit(100.0, Vector3.RIGHT)
+	var pierced: float = whole - elite.health
+	elite.health = whole
+	elite.receive_hit(100.0, Vector3.RIGHT, false, player)
+	var plain: float = whole - elite.health
+	elite.receive_hit(99999.0, Vector3.FORWARD)
+	player.health = 100.0
+	player.plate_level = 0
+	player.armor = 0.0
+	player.receive_damage(10.0, Vector3.INF, "bullet", "cru")
+	expect(is_equal_approx(pierced, 90.0) and is_equal_approx(plain, 60.0) and is_equal_approx(player.health, 100.0 - 10.0 * 0.92) and is_equal_approx(skills.armour_left(), 0.25), "Armour stops less of the player's fire, and bullets hurt him less")
+	# The other two trees, rank by rank.
+	skills.reset()
+	skills.ranks = {"sweeper_damage": 3, "sweeper_reload": 3, "sweeper_ammo": 2, "sweeper_head": 2, "sweeper_skin": 3, "hunter_filter": 2, "hunter_skin": 3, "hunter_damage": 2, "hunter_acid": 2}
+	var mauler: Infected = game.spawn_enemy("mauler")
+	mauler.set_physics_process(false)
+	mauler.position = Vector3(-4.0, 0.05, 30.0)
+	var crusher: Infected = game.spawn_enemy("charger")
+	crusher.set_physics_process(false)
+	crusher.position = Vector3(-8.0, 0.05, 30.0)
+	await frames(2)
+	player.mask_level = 2
+	var filter: float = player.filter_capacity()
+	player.mask_level = 0
+	player.equip_weapon("rifle", true)
+	player.ammo = 3
+	player.reload_left = 0.0
+	player.start_reload()
+	var quick: float = player.reload_left
+	player.reload_left = 0.0
+	player.ammo = int(Survivor.WEAPONS.rifle.magazine)
+	expect(is_equal_approx(skills.damage_factor(mauler, false), 1.24) and is_equal_approx(skills.damage_factor(mauler, true), 1.48) and is_equal_approx(skills.damage_factor(crusher, true), 1.16) and is_equal_approx(skills.harm_factor("", "common"), 0.76) and is_equal_approx(skills.harm_factor("", "special"), 0.7) and is_equal_approx(skills.harm_factor("gas", ""), 0.7) and is_equal_approx(skills.harm_factor("acid", ""), 0.6) and is_equal_approx(filter, 20.0 * 1.5) and is_equal_approx(quick, float(Survivor.WEAPONS.rifle.reload_time) * 0.76) and player.reserve_cap("rifle") == 234, "The other abilities count rank by rank: harder hits, a thicker skin, a longer filter, quicker hands, deeper pockets")
+	for foe in [mauler, crusher]:
+		foe.receive_hit(99999.0, Vector3.FORWARD)
+	# Out of service again, with nothing left behind.
+	skills.reset()
+	skills.active = Skills.IN_SERVICE
+	skills.adopt({"sweeper_damage": 9, "nonsense": 2})
+	var taken: bool = skills.rank("sweeper_damage") == 3 and not skills.ranks.has("nonsense")
+	skills.reset()
+	expect(taken and skills.value("reload") == 0.0 and player.reserve_cap("rifle") == 180 and game.profile.skills.is_empty(), "Switched off again, the abilities leave no trace; what the profile holds is checked before it is taken in")
+	game.team_enabled = true
+	game.start_run()
 
 ## What came with v0.10: the AK-47 and its parts, the C.R.U. Elite and his gas, grenades
 ## that are readied and aimed before they fly, music that follows the night, the settings
@@ -1133,7 +1348,7 @@ func _later(game: Node3D) -> void:
 	expect(quarter and silent and sliders == 5 and AudioServer.get_bus_index("Voice") > 0 and AudioServer.get_bus_send(AudioServer.get_bus_index("Field")) == &"SFX", "Everything, the music, the effects and the voices can be turned up and down on their own")
 	# Every menu and every list of the shop can be built.
 	var built := 0
-	for mode in ["main", "pause", "win", "lose", "settings", "host", "join", "board", "skins"]:
+	for mode in ["main", "pause", "win", "lose", "settings", "host", "join", "board", "skins", "skills"]:
 		game.hud.show_menu(mode)
 		if game.hud.current_menu == mode and game.hud.modal.find_children("*", "Button", true, false).size() > 0:
 			built += 1
@@ -1142,7 +1357,7 @@ func _later(game: Node3D) -> void:
 		if game.hud.shop_tab == str(tab[0]) and game.hud.modal.find_children("*", "ScrollContainer", true, false).size() == 1:
 			built += 1
 	game.hud.hide_menu()
-	expect(built == 9 + SurvivalHUD.SHOP_TABS.size(), "Every menu and every list of the shop can be opened (%d)" % built)
+	expect(built == 10 + SurvivalHUD.SHOP_TABS.size(), "Every menu and every list of the shop can be opened (%d)" % built)
 	game.hud._process(0.1)
 	var tile: Array = game.hud.tiles.grenade
 	game.hud.loadout()
@@ -1233,7 +1448,7 @@ func _threats(game: Node3D) -> void:
 	game.preparation_left = 9999.0
 	game.gas.clear()
 	# --- gas that comes and goes
-	expect(GasField.pockets_for(1) == 0 and GasField.pockets_for(2) == 1 and GasField.pockets_for(5) == 2 and GasField.pockets_for(8) == 3, "Pockets of gas come with the rounds")
+	expect(GasField.pockets_for(1) == 0 and GasField.pockets_for(2) == 1 and GasField.pockets_for(3) == 2 and GasField.pockets_for(5) == 2 and GasField.pockets_for(8) == 3, "Banks of gas come with the rounds")
 	var where: Vector3 = (spots.yard_south as Vector3) + Vector3(5.0, 0, 6.0)
 	var pocket: Dictionary = game.gas._add(where, 60.0, 1.0)
 	expect(game.gas.toxic_at(where + Vector3(2.0, 0.05, 0)) and game.toxic_at(where) and not game.gas.toxic_at(where + Vector3(9.5, 0, 0)) and not game.gas.toxic_at(where + Vector3(0, 3.4, 0)) and (mission.export_state()[2] as Array).size() == 3 and (game.gas.export_state()[1] as Array).size() == 1, "A pocket of gas poisons the yard where it lies, and the other player is told")
@@ -1242,7 +1457,7 @@ func _threats(game: Node3D) -> void:
 	player.mask_level = 0
 	player.filter_left = 0.0
 	await wait(4.6)
-	expect(player.health < 100.0 and str(game.interaction_prompt()).contains("Wolke"), "Without a mask the pocket hurts after a few breaths")
+	expect(player.health < 100.0 and str(game.interaction_prompt()).contains("Raus aus dem Gas"), "Without a mask the pocket hurts after a few breaths")
 	player.health = 100.0
 	player.mask_level = 2
 	player.filter_left = player.filter_capacity()

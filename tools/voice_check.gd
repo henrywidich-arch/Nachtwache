@@ -3,6 +3,8 @@ extends SceneTree
 ## has no recording yet (it is shown as a subtitle only), and which recording belongs to
 ## no line. Run it after `--import`, because it asks for the files the way the game does.
 ##   godot --headless --path . -s res://tools/voice_check.gd
+## With `-- --write-order=<file>` the lines without a recording are written as the list
+## tools/make_voices.js works from: [{speaker, cue, n, text}], one speaker after another.
 
 func _init() -> void:
 	var radio: GDScript = load("res://scripts/radio.gd")
@@ -16,12 +18,12 @@ func _init() -> void:
 	for cue in lines:
 		var variants: Array = lines[cue][1]
 		for i in range(variants.size()):
-			_note(folder_path, str(lines[cue][0]), str(cue), i, counts, wanted, missing)
+			_note(folder_path, str(lines[cue][0]), str(cue), i, str(variants[i]), counts, wanted, missing)
 	for cue in barks:
 		for speaker in barks[cue]:
 			var variants: Array = barks[cue][speaker]
 			for i in range(variants.size()):
-				_note(folder_path, str(speaker), str(cue), i, counts, wanted, missing)
+				_note(folder_path, str(speaker), str(cue), i, str(variants[i]), counts, wanted, missing)
 	var stray: Array = []
 	var top := DirAccess.open(folder_path)
 	if top != null:
@@ -38,13 +40,23 @@ func _init() -> void:
 		total += int(counts[speaker][0])
 		recorded += int(counts[speaker][1])
 	for entry in missing:
-		print("NO RECORDING  ", entry)
+		print("NO RECORDING  %s/%s_%d  %s" % [entry.speaker, entry.cue, entry.n, entry.text])
 	for entry in stray:
 		print("NO LINE       ", entry)
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--write-order="):
+			# One speaker after another, so that the voice has to be changed only once each.
+			missing.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return speakers.find(a.speaker) < speakers.find(b.speaker))
+			var characters := 0
+			for entry in missing:
+				characters += str(entry.text).length()
+			var file := FileAccess.open(argument.get_slice("=", 1), FileAccess.WRITE)
+			file.store_string(JSON.stringify(missing, " "))
+			print("ORDER: %d lines, %d characters -> %s" % [missing.size(), characters, argument.get_slice("=", 1)])
 	print("VOICE_CHECK: %d lines, %d recorded, %d without a recording, %d recordings without a line" % [total, recorded, missing.size(), stray.size()])
 	quit(0 if stray.is_empty() else 1)
 
-func _note(folder_path: String, speaker: String, cue: String, index: int, counts: Dictionary, wanted: Dictionary, missing: Array) -> void:
+func _note(folder_path: String, speaker: String, cue: String, index: int, text: String, counts: Dictionary, wanted: Dictionary, missing: Array) -> void:
 	var file_name := "%s_%d.ogg" % [cue, index + 1]
 	if not counts.has(speaker):
 		counts[speaker] = [0, 0]
@@ -56,4 +68,4 @@ func _note(folder_path: String, speaker: String, cue: String, index: int, counts
 	if ResourceLoader.exists(folder_path + speaker + "/" + file_name):
 		counts[speaker][1] += 1
 	else:
-		missing.append(speaker + "/" + file_name)
+		missing.append({"speaker": speaker, "cue": cue, "n": index + 1, "text": text})

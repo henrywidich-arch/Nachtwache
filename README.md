@@ -84,16 +84,18 @@ Dazu kommen **Aufträge** an zufälligen Orten (Marker mit Entfernung auf dem Bi
 
 ### Gas und Gasmaske
 
-Gas verletzt dich nach drei Sekunden und dann jede Sekunde weiter. Die **Gasmaske** aus dem Shop hält es ab, solange ihr Filter reicht (8, 20, 45 oder 120 Sekunden je nach Stufe); an frischer Luft erholt er sich. Die Restzeit steht unten links.
+Gas verletzt dich nach drei Sekunden und dann jede Sekunde weiter. Die **Gasmaske** aus dem Shop hält es ab, solange ihr Filter reicht (8, 20, 45 oder 120 Sekunden je nach Stufe); an frischer Luft erholt er sich. Die Restzeit steht unten rechts über den Taschen.
+
+**Das Gas ist kaum zu sehen:** ein blasser, leicht grünlicher Dunst dicht über dem Boden, nur wenig dichter als der Nebel der Nacht. Du erkennst es daran, wo er liegt – und sonst an der Warnung **GIFTGAS**, an einem kurzen Zischen beim ersten Atemzug und, wenn du eine Maske trägst, an der Anzeige **IM GAS · MASKE … s**. Deine Bots rufen es aus, wenn in ihrer Nähe Gas aufquillt.
 
 | Wo | Wann | Was hilft |
 |---|---|---|
 | **Hinter dem Zaun** | immer | nicht hingehen |
-| **Gasfelder im Hof** | ab Runde 2 eines, ab Runde 4 zwei, ab Runde 7 drei gleichzeitig | Grün leuchtende Wolken, rund 15 m breit. Sie bleiben etwa eine Minute, dünnen aus und quellen woanders wieder auf – nie auf dem Landeplatz und nie in Gebäuden. Umgehen, im Haus warten oder mit Maske durchlaufen |
-| **Giftnebel über einer Hofseite** | ab Runde 4, manchmal | Eine ganze Seite (Nord, Süd, Ost, West) liegt für die Runde unter Gas. In den Gebäuden bist du sicher |
+| **Gasbänke im Hof** | ab Runde 2 eine, ab Runde 3 zwei, ab Runde 6 drei gleichzeitig | Dünner Dunst, der sich **ausbreitet**: Eine Bank beginnt als ein Fleck von rund 17 m Breite und wächst alle paar Sekunden um einen weiteren daneben, bis sie aus vier bis sieben Flecken besteht – bis zu 40 m lang. Drei Bänke bedecken zusammen bis zu einem Drittel des Hofs. Eine Bank liegt gut eine Minute, dünnt aus und quillt woanders wieder auf – nie auf dem Landeplatz, nie in Gebäuden und nie direkt auf dir (sie kann aber zu dir hin wachsen). Umgehen, im Haus warten oder mit Maske durchlaufen |
+| **Giftnebel über einer Hofseite** | ab Runde 4, manchmal | Eine ganze Seite (Nord, Süd, Ost, West) liegt für die Runde unter demselben dünnen Dunst. In den Gebäuden bist du sicher |
 | **Gasalarm im Haus** | ab Runde 4, manchmal, sobald das Obergeschoss offen ist | Zehn Sekunden Warnung, dann steht das **Erdgeschoss** des Farmhauses gut eine halbe Minute unter Gas. **Oben ist die Luft sauber**: rauf auf die Galerie, in die Zimmer oder auf den Balkon – oder Maske auf und unten bleiben. Keller und Nebengebäude bleiben frei |
 | **Gas des Medic** | solange er lebt | Flache grüne Schwaden, die um ihn herumkriechen. Maske, Abstand – oder ihn erschießen |
-| **Gasgranate des C.R.U. Elite** | wenn er eine wirft | Eine kleine Wolke für rund 13 Sekunden, **auch in Räumen**. Raus aus der Wolke, oder Maske auf |
+| **Gasgranate des C.R.U. Elite** | wenn er eine wirft | Eine kleine Wolke für rund 13 Sekunden, dichter und besser zu sehen als das Gas im Hof, **auch in Räumen**. Raus aus der Wolke, oder Maske auf |
 
 In den Runden, in denen ein Hack-Modul läuft oder der Helikopter kommt, gibt es keinen Gasalarm im Haus.
 
@@ -180,7 +182,7 @@ Je höher die Schwierigkeit, desto schneller reagieren sie, desto besser treffen
 | M9 Pistole | 60 | 15 | Leicht und schnell, billige Zweitwaffe |
 | .44 Magnum | 220 | 6 | Sechs Schuss, jeder ein Hammer |
 | Scharfschützengewehr | 450 | 5 | Zielfernrohr (rechte Maustaste), Repetierer; die Kugel geht durch bis zu vier Körper |
-| Granatwerfer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. **Erst nach Runde 4** im Shop |
+| Granatwerfer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. Das Geschoss fliegt im **Bogen**: Gerade gehalten kommt es nach rund 20 m herunter, für weitere Ziele hältst du höher. Die **rechte Maustaste** zeigt Flugbahn und Einschlagpunkt; der Werfer bleibt dabei neben der Sichtlinie. **Erst nach Runde 4** im Shop |
 | Minigun | 1500 | 200 | Läuft kurz an und feuert dann 1300 Schuss pro Minute; macht langsam. **Erst nach Runde 6** im Shop |
 
 ### Aufsätze für UMP45 und AK-47
@@ -189,7 +191,7 @@ In der Shop-Liste **Aufsätze**, für jede der beiden Waffen eigens zu kaufen. E
 
 | Aufsatz | Preis | Wirkung |
 |---|---|---|
-| Rotpunktvisier | 120 | Ein großes, klares Glas mit Leuchtpunkt im Ring. Es sitzt dicht am Auge und über Kimme und Korn, sodass kaum etwas vom Gewehr im Bild steht. Etwas mehr Vergrößerung als über Kimme und Korn, beim Zielen 45 % weniger Streuung |
+| Rotpunktvisier | 120 | Ein großes, klares Glas mit einem feinen, matten Leuchtpunkt in einem hauchdünnen Ring. Es sitzt dicht am Auge und über Kimme und Korn, sodass kaum etwas vom Gewehr im Bild steht. Etwas mehr Vergrößerung als über Kimme und Korn, beim Zielen 45 % weniger Streuung |
 | Zielfernrohr 4× | 260 | Vierfache Vergrößerung. Das Bild füllt fast den ganzen Bildschirm; das Fadenkreuz hat Haltemarken für weite Schüsse. Beim Zielen 65 % weniger Streuung; die Sicht dreht langsamer |
 | Schalldämpfer | 180 (AK-47: 200) | Leiser Schuss, kaum Mündungsfeuer, 20 bis 25 % weniger Rückstoß, etwas weniger Streuung, 5 % weniger Schaden – und die C.R.U. weicht deinen Schüssen nicht mehr aus |
 
@@ -214,7 +216,7 @@ Die Preise gelten für „Normal“ und steigen mit der Schwierigkeit.
 
 Im Solo-Spiel begleiten dich zwei Bots – am Anfang **Viper** (Honey Badger) und **Scorpion** (Schrotflinte). Sie halten ein paar Schritte Abstand, kommen nach, wenn du dich entfernst, schießen selbstständig, laden nach und weichen zurück, wenn ihnen etwas zu nahe kommt. Geht einer zu Boden, hilfst du ihm mit **E** auf; nach 14 Sekunden oder am Rundenende steht er von selbst wieder. **Gehst du selbst zu Boden**, kommt der nächste Bot angerannt und hilft dir auf – verloren ist die Nacht erst, wenn niemand mehr steht.
 
-Befehle für beide Bots: **X** = Position halten (an der Stelle, auf die du zielst; ein Ring markiert sie), **C** = bei mir bleiben, **V** = frei bewegen (sie suchen sich die Infizierten selbst, bleiben aber in deiner Nähe). Sie bestätigen jeden Befehl und rufen im Gefecht. Mit Team kommen mehr Infizierte. Ohne Bots starten: `SPIELEN.cmd` um ` -- --no-team` ergänzen.
+Befehle für beide Bots: **X** = Position halten (an der Stelle, auf die du zielst; ein Ring markiert sie), **C** = bei mir bleiben, **V** = frei bewegen (sie suchen sich die Infizierten selbst, bleiben aber in deiner Nähe). Sie bestätigen jeden Befehl und rufen im Gefecht. Für fast alles haben sie mindestens drei verschiedene Sprüche, und sie melden auch: die ersten Infizierten einer Runde, Gas, das in ihrer Nähe aufquillt, eine Granate, die bei ihnen landet, den Medic, einen Schild-Soldaten, einen erlegten Spezial-Infizierten, einen Leech an dir, eigene schwere Verletzungen – und manchmal sagen sie etwas in die Stille zwischen zwei Runden. Mit Team kommen mehr Infizierte. Ohne Bots starten: `SPIELEN.cmd` um ` -- --no-team` ergänzen.
 
 Wer steht und nichts zu bekämpfen hat, **behält seine Blickrichtung** und dreht sich nicht mit dir mit. Willst du dir die Modelle in Ruhe ansehen: **X** drücken – dann bleiben sie stehen, auch wenn du nah herangehst (bei „bei mir bleiben“ machen sie dir ab zwei Metern Platz).
 
@@ -229,6 +231,20 @@ Wer steht und nichts zu bekämpfen hat, **behält seine Blickrichtung** und dreh
 | Breacher-Rüstung | 500 Gegner ausgeschaltet | nein |
 
 Was du selbst trägst, bleibt für die Bots wählbar: Du kannst als Viper spielen und trotzdem Viper im Trupp haben. Zum Ausprobieren lässt sich der Trupp auch beim Start festlegen: `SPIELEN.cmd` um ` -- --squad=raven,viper` ergänzen. Die Zähler stehen in der Laufbahn deines Profils (`user://nachtwache_profile.json`); automatische Testläufe schreiben dort nichts hinein.
+
+### Fähigkeiten (in Wartung)
+
+Im Hauptmenü unter **FÄHIGKEITEN** stehen drei Wege mit je sechs Fähigkeiten in drei Reihen:
+
+| Weg | Schwerpunkt | Beispiele |
+|---|---|---|
+| **Säuberer** | gegen die Masse der Infizierten | mehr Schaden und Kopfschuss-Schaden gegen gewöhnliche Infizierte, schneller nachladen, mehr Reservemunition; zuletzt: Gewehrkugeln durchschlagen einen Infizierten |
+| **Jäger** | gegen Spezial-Infizierte | mehr Schaden gegen sie und weniger durch sie, der Maskenfilter hält länger, weniger Säureschaden, einen Leech schneller abschütteln; zuletzt: jeder erlegte Spezial-Infizierte heilt |
+| **Brecher** | gegen die Soldaten der C.R.U. | ihre Panzerung hält weniger ab, weniger Schaden durch Kugeln und Granaten, **das Scharfschützengewehr schießt durch den Schild**; zuletzt: auch Magnum und AK-47, mit halbem Schaden |
+
+**Das ist noch nicht in Betrieb.** Die Seite zeigt, was kommt und auf welcher Stufe du nach deiner Laufbahn stündest; Punkte lassen sich nicht vergeben, und nichts davon ändert einen Einsatz. Die Wirkungen selbst sind im Spiel schon eingebaut und werden mitgeprüft – eingeschaltet wird alles mit `IN_SERVICE` in `scripts/skills.gd`, danach braucht es noch eine Runde Abstimmung der Zahlen.
+
+So ist es gedacht: Deine Laufbahn (Abschüsse, Aufträge, Wiederbelebungen, Siege) ergibt Erfahrung, Erfahrung ergibt Stufen, jede Stufe ab der zweiten einen Punkt. Ein Punkt kauft einen Rang. Die zweite Reihe eines Wegs öffnet sich ab drei, die dritte ab sieben Punkten in diesem Weg. Bei Stufe 20 ist Schluss: 19 Punkte für 42 Ränge – man muss sich für einen Schwerpunkt entscheiden. Später können Waffen einem Weg vorbehalten sein (`weapons` in `TREES`).
 
 ## Koop zu zweit
 
@@ -284,7 +300,7 @@ Was am Mac anders ist:
 |---|---|
 | `scripts/game.gd` | Runden (`ROUNDS`), Score, Shop, Käufe, Pause, Sieg und Niederlage, Team und Team-Befehle, Koop-Lobby |
 | `scripts/mission.gd` | Rundenarten (`WAVES`), C.R.U.-Trupp (`SQUAD_ORDER`) und Aufträge (`TASKS`): Planung der Nacht, Gegenstände in der Welt, Geräte, die laufen und ausfallen (`RUNNERS`), Belohnungen |
-| `scripts/gas_field.gd` | Gas, das kommt und geht: Gasfelder im Hof (`POCKET_ROUNDS`), Gasalarm im Erdgeschoss (`FLOOD_SECONDS`) |
+| `scripts/gas_field.gd` | Gas, das kommt und geht: Gasbänke im Hof (`POCKET_ROUNDS`, `BANK_PATCHES`, `SPREAD_EVERY`), wie dicht und wie sichtbar der Dunst ist (`YARD_HAZE`, `YARD_GLOW` und der Nebel-Shader `HAZE_CODE`), Gasalarm im Erdgeschoss (`FLOOD_SECONDS`) |
 | `scripts/story.gd` | Die Geschichte: welcher Schritt in welche Runde fällt, wann sich welcher Bereich öffnet (`AREA_ROUNDS`), Nadja, Helikopter, die Ankunft am Anfang |
 | `scripts/helicopter.gd` | Der Helikopter: Rotoren, Lichter, Seile, Motorgeräusch |
 | `scripts/radio.gd` | Alle Funksprüche (`LINES`) und Rufe (`BARKS`) auf Englisch, nach Stichwort und Sprecher |
@@ -306,6 +322,7 @@ Was am Mac anders ist:
 | `scripts/hud.gd` | Menüs, Shop-Menü, Koop-Lobby und Anzeigen |
 | `scripts/sound.gd` | Lädt die Sounds aus `assets/sounds`, Lautstärken (`MIX`), Hall drinnen/draußen |
 | `scripts/music.gd` | Die Musik: welche Datei zu welchem Teil der Nacht gehört (`PHASES`), wann gewechselt und wie lange übergeblendet wird |
+| `scripts/skills.gd` | Die drei Wege der Fähigkeiten (`TREES`), Erfahrung, Stufen und Punkte, und was jede Fähigkeit bewirkt. `IN_SERVICE` nimmt sie in Betrieb |
 | `scripts/verification.gd` | Automatische Prüfungen, Bot-Durchlauf, Koop-Test |
 | `SPIELEN.command`, `tools/make_mac_package.js` | Start auf dem Mac (sucht Godot, bereitet beim ersten Mal die Spieldaten vor); der Packer für das Mac-Paket, der `SPIELEN.command` in der ZIP als startbar kennzeichnet |
 
@@ -353,6 +370,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 
 ## Stand und Grenzen
 
+**v0.11** macht das **Gas** zu einem dünnen Dunst, der sich in großen Bänken über den Hof ausbreitet statt als grelle Wolke an einer Stelle zu stehen, gibt dem **Granatwerfer** eine gebogene Flugbahn samt Anzeige, dem **Rotpunktvisier** eine feinere Marke, den **Bots** 129 neue Sprüche und neue Anlässe zu rufen, und zeigt im Menü die drei Wege der **Fähigkeiten** – noch in Wartung.
+
 **v0.10** bringt den **C.R.U. Elite** mit AK-47 und Gasgranaten, die **AK-47** als kaufbares Gewehr mit Magazinwechsel und Aufsätzen, ein Rotpunktvisier und ein Zielfernrohr, durch die man deutlich mehr sieht, einen Medic, dessen Gas flach über den Boden kriecht und Infizierte sichtbar verstärkt, tote Forscher, die von Anfang an auf dem Hof liegen, eine neue Granatexplosion (Feuerwolken, Funken, Glut, Rauch) samt richtigem 40-mm-Geschoss, Granaten mit Flugbahn-Anzeige, **Musik**, die der Nacht folgt, eine neue Oberfläche mit Einstellungen für Ton und Bild und 81 zusätzliche Aufnahmen für Funk und Rufe (Coleman allein 58), dazu einen neuen Schuss für den Granatwerfer und neue Explosionen.
 
 **v0.9** bringt den Medic-Zombie mit seiner Wolke, den Schild-Soldaten der C.R.U., einen dritten C.R.U.-Körper, den Crusher schon vor der letzten Runde, Gasfelder im Hof und Gasalarm im Haus (damit Gasmaske und Obergeschoss einen Zweck haben), eine Munitionsstation und Aufträge im Obergeschoss, tote Forscher als Modelle und eine Granatexplosion mit Feuerball, Druckring, Erdfontäne und Rauch. Dazu kommt der Start auf dem Mac, die Einstellung **3D** für schwächere Rechner und Vollbild per Alt + Enter.
@@ -379,7 +398,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 
 ## Prüfung
 
-386 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins – und die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug.
+399 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins – und die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug.
 
 ```text
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test
@@ -399,4 +418,4 @@ Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --mp-hos
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --mp-join-test
 ```
 
-Screenshots: `--story-check` (alle Stationen der Geschichte), `--intro-check` (die Ankunft), `--v9-check` (Medic, Schild-Soldat, Elite, Gas, tote Forscher, Explosion), `--gun-check --gun=ak` oder `--gun=ump` (Waffe an der Hüfte, durch jedes Visier, Magazinwechsel), `--blast-check` (die Explosion in sechs Augenblicken), `--ump-check` (UMP, Aufsätze, Magazinwechsel, Shop), `--cru-check`, `--weapons-check`, `--visual-check`, `--map-tour`, `--team-check`, `--ripper-check`, `--shotgun-check`, `--mission-check`, `--gear-check`, `--models-check`, `--menu-check`, jeweils mit `--capture-dir=ORDNER`. Mit `--scale=0.5` rechnet ein Start das 3D-Bild mit halber Auflösung, mit `--squad=raven,viper` wählt er die beiden Bots – beides, ohne etwas zu speichern. Automatische Läufe (alles, was auf `-check` oder `-test` endet, und alles ohne Fenster) lesen und ändern dein gespeichertes Profil und deine Einstellungen nicht. Nach neuen Skripten mit `class_name` oder neuen Dateien in `assets` einmal den Editor öffnen (oder `--headless --import` ausführen), damit Godot sie kennt.
+Screenshots: `--story-check` (alle Stationen der Geschichte), `--intro-check` (die Ankunft), `--v9-check` (Medic, Schild-Soldat, Elite, Gas, tote Forscher, Explosion), `--gun-check --gun=ak` oder `--gun=ump` (Waffe an der Hüfte, durch jedes Visier, Magazinwechsel), `--blast-check` (die Explosion in sechs Augenblicken), `--gas-check` (eine Gasbank von außen, von weitem und von innen, eine Hofseite unter Gas, der Zaun, die Gasgranate, das Erdgeschoss, die Flugbahn des Granatwerfers), `--ump-check` (UMP, Aufsätze, Magazinwechsel, Shop), `--cru-check`, `--weapons-check`, `--visual-check`, `--map-tour`, `--team-check`, `--ripper-check`, `--shotgun-check`, `--mission-check`, `--gear-check`, `--models-check`, `--menu-check`, jeweils mit `--capture-dir=ORDNER`. Mit `--scale=0.5` rechnet ein Start das 3D-Bild mit halber Auflösung, mit `--squad=raven,viper` wählt er die beiden Bots – beides, ohne etwas zu speichern. Automatische Läufe (alles, was auf `-check` oder `-test` endet, und alles ohne Fenster) lesen und ändern dein gespeichertes Profil und deine Einstellungen nicht. Nach neuen Skripten mit `class_name` oder neuen Dateien in `assets` einmal den Editor öffnen (oder `--headless --import` ausführen), damit Godot sie kennt.

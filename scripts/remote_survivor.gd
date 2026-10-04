@@ -57,9 +57,9 @@ func takes_local_damage() -> bool:
 func shake_from(_source: Vector3, _strength: float, _reach: float) -> void:
 	pass
 
-func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "") -> void:
+func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "", by: String = "") -> void:
 	if is_targetable():
-		game.net.send_hurt(amount, from if from != Vector3.INF else global_position, kind)
+		game.net.send_hurt(amount, from if from != Vector3.INF else global_position, kind, by)
 
 func _physics_process(delta: float) -> void:
 	firing_left -= delta

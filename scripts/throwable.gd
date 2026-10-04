@@ -11,6 +11,9 @@ const KINDS := {
 }
 ## Blast of the grenade: radius, damage to survivors at the centre, damage to infected.
 const BLAST := [6.5, 45.0, 280.0]
+## A shell from the launcher: its share of gravity and the drag of the air on it.
+const SHELL_PULL := 1.0
+const SHELL_DAMP := 0.1
 
 var game: Node3D
 var kind := "grenade"
@@ -36,7 +39,8 @@ func _ready() -> void:
 		collision_mask = 1 | 4 | 16
 		contact_monitor = true
 		max_contacts_reported = 2
-		gravity_scale = 0.7
+		gravity_scale = SHELL_PULL
+		linear_damp = SHELL_DAMP
 		lock_rotation = true
 		fuse = 4.0
 		body_entered.connect(func(_body: Node) -> void:
@@ -57,6 +61,11 @@ func _ready() -> void:
 	spark.light_energy = 1.6 if hostile else 0.5
 	spark.omni_range = 3.2 if hostile else 1.6
 	add_child(spark)
+	if hostile and not impact:
+		# One of the squad who stands near where it lands shouts a warning.
+		get_tree().create_timer(0.7).timeout.connect(func() -> void:
+			if is_instance_valid(self) and kind != "gas":
+				game.squad_call("grenade", global_position, 13.0))
 	if impact:
 		_build_shell(spark)
 		return

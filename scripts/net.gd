@@ -323,13 +323,13 @@ func _boom(center: Vector3, radius: float, damage: float, style: String) -> void
 		game.fx.pop_growth_near(center)
 	game.explode(center, radius, damage, 0.0, style)
 
-func send_hurt(amount: float, from: Vector3, kind: String) -> void:
+func send_hurt(amount: float, from: Vector3, kind: String, by: String = "") -> void:
 	if hosting and partner != 0:
-		_hurt.rpc_id(partner, amount, from, kind)
+		_hurt.rpc_id(partner, amount, from, kind, by)
 
 @rpc("authority", "call_remote", "reliable")
-func _hurt(amount: float, from: Vector3, kind: String) -> void:
-	game.player.receive_damage(amount, from, kind)
+func _hurt(amount: float, from: Vector3, kind: String, by: String = "") -> void:
+	game.player.receive_damage(amount, from, kind, by)
 
 func send_feed(text: String, points: int, headshot: bool, dim: bool, counts: bool) -> void:
 	if hosting and partner != 0:
@@ -372,17 +372,20 @@ func _finish(victory: bool, team_stats: Dictionary = {}) -> void:
 
 # ---------------------------------------------------------------- guest -> host
 
-func report_hit(enemy: Infected, damage: float, direction: Vector3, headshot: bool) -> void:
-	_hit.rpc_id(1, enemy.net_id, damage, direction, headshot)
+## `through`: the guest's bullet went through a shield (an ability of his).
+func report_hit(enemy: Infected, damage: float, direction: Vector3, headshot: bool, through: bool = false) -> void:
+	_hit.rpc_id(1, enemy.net_id, damage, direction, headshot, through)
 
 @rpc("any_peer", "call_remote", "reliable")
-func _hit(id: int, damage: float, direction: Vector3, headshot: bool) -> void:
+func _hit(id: int, damage: float, direction: Vector3, headshot: bool, through: bool = false) -> void:
 	if not hosting:
 		return
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
 		if enemy.net_id == id:
+			game.blasting = through
 			enemy.receive_hit(damage, direction, headshot, remote)
+			game.blasting = false
 			return
 
 ## What the mission director of the host knows: round kind, power, tasks and their items.

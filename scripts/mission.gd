@@ -98,7 +98,7 @@ class Target extends Node3D:
 	func takes_local_damage() -> bool:
 		return not mission.game.net.joined
 
-	func receive_damage(amount: float, _from: Vector3 = Vector3.INF, _kind: String = "") -> void:
+	func receive_damage(amount: float, _from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
 		mission.damage_item(item, amount)
 
 var game: Node3D
