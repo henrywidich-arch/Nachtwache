@@ -1,13 +1,16 @@
 class_name Throwable
 extends RigidBody3D
-## A hand grenade or a flashbang in flight. It bounces off the world; when the fuse runs
-## out it asks the game for the blast, which in a co-op match is the host's to decide.
+## A hand grenade, a flashbang or a Molotov cocktail in flight. A grenade bounces off the
+## world, and when its fuse runs out it asks the game for the blast; a bottle bursts on
+## the first thing it strikes. What happens then is, in a co-op match, the host's to decide.
 
 const KINDS := {
 	"grenade": {"fuse": 2.3, "color": Color("3d4a34"), "glow": Color("ff5a3c")},
 	"flashbang": {"fuse": 1.7, "color": Color("8e9496"), "glow": Color("d8f2ff")},
 	# Thrown by the C.R.U. Elite: no blast, but a cloud of gas where it comes to rest.
-	"gas": {"fuse": 2.0, "color": Color("5d6a3c"), "glow": Color("8dff5a")}
+	"gas": {"fuse": 2.0, "color": Color("5d6a3c"), "glow": Color("8dff5a")},
+	# breaks: it does not bounce; the first thing it strikes ends its flight.
+	"molotov": {"fuse": 5.0, "color": Color("4a3a1e"), "glow": Color("ff8a2e"), "breaks": true}
 }
 ## Blast of the grenade: radius, damage to survivors at the centre, damage to infected.
 const BLAST := [6.5, 45.0, 280.0]
@@ -46,6 +49,14 @@ func _ready() -> void:
 		body_entered.connect(func(_body: Node) -> void:
 			if armed_in <= 0.0:
 				fuse = 0.0)
+	if KINDS[kind].get("breaks", false):
+		# A body stops it as well as a wall.
+		collision_mask = 1 | 4 | 16
+		contact_monitor = true
+		max_contacts_reported = 2
+		body_entered.connect(func(_body: Node) -> void:
+			if armed_in <= 0.0:
+				fuse = 0.0)
 	var bounce := PhysicsMaterial.new()
 	bounce.bounce = 0.32
 	bounce.friction = 0.95
@@ -61,6 +72,14 @@ func _ready() -> void:
 	spark.light_energy = 1.6 if hostile else 0.5
 	spark.omni_range = 3.2 if hostile else 1.6
 	add_child(spark)
+	if kind == "molotov":
+		# The rag in its neck burns.
+		spark.light_energy = 1.3
+		spark.omni_range = 2.6
+		var rag: CPUParticles3D = game.fx.rag_flame()
+		rag.position.y = 0.12
+		add_child(rag)
+		rag.emitting = true
 	if hostile and not impact:
 		# One of the squad who stands near where it lands shouts a warning.
 		get_tree().create_timer(0.7).timeout.connect(func() -> void:
@@ -72,7 +91,7 @@ func _ready() -> void:
 	var body := MeshInstance3D.new()
 	var mesh := CapsuleMesh.new()
 	mesh.radius = 0.045 if kind == "grenade" else 0.035
-	mesh.height = 0.13 if kind == "grenade" else 0.15
+	mesh.height = 0.13 if kind == "grenade" else (0.22 if kind == "molotov" else 0.15)
 	mesh.radial_segments = 10
 	mesh.rings = 4
 	body.mesh = mesh
@@ -179,6 +198,8 @@ func _physics_process(delta: float) -> void:
 		return
 	if kind == "gas":
 		game.gas_burst(global_position)
+	elif kind == "molotov":
+		game.fire_burst(global_position)
 	elif kind == "grenade" and hostile:
 		game.blast(global_position + Vector3(0, 0.15, 0), 6.0, 70.0, 110.0, "frag")
 	elif kind == "grenade":

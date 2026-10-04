@@ -35,6 +35,8 @@ const MEDIC_RANGE := 16.0
 ## Sideways dash out of the line of fire: speed and duration.
 const ROLL_SPEED := 5.4
 const ROLL_SECONDS := 0.72
+## The voices of the unit; every soldier has one of them for good.
+const VOICES := ["cru", "cru2", "cru3", "cru4"]
 
 var role: Dictionary
 var body: CruVisual
@@ -161,6 +163,22 @@ func _show_volley(delta: float) -> void:
 func say(what: String) -> void:
 	cue("say", [what])
 
+## Which of the unit's voices is his: the same on both machines of a co-op match.
+func voice() -> String:
+	return VOICES[net_id % VOICES.size()]
+
+## True if there is room to throw himself `way`: the whole length of the roll is free at
+## knee and at chest height, and there is floor where it ends.
+func _room_to_roll(way: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state
+	var reach := ROLL_SPEED * ROLL_SECONDS + 0.4
+	for height in [0.45, 1.0]:
+		var from := global_position + Vector3(0, height, 0)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + way * reach, 1 | 16, [get_rid()])).is_empty():
+			return false
+	var end := global_position + way * (reach - 0.4) + Vector3(0, 0.6, 0)
+	return not space.intersect_ray(PhysicsRayQueryParameters3D.create(end, end + Vector3.DOWN * 1.3, 1)).is_empty()
+
 # ---------------------------------------------------------------- damage
 
 ## True if a bullet flying along `direction` strikes the shield instead of the man. A
@@ -180,7 +198,7 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 	# What the armour stops; an ability of the player's makes it stop less of his own fire.
 	var stopped := 1.0 - float(role.armour)
 	if source == null:
-		stopped *= game.skills.armour_left()
+		stopped *= game.skills.armour_left() * game.piercing
 	super.receive_hit(amount * (1.0 - stopped), direction, headshot, source)
 	if dead or puppet:
 		return
@@ -202,9 +220,21 @@ func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: boo
 		for ally in _squad():
 			ally.rattled = 5.0
 
+## Share of a hit that gets past his armour when it stops only `left` of what it would.
+func armour_share(left: float) -> float:
+	return 1.0 - (1.0 - float(role.armour)) * clampf(left, 0.0, 1.0)
+
+## The same as a factor on a hit before the plain armour is taken off it: what a guest of
+## a co-op match reports to the host, who knows nothing of the guest's weapon.
+func armour_gain(left: float) -> float:
+	return armour_share(left) / maxf(0.05, float(role.armour))
+
 ## A shot came close or struck home: now and then the soldier throws itself aside.
 func threatened(force: bool = false) -> void:
-	if dead or roll_left > 0.0 or str(spec.role) in ["heavy", "shield"] or not is_instance_valid(prey):
+	if dead or roll_left > 0.0 or held_left > 0.0 or str(spec.role) in ["heavy", "shield"] or not is_instance_valid(prey):
+		return
+	# Never on a flight of stairs: there is a wall or a rail to either side.
+	if game.cabin.has_method("on_stairs") and game.cabin.on_stairs(global_position):
 		return
 	if not force:
 		if roll_wait > 0.0:
@@ -215,11 +245,11 @@ func threatened(force: bool = false) -> void:
 	roll_wait = randf_range(4.0, 7.0) / _tactics()
 	var to: Vector3 = prey.global_position - global_position
 	var across := Vector3(-to.z, 0, to.x).normalized() * (1.0 if randf() < 0.5 else -1.0)
-	# Towards the side that has room.
-	var chest := global_position + Vector3(0, 1.0, 0)
-	var query := PhysicsRayQueryParameters3D.create(chest, chest + across * 2.8, 1 | 16, [get_rid()])
-	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+	# Towards the side that has room; with none on either side he stays on his feet.
+	if not _room_to_roll(across):
 		across = -across
+		if not _room_to_roll(across):
+			return
 	roll_dir = across
 	roll_left = ROLL_SECONDS
 	rounds_left = 0
@@ -230,12 +260,16 @@ func threatened(force: bool = false) -> void:
 func _physics_process(delta: float) -> void:
 	_show_volley(delta)
 	if dead:
+		_smoulder(delta)
 		model.animate(delta, 0.0)
 		return
 	if puppet:
 		_mirror(delta)
 		return
 	if not game.is_playing():
+		return
+	_burn(delta)
+	if dead:
 		return
 	model.animate(delta, 0.0)
 	head_box.global_position = model.head_position()
@@ -311,8 +345,9 @@ func _physics_process(delta: float) -> void:
 			post_left = 0.0
 	else:
 		stuck_for = 0.0
-	velocity.x = direction.x * pace
-	velocity.z = direction.z * pace
+	knock = knock.move_toward(Vector3.ZERO, delta * 16.0)
+	velocity.x = direction.x * pace + knock.x
+	velocity.z = direction.z * pace + knock.z
 	if not is_on_floor():
 		velocity.y -= delta * GRAVITY
 	else:

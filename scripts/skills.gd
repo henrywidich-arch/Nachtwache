@@ -3,20 +3,24 @@ extends RefCounted
 ## Three trees of abilities, each with a focus of its own: against the mass of the
 ## infected, against the special ones, and against the soldiers of the C.R.U.
 ##
-## UNDER MAINTENANCE. The trees can be looked at in the menu, but no points can be spent
-## and nothing here changes a night yet (IN_SERVICE). Everything below is wired into the
-## game and covered by the checks all the same, so that putting it into service is this
-## one constant and a round of balancing.
+## Finished nights earn experience (from the career totals in the profile), experience
+## gives levels, every level after the first one point. A point buys one rank of an
+## ability. The abilities of a tree come in three tiers; a tier opens once enough points
+## have gone into its tree. Not every point can be had: the last level leaves a player with
+## LEVELS - 1 points for 42 ranks, so a focus has to be chosen. Points can be taken back
+## at any time in the menu, for nothing.
 ##
-## How it is meant to work: finished nights earn experience (from the career totals in
-## the profile), experience gives levels, every level after the first one point. A point
-## buys one rank of an ability. The abilities of a tree come in three tiers; a tier opens
-## once enough points have gone into its tree. Not every point can be had: the last level
-## leaves a player with LEVELS - 1 points for 42 ranks, so a focus has to be chosen.
+## Each tree also has a weapon of its own, which the shop only sells to somebody who has
+## WEAPON_NEEDS points in that tree.
+##
+## IN_SERVICE false puts all of it out of service again: the trees can then still be looked
+## at, but no points can be spent and nothing here changes a night.
 
-const IN_SERVICE := false
+const IN_SERVICE := true
 ## Points that must be in a tree before its second and third tier open.
 const TIER_NEEDS := [0, 3, 7]
+## Points that must be in a tree before the shop sells its weapon.
+const WEAPON_NEEDS := 3
 const LEVELS := 20
 ## Experience for the career totals of the profile.
 const WORTH := {"kills": 1, "special_kills": 4, "cru_kills": 6, "objectives": 60, "revives": 30, "victories": 500}
@@ -24,10 +28,10 @@ const WORTH := {"kills": 1, "special_kills": 4, "cru_kills": 6, "objectives": 60
 ## id -> tree. Each ability: ranks it has, tier it belongs to, what one rank gives (`gives`:
 ## key -> amount per rank; game code asks for the keys through value()), and its note for
 ## the menu, in which %s stands for the amount at the rank shown.
-## `weapons`: reserved for weapons that only this tree may buy (none yet).
+## `weapons`: what only somebody with points in this tree may buy (see Survivor.WEAPONS).
 const TREES := {
 	"sweeper": {
-		"label": "SÄUBERER", "focus": "Gegen die Masse der Infizierten", "color": Color("7fe3b4"), "weapons": [],
+		"label": "SÄUBERER", "focus": "Gegen die Masse der Infizierten", "color": Color("7fe3b4"), "weapons": ["flamer"],
 		"skills": [
 			{"id": "sweeper_damage", "label": "DAUERFEUER", "tier": 1, "ranks": 3, "gives": {"damage_common": 0.08}, "note": "+%s %% Schaden gegen gewöhnliche Infizierte"},
 			{"id": "sweeper_reload", "label": "SCHNELLE HÄNDE", "tier": 1, "ranks": 3, "gives": {"reload": 0.08}, "note": "Nachladen %s %% schneller"},
@@ -38,7 +42,7 @@ const TREES := {
 		]
 	},
 	"hunter": {
-		"label": "JÄGER", "focus": "Gegen Spezial-Infizierte", "color": Color("ffc34d"), "weapons": [],
+		"label": "JÄGER", "focus": "Gegen Spezial-Infizierte", "color": Color("ffc34d"), "weapons": ["nitro"],
 		"skills": [
 			{"id": "hunter_damage", "label": "SCHWACHSTELLEN", "tier": 1, "ranks": 3, "gives": {"damage_special": 0.08}, "note": "+%s %% Schaden gegen Spezial-Infizierte"},
 			{"id": "hunter_skin", "label": "ABGEHÄRTET", "tier": 1, "ranks": 3, "gives": {"harm_special": 0.1}, "note": "%s %% weniger Schaden durch Spezial-Infizierte"},
@@ -49,7 +53,7 @@ const TREES := {
 		]
 	},
 	"breacher": {
-		"label": "BRECHER", "focus": "Gegen die Soldaten der C.R.U.", "color": Color("74d8ea"), "weapons": [],
+		"label": "BRECHER", "focus": "Gegen die Soldaten der C.R.U.", "color": Color("74d8ea"), "weapons": ["fifty"],
 		"skills": [
 			{"id": "breacher_armour", "label": "PANZERBRECHEND", "tier": 1, "ranks": 3, "gives": {"armour_pierce": 0.25}, "note": "Die Panzerung der C.R.U. hält %s %% weniger ab"},
 			{"id": "breacher_plates", "label": "PLATTENTRÄGER", "tier": 1, "ranks": 3, "gives": {"harm_bullet": 0.08}, "note": "%s %% weniger Schaden durch Kugeln"},
@@ -147,6 +151,23 @@ func learn(id: String, totals: Dictionary) -> bool:
 ## Takes back every point.
 func reset() -> void:
 	ranks.clear()
+
+## The tree a weapon belongs to, or "" for one that anybody may buy.
+static func weapon_tree(id: String) -> String:
+	for tree in TREES:
+		if (TREES[tree].weapons as Array).has(id):
+			return tree
+	return ""
+
+## Why the shop does not sell a weapon to this player ("" if it does): a tree's own
+## weapon wants points in that tree.
+func weapon_barred(id: String) -> String:
+	var tree := weapon_tree(id)
+	if tree == "":
+		return ""
+	if not active:
+		return "In Wartung"
+	return "" if spent(tree) >= WEAPON_NEEDS else "%d Punkte in %s" % [WEAPON_NEEDS, TREES[tree].label]
 
 ## What is kept in the profile; only ranks that exist and fit are taken back in.
 func adopt(stored: Variant) -> void:

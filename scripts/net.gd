@@ -226,11 +226,13 @@ func _prune(_delta: float) -> void:
 
 func start_match() -> void:
 	if hosting and partner != 0:
-		_begin.rpc_id(partner, game.profile.difficulty)
+		_begin.rpc_id(partner, game.profile.difficulty, game.profile.mode, game.profile.modifiers)
 
 @rpc("authority", "call_remote", "reliable")
-func _begin(level: String) -> void:
+func _begin(level: String, mode: String = "story", modifiers: bool = false) -> void:
 	game.level = level
+	game.mode = mode
+	game.modifiers_on = modifiers
 	game.start_run()
 
 func send_spawn(enemy: Infected) -> void:
@@ -301,16 +303,19 @@ func _status(wave: int, phase_now: String, break_left: float, credits: int, scor
 
 func send_round(event: String, wave: int) -> void:
 	if hosting and partner != 0:
-		_round.rpc_id(partner, event, wave)
+		_round.rpc_id(partner, event, wave, game.modifier, game.modifier_arg)
 
+## `modifier`: what the host drew for the round that begins (see Game.MODIFIERS).
 @rpc("authority", "call_remote", "reliable")
-func _round(event: String, wave: int) -> void:
+func _round(event: String, wave: int, modifier: String = "", arg: String = "") -> void:
 	game.wave = wave
 	if event == "begin":
 		game.phase = "wave"
+		game._set_modifier(modifier, arg)
 		game.present_wave_begin()
 	else:
 		game.phase = "preparing"
+		game._set_modifier("")
 		game.present_wave_done()
 
 func send_explosion(center: Vector3, radius: float, damage: float, style: String) -> void:
@@ -449,6 +454,52 @@ func send_flash(center: Vector3) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _flash(center: Vector3) -> void:
 	game.show_flash(center)
+
+## A guest's Molotov cocktail has burst: the host lights the fire for both.
+func request_fire(center: Vector3) -> void:
+	if joined:
+		_fire_request.rpc_id(1, center)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _fire_request(center: Vector3) -> void:
+	if hosting:
+		game.fire_burst(center, remote)
+
+func send_fire(center: Vector3) -> void:
+	if hosting and partner != 0:
+		_fire.rpc_id(partner, center)
+
+@rpc("authority", "call_remote", "reliable")
+func _fire(center: Vector3) -> void:
+	game.fire.ignite(center)
+
+## A guest struck an enemy with his weapon: the host throws it back.
+func report_shove(enemy: Infected, direction: Vector3, damage: float) -> void:
+	_shove.rpc_id(1, enemy.net_id, direction, damage)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _shove(id: int, direction: Vector3, damage: float) -> void:
+	if not hosting:
+		return
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if enemy.net_id == id:
+			enemy.shove(direction, Survivor.MELEE_PUSH, Survivor.MELEE_DAZE, clampf(damage, 0.0, 80.0), remote)
+			return
+
+## What a guest's flamethrower did to an enemy since his last report.
+func report_burn(enemy: Infected, damage: float) -> void:
+	_burn.rpc_id(1, enemy.net_id, damage)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _burn(id: int, damage: float) -> void:
+	if not hosting or not is_instance_valid(remote):
+		return
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if enemy.net_id == id:
+			game.scorch(enemy, clampf(damage, 0.0, 150.0), (enemy.global_position - remote.global_position).normalized(), remote)
+			return
 
 ## A guest hammers [E] to shake off the Leech that hangs on to it.
 func send_shake(id: int) -> void:

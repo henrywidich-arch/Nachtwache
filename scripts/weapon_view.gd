@@ -129,6 +129,33 @@ const VIEWS := {
 		"hip": Vector3(0.2, -0.3, -0.46), "hip_angles": Vector3(2.0, 8.0, -3.0),
 		"aim": Vector3(0.1, -0.28, -0.46), "muzzle": Vector3(0, -0.005, -0.782)
 	},
+	# The five below are models from MODELS as well. The M14 and the double rifle are aimed
+	# over their iron sights: the eye is on the line through rear and front sight, 12 cm
+	# behind the M14's aperture and 33 cm behind the double rifle's V, which stands far out
+	# on its rib. The SVD and the .50 are looked through; the flamethrower is not aimed at
+	# all and stays beside the line of sight, like the launcher.
+	"m14": {
+		"hip": Vector3(0.125, -0.135, -0.36), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.044, -0.0948), "muzzle": Vector3(0, 0.01, -0.676)
+	},
+	"svd": {
+		"hip": Vector3(0.13, -0.18, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.074, -0.152), "muzzle": Vector3(0, 0.002, -0.808)
+	},
+	"flamer": {
+		"hip": Vector3(0.15, -0.18, -0.32), "hip_angles": Vector3(1.0, 6.5, -2.5),
+		"aim": Vector3(0.1, -0.17, -0.34), "aim_angles": Vector3(0.5, 4.0, -2.0), "muzzle": Vector3(0, -0.008, -0.704)
+	},
+	"nitro": {
+		"hip": Vector3(0.125, -0.135, -0.36), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.0325, -0.131), "muzzle": Vector3(0, 0.004, -0.688),
+		# Held level and rolled a little while it is loaded, so that the open breech shows.
+		"reload_low": Vector3(-0.03, -0.03, 0.05), "reload_turn": Vector3(0.08, 0.3, -0.45)
+	},
+	"fifty": {
+		"hip": Vector3(0.14, -0.2, -0.34), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.1286, -0.132), "muzzle": Vector3(0, 0.027, -0.868)
+	},
 	# The UMP has a view of its own (build_ump). aim_angles: its sight line climbs a little
 	# towards the muzzle, so the weapon is tipped by that much when aiming over the irons.
 	# reload_low and reload_turn: how the weapon is held while its magazine is changed -
@@ -156,7 +183,14 @@ const MODELS := {
 	"autoshotgun": {"scene": "res://assets/models/autoshotgun.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.056, -0.273), "hands": "cradle"},
 	"sniper": {"scene": "res://assets/models/sniper.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.034, -0.355), "hands": "cradle"},
 	"launcher": {"scene": "res://assets/models/launcher.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, -0.026, -0.2045), "hands": "grip"},
-	"minigun": {"scene": "res://assets/models/minigun.glb", "mount": Vector3(0, -0.12, 0.05), "support": Vector3(0, 0.251, -0.142), "hands": "grip"}
+	"minigun": {"scene": "res://assets/models/minigun.glb", "mount": Vector3(0, -0.12, 0.05), "support": Vector3(0, 0.251, -0.142), "hands": "grip"},
+	"m14": {"scene": "res://assets/models/m14.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0811, -0.341), "hands": "cradle"},
+	"svd": {"scene": "res://assets/models/svd.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0928, -0.438), "hands": "cradle"},
+	"flamer": {"scene": "res://assets/models/flamethrower.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.007, -0.437), "hands": "grip"},
+	# open: the double rifle breaks open to be loaded; its barrels turn about their hinge
+	# (the node "Barrels") by this many degrees.
+	"nitro": {"scene": "res://assets/models/double_rifle.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0829, -0.308), "hands": "cradle", "open": -28.0},
+	"fifty": {"scene": "res://assets/models/heavy_sniper.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0895, -0.378), "hands": "cradle"}
 }
 
 static var materials: Dictionary = {}

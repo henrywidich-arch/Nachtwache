@@ -1,5 +1,7 @@
 extends Node3D
-## Match state and all economy/round rules: ten finite rounds with a real win state.
+## Match state and all economy/round rules. Two modes: the story with its ten rounds and a
+## real win state, and the endless night that goes on round after round until the squad
+## falls (see mode). In both a round may bring a modifier (MODIFIERS).
 
 ## Who attacks in a plain round. Strikers join in round five, the Crusher closes the night.
 ## The mission director turns some rounds into hordes or mutant packs and adds tasks.
@@ -20,7 +22,30 @@ const RENDER_SCALES := [1.0, 0.85, 0.7, 0.6, 0.5, 0.4]
 ## Seconds between two rounds; the weapon shop is open for exactly this long.
 const BREAK_SECONDS := 20.0
 const ROUND_HEAL := 20.0
+## How many attackers are in the yard at once, at the most: what a late round on normal
+## difficulty comes to, and what no difficulty and no modifier gets past.
 const MAX_ALIVE := 16
+const ALIVE_LIMIT := 24
+## The endless mode past the end of ROUNDS: how much of the last round's numbers every
+## further round adds.
+const ENDLESS_GROWTH := 0.08
+## What a round can bring on top when modifiers are switched on. rules: factors on the
+## night's rules for that round (Profile.DIFFICULTIES, and "health": what the enemies take;
+## "loot": what a kill pays). from: the first round it may turn up in. A %s in the note
+## stands for what the modifier turned up (PACKS).
+const MODIFIERS := {
+	"horde": {"label": "DOPPELTE HORDE", "note": "Doppelt so viele Angreifer.", "rules": {"horde": 2.0}, "from": 2},
+	"pack": {"label": "RUDEL", "note": "Dreimal so viele %s wie sonst.", "from": 3},
+	"fast": {"label": "HETZJAGD", "note": "Alle Gegner sind schneller.", "rules": {"pace": 1.22}, "from": 2},
+	"tough": {"label": "ZÄHE BRUT", "note": "Alle Gegner halten die Hälfte mehr aus.", "rules": {"health": 1.5}, "from": 2},
+	"strong": {"label": "BLUTRAUSCH", "note": "Jeder Treffer der Gegner tut mehr weh.", "rules": {"harm": 1.4}, "from": 2},
+	"gas": {"label": "GIFTNACHT", "note": "Mehr Gas auf dem Hof, und es beißt schneller.", "rules": {"gas": 1.6}, "from": 2},
+	"cru": {"label": "HELIX GREIFT EIN", "note": "Ein C.R.U.-Trupp kommt mitten in der Runde.", "from": 4},
+	"boss": {"label": "SCHWERES KALIBER", "note": "Ein Crusher mischt sich unter die Horde.", "from": 5},
+	"loot": {"label": "FETTE BEUTE", "note": "Abschüsse bringen doppelten Vorrat, und es fällt mehr Nachschub.", "rules": {"loot": 2.0, "drops": 2.5}, "from": 2}
+}
+## The kinds a pack can be made of: what the note calls them, and the first round for each.
+const PACKS := {"charger": ["Charger", 3], "ripper": ["Ripper", 3], "leech": ["Leeches", 4], "striker": ["Striker", 5]}
 ## Orders for the squad and how the HUD names them.
 const ORDERS := {"follow": "FOLGT", "hold": "HÄLT", "free": "FREI"}
 const ORDER_CALLS := {"follow": "BEI MIR BLEIBEN", "hold": "POSITION HALTEN", "free": "FREI BEWEGEN"}
@@ -80,7 +105,18 @@ var remote_remaining := 0
 var overlay := ""
 ## Chosen difficulty, best runs and career totals.
 var profile := Profile.new()
-## Difficulty of the running match and its rules (a row of Profile.DIFFICULTIES).
+## "story": ten rounds and the way to Nadja. "endless": no story and no last round.
+var mode := "story"
+var endless: bool:
+	get: return mode == "endless"
+## Whether every round brings a modifier, the one of the running round ("" for none), what
+## it turned up (the kind a pack is made of), and the one of the round before.
+var modifiers_on := false
+var modifier := ""
+var modifier_arg := ""
+var last_modifier := ""
+## Difficulty of the running match and its rules (a row of Profile.DIFFICULTIES, changed
+## for a round by its modifier).
 var level := "normal"
 var rules: Dictionary = Profile.DIFFICULTIES["normal"]
 ## What the whole squad did in this match, for the leaderboard.
@@ -108,11 +144,23 @@ var mission: MissionDirector
 var story: StoryDirector
 ## Gas that comes and goes in the yard and in the house.
 var gas: GasField
+## Fire on the ground, from Molotov cocktails.
+var fire: FireField
 ## True while a blast is being worked out: a shield does not stop that.
 ## (Also set for a bullet that an ability lets through a shield.)
 var blasting := false
-## The player's abilities; out of service for now (see Skills).
+## While the player's shot is being worked out: the share of what a soldier's armour stops
+## that it still stops against the weapon that fired (see Survivor.WEAPONS, armour).
+var piercing := 1.0
+## The player's abilities (see Skills).
 var skills := Skills.new()
+## What the shop has done for the squad this night: the level of each upgrade
+## (Survivor.GOODS), and what a level is worth.
+var squad_levels := {"squad_armor": 0, "squad_ammo": 0}
+const SQUAD_HEALTH := 0.3
+const SQUAD_DAMAGE := 0.2
+## What the last finished night earned: {xp, level, raised} (see finish).
+var last_gain: Dictionary = {}
 ## The round in which the Medic was last called out.
 var medic_round := 0
 ## What Coleman has already said once this night.
@@ -173,6 +221,10 @@ func _ready() -> void:
 	gas.name = "Gas"
 	gas.game = self
 	add_child(gas)
+	fire = FireField.new()
+	fire.name = "Fire"
+	fire.game = self
+	add_child(fire)
 	mission = MissionDirector.new()
 	mission.name = "Mission"
 	mission.game = self
@@ -310,6 +362,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_cru_check")
+	elif "--v14-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_v14_check")
 	elif "--models-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -365,7 +421,7 @@ func _warm_up() -> void:
 	fade.tween_callback(curtain.queue_free)
 
 func _configure_input() -> void:
-	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_C, "squad_free": KEY_V, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B}
+	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_C, "squad_free": KEY_V, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "melee": KEY_Q}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -446,7 +502,7 @@ func _process(delta: float) -> void:
 			begin_wave()
 	elif phase == "wave":
 		spawn_left -= delta
-		if not spawn_queue.is_empty() and spawn_left <= 0 and alive_count < int(round(mini(MAX_ALIVE, 7 + wave) * float(rules.horde))) + 3 * extra_guns():
+		if not spawn_queue.is_empty() and spawn_left <= 0 and alive_count < mini(ALIVE_LIMIT, int(round(mini(MAX_ALIVE, 7 + wave) * float(rules.horde)))) + 3 * extra_guns():
 			spawn_enemy()
 			spawn_left = maxf(0.4, 1.5 - wave * 0.09) / (1.0 + 0.3 * extra_guns()) * mission.interval_factor()
 		if spawn_queue.is_empty() and alive_count == 0 and mission.round_clear():
@@ -460,6 +516,9 @@ func _clear_match_nodes() -> void:
 	mission.clear()
 	story.clear()
 	gas.clear()
+	fire.clear()
+	for key in squad_levels:
+		squad_levels[key] = 0
 	medic_round = 0
 	told.clear()
 	team.clear()
@@ -473,6 +532,8 @@ func _clear_match_nodes() -> void:
 
 ## The words under the opening banner: what is open tonight.
 func opening_note() -> String:
+	if endless:
+		return "Endlosmodus: Runde um Runde, bis der Hof fällt. Das ganze Haus und das Labor stehen offen."
 	if story.enabled:
 		return "Zum Farmhaus! Kaminzimmer und Obergeschoss sind noch versperrt. Der Waffenshop ist offen."
 	return "Vordertür, Hintertür, Seitentür, das Loch in der Küchenwand – und die Außentreppe zum Balkon."
@@ -491,7 +552,10 @@ func start_run() -> void:
 	# The host of a co-op match has already told a guest which difficulty is played.
 	if not net.joined:
 		level = profile.difficulty
-	rules = Profile.DIFFICULTIES.get(level, Profile.DIFFICULTIES["normal"])
+		mode = profile.mode
+		modifiers_on = profile.modifiers
+	last_modifier = ""
+	_set_modifier("")
 	for key in stats:
 		stats[key] = 0
 	last_place = 0
@@ -516,7 +580,7 @@ func start_run() -> void:
 	player.controlled = true
 	player.camera.current = true
 	# On a map with a landing zone the squad arrives there by helicopter.
-	var arrival: bool = cabin.points.has("landing") and (not check_mode or story_in_checks)
+	var arrival: bool = cabin.points.has("landing") and (not check_mode or story_in_checks) and not endless
 	if arrival:
 		var pad: Vector3 = story.start_point()
 		player.position = pad + Vector3(0, 0.05, 0)
@@ -541,8 +605,79 @@ func start_run() -> void:
 	if not check_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
+## Who attacks in a plain round. Past the end of the table (the endless mode) the last
+## round grows a little with every further one; every second of those brings a Crusher,
+## and from round twenty on every fifth brings another.
+func roster_of(number: int) -> Dictionary:
+	if number <= ROUNDS.size():
+		return ROUNDS[number - 1]
+	var beyond := number - ROUNDS.size()
+	var last: Dictionary = ROUNDS[ROUNDS.size() - 1]
+	var grown := {}
+	for kind in last:
+		if kind != "crusher":
+			grown[kind] = int(round(int(last[kind]) * (1.0 + ENDLESS_GROWTH * beyond)))
+	grown["crusher"] = (1 if beyond % 2 == 0 else 0) + (1 if number >= 20 and number % 5 == 0 else 0)
+	return grown
+
+## Puts a modifier into force for the running round (on a guest: the one the host drew),
+## or with "" the night's plain rules again.
+func _set_modifier(id: String, arg: String = "") -> void:
+	modifier = id if MODIFIERS.has(id) else ""
+	modifier_arg = arg
+	rules = Profile.DIFFICULTIES.get(level, Profile.DIFFICULTIES["normal"])
+	if modifier == "":
+		return
+	var changed: Dictionary = rules.duplicate()
+	var factors: Dictionary = MODIFIERS[modifier].get("rules", {})
+	for key in factors:
+		changed[key] = float(changed.get(key, 1.0)) * float(factors[key])
+	rules = changed
+
+## What the running round's modifier does, in words.
+func modifier_note() -> String:
+	if modifier == "":
+		return ""
+	var note := str(MODIFIERS[modifier].note)
+	return note % str(PACKS[modifier_arg][0]) if note.contains("%s") and PACKS.has(modifier_arg) else note
+
+## Draws the modifier of the round that is about to begin: one that fits it, and not the
+## one of the round before. The first round has none, nor has the end of the story.
+func _draw_modifier() -> void:
+	_set_modifier("")
+	if not modifiers_on or wave < 2:
+		return
+	if not endless and (wave >= ROUNDS.size() or (story.enabled and story.stage in ["rescue", "evac"])):
+		return
+	var soldiers: bool = mission.wave_kind in ["cru", "mixed"]
+	var options: Array = []
+	for id in MODIFIERS:
+		if wave < int(MODIFIERS[id].from) or id == last_modifier:
+			continue
+		# No soldiers on top of soldiers, no second Crusher, and nothing that multiplies
+		# the infected in a round that hardly has any.
+		if id == "cru" and (soldiers or mission.ambush_left > 0.0):
+			continue
+		if id == "boss" and int(roster_of(wave).get("crusher", 0)) > 0:
+			continue
+		if id in ["horde", "pack", "boss"] and mission.wave_kind == "cru":
+			continue
+		options.append(id)
+	if options.is_empty():
+		return
+	var id: String = options[randi() % options.size()]
+	var arg := ""
+	if id == "pack":
+		var kinds: Array = []
+		for kind in PACKS:
+			if wave >= int(PACKS[kind][1]) and (kind != "ripper" or ResourceLoader.exists(RipperVisual.SCENE)):
+				kinds.append(kind)
+		arg = str(kinds[randi() % kinds.size()])
+	last_modifier = id
+	_set_modifier(id, arg)
+
 func begin_wave() -> void:
-	if wave >= ROUNDS.size() or net.joined:
+	if (not endless and wave >= ROUNDS.size()) or net.joined:
 		return
 	wave += 1
 	round_called = false
@@ -550,7 +685,14 @@ func begin_wave() -> void:
 	phase = "wave"
 	spawn_queue.clear()
 	mission.begin_round(wave)
-	var roster: Dictionary = ROUNDS[wave - 1]
+	_draw_modifier()
+	var roster: Dictionary = roster_of(wave)
+	if modifier == "pack":
+		# Three times as many of one kind, and half a dozen at the least.
+		roster = roster.duplicate()
+		roster[modifier_arg] = maxi(2, int(roster.get(modifier_arg, 0))) * 3
+	elif modifier == "cru":
+		mission.ambush_left = randf_range(14.0, 26.0)
 	for kind in roster:
 		if kind == "crusher":
 			continue
@@ -576,16 +718,23 @@ func begin_wave() -> void:
 	# when the table says so, but not into a round that belongs to the C.R.U.; with the
 	# story on, the early one comes with the round in which the lab is searched.
 	var bosses := int(roster.get("crusher", 0))
-	if wave < ROUNDS.size():
+	if endless or wave < ROUNDS.size():
 		if story.enabled:
 			bosses = 1 if story.stage == "lab" and story.given.has("drives") and not story.given.has("boss") else 0
 			if bosses > 0:
 				story.given["boss"] = true
 		elif mission.kind_factor("crusher") < 0.3:
 			bosses = 0
+	if modifier == "boss":
+		bosses += 1
 	for i in range(bosses):
 		spawn_queue.insert(int(spawn_queue.size() * 0.55), "crusher")
 	gas.begin_round(wave, story.enabled and story.stage in ["module", "rescue", "evac"])
+	if modifier == "gas":
+		# More banks in the yard, sooner, and a part of the yard under the fog as well.
+		gas.thicken()
+		if cabin.gas_zone == "":
+			cabin.set_gas(str(CabinMap.GAS_ZONES.keys()[randi() % CabinMap.GAS_ZONES.size()]))
 	spawned_this_wave = 0
 	spawn_left = 0.5
 	present_wave_begin()
@@ -598,6 +747,8 @@ func present_wave_begin() -> void:
 	var kind_label := str(MissionDirector.WAVES[mission.wave_kind].label)
 	if story.enabled and story.stage == "evac":
 		hud.announce("LETZTE RUNDE  ·  EVAKUIERUNG", "Bringt Nadja zum Landeplatz und haltet ihn, bis der Helikopter unten ist.")
+	elif modifier != "":
+		hud.announce("RUNDE %02d" % wave + ("" if kind_label == "" else "  ·  " + kind_label), "MODIFIKATION  ·  %s  –  %s" % [MODIFIERS[modifier].label, modifier_note()], 6.5)
 	else:
 		hud.announce("RUNDE %02d" % wave + ("" if kind_label == "" else "  ·  " + kind_label), "Infizierte im Anmarsch. Haltet die Zugänge.")
 	_say(mission.opening_cue(), 7.0)
@@ -680,6 +831,9 @@ func nearest_survivor(from: Vector3, current: Node3D = null) -> Node3D:
 			continue
 		var span: Vector3 = candidate.global_position - from
 		var gap := Vector2(span.x, span.z).length() + absf(span.y) * 2.5
+		# Somebody the hunters overlook seems further away to them than he is.
+		if candidate is Teammate:
+			gap *= (candidate as Teammate).overlooked
 		if candidate == current:
 			gap *= 0.75
 		if gap < best_gap:
@@ -702,7 +856,7 @@ func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node
 	if not by_team:
 		return
 	var points: int = int(round((int(enemy.spec.score) + (50 if headshot else 0)) * float(rules.score)))
-	credits += int(enemy.spec.reward)
+	credits += int(round(int(enemy.spec.reward) * float(rules.get("loot", 1.0))))
 	score += points
 	stats.kills += 1
 	var human: bool = enemy.spec.get("human", false)
@@ -778,9 +932,10 @@ func complete_wave() -> void:
 	mission.end_round()
 	gas.end_round()
 	story.round_over(wave)
+	_set_modifier("")
 	credits += 100
 	score += int(round(500 * float(rules.score)))
-	if wave >= ROUNDS.size():
+	if not endless and wave >= ROUNDS.size():
 		radio("victory", 8.0)
 		finish(true)
 		return
@@ -862,6 +1017,24 @@ func gas_burst(center: Vector3) -> void:
 		return
 	gas.burst(fx.floor_below(center + Vector3.UP * 0.3))
 
+## A Molotov cocktail has burst: the ground around it burns for a while. In a co-op match
+## the host lights the fire for both. `by`: the partner, if the bottle was his.
+func fire_burst(center: Vector3, by: Node = null) -> void:
+	if net.joined:
+		net.request_fire(center)
+		return
+	var at := fx.floor_below(center + Vector3.UP * 0.3)
+	fire.ignite(at, by)
+	net.send_fire(at)
+
+## Fire on an enemy: it goes round a shield, and whoever it touches burns on for a while.
+## `source`: who gets the credit (empty for the player of this machine).
+func scorch(enemy: Infected, damage: float, direction: Vector3, source: Node = null, seconds: float = 2.5) -> void:
+	blasting = true
+	enemy.receive_hit(damage, direction, false, source)
+	blasting = false
+	enemy.ignite(seconds, source)
+
 ## A flashbang goes off: the infected that can see it reel for a few seconds.
 func flash_bang(center: Vector3) -> void:
 	if net.joined:
@@ -900,6 +1073,10 @@ func item_price(id: String) -> int:
 				return -1
 		"plates":
 			return -1 if player.plate_level >= data.prices.size() else price(int(data.prices[player.plate_level]))
+		"squad_armor", "squad_ammo":
+			# Only for somebody who has a squad with him.
+			var level := int(squad_levels[id])
+			return -1 if team.is_empty() or level >= data.prices.size() else price(int(data.prices[level]))
 		"mags":
 			if player.inventory[player.current_weapon].get("mags", false):
 				return -1
@@ -918,7 +1095,12 @@ func buy_item(id: String) -> bool:
 		return false
 	credits -= cost
 	net.spend(cost)
-	player.take_item(id)
+	if squad_levels.has(id):
+		squad_levels[id] = int(squad_levels[id]) + 1
+		for mate in team:
+			mate.outfit(int(squad_levels.squad_armor), int(squad_levels.squad_ammo))
+	else:
+		player.take_item(id)
 	sounds.play_menu("buy")
 	hud.show_menu("shop")
 	return true
@@ -1248,15 +1430,20 @@ func _run_radio(delta: float) -> void:
 ## Somebody who stands in the world calls something out: a squad member, a C.R.U. soldier,
 ## the shopkeeper. Nobody talks over himself, and the C.R.U. take turns.
 func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0) -> bool:
-	var key: Variant = "cru" if speaker == "cru" else who.get_instance_id()
+	# The soldiers of the C.R.U. have several voices and take turns as one.
+	var unit := speaker.begins_with("cru")
+	var key: Variant = "cru" if unit else who.get_instance_id()
 	var now := Time.get_ticks_msec()
 	if now < int(bark_until.get(key, 0)):
 		return false
 	var line := Radio.bark(speaker, cue)
+	# A voice that has not recorded a line leaves it to the first voice of the unit.
+	if unit and (line.is_empty() or str(line.sound) == ""):
+		line = Radio.bark("cru", cue)
 	if line.is_empty() or str(line.sound) == "":
 		return false
 	var length := sounds.speak_at(str(line.sound), who.global_position + Vector3(0, 1.6, 0), volume)
-	bark_until[key] = now + int((length + (1.6 if speaker == "cru" else 0.5)) * 1000.0)
+	bark_until[key] = now + int((length + (1.6 if unit else 0.5)) * 1000.0)
 	return length > 0.0
 
 ## The member of the squad nearest to a place calls something out about it, if one stands
@@ -1281,6 +1468,12 @@ func learn_skill(id: String) -> bool:
 	profile.skills = skills.ranks.duplicate()
 	profile.save()
 	return true
+
+## Takes every point back, for nothing: the trees can be tried out.
+func reset_skills() -> void:
+	skills.reset()
+	profile.skills = {}
+	profile.save()
 
 ## One member of the squad that is on its feet, picked at random; null if there is none.
 func squad_voice() -> Teammate:
@@ -1389,6 +1582,8 @@ func buy_weapon(id: String) -> bool:
 	var station := closest_station()
 	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop": return false
 	if not Survivor.WEAPONS.has(id) or player.inventory.has(id): return false
+	# A tree's own weapon is for those who have put points into that tree.
+	if skills.weapon_barred(id) != "": return false
 	# The heaviest weapons only reach the shop once the night is well under way.
 	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave: return false
 	var cost := price(int(Survivor.WEAPONS[id].price))
@@ -1466,11 +1661,15 @@ func return_to_menu() -> void:
 func finish(victory: bool) -> void:
 	net.send_finish(victory)
 	var squad := "KOOP" if net.active else ("TEAM" if not team.is_empty() else "SOLO")
-	last_place = profile.record(level, {
+	var before := Skills.experience(profile.totals)
+	last_place = profile.record(Profile.board(level, mode), {
 		"score": score, "round": wave, "seconds": int(elapsed), "victory": victory, "kills": stats.kills,
 		"special_kills": stats.special_kills, "cru_kills": stats.cru_kills, "revives": stats.revives,
 		"objectives": stats.objectives, "team": squad, "date": Time.get_date_string_from_system()
 	})
+	# What the night was worth to the trees of abilities.
+	var after := Skills.experience(profile.totals)
+	last_gain = {"xp": after - before, "level": Skills.level_of(after), "raised": Skills.level_of(after) - Skills.level_of(before)}
 	overlay = ""
 	player.menu_open = false
 	state = "win" if victory else "lose"
@@ -2488,6 +2687,213 @@ func _run_weapons_check() -> void:
 	await get_tree().create_timer(0.4).timeout
 	await _capture(folder, "shop_weapons.png")
 	print("WEAPONS_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Screenshots of what came with v0.14: the menus with the mode of the night and the
+## abilities in service, the five new weapons, a blow with the weapon, fire, the soldiers'
+## falls, the shop's new lists, a round with a modifier and the end of an endless night.
+func _run_v14_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(2.0)
+	# A career like a few good nights, so that there are points to spend.
+	profile.totals = {"missions": 6, "victories": 3, "kills": 2505, "special_kills": 915, "cru_kills": 177, "revives": 16, "objectives": 43, "seconds": 5227}
+	hud.show_menu("main")
+	await tick.call(0.3)
+	await _capture(folder, "menu_main.png")
+	for id in ["sweeper_damage", "sweeper_damage", "sweeper_reload", "breacher_armour"]:
+		learn_skill(id)
+	hud.show_menu("skills")
+	await tick.call(0.3)
+	await _capture(folder, "menu_skills.png")
+	hud._open_settings("main")
+	await tick.call(0.3)
+	await _capture(folder, "menu_settings.png")
+	profile.mode = "endless"
+	profile.modifiers = true
+	hud.show_menu("main")
+	await tick.call(0.3)
+	await _capture(folder, "menu_main_endless.png")
+	profile.record(Profile.board("normal", "endless"), {"score": 48200, "round": 14, "seconds": 1820, "victory": false, "kills": 512, "team": "TEAM", "date": "2026-10-04"})
+	hud.show_menu("board")
+	await tick.call(0.3)
+	await _capture(folder, "menu_board_endless.png")
+	profile.mode = "story"
+	profile.modifiers = false
+	# --- the five new weapons
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	_place_player(Vector3(0, 0.05, 12.5), 180)
+	for id in ["m14", "svd", "flamer", "nitro", "fifty"]:
+		player.unlock(id)
+		await tick.call(0.7)
+		await _capture(folder, "weapon_%s_hip.png" % id)
+		Input.action_press("aim")
+		await tick.call(0.6)
+		await _capture(folder, "weapon_%s_aim.png" % id)
+		Input.action_release("aim")
+		await tick.call(0.3)
+	# The double rifle, broken open to be loaded.
+	player.equip_weapon("nitro", true)
+	await tick.call(0.5)
+	player.ammo = 0
+	player.start_reload()
+	await tick.call(float(Survivor.WEAPONS.nitro.reload_time) * 0.45)
+	await _capture(folder, "weapon_nitro_open.png")
+	await tick.call(float(Survivor.WEAPONS.nitro.reload_time) * 0.6)
+	# --- a blow with the weapon
+	_place_player(Vector3(0, 0.05, 22.0), 180)
+	player.equip_weapon("rifle", true)
+	var near := spawn_enemy("mauler")
+	near.position = Vector3(0.15, 0.05, 23.6)
+	near.alert = true
+	await tick.call(0.35)
+	player.melee()
+	await tick.call(0.1)
+	await _capture(folder, "melee_swing.png")
+	await tick.call(0.4)
+	await _capture(folder, "melee_thrown.png")
+	near.receive_hit(99999.0, Vector3.FORWARD)
+	# --- the flamethrower
+	await tick.call(0.6)
+	var row: Array = []
+	for i in range(4):
+		var foe := spawn_enemy("mauler")
+		foe.position = Vector3(-2.2 + i * 1.5, 0.05, 27.0 + (i % 2) * 1.6)
+		foe.max_health = 900.0
+		foe.health = 900.0
+		foe.alert = true
+		foe.held_left = 30.0
+		row.append(foe)
+	player.equip_weapon("flamer", true)
+	await tick.call(0.6)
+	for i in range(55):
+		player.rotation.y = PI + sin(i * 0.11) * 0.22
+		player.shoot()
+		await get_tree().physics_frame
+	player.flame_left = 3.0
+	await _capture(folder, "flamer_fire.png")
+	await _capture_from(folder, "flamer_side.png", Vector3(7.5, 2.4, 21.0), Vector3(0, 1.0, 26.0), 55)
+	player.flame_left = 0.0
+	for foe in row:
+		foe.receive_hit(99999.0, Vector3.FORWARD)
+	# --- the Molotov cocktail
+	await tick.call(1.0)
+	_place_player(Vector3(0, 0.05, 22.0), 180)
+	player.equip_weapon("rifle", true)
+	player.items.molotov = 1
+	player.throw_cooldown = 0.0
+	player.throw("molotov")
+	var waited := 0
+	while fire.fires.is_empty() and waited < 300:
+		await get_tree().physics_frame
+		waited += 1
+	var burning: Vector3 = fire.fires[0].pos if not fire.fires.is_empty() else Vector3(0, 0, 34.0)
+	for i in range(4):
+		var foe := spawn_enemy("mauler" if i < 3 else "cru_assault")
+		foe.position = burning + Vector3(-1.6 + i * 1.1, 0.05, 0.6 - (i % 2) * 1.2)
+		foe.max_health = 1500.0
+		foe.health = 1500.0
+		foe.alert = true
+		foe.held_left = 30.0
+	await tick.call(1.3)
+	await _capture(folder, "molotov_fire.png")
+	await _capture_from(folder, "molotov_side.png", burning + Vector3(6.5, 2.6, -5.5), burning + Vector3(0, 0.7, 0), 55)
+	await tick.call(5.5)
+	await _capture_from(folder, "molotov_late.png", burning + Vector3(6.5, 2.6, -5.5), burning + Vector3(0, 0.7, 0), 55)
+	fire.clear()
+	for node in get_tree().get_nodes_in_group("infected"):
+		(node as Infected).receive_hit(99999.0, Vector3.FORWARD)
+	# --- the falls of the soldiers, six at a time
+	var clips: Array = SoldierVisual.FALLS + SoldierVisual.DEATHS
+	var kinds := ["cru_assault", "cru_shotgunner", "cru_heavy", "cru_marksman", "cru_medic", "cru_commander", "cru_elite", "cru_shield"]
+	for group in range(2):
+		var line: Array[CruSoldier] = []
+		for i in range(6):
+			var trooper := spawn_enemy(kinds[(group * 6 + i) % kinds.size()]) as CruSoldier
+			trooper.position = Vector3(-6.0 + i * 2.4, 0.05, 25.0)
+			trooper.set_physics_process(false)
+			trooper.model.rotation.y = 0.0
+			line.append(trooper)
+		for step in range(20):
+			for trooper in line:
+				trooper.model.animate(1.0 / 60.0, 0.0)
+		for i in range(6):
+			line[i].model.die(str(clips[group * 6 + i]))
+		for step in range(34):
+			for trooper in line:
+				trooper.model.animate(1.0 / 60.0, 0.0)
+		await _capture_from(folder, "falls_%d_mid.png" % (group + 1), Vector3(0, 2.4, 17.5), Vector3(0, 0.5, 25.0), 68)
+		for step in range(220):
+			for trooper in line:
+				trooper.model.animate(1.0 / 60.0, 0.0)
+		await _capture_from(folder, "falls_%d_down.png" % (group + 1), Vector3(0, 2.4, 17.5), Vector3(0, 0.5, 25.0), 68)
+		await _capture_from(folder, "falls_%d_left.png" % (group + 1), Vector3(-3.6, 3.4, 21.2), Vector3(-3.6, 0.0, 25.0), 62)
+		await _capture_from(folder, "falls_%d_right.png" % (group + 1), Vector3(3.6, 3.4, 21.2), Vector3(3.6, 0.0, 25.0), 62)
+		for trooper in line:
+			trooper.queue_free()
+		alive_count = 0
+		await tick.call(0.3)
+	# --- the shop's new lists
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	wave = 7
+	credits = 5000
+	skills.ranks = {"sweeper_damage": 3}
+	var counter: Vector3 = cabin.points.shop
+	_place_player(counter + Vector3(0, 0.05, 0.6), 0)
+	await tick.call(0.3)
+	open_shop()
+	for tab in ["class", "use", "weapons", "heavy"]:
+		hud._open_tab(tab)
+		await tick.call(0.4)
+		await _capture(folder, "shop_%s.png" % tab)
+	resume_run()
+	team_enabled = true
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	credits = 2000
+	_place_player(counter + Vector3(0, 0.05, 0.6), 0)
+	await tick.call(0.3)
+	open_shop()
+	buy_item("squad_armor")
+	hud._open_tab("team")
+	await tick.call(0.4)
+	await _capture(folder, "shop_team.png")
+	resume_run()
+	# --- a round with a modifier
+	team_enabled = false
+	profile.modifiers = true
+	start_run()
+	set_process(false)
+	mission.plain()
+	_place_player(Vector3(0, 0.05, 12.5), 180)
+	begin_wave()
+	spawn_queue.clear()
+	complete_wave()
+	begin_wave()
+	await tick.call(0.6)
+	await _capture(folder, "round_modifier.png")
+	profile.modifiers = false
+	# --- the end of an endless night
+	profile.mode = "endless"
+	start_run()
+	set_process(false)
+	wave = 14
+	score = 48200
+	kills = 512
+	finish(false)
+	await tick.call(0.5)
+	await _capture(folder, "end_endless.png")
+	print("V14_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Screenshots of the C.R.U.: the roles in a row, their moves, and a fire fight.

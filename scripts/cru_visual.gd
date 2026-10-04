@@ -19,6 +19,7 @@ var shield: Node3D
 func _ready() -> void:
 	soldier = SoldierVisual.new()
 	soldier.look = kind
+	soldier.mortal = true
 	add_child(soldier)
 	skeleton = soldier.skeleton
 	mesh_instance = soldier.mesh_instance
@@ -199,13 +200,22 @@ func stagger(_heavy: bool, _clip_name: String = "") -> float:
 func scream(_clip_name: String = "scream") -> float:
 	return 0.0
 
-func pick_death(forward: bool, _headshot: bool = false, _side: float = 0.0) -> String:
-	return "forward" if forward else "back"
+## The fall that fits the shot, picked as the infected pick theirs: `forward` when hit
+## from behind, `side` is where the bullet was heading across the body.
+func pick_death(forward: bool, headshot: bool = false, side: float = 0.0) -> String:
+	var pool := "front"
+	if forward:
+		pool = "behind"
+	elif headshot and randf() < 0.7:
+		pool = "head"
+	elif absf(side) > 0.55:
+		pool = "from_right" if side < 0.0 else "from_left"
+	return str((InfectedVisual.DEATHS[pool] as Array).pick_random())
 
 func die(clip_name: String) -> void:
 	dying = true
 	state = "dead"
-	soldier.fall(clip_name == "forward")
+	soldier.fall(clip_name == "forward", clip_name)
 	# The lamps go out with him.
 	if lamp != null:
 		lamp.hide()

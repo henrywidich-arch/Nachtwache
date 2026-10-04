@@ -13,8 +13,9 @@ const CLIP_FOLDER := "res://assets/models/mixamo/"
 ## Mixamo clips. speed: ground speed of the source character in m/s. strike: the moment a
 ## blow lands. start/end: the part of the file that is used. travel: movement along the
 ## facing is taken out of the clip and handed to the body as real motion. fall: the body
-## ends on the ground. drift: scales sideways travel. mirror: a left/right flipped copy of
-## another clip. set: only skeletons of that set get the clip.
+## ends on the ground. drift: scales sideways travel. rooted: the clip is played on the
+## spot, whatever way its source travels (the body does the moving itself). mirror: a
+## left/right flipped copy of another clip. set: only skeletons of that set get the clip.
 const CLIPS := {
 	"idle": {"file": "mauler_hazmat_rig", "loop": true},
 	"shamble": {"file": "anim_walk_hunched", "loop": true, "speed": 0.38, "set": "zombie"},
@@ -533,6 +534,9 @@ static func sample(rig_scene: String, table: Dictionary) -> Dictionary:
 			offset.x *= float(info.get("drift", 1.0))
 			if info.get("travel", false):
 				travel.append(offset.z)
+				offset.z = 0.0
+			if info.get("rooted", false):
+				offset.x = 0.0
 				offset.z = 0.0
 			offsets.append(offset)
 		clips[clip_name] = {"length": length, "frames": frames, "loop": bool(info.get("loop", false)), "fall": bool(info.get("fall", false)), "speed": float(info.get("speed", 0.0)), "strike": float(info.get("strike", 0.0)) - first, "set": str(info.get("set", "")), "turns": turns, "offsets": offsets, "travel": travel}

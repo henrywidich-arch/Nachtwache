@@ -70,6 +70,12 @@ var spot_wait := 0.0
 ## Carries no weapon and never fights: somebody the squad looks after. Such a one stays
 ## down until it is helped up.
 var unarmed := false
+## Full health, and the factor on what its shots do. The shop can raise both (outfit).
+var max_health := 100.0
+var damage_factor := 1.0
+## To those who hunt the survivors this one seems that many times further away than it
+## is: they go for the others first.
+var overlooked := 1.0
 
 func _ready() -> void:
 	# The player's layer: bullets of the squad pass through, the infected bump into it.
@@ -103,6 +109,13 @@ func _ready() -> void:
 	add_child(name_tag)
 	rotation.y = facing
 	think_left = randf() * 0.2
+
+## What the shop has done for the squad: the levels of its armour and of its ammunition.
+func outfit(armor: int, rounds: int) -> void:
+	var before := max_health
+	max_health = 100.0 * (1.0 + float(game.SQUAD_HEALTH) * armor)
+	health += max_health - before
+	damage_factor = 1.0 + float(game.SQUAD_DAMAGE) * rounds
 
 func is_targetable() -> bool:
 	return not down and rising_left <= 0.0
@@ -379,7 +392,7 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 			if body is Infected:
 				var enemy := body as Infected
 				var headshot := head_zone or enemy.is_headshot(hit.position)
-				var damage := float(gun.damage) * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
+				var damage := float(gun.damage) * damage_factor * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
 				if pellets > 1:
 					damage *= clampf(1.0 - (muzzle.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
 				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
@@ -420,11 +433,11 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = 
 		game.sounds.play_at(str(visual.config.voice), eye())
 	if health <= 0.0:
 		_go_down(from)
-	elif health < 45.0 and not hurt_called:
+	elif health < max_health * 0.45 and not hurt_called:
 		# Badly hurt: said once, until the wounds have been seen to.
 		hurt_called = true
 		game.bark(self, look, "hurt", 1.0)
-	elif health > 70.0:
+	elif health > max_health * 0.7:
 		hurt_called = false
 
 func _go_down(from: Vector3) -> void:
@@ -459,10 +472,10 @@ func revive(full: bool = false) -> void:
 	hurt_called = false
 	if not down:
 		if full:
-			health = 100.0
+			health = max_health
 		return
 	down = false
-	health = 100.0 if full else 60.0
+	health = max_health if full else max_health * 0.6
 	ammo = int(gun.magazine)
 	rising_left = visual.rise()
 	name_tag.modulate = Color("9fe4ef")

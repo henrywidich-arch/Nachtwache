@@ -29,7 +29,9 @@ const MOVES := {
 	"strafe_left": {"mirror": "strafe_right"},
 	"crouch": {"file": "soldier_crouch", "loop": true},
 	"crouch_run": {"file": "soldier_crouch_run", "loop": true, "speed": 2.4},
-	"roll": {"file": "soldier_roll"},
+	# The soldier's body moves through the roll by itself (CruSoldier.ROLL_SPEED): the clip
+	# must not carry the model on top of that, or it jumps back when the roll is over.
+	"roll": {"file": "soldier_roll", "rooted": true},
 	"throw_right": {"file": "soldier_throw"},
 	"throw": {"mirror": "throw_right"},
 	"rope": {"file": "soldier_rope", "loop": true},
@@ -41,7 +43,11 @@ const UPPER_MOVES := ["throw", "calm"]
 ## The throw is played from this share of the clip on, at this rate: wind-up and release.
 const THROW_FROM := 0.22
 const THROW_RATE := 1.5
+## The falls every body can do, and gets up from again.
 const FALLS := ["death_back", "death_forward"]
+## More ways to go down, for somebody who stays there (see mortal): the falls of the
+## infected (InfectedVisual.DEATHS says which fits which shot).
+const DEATHS := ["death_side", "death_side_left", "death_headshot", "death_from_back", "death_from_front", "death_from_right", "death_from_left", "death_drop_back", "death_drop_left", "death_drop_right"]
 const RISE_RATE := 2.3
 ## weapon: what is carried. grip-relative points of each weapon are listed in WEAPONS.
 const LOOKS := {
@@ -133,6 +139,10 @@ var flash: Node3D
 var flash_left := 0.0
 var model_scale := 1.0
 var stride_scale := 1.0
+## Set before the body enters the tree: it also gets the falls of DEATHS.
+var mortal := false
+## look -> the library of those falls.
+static var deaths: Dictionary = {}
 ## "stand", "down", "rising", "roll", "rope" or "landing".
 var mode := "stand"
 ## Seconds until a roll or a landing is over.
@@ -190,6 +200,10 @@ func _ready() -> void:
 	legs = _player("Legs")
 	legs.add_animation_library("", full[look])
 	legs.add_animation_library("fall", falls[look])
+	if mortal:
+		if not deaths.has(look):
+			deaths[look] = InfectedVisual._bake(skeleton, rig, "zombie", {}, DEATHS)
+		legs.add_animation_library("death", deaths[look])
 	legs.add_animation_library("move", full_moves[look])
 	arms = _player("Arms")
 	arms.add_animation_library("", upper[look])
@@ -420,13 +434,18 @@ func reload(seconds: float) -> void:
 	reload_left = seconds
 	reload_rate = float(sampled.clips.reload.length) / maxf(0.3, seconds)
 
-## Goes down and stays there until rise() is called.
-func fall(forward: bool = false) -> void:
+## Goes down and stays there until rise() is called. `clip`: one of FALLS or DEATHS; left
+## out or unknown to this body, it falls on its face (`forward`) or on its back.
+func fall(forward: bool = false, clip: String = "") -> void:
 	mode = "down"
 	reload_left = 0.0
 	flash.hide()
 	legs.speed_scale = 1.0
-	legs.play("fall/death_forward" if forward else "fall/death_back", 0.12, 1.25)
+	var wanted := "fall/death_forward" if forward else "fall/death_back"
+	for library in ["fall/", "death/"]:
+		if clip != "" and legs.has_animation(library + clip):
+			wanted = library + clip
+	legs.play(wanted, 0.12, 1.25)
 
 func _pelvis() -> Vector3:
 	return skeleton.global_transform * skeleton.get_bone_global_pose(rig.pelvis.index).origin

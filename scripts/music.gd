@@ -81,7 +81,7 @@ func current_phase() -> String:
 	if game.state not in ["playing", "paused", "shop"]:
 		return "anfang"
 	var rounds: int = game.ROUNDS.size()
-	var final: bool = game.wave >= rounds or (game.story.enabled and str(game.story.stage) in ["evac", "done"])
+	var final: bool = (not game.endless and game.wave >= rounds) or (game.story.enabled and str(game.story.stage) in ["evac", "done"])
 	if game.phase != "wave":
 		return "anfang"
 	if final:

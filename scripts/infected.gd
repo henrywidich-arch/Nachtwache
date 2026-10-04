@@ -203,6 +203,12 @@ const LEAP_RANGE := Vector2(4.0, 7.5)
 const POUNCE_FLIGHT := 0.46
 const ENRAGE_PACE := 1.75
 const GRAVITY := 22.0
+## The round after which nobody gets any faster (they still get tougher): past it the
+## endless night would outrun the survivors.
+const SPEED_ROUNDS := 20
+## Fire on a body: what it does a second, and how often it bites.
+const BURN_DPS := 22.0
+const BURN_TICK := 0.5
 
 var game: Node3D
 var kind := "mauler"
@@ -241,6 +247,16 @@ var lurk_left := 0.0
 ## Seconds the infected cannot act: staggered by gunfire or screaming.
 var held_left := 0.0
 var stagger_cooldown := 0.0
+## The speed a blow has given the body; it wears off within a step or two.
+var knock := Vector3.ZERO
+## Seconds it goes on burning, the time to the fire's next bite, and who lit it.
+var burn_left := 0.0
+var burn_tick := 0.0
+var burn_source: Node
+var flames: CPUParticles3D
+var flame_lamp: OmniLight3D
+## Seconds a body that fell burning burns on.
+var ember_left := 0.0
 var burst := 0.0
 var burst_left := 0.0
 var pain_left := 0.0
@@ -293,13 +309,14 @@ func _ready() -> void:
 	# World, survivors, other infected and railings.
 	collision_mask = 1 | 2 | 4 | 16
 	floor_snap_length = 0.3
-	max_health = float(spec.health) + float(spec.health_per_round) * (wave - 1)
+	# A modifier of the round may make everybody tougher.
+	max_health = (float(spec.health) + float(spec.health_per_round) * (wave - 1)) * float(game.rules.get("health", 1.0))
 	health = max_health
 	# A Crusher that turns up before the last round is not yet fully grown.
 	if kind == "crusher" and wave < int(game.ROUNDS.size()):
 		max_health *= 0.55 if wave <= 6 else 0.75
 		health = max_health
-	speed = (float(spec.speed) + float(spec.speed_per_round) * (wave - 1)) * randf_range(0.93, 1.08) * float(game.rules.pace)
+	speed = (float(spec.speed) + float(spec.speed_per_round) * (mini(wave, SPEED_ROUNDS) - 1)) * randf_range(0.93, 1.08) * float(game.rules.pace)
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = spec.radius
 	capsule.height = spec.height
@@ -563,7 +580,9 @@ func show_cue(action: String, args: Array) -> void:
 				game.player.trauma = 1.0
 				game.hud.flash(Color(0.35, 0.0, 0.0), 0.7)
 		"say":
-			game.bark(self, "cru", str(args[0]), 2.0)
+			game.bark(self, voice(), str(args[0]), 2.0)
+		"burn":
+			_show_flames(bool(args[0]))
 		"dissolve":
 			model.dissolve()
 			game.fx.acid_cloud(global_position, puppet)
@@ -576,6 +595,7 @@ func _physics_process(delta: float) -> void:
 	if dead:
 		if cloud != null:
 			_lift_cloud()
+		_smoulder(delta)
 		model.animate(delta, 0.0)
 		return
 	if cloud != null:
@@ -584,6 +604,9 @@ func _physics_process(delta: float) -> void:
 		_follow(delta)
 		return
 	if not game.is_playing():
+		return
+	_burn(delta)
+	if dead:
 		return
 	if kind == "stalker":
 		_haunt(delta)
@@ -705,8 +728,9 @@ func _physics_process(delta: float) -> void:
 				dodge_side = -1.0 if (other.global_position - global_position).dot(right) > 0.0 else 1.0
 	if dodge_left > 0.0 and pace > 0.5:
 		direction = (direction + right * dodge_side * 1.5).normalized()
-	velocity.x = direction.x * pace + push.x
-	velocity.z = direction.z * pace + push.z
+	knock = knock.move_toward(Vector3.ZERO, delta * 16.0)
+	velocity.x = direction.x * pace + push.x + knock.x
+	velocity.z = direction.z * pace + push.z + knock.z
 	if not is_on_floor():
 		velocity.y -= delta * GRAVITY
 	else:
@@ -1035,6 +1059,87 @@ func _stagger(heavy: bool) -> void:
 	# Being knocked off balance breaks off an attack that has not landed yet.
 	attack_clock = -1.0
 	cooldown = maxf(cooldown, held_left + 0.25)
+
+## A blow with a rifle butt: it hurts a little, throws the body back a step and leaves it
+## reeling for `seconds`. A shield takes the blow; the heavy ones are only held up for a
+## moment, and nothing moves the Crusher.
+func shove(direction: Vector3, speed: float, seconds: float, damage: float, source: Node = null) -> void:
+	if dead:
+		return
+	var shielded := blocks(direction)
+	receive_hit(damage, direction, false, source)
+	if dead or shielded or kind == "stalker" or leap != "":
+		return
+	var back := Vector3(direction.x, 0, direction.z).normalized()
+	var reaction := str(spec.stagger)
+	if reaction == "":
+		held_left = maxf(held_left, seconds * 0.3)
+		if kind != "crusher":
+			knock = back * speed * 0.5
+		return
+	if clung_to != null:
+		release(true)
+	# A stumble carries the body back by itself.
+	knock = back * speed * (0.6 if reaction == "stumble" else 1.0)
+	_stagger(reaction == "stumble")
+	held_left = maxf(held_left, seconds)
+	cooldown = maxf(cooldown, held_left + 0.3)
+
+## Set alight: it burns for `seconds`, which hurts it every half second; whoever lit it
+## gets the credit (`source`: a teammate or the co-op partner, empty for the player).
+func ignite(seconds: float, source: Node = null) -> void:
+	if dead:
+		return
+	if burn_left <= 0.0:
+		burn_tick = BURN_TICK
+		cue("burn", [true])
+	burn_left = maxf(burn_left, seconds)
+	burn_source = source
+
+func _burn(delta: float) -> void:
+	if burn_left <= 0.0:
+		return
+	burn_left -= delta
+	burn_tick -= delta
+	if burn_tick <= 0.0:
+		burn_tick += BURN_TICK
+		# Fire goes round a shield.
+		game.blasting = true
+		receive_hit(BURN_DPS * BURN_TICK, Vector3(0, 0.2, 0) - facing(), false, burn_source if is_instance_valid(burn_source) else null)
+		game.blasting = false
+	if burn_left <= 0.0 and not dead:
+		cue("burn", [false])
+
+## Flames on the body while it burns.
+func _show_flames(on: bool) -> void:
+	if flames == null:
+		if not on:
+			return
+		flames = game.fx.body_flames(float(spec.height), float(spec.radius))
+		add_child(flames)
+		flame_lamp = OmniLight3D.new()
+		flame_lamp.light_color = Color(1.0, 0.55, 0.2)
+		flame_lamp.light_energy = 1.3
+		flame_lamp.omni_range = 4.5
+		flame_lamp.position.y = float(spec.height) * 0.6
+		add_child(flame_lamp)
+	flames.emitting = on
+	flame_lamp.visible = on
+	ember_left = 2.5
+
+## A body that fell burning burns on for a moment, down where it lies.
+func _smoulder(delta: float) -> void:
+	if flames == null or not flames.emitting:
+		return
+	flames.position.y = move_toward(flames.position.y, 0.3, delta * 1.6)
+	flame_lamp.position.y = flames.position.y + 0.2
+	ember_left -= delta
+	if ember_left <= 0.0:
+		_show_flames(false)
+
+## The voice a soldier shouts with (see Radio.BARKS); nothing the infected have.
+func voice() -> String:
+	return "cru"
 
 ## Blinded by a flashbang: reels on the spot for a few seconds.
 func stun(seconds: float) -> void:

@@ -14,6 +14,11 @@ const INTEL_NEEDED := 3
 ## Parts of the house that open by themselves once this round is over.
 const AREA_ROUNDS := {"wing": 1, "upper": 3}
 const AREA_NOTES := {"wing": "Weitere Räume im Erdgeschoss sind offen.", "upper": "Die Treppen sind frei: das Obergeschoss ist offen."}
+## Nadja carries no weapon and cannot look after herself: she takes far more than the
+## squad does, and to the hunters she seems this many times further away than she is, so
+## that they go for those who shoot at them first.
+const NADJA_HEALTH := 260.0
+const NADJA_OVERLOOKED := 2.5
 ## Seconds Nadja may lie on the ground before she is lost.
 const NADJA_SECONDS := 30.0
 ## The cutscene at the start: its length, and when what happens in it.
@@ -106,7 +111,8 @@ func clear() -> void:
 func begin() -> void:
 	clear()
 	var cabin: CabinMap = game.cabin
-	enabled = cabin.has_method("unlock") and cabin.points.has("nadja_hack") and (not game.check_mode or game.story_in_checks)
+	# The endless night has no story.
+	enabled = cabin.has_method("unlock") and cabin.points.has("nadja_hack") and (not game.check_mode or game.story_in_checks) and not game.endless
 	if not enabled:
 		return
 	cabin.lock_all()
@@ -281,6 +287,9 @@ func _free_nadja() -> void:
 	nadja.slot = Vector3(-1.1, 0, 2.8)
 	nadja.facing = game.facing_of("nadja")
 	game.mates.add_child(nadja)
+	nadja.max_health = NADJA_HEALTH
+	nadja.health = NADJA_HEALTH
+	nadja.overlooked = NADJA_OVERLOOKED
 	nadja.global_position = at
 	game.survivors.append(nadja)
 
@@ -298,7 +307,7 @@ func _watch_nadja(delta: float) -> void:
 			game.finish(false)
 	else:
 		nadja_down = 0.0
-		if nadja.health < 55.0 and nadja_call <= 0.0:
+		if nadja.health < nadja.max_health * 0.4 and nadja_call <= 0.0:
 			nadja_call = 24.0
 			game.radio("nadja_hurt", 5.0)
 		elif stage == "evac" and nadja_call <= -40.0:

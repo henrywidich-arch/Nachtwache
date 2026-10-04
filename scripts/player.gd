@@ -30,11 +30,23 @@ const WEAPONS := {
 	# The machine gun: a hundred rounds in the box and four boxes more. Shares its key with
 	# the minigun.
 	"mg": {"label": "MASCHINENGEWEHR", "slot": 0, "price": 800, "group": "heavy", "from_round": 3, "sound": "mg", "magazine": 100, "reserve_max": 400, "reload_time": 4.2, "interval": 0.085, "damage": 30.0, "head_multiplier": 2.2, "spread": 0.022, "kick": 0.0085, "flash": 1.2, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
-	"minigun": {"label": "MINIGUN", "slot": 0, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55}
+	"minigun": {"label": "MINIGUN", "slot": 0, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55},
+	# semi: one shot for every pull of the trigger. zoom and aim_spread: see ATTACHMENTS.
+	"m14": {"label": "M14", "slot": 3, "price": 320, "sound": "m14", "semi": true, "magazine": 20, "reserve_max": 140, "reload_time": 2.3, "interval": 0.16, "damage": 64.0, "head_multiplier": 2.6, "spread": 0.006, "kick": 0.024, "flash": 1.2, "punch": 1.3, "settle": 0.6, "zoom": 38.0, "aim_spread": 0.3},
+	"svd": {"label": "SVD DRAGUNOW", "slot": 8, "price": 650, "group": "heavy", "from_round": 2, "sound": "svd", "semi": true, "magazine": 10, "reserve_max": 60, "reload_time": 2.7, "interval": 0.38, "damage": 165.0, "head_multiplier": 2.4, "spread": 0.02, "kick": 0.04, "flash": 1.4, "punch": 1.8, "settle": 0.85, "scope": 15.0, "pierce": 1},
+	# The three below belong to a tree of abilities each (Skills.TREES, weapons): the shop
+	# sells them only to somebody who has put points into that tree.
+	# flame: no bullets but a stream of fire (see _flame); its magazine is its tank.
+	"flamer": {"label": "FLAMMENWERFER", "slot": 7, "price": 700, "group": "class", "sound": "flamer", "magazine": 150, "reserve_max": 300, "reload_time": 3.2, "interval": 0.06, "damage": 9.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.0, "flash": 0.0, "flame": true},
+	# special: factor on what it does to special infected.
+	"nitro": {"label": "DOPPELBÜCHSE .600", "slot": 4, "price": 650, "group": "class", "sound": "nitro", "semi": true, "magazine": 2, "reserve_max": 36, "reload_time": 2.5, "interval": 0.25, "damage": 430.0, "head_multiplier": 1.8, "spread": 0.012, "kick": 0.085, "flash": 1.9, "punch": 3.0, "settle": 0.85, "zoom": 42.0, "aim_spread": 0.3, "special": 1.5, "pierce": 1},
+	# shield: share of its damage that goes through a shield. armour: share of what a
+	# soldier's armour stops that it still stops against this weapon.
+	"fifty": {"label": "M107 KALIBER .50", "slot": 8, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
 const QUIET_SOUNDS := ["badger", "ump_sil"]
-const ORDER := ["rifle", "ak", "p90", "ump", "badger", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "launcher", "mg", "minigun"]
+const ORDER := ["rifle", "ak", "p90", "ump", "badger", "m14", "shotgun", "nitro", "pistol", "revolver", "autoshotgun", "flamer", "sniper", "svd", "fifty", "launcher", "mg", "minigun"]
 ## Parts the shop sells for a weapon. slot: only one part per slot is on the weapon at a
 ## time. set: values of the weapon's table that the part replaces (aim_spread: how much of
 ## the scatter is left when aiming; zoom: field of view when aiming; scope: field of view
@@ -62,13 +74,17 @@ const ATTACHMENTS := {
 const GOODS := {
 	"grenade": {"label": "SPLITTERGRANATE", "price": 60, "max": 4, "group": "use", "note": "Taste G. Reißt alles im Umkreis mit – auch dich."},
 	"flashbang": {"label": "BLENDGRANATE", "price": 45, "max": 4, "group": "use", "note": "Taste T. Betäubt Infizierte für einige Sekunden."},
+	"molotov": {"label": "MOLOTOWCOCKTAIL", "price": 70, "max": 3, "group": "use", "note": "Taste H. Zerplatzt beim Aufschlag: Der Boden brennt einige Sekunden, und wer hindurchläuft, brennt weiter."},
 	"claymore": {"label": "CLAYMORE", "price": 90, "max": 4, "group": "use", "note": "Taste B. Zündet, sobald etwas davor läuft."},
 	"revive": {"label": "ADRENALINSPRITZE", "price": 300, "max": 1, "group": "use", "note": "Rettet dich einmal, wenn dein Leben auf null fällt."},
 	"vest": {"label": "SCHUTZWESTE", "price": 150, "group": "gear", "note": "50 Rüstung. Rüstung fängt 60 % jedes Treffers ab."},
 	"armor": {"label": "SCHWERE RÜSTUNG", "price": 300, "group": "gear", "note": "100 Rüstung."},
 	"plates": {"label": "BALLISTISCHE WESTE", "prices": [160, 260, 400], "group": "gear", "note": "C.R.U.-Kugeln und -Granaten: 25 / 40 / 55 % weniger Schaden"},
 	"mags": {"label": "GRÖSSERE MAGAZINE", "price": 200, "group": "mods", "note": "+50 % Magazin für die Waffe in deiner Hand."},
-	"mask": {"label": "GASMASKE", "prices": [150, 250, 400, 600], "group": "gear", "note": "Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas."}
+	"mask": {"label": "GASMASKE", "prices": [150, 250, 400, 600], "group": "gear", "note": "Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas."},
+	# For the two who come along (Game.squad_levels); nothing the survivor carries.
+	"squad_armor": {"label": "TEAM: SCHUTZPLATTEN", "prices": [180, 300, 450], "group": "team", "note": "Deine Begleiter halten mehr aus: +30 % Leben je Stufe."},
+	"squad_ammo": {"label": "TEAM: SCHARFE MUNITION", "prices": [180, 300, 450], "group": "team", "note": "Deine Begleiter treffen härter: +20 % Schaden je Stufe."}
 }
 ## Seconds of clean air a mask of each level holds.
 const MASK_SECONDS := [0.0, 8.0, 20.0, 45.0, 120.0]
@@ -108,7 +124,7 @@ var controlled := false
 var menu_open := false
 ## Co-op: out of the fight until the partner helps or the round ends.
 var down := false
-var items := {"grenade": 0, "flashbang": 0, "claymore": 0, "revive": 0}
+var items := {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0}
 var armor := 0.0
 ## Level of the ballistic plates, 0 to 3.
 var plate_level := 0
@@ -126,6 +142,21 @@ const LAUNCH_SPEED := 25.0
 const LAUNCH_LIFT := 2.6
 const THROW_SWING := 0.16
 const THROW_AIM_AFTER := 0.2
+## The key that readies and throws each thing.
+const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov"}
+## A blow with the weapon (key Q): how far it reaches and how wide (the cosine of half its
+## angle), what it does, how fast whoever is struck is thrown back and for how long he
+## reels, and the seconds until the next blow.
+const MELEE_REACH := 2.4
+const MELEE_CONE := 0.4
+const MELEE_DAMAGE := 30.0
+const MELEE_PUSH := 6.5
+const MELEE_DAZE := 1.7
+const MELEE_GAP := 0.85
+## The stream of the flamethrower: how far it reaches and how narrow it is (the cosine of
+## half its angle).
+const FLAME_REACH := 10.0
+const FLAME_CONE := 0.962
 var throw_kind := ""
 var throw_held := 0.0
 var throw_swing := -1.0
@@ -135,6 +166,23 @@ var clung_by: Infected
 var reload_left := 0.0
 var reload_cue := 0
 var shot_cooldown := 0.0
+## The trigger has not been let go since the last shot: a weapon that fires single shots
+## waits for that.
+var trigger_held := false
+var melee_cooldown := 0.0
+## The swing of a blow with the weapon, 1 when it starts to 0 when it is over.
+var melee_pose := 0.0
+## Seconds the flamethrower's stream keeps showing after its last tick, and the seconds
+## until its next hit marker.
+var flame_left := 0.0
+var flame_mark := 0.0
+var flame_stream: CPUParticles3D
+var flame_light: OmniLight3D
+var flame_voice: AudioStreamPlayer
+## Co-op guest: what the flamethrower did since the last report to the host (enemy ->
+## damage), and the seconds until the next report.
+var burn_report: Dictionary = {}
+var burn_wait := 0.0
 var recoil := 0.0
 ## Muzzle climb that still has to settle back down.
 var climb := 0.0
@@ -278,8 +326,8 @@ func take_item(id: String) -> void:
 		_:
 			items[id] = int(items[id]) + 1
 
-## Takes a grenade or a flashbang in the hand. It is thrown when the key is let go;
-## while it is held, a line shows where it will fly.
+## Takes a grenade, a flashbang or a Molotov cocktail in the hand. It is thrown when the
+## key is let go; while it is held, a line shows where it will fly.
 func ready_throw(kind: String) -> void:
 	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0 or throw_kind != "":
 		return
@@ -311,7 +359,9 @@ func _flight(at: Vector3, speed: Vector3, seconds: float, pull: float, damp: flo
 ## What a grenade thrown now would do: the points of its flight up to the first thing it
 ## strikes (or until its fuse runs out).
 func throw_path(kind: String) -> PackedVector3Array:
-	return _flight(camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15, -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5, float(Throwable.KINDS[kind].fuse), 1.0, 0.3, 1 | 16)
+	# A bottle bursts on the first body it strikes; a grenade flies past them.
+	var mask := (1 | 4 | 16) if Throwable.KINDS[kind].get("breaks", false) else (1 | 16)
+	return _flight(camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15, -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5, float(Throwable.KINDS[kind].fuse), 1.0, 0.3, mask)
 
 ## Where a shell fired from the launcher now would fly: a shallow arc, a little above the
 ## line of sight at first and then falling under it.
@@ -325,8 +375,7 @@ func _hold_throw(delta: float) -> void:
 		throw_kind = ""
 		return
 	throw_held += delta
-	var action := "throw_grenade" if throw_kind == "grenade" else "throw_flash"
-	if throw_swing < 0.0 and not Input.is_action_pressed(action):
+	if throw_swing < 0.0 and not Input.is_action_pressed(str(THROW_KEYS[throw_kind])):
 		throw_swing = THROW_SWING
 	if throw_swing >= 0.0:
 		throw_swing -= delta
@@ -336,7 +385,7 @@ func _hold_throw(delta: float) -> void:
 			throw_swing = -1.0
 			throw(kind)
 
-## Throws a grenade or a flashbang where the survivor looks.
+## Throws a grenade, a flashbang or a Molotov cocktail where the survivor looks.
 func throw(kind: String) -> void:
 	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0:
 		return
@@ -351,6 +400,47 @@ func throw(kind: String) -> void:
 	body.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
 	recoil = 0.6
 	game.sounds.play_sound("swipe", -3.0, 1.5)
+
+## A blow with the weapon: whoever stands right in front is hurt a little, thrown back a
+## step and reels for a moment. In a co-op match the host works out what it does.
+func melee() -> void:
+	if down or melee_cooldown > 0.0 or throw_kind != "":
+		return
+	melee_cooldown = MELEE_GAP
+	melee_pose = 1.0
+	shot_cooldown = maxf(shot_cooldown, 0.35)
+	game.sounds.play_sound("swipe", -1.0, 0.85)
+	var origin := camera.global_position
+	var ahead := Vector3(-sin(rotation.y), 0, -cos(rotation.y))
+	var space := get_world_3d().direct_space_state
+	var struck := 0
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if enemy.dead:
+			continue
+		var to := enemy.global_position - global_position
+		var flat := Vector3(to.x, 0, to.z)
+		var gap := flat.length() - float(enemy.spec.radius)
+		if gap > MELEE_REACH or absf(to.y) > 1.6:
+			continue
+		# Whoever is close enough to touch is struck wherever he stands in front.
+		if gap > 0.5 and flat.normalized().dot(ahead) < MELEE_CONE:
+			continue
+		var chest := enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.55, 0)
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, chest, 1)).is_empty():
+			continue
+		struck += 1
+		var push := flat.normalized() if flat.length() > 0.05 else ahead
+		var damage: float = MELEE_DAMAGE * game.skills.damage_factor(enemy, false)
+		if game.net.joined:
+			game.net.report_shove(enemy, push, damage)
+			enemy.show_cue("hit", [1.0, 0.5])
+		else:
+			enemy.shove(push, MELEE_PUSH, MELEE_DAZE, damage)
+	if struck > 0:
+		game.sounds.play_sound("melee")
+		game.hud.hit_marker(false)
+		trauma = minf(1.0, trauma + 0.2)
 
 ## Sets a mine down a step ahead, pointing where the survivor faces.
 func place_claymore() -> void:
@@ -520,6 +610,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		ready_throw("grenade")
 	if event.is_action_pressed("throw_flash"):
 		ready_throw("flashbang")
+	if event.is_action_pressed("throw_molotov"):
+		ready_throw("molotov")
+	if event.is_action_pressed("melee"):
+		melee()
 	if event.is_action_pressed("place_claymore"):
 		place_claymore()
 	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -528,6 +622,19 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	shot_cooldown = maxf(0, shot_cooldown - delta)
 	throw_cooldown = maxf(0, throw_cooldown - delta)
+	melee_cooldown = maxf(0, melee_cooldown - delta)
+	melee_pose = move_toward(melee_pose, 0.0, delta * 3.4)
+	flame_left = maxf(0.0, flame_left - delta)
+	flame_mark = maxf(0.0, flame_mark - delta)
+	_show_flame(flame_left > 0.0)
+	if not burn_report.is_empty():
+		burn_wait -= delta
+		if burn_wait <= 0.0:
+			burn_wait = 0.2
+			for enemy in burn_report:
+				if is_instance_valid(enemy):
+					game.net.report_burn(enemy, float(burn_report[enemy]))
+			burn_report.clear()
 	_hold_throw(delta)
 	throw_pose = move_toward(throw_pose, 1.0 if throw_kind != "" else 0.0, delta * (9.0 if throw_kind != "" else 4.5))
 	# The line of the throw, once the key has been held for a moment.
@@ -632,8 +739,11 @@ func _physics_process(delta: float) -> void:
 	if position.y < -10:
 		position = game.cabin.player_start
 	var firing: bool = Input.is_action_pressed("fire") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not blocked and not (sprint and input.length() > 0.1)
+	# A weapon that fires single shots wants the trigger let go before the next one.
+	if not Input.is_action_pressed("fire"):
+		trigger_held = false
 	_spin(delta, firing)
-	if firing and spin >= 1.0:
+	if firing and spin >= 1.0 and trigger_free():
 		shoot()
 	var moving := input.length() > 0.1 and is_on_floor()
 	if moving:
@@ -651,6 +761,10 @@ func _physics_process(delta: float) -> void:
 		weapon.hide()
 	var zoom := float(sights.get("scope", sights.get("zoom", 50.0))) if aiming else (BASE_FOV + 5.0 if sprint and moving else BASE_FOV)
 	camera.fov = lerpf(camera.fov, zoom, minf(1, delta * 11))
+
+## False while a weapon that fires single shots waits for the trigger to be let go.
+func trigger_free() -> bool:
+	return not (trigger_held and WEAPONS[current_weapon].get("semi", false))
 
 ## The rotary gun has to come up to speed before it fires; every other weapon is ready.
 func _spin(delta: float, firing: bool) -> void:
@@ -696,6 +810,84 @@ func _launch(data: Dictionary) -> void:
 	if game.net.active:
 		game.net.send_shot(camera.global_position, camera.global_position - camera.global_basis.z * 30.0, str(data.sound))
 
+## The flamethrower: a stream of fire as far as FLAME_REACH. Whatever stands in its cone
+## and in sight is scorched, and keeps burning.
+func _flame(data: Dictionary) -> void:
+	flame_left = 0.16
+	var origin := camera.global_position
+	var ahead := -camera.global_basis.z
+	var space := get_world_3d().direct_space_state
+	var touched := false
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if enemy.dead:
+			continue
+		var chest := enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.55, 0)
+		var to := chest - origin
+		var gap := to.length()
+		# Up close the stream is as wide as whoever stands in front of the nozzle.
+		if gap > FLAME_REACH or to.normalized().dot(ahead) < (FLAME_CONE if gap > 2.5 else 0.7):
+			continue
+		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, chest, 1)).is_empty():
+			continue
+		touched = true
+		var damage: float = float(data.damage) * _bonus(data, enemy, false)
+		if game.net.joined:
+			# The host works out what the fire does; a guest reports it a few times a second.
+			burn_report[enemy] = float(burn_report.get(enemy, 0.0)) + damage
+		else:
+			game.scorch(enemy, damage, to.normalized())
+	if touched and flame_mark <= 0.0:
+		flame_mark = 0.3
+		game.hud.hit_marker(false)
+	if game.net.active:
+		game.net.send_shot(origin, origin + ahead * FLAME_REACH, str(data.sound))
+
+## The stream of the flamethrower, its glow and its roar: on while it fires.
+func _show_flame(on: bool) -> void:
+	if flame_stream == null:
+		if not on:
+			return
+		flame_stream = game.fx.flame_stream()
+		camera.add_child(flame_stream)
+		flame_light = OmniLight3D.new()
+		flame_light.light_color = Color(1.0, 0.55, 0.2)
+		flame_light.omni_range = 9.0
+		flame_light.position = Vector3(0, -0.1, -3.2)
+		flame_light.light_cull_mask = 1
+		camera.add_child(flame_light)
+		flame_voice = AudioStreamPlayer.new()
+		var roar := (game.sounds.clips["flamer"][0] as AudioStreamWAV).duplicate() as AudioStreamWAV
+		roar.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		roar.loop_begin = 0
+		roar.loop_end = int(roar.get_length() * roar.mix_rate)
+		flame_voice.stream = roar
+		flame_voice.bus = "Field"
+		flame_voice.volume_db = float(FieldAudio.MIX["flamer"][0])
+		add_child(flame_voice)
+	if on:
+		flame_stream.global_position = _visible_muzzle()
+		flame_stream.global_basis = camera.global_basis
+		flame_light.light_energy = 2.2 + randf() * 0.9
+	flame_stream.emitting = on
+	flame_light.visible = on
+	if on and not flame_voice.playing and not game.sounds.hush:
+		flame_voice.play()
+	elif not on and flame_voice.playing:
+		flame_voice.stop()
+
+## What a hit of this weapon is worth against this enemy beyond its plain damage: what
+## the abilities add and what the weapon itself is made for. A guest of a co-op match,
+## whose hits the host works out, also reports here what his weapon and his abilities
+## take off a soldier's armour.
+func _bonus(data: Dictionary, enemy: Infected, headshot: bool) -> float:
+	var factor: float = game.skills.damage_factor(enemy, headshot)
+	if Skills.kind_of(enemy) == "special":
+		factor *= float(data.get("special", 1.0))
+	if game.net.joined and enemy is CruSoldier:
+		factor *= (enemy as CruSoldier).armour_gain(float(data.get("armour", 1.0)) * game.skills.armour_left())
+	return factor
+
 ## A heavy bullet goes on through the body it hit: whoever stands behind is struck too,
 ## a little less hard each time. Returns where the bullet finally stops.
 func _pierce(data: Dictionary, passes: int, direction: Vector3, first: Infected, struck: Dictionary, from: Vector3) -> Vector3:
@@ -720,7 +912,7 @@ func _pierce(data: Dictionary, passes: int, direction: Vector3, first: Infected,
 		var damage: float = float(data.damage) * force
 		if headshot:
 			damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
-		damage *= game.skills.damage_factor(enemy, headshot)
+		damage *= _bonus(data, enemy, headshot)
 		var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
 		entry.damage += damage
 		entry.headshot = entry.headshot or headshot
@@ -791,6 +983,12 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var step: Dictionary = WeaponView.reload_step(current_weapon, done)
 		clip.position = step.magazine
 		(weapon.get_node("Support") as Node3D).position = step.hand
+	# A double rifle breaks open while it is loaded: the barrels drop and come up again.
+	if WeaponView.MODELS.has(current_weapon) and WeaponView.MODELS[current_weapon].has("open"):
+		var barrels := weapon.find_child("Barrels", true, false) as Node3D
+		if barrels != null:
+			var done := 1.0 - reload_left / float(WEAPONS[current_weapon].reload_time) if reload_left > 0.0 else 1.0
+			barrels.rotation.x = deg_to_rad(float(WeaponView.MODELS[current_weapon].open)) * smoothstep(0.08, 0.24, done) * (1.0 - smoothstep(0.72, 0.9, done))
 	# The pump hand drags the forend back and shoves it forward again.
 	var slide := weapon.get_node_or_null("Slide") as Node3D
 	if slide != null:
@@ -800,6 +998,11 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 			target += Vector3(0.0, -0.012, 0.012) * stroke
 			angles += Vector3(0.06, 0.03, -0.12) * stroke
 		slide.position.z = stroke * PUMP_TRAVEL
+	# A blow with the weapon: it is thrust forward and across, and comes back.
+	if melee_pose > 0.0:
+		var swing := sin(melee_pose * PI)
+		target += Vector3(-0.08, 0.035, -0.2) * swing
+		angles += Vector3(-0.3, 0.75, 0.55) * swing
 	# A grenade in the other hand: the weapon dips out of the way.
 	if throw_pose > 0.0:
 		var dip := smoothstep(0.0, 1.0, throw_pose)
@@ -863,7 +1066,11 @@ func shoot() -> void:
 		return
 	var aiming := Input.is_action_pressed("aim")
 	ammo -= 1
+	trigger_held = true
 	shot_cooldown = float(data.interval)
+	if data.has("flame"):
+		_flame(data)
+		return
 	# A suppressor leaves only a small, dim flash; a shotgun lights up the room.
 	var blaze: float = data.flash
 	flash_left = 0.03 if blaze < 0.5 else (0.075 if blaze > 1.5 else 0.045)
@@ -907,7 +1114,8 @@ func shoot() -> void:
 				target = target.get_meta("infected")
 			var shielded: bool = target is Infected and (target as Infected).blocks(direction)
 			# A shield stops a bullet, unless an ability lets this weapon shoot through it.
-			var share: float = game.skills.shield_share(current_weapon) if shielded else 1.0
+			# A few weapons do so by themselves.
+			var share: float = maxf(game.skills.shield_share(current_weapon), float(data.get("shield", 0.0))) if shielded else 1.0
 			if shielded and share <= 0.0:
 				# It rings off a shield: no blood, no harm, and the bullet stops there.
 				if marks < 4:
@@ -922,7 +1130,7 @@ func shoot() -> void:
 					damage *= clampf(1.0 - (origin.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
 				if headshot:
 					damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
-				damage *= share * game.skills.damage_factor(enemy, headshot)
+				damage *= share * _bonus(data, enemy, headshot)
 				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction, "through": false})
 				entry.damage += damage
 				entry.headshot = entry.headshot or headshot
@@ -951,8 +1159,10 @@ func shoot() -> void:
 		else:
 			# A bullet that went through a shield is not stopped by it a second time.
 			game.blasting = bool(entry.get("through", false))
+			game.piercing = float(data.get("armour", 1.0))
 			(enemy as Infected).receive_hit(entry.damage, entry.direction, entry.headshot)
 			game.blasting = false
+			game.piercing = 1.0
 	if not struck.is_empty():
 		game.hud.hit_marker(any_head)
 	# A suppressed shot gives nobody the direction it came from.
@@ -1051,7 +1261,12 @@ func reset_survivor() -> void:
 	trauma = 0
 	mist_exposure = 0
 	mist_damage_left = 0
-	items = {"grenade": 0, "flashbang": 0, "claymore": 0, "revive": 0}
+	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0}
+	trigger_held = false
+	melee_cooldown = 0.0
+	melee_pose = 0.0
+	flame_left = 0.0
+	burn_report.clear()
 	armor = 0.0
 	plate_level = 0
 	clung_by = null

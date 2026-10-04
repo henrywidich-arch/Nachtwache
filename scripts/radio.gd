@@ -8,7 +8,7 @@ extends RefCounted
 
 const VOICE_FOLDER := "res://assets/voice/"
 ## How a speaker is named in the subtitle.
-const NAMES := {"coleman": "COLEMAN", "nadja": "NADJA", "viper": "VIPER", "scorpion": "SCORPION", "raven": "RAVEN", "cru": "C.R.U.", "shop": "HÄNDLERIN"}
+const NAMES := {"coleman": "COLEMAN", "nadja": "NADJA", "viper": "VIPER", "scorpion": "SCORPION", "raven": "RAVEN", "cru": "C.R.U.", "cru2": "C.R.U.", "cru3": "C.R.U.", "cru4": "C.R.U.", "shop": "HÄNDLERIN"}
 ## cue -> [speaker, [variants]]
 const LINES := {
 	"intro_drop": ["coleman", ["Fireteam, you are over the drop point. Ropes out. Good hunting."]],
@@ -176,18 +176,18 @@ const BARKS := {
 	"leech": {"viper": ["It is on you! Hold still!", "Leech on you! Do not move!", "Something is clinging to you!"], "scorpion": ["Get that thing off!", "It has got you! Rip it off!", "Hold on, it is on your back!"], "raven": ["Shake it off!", "It is feeding on you!", "Tear it off, now!"]},
 	"round": {"viper": ["Here they come. Stay sharp.", "New wave. Check your corners.", "Contacts inbound. Weapons up."], "scorpion": ["More of them. Good.", "Here comes the next batch!", "Bring it on!"], "raven": ["They are coming.", "Again. Fine.", "Let them come."]},
 	"hurt": {"viper": ["Taking damage!", "I am hurt, still standing!", "They are tearing me up!"], "scorpion": ["That one hurt!", "I am bleeding here!", "Getting chewed up!"], "raven": ["I am wounded.", "They cut me!", "It hurts. Keep shooting."]},
-	"gas": {"viper": ["Gas ahead! Go around!", "The air is bad here. Masks!", "Gas is spreading. Watch your step."], "scorpion": ["Gas! Do not breathe that!", "That fog bites! Stay out!", "Gas rolling in!"], "raven": ["Poison in the air. Careful.", "Gas. Stay out of it.", "The fog is toxic. Move."], "cru": ["Gas out!", "Masks on, gas out!"]},
-	"medic": {"viper": ["Medic! Take it down first!", "That one heals them! Priority!"], "scorpion": ["The tank guy! Kill him!", "Shoot the healer!"], "raven": ["The one with the tanks! Kill it!", "It is feeding them. End it."], "cru": ["Medic moving!"]},
+	"gas": {"viper": ["Gas ahead! Go around!", "The air is bad here. Masks!", "Gas is spreading. Watch your step."], "scorpion": ["Gas! Do not breathe that!", "That fog bites! Stay out!", "Gas rolling in!"], "raven": ["Poison in the air. Careful.", "Gas. Stay out of it.", "The fog is toxic. Move."], "cru": ["Gas out!", "Masks on, gas out!"], "cru2": ["Gas out.", "Masks on. Gas out."], "cru3": ["Gas out. Choke on it.", "Masks on."], "cru4": ["Deploying gas.", "Gas deployed."]},
+	"medic": {"viper": ["Medic! Take it down first!", "That one heals them! Priority!"], "scorpion": ["The tank guy! Kill him!", "Shoot the healer!"], "raven": ["The one with the tanks! Kill it!", "It is feeding them. End it."], "cru": ["Medic moving!"], "cru2": ["Medic moving."], "cru3": ["Medic. Move."], "cru4": ["Medic en route."]},
 	"shield": {"viper": ["Shield! Get around him!", "Do not shoot the shield, flank!"], "scorpion": ["Shield guy! Hit him from the side!", "Bullets bounce off that thing!"], "raven": ["Shield. Go for his back.", "Circle him. The shield holds."]},
 	"big_kill": {"viper": ["Special is down.", "Big target neutralized."], "scorpion": ["The big one is down! Ha!", "That freak is finished!"], "raven": ["The monster is dead.", "It bleeds like the rest."]},
 	"idle": {"viper": ["Check your ammo while it is quiet.", "Shop is open. Use the time.", "Breathe. It will not stay quiet."], "scorpion": ["I could use a drink.", "Is that all they have got?", "Somebody tell me this pays extra."], "raven": ["Too quiet.", "I do not like this place.", "Count your rounds."]},
-	"contact": {"cru": ["Contact!", "Hostiles, engage!", "Targets in the house!"]},
-	"frag": {"cru": ["Frag out!", "Grenade!"]},
-	"flank": {"cru": ["Moving left!", "Flanking!"]},
-	"cover": {"cru": ["Reloading!", "Cover me!"]},
-	"man_down": {"cru": ["Man down!", "We lost one!"]},
-	"retreat": {"cru": ["Fall back!", "Pull back!"]},
-	"push": {"cru": ["Push them! Go!", "Hold the line!"]},
+	"contact": {"cru": ["Contact!", "Hostiles, engage!", "Targets in the house!"], "cru2": ["Contact.", "Targets ahead. Engaging.", "Hostiles in the house."], "cru3": ["Kill them all.", "There they are. Light them up.", "Targets. Drop them."], "cru4": ["Hostiles confirmed.", "Engaging targets.", "Weapons free."]},
+	"frag": {"cru": ["Frag out!", "Grenade!"], "cru2": ["Frag out.", "Grenade."], "cru3": ["Frag out. Burn.", "Eat this."], "cru4": ["Grenade out.", "Frag."]},
+	"flank": {"cru": ["Moving left!", "Flanking!"], "cru2": ["Moving left.", "Flanking."], "cru3": ["Going around.", "Cutting them off."], "cru4": ["Flanking right.", "Repositioning."]},
+	"cover": {"cru": ["Reloading!", "Cover me!"], "cru2": ["Reloading.", "Cover me."], "cru3": ["Changing mag.", "Empty. Cover."], "cru4": ["Reloading.", "Magazine change."]},
+	"man_down": {"cru": ["Man down!", "We lost one!"], "cru2": ["Man down.", "We lost one."], "cru3": ["One down. Keep shooting.", "He is gone. Move."], "cru4": ["Operator down.", "Casualty."]},
+	"retreat": {"cru": ["Fall back!", "Pull back!"], "cru2": ["Falling back.", "Pulling back."], "cru3": ["Back. Now.", "Fall back."], "cru4": ["Withdrawing.", "Breaking contact."]},
+	"push": {"cru": ["Push them! Go!", "Hold the line!"], "cru2": ["Push them.", "Hold the line."], "cru3": ["Forward. No prisoners.", "Finish them."], "cru4": ["Advancing.", "Pressing the attack."]},
 	"greet": {"shop": ["What do you need?", "Back again? Good.", "Cash first, questions never."]},
 	"sold": {"shop": ["Good choice.", "Pleasure doing business."]},
 	"bye": {"shop": ["Try not to die with my stock."]}

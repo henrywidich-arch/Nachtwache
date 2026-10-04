@@ -152,6 +152,11 @@ func begin_round(number: int, quiet: bool = false) -> void:
 	if number >= FLOOD_FROM and upstairs and not quiet and random.randf() < FLOOD_CHANCE * float(game.rules.get("events", 1.0)):
 		flood_wait = random.randf_range(18.0, 40.0)
 
+## A round with more gas than usual: three more banks, and the first of them soon.
+func thicken() -> void:
+	wanted += 3
+	next_in = minf(next_in, 3.0)
+
 ## Called by the host when a round is over: the air clears.
 func end_round() -> void:
 	wanted = 0

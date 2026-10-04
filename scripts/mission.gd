@@ -101,10 +101,15 @@ class Target extends Node3D:
 	func receive_damage(amount: float, _from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
 		mission.damage_item(item, amount)
 
+## What a night without a last round counts as its number of rounds.
+const NO_END := 1 << 20
+
 var game: Node3D
 var random := RandomNumberGenerator.new()
 ## One entry per round: {"wave": kind, "tasks": [kinds]}.
 var plan: Array = []
+## The errand of the last round that had one: the next round gets another.
+var last_errand := ""
 var wave_kind := "classic"
 var tasks: Array = []
 var next_id := 1
@@ -147,7 +152,8 @@ func clear() -> void:
 	pending.clear()
 	wave_kind = "classic"
 
-## Lays out the whole night. The first two rounds and the last one stay plain.
+## Lays out the whole night. The first two rounds and the last one stay plain. The
+## endless night has no last round: it is planned on as it goes (begin_round).
 func prepare() -> void:
 	clear()
 	upstairs_share = 0.0 if game.check_mode else 0.6
@@ -157,36 +163,40 @@ func prepare() -> void:
 	sightings = 0
 	scare_done = false
 	sighting_left = random.randf_range(55.0, 95.0)
+	last_errand = ""
 	var rounds: int = game.ROUNDS.size()
-	var previous := ""
 	for i in range(rounds):
-		var entry := {"wave": "classic", "tasks": [], "gas": ""}
-		if i >= 3 and i < rounds - 1 and random.randf() < 0.22 * float(game.rules.events):
-			entry.gas = CabinMap.GAS_ZONES.keys()[random.randi() % CabinMap.GAS_ZONES.size()]
-		if i >= 2 and i < rounds - 1:
-			var roll := random.randf()
-			entry.wave = "horde" if roll < 0.24 else ("elite" if roll < 0.42 else "classic")
-			# From round four on the C.R.U. may take a round over or join one, but never
-			# two rounds in a row.
-			if i >= 3 and not str(plan[i - 1].wave) in ["cru", "mixed"]:
-				var turn := random.randf()
-				if turn < 0.2:
-					entry.wave = "cru"
-				elif turn < 0.36:
-					entry.wave = "mixed"
-			if i >= 4 and str(entry.wave) in ["classic", "horde", "elite"] and random.randf() < 0.16 * float(game.rules.events):
-				entry["ambush"] = true
-			if random.randf() < minf(0.9, 0.55 * float(game.rules.events)):
-				var options: Array = errands()
-				options.erase(previous)
-				previous = options[random.randi() % options.size()]
-				entry.tasks.append(previous)
-				if i >= 5 and random.randf() < 0.3 * float(game.rules.events):
-					options.erase(previous)
-					entry.tasks.append(options[random.randi() % options.size()])
-		plan.append(entry)
+		plan.append(_plan_round(i, NO_END if game.endless else rounds))
 	game.story.shape(plan)
 	_lay_bodies()
+
+## What round i + 1 of a night of `rounds` rounds brings; the rounds before it are planned.
+func _plan_round(i: int, rounds: int) -> Dictionary:
+	var entry := {"wave": "classic", "tasks": [], "gas": ""}
+	if i >= 3 and i < rounds - 1 and random.randf() < 0.22 * float(game.rules.events):
+		entry.gas = CabinMap.GAS_ZONES.keys()[random.randi() % CabinMap.GAS_ZONES.size()]
+	if i >= 2 and i < rounds - 1:
+		var roll := random.randf()
+		entry.wave = "horde" if roll < 0.24 else ("elite" if roll < 0.42 else "classic")
+		# From round four on the C.R.U. may take a round over or join one, but never
+		# two rounds in a row.
+		if i >= 3 and not str(plan[i - 1].wave) in ["cru", "mixed"]:
+			var turn := random.randf()
+			if turn < 0.2:
+				entry.wave = "cru"
+			elif turn < 0.36:
+				entry.wave = "mixed"
+		if i >= 4 and str(entry.wave) in ["classic", "horde", "elite"] and random.randf() < 0.16 * float(game.rules.events):
+			entry["ambush"] = true
+		if random.randf() < minf(0.9, 0.55 * float(game.rules.events)):
+			var options: Array = errands()
+			options.erase(last_errand)
+			last_errand = options[random.randi() % options.size()]
+			entry.tasks.append(last_errand)
+			if i >= 5 and random.randf() < 0.3 * float(game.rules.events):
+				options.erase(last_errand)
+				entry.tasks.append(options[random.randi() % options.size()])
+	return entry
 
 ## Scatters the dead over the farm: one on the upper floor of the house, the rest in the
 ## yard.
@@ -297,10 +307,13 @@ func ambush(share: float = 0.5, announce: bool = true) -> void:
 		game.radio("cru_ambush", 6.0)
 
 func opening_cue() -> String:
-	return "round_final" if game.wave >= game.ROUNDS.size() else str(WAVES[wave_kind].cue)
+	return "round_final" if not game.endless and game.wave >= game.ROUNDS.size() else str(WAVES[wave_kind].cue)
 
 func begin_round(number: int) -> void:
 	_drop_tasks()
+	# The endless night is planned as it goes.
+	while game.endless and plan.size() < number:
+		plan.append(_plan_round(plan.size(), NO_END))
 	var entry: Dictionary = plan[number - 1] if number - 1 < plan.size() else {"wave": "classic", "tasks": []}
 	wave_kind = str(entry.wave)
 	# The story may claim the round: its own task, its own kind of attack.

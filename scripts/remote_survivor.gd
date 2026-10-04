@@ -21,6 +21,11 @@ var net_position := Vector3.ZERO
 var net_yaw := 0.0
 var net_pitch := 0.0
 var net_velocity := Vector3.ZERO
+## The partner's flamethrower: seconds its stream keeps showing, and where it points.
+var flame_left := 0.0
+var flame_to := Vector3.ZERO
+var flame_stream: CPUParticles3D
+var flame_voice: AudioStreamPlayer3D
 
 func _ready() -> void:
 	# The infected bump into it; nothing pushes it around.
@@ -61,8 +66,40 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 	if is_targetable():
 		game.net.send_hurt(amount, from if from != Vector3.INF else global_position, kind, by)
 
+## The stream of the partner's flamethrower and its roar, for as long as it fires.
+func _show_flame(on: bool) -> void:
+	if flame_stream == null:
+		if not on:
+			return
+		flame_stream = game.fx.flame_stream()
+		add_child(flame_stream)
+		flame_voice = AudioStreamPlayer3D.new()
+		var roar := (game.sounds.clips["flamer"][0] as AudioStreamWAV).duplicate() as AudioStreamWAV
+		roar.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		roar.loop_begin = 0
+		roar.loop_end = int(roar.get_length() * roar.mix_rate)
+		flame_voice.stream = roar
+		flame_voice.unit_size = 6.0
+		flame_voice.max_distance = 60.0
+		flame_voice.bus = "Field"
+		flame_voice.volume_db = float(FieldAudio.MIX["flamer"][0])
+		flame_voice.position.y = 1.3
+		add_child(flame_voice)
+	if on:
+		var muzzle := visual.muzzle_position()
+		flame_stream.global_position = muzzle
+		if muzzle.distance_to(flame_to) > 0.5:
+			flame_stream.look_at(flame_to)
+	flame_stream.emitting = on
+	if on and not flame_voice.playing:
+		flame_voice.play()
+	elif not on and flame_voice.playing:
+		flame_voice.stop()
+
 func _physics_process(delta: float) -> void:
 	firing_left -= delta
+	flame_left -= delta
+	_show_flame(flame_left > 0.0)
 	global_position = global_position.lerp(net_position, minf(1.0, delta * 14.0))
 	rotation.y = lerp_angle(rotation.y, net_yaw, minf(1.0, delta * 14.0))
 	visual.pitch = lerpf(visual.pitch, net_pitch, minf(1.0, delta * 12.0))
@@ -96,6 +133,11 @@ func set_down(now: bool) -> void:
 ## The partner fired: flash, tracer and the sound of their weapon from where they stand.
 func show_shot(to: Vector3, sound: String) -> void:
 	firing_left = 0.2
+	if sound == "flamer":
+		# No shot but a stream of fire, for as long as these keep coming.
+		flame_left = 0.3
+		flame_to = to
+		return
 	visual.shot()
 	game.fx.tracer(visual.muzzle_position(), to)
 	game.sounds.play_at(sound, visual.muzzle_position(), -3.0)

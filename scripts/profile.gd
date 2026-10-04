@@ -36,6 +36,10 @@ const SKINS := {
 ## Off during automatic checks: nothing is read from or written to the player's file.
 var stored := true
 var difficulty := "normal"
+## What the next night is: "story" or "endless", and whether its rounds bring modifiers
+## (see Game.MODIFIERS).
+var mode := "story"
+var modifiers := false
 ## Difficulty -> finished runs, best first.
 var runs: Dictionary = {}
 var totals := {"missions": 0, "victories": 0, "kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0, "seconds": 0}
@@ -55,10 +59,14 @@ func open() -> void:
 		return
 	if str(parsed.get("difficulty", "")) in ORDER:
 		difficulty = str(parsed.difficulty)
+	if str(parsed.get("mode", "")) in ["story", "endless"]:
+		mode = str(parsed.mode)
+	modifiers = bool(parsed.get("modifiers", false))
 	if parsed.get("runs") is Dictionary:
 		for level in ORDER:
-			if parsed.runs.get(level) is Array:
-				runs[level] = parsed.runs[level]
+			for list in [level, board(level, "endless")]:
+				if parsed.runs.get(list) is Array:
+					runs[list] = parsed.runs[list]
 	if parsed.get("totals") is Dictionary:
 		for key in totals:
 			totals[key] = int(parsed.totals.get(key, 0))
@@ -76,7 +84,7 @@ func open() -> void:
 func save() -> void:
 	if not stored:
 		return
-	var kept := {"difficulty": difficulty, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
+	var kept := {"difficulty": difficulty, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
 	if not skills.is_empty():
 		kept["skills"] = skills
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
@@ -112,6 +120,20 @@ func next_difficulty() -> void:
 	difficulty = ORDER[(ORDER.find(difficulty) + 1) % ORDER.size()]
 	save()
 
+func next_mode() -> void:
+	mode = "endless" if mode == "story" else "story"
+	save()
+
+func toggle_modifiers() -> void:
+	modifiers = not modifiers
+	save()
+
+## The list a night is filed under: one per difficulty for the story, and one more per
+## difficulty for the endless mode.
+static func board(level: String, play: String) -> String:
+	return "endless_" + level if play == "endless" else level
+
+## The best nights of a list (see board).
 func best(level: String) -> Array:
 	return runs.get(level, [])
 

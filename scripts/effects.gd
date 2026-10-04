@@ -933,6 +933,166 @@ func pop_growth_near(at: Vector3) -> void:
 		(growths[best].body as RigidBody3D).queue_free()
 		growths.remove_at(best)
 
+# ---------------------------------------------------------------- fire
+
+## The sheets flames are drawn with: an upright tongue, and a round one for a jet.
+var flame_sheets: Dictionary = {}
+
+func _flame_sheet(tongue: bool) -> QuadMesh:
+	if not flame_sheets.has(tongue):
+		var sheet := QuadMesh.new()
+		sheet.size = Vector2(0.55, 1.25) if tongue else Vector2(1.0, 1.0)
+		var paint := StandardMaterial3D.new()
+		paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		paint.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		paint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		paint.albedo_texture = soft_texture
+		paint.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		paint.billboard_keep_scale = true
+		paint.vertex_color_use_as_albedo = true
+		sheet.material = paint
+		flame_sheets[tongue] = sheet
+	return flame_sheets[tongue]
+
+## Flames: soft sheets that glow and are added to the picture. Each one alone is a
+## saturated orange that turns red and fades; where many lie over each other they add up
+## to yellow, so that a fire is brightest at its heart. `tongues`: upright ones that only
+## sway (a fire that stands), or round ones that tumble (a jet). Off until switched on.
+func _flames(amount: int, lifetime: float, tongues: bool = true) -> CPUParticles3D:
+	var fire := CPUParticles3D.new()
+	fire.mesh = _flame_sheet(tongues)
+	fire.amount = amount
+	fire.lifetime = lifetime
+	fire.lifetime_randomness = 0.3
+	fire.local_coords = false
+	fire.direction = Vector3.UP
+	fire.angle_min = -14.0 if tongues else 0.0
+	fire.angle_max = 14.0 if tongues else 360.0
+	fire.angular_velocity_min = -25.0 if tongues else -90.0
+	fire.angular_velocity_max = 25.0 if tongues else 90.0
+	var ramp := Gradient.new()
+	ramp.offsets = PackedFloat32Array([0.0, 0.1, 0.5, 1.0])
+	ramp.colors = PackedColorArray([Color(1.0, 0.7, 0.25, 0.0), Color(1.0, 0.5, 0.1, 0.72), Color(0.95, 0.22, 0.03, 0.5), Color(0.3, 0.03, 0.0, 0.0)])
+	fire.color_ramp = ramp
+	fire.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	fire.emitting = false
+	return fire
+
+static func _curve(points: Array) -> Curve:
+	var curve := Curve.new()
+	for point in points:
+		curve.add_point(point)
+	return curve
+
+## Flames on a burning body of this height and girth: an emitter to hang on it.
+func body_flames(height: float, girth: float) -> CPUParticles3D:
+	var fire := _flames(14, 0.55)
+	fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	fire.emission_box_extents = Vector3(girth * 0.8, height * 0.3, girth * 0.8)
+	fire.position.y = height * 0.5
+	fire.spread = 25.0
+	fire.gravity = Vector3(0, 3.5, 0)
+	fire.initial_velocity_min = 0.2
+	fire.initial_velocity_max = 0.9
+	fire.scale_amount_min = 0.45
+	fire.scale_amount_max = 0.8
+	fire.scale_amount_curve = _curve([Vector2(0.0, 0.6), Vector2(0.3, 1.0), Vector2(1.0, 0.25)])
+	return fire
+
+## The stream of a flamethrower: it flies along the emitter's -Z as far as the weapon
+## reaches and widens on its way.
+func flame_stream() -> CPUParticles3D:
+	var fire := _flames(72, 0.6, false)
+	fire.direction = Vector3(0, 0, -1)
+	fire.spread = 3.5
+	fire.gravity = Vector3(0, 1.2, 0)
+	fire.initial_velocity_min = 15.0
+	fire.initial_velocity_max = 18.0
+	fire.scale_amount_min = 0.9
+	fire.scale_amount_max = 1.5
+	fire.scale_amount_curve = _curve([Vector2(0.0, 0.07), Vector2(0.45, 0.65), Vector2(1.0, 1.3)])
+	return fire
+
+## The small flame on the rag of a Molotov cocktail in flight (switched on by the bottle).
+func rag_flame() -> CPUParticles3D:
+	var fire := _flames(8, 0.3, false)
+	fire.spread = 30.0
+	fire.gravity = Vector3(0, 2.0, 0)
+	fire.initial_velocity_min = 0.1
+	fire.initial_velocity_max = 0.5
+	fire.scale_amount_min = 0.1
+	fire.scale_amount_max = 0.2
+	return fire
+
+## Burning petrol on the ground: a ball of fire where the bottle burst, low flames over a
+## round patch, smoke above them, a light and a burnt mark. Returns {node, flames, smoke,
+## light}; FireField lets it burn down.
+func fire_pool(center: Vector3, radius: float) -> Dictionary:
+	var holder := Node3D.new()
+	transient.add_child(holder)
+	holder.global_position = center
+	var fire := _flames(int(radius * 36.0), 0.75)
+	fire.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	fire.emission_ring_axis = Vector3.UP
+	fire.emission_ring_height = 0.05
+	fire.emission_ring_radius = radius * 0.92
+	fire.emission_ring_inner_radius = 0.0
+	fire.position.y = 0.3
+	fire.spread = 14.0
+	fire.gravity = Vector3(0, 2.6, 0)
+	fire.initial_velocity_min = 0.3
+	fire.initial_velocity_max = 1.2
+	fire.scale_amount_min = 0.6
+	fire.scale_amount_max = 1.3
+	fire.scale_amount_curve = _curve([Vector2(0.0, 0.5), Vector2(0.3, 1.0), Vector2(1.0, 0.3)])
+	holder.add_child(fire)
+	fire.emitting = true
+	var sheet := QuadMesh.new()
+	sheet.size = Vector2(1.0, 1.0)
+	var soot := StandardMaterial3D.new()
+	soot.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	soot.albedo_texture = puff_textures[1]
+	soot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	soot.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	soot.billboard_keep_scale = true
+	soot.vertex_color_use_as_albedo = true
+	sheet.material = soot
+	var smoke := CPUParticles3D.new()
+	smoke.mesh = sheet
+	smoke.amount = 12
+	smoke.lifetime = 2.4
+	smoke.local_coords = false
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	smoke.emission_sphere_radius = radius * 0.55
+	smoke.position.y = 1.1
+	smoke.direction = Vector3.UP
+	smoke.spread = 20.0
+	smoke.gravity = Vector3(0, 0.5, 0)
+	smoke.initial_velocity_min = 0.6
+	smoke.initial_velocity_max = 1.3
+	smoke.angle_max = 360.0
+	smoke.scale_amount_min = 1.3
+	smoke.scale_amount_max = 2.3
+	smoke.scale_amount_curve = _curve([Vector2(0.0, 0.5), Vector2(1.0, 1.4)])
+	var thin := Gradient.new()
+	thin.offsets = PackedFloat32Array([0.0, 0.25, 1.0])
+	thin.colors = PackedColorArray([Color(0.1, 0.09, 0.08, 0.0), Color(0.09, 0.08, 0.08, 0.42), Color(0.12, 0.12, 0.12, 0.0)])
+	smoke.color_ramp = thin
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	holder.add_child(smoke)
+	var lamp := OmniLight3D.new()
+	lamp.light_color = Color(1.0, 0.55, 0.2)
+	lamp.light_energy = 3.0
+	lamp.omni_range = radius * 3.0
+	lamp.position.y = 0.9
+	lamp.light_volumetric_fog_energy = 0.6
+	holder.add_child(lamp)
+	decal(center, radius * 2.3, Color(0.02, 0.02, 0.02, 0.85), Vector3.UP, true)
+	var ball := _cloud_burst(true, 14, 0.7, Vector3(0, 2.5, 0), 1.0, 5.0, 0.8, 1.9, 5.0)
+	ball.color_ramp = fire.color_ramp
+	ball.global_position = center + Vector3(0, 0.4, 0)
+	return {"node": holder, "flames": fire, "smoke": smoke, "light": lamp}
+
 # ---------------------------------------------------------------- crusher acid
 
 func acid_cloud(center: Vector3, _cosmetic: bool = false) -> void:

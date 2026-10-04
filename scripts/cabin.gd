@@ -3839,6 +3839,14 @@ func _stair_height(stair: Dictionary, flat: Vector2) -> float:
 	var t := clampf((flat - Vector2(foot.x, foot.z)).dot(run) / run.length_squared(), 0.0, 1.0)
 	return lerpf(foot.y, head.y, t)
 
+## True on a flight of stairs.
+func on_stairs(pos: Vector3) -> bool:
+	var flat := Vector2(pos.x, pos.z)
+	for stair in stairs:
+		if (stair.rect as Rect2).has_point(flat) and absf(pos.y - _stair_height(stair, flat)) < 0.9:
+			return true
+	return false
+
 ## Where a position is: on a flight of stairs (with the nearest point of its centre
 ## line) or on one of the levels (with the nearest free cell).
 func _locate(pos: Vector3) -> Dictionary:
