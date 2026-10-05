@@ -97,23 +97,34 @@ const LOOKS := {
 		"label": "C.R.U.", "scene": preload("res://assets/models/cru.glb"), "textures": "res://assets/models/cru_",
 		"source_height": 1.85, "height": 1.99, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male"
 	},
-	# The three operators (see Operator), who are also looks the player can earn. eyes: where
-	# their eyes glow, on the model as it stands at rest (x across, y up, z to its front),
-	# and how big each is.
+	# The three operators (see Operator), who are also looks the player can earn. eyes: their
+	# eyes glow. at: where they are on the model as it stands at rest (x across, y up, z to
+	# its front), facing: which way each looks, size: its radius. mask: a picture in the
+	# model's UVs, white where the glass of the eyes is - with it the glass itself glows,
+	# without it a bright disc lies on each eye (see _fit_eyes).
+	# Phantom: slim, a mask with the two tubes of a night-vision set, an aerial on his helmet.
 	"phantom": {
-		"label": "PHANTOM", "scene": preload("res://assets/models/cruelite.glb"), "textures": "res://assets/models/cruelite_",
-		"source_height": 1.89, "height": 1.9, "weapon": "badger", "shot": "badger", "voice": "bot_hurt_male",
-		"eyes": {"at": [Vector3(-0.057, 1.735, 0.184), Vector3(0.057, 1.735, 0.184)], "size": 0.02}
+		"label": "PHANTOM", "scene": preload("res://assets/models/phantom.glb"), "textures": "res://assets/models/phantom_",
+		"source_height": 1.945, "height": 1.945, "weapon": "badger", "shot": "badger", "voice": "bot_hurt_male",
+		"eyes": {"mask": "res://assets/models/phantom_glow.png", "size": 0.018,
+			"at": [Vector3(-0.0625, 1.753, 0.2), Vector3(0.051, 1.7625, 0.2)],
+			"facing": [Vector3(-0.047, -0.058, 0.997), Vector3(-0.02, -0.055, 0.998)]}
 	},
+	# Havoc: the heaviest of them, hooded, a full mask with slanted lenses, one leg of metal.
 	"havoc": {
-		"label": "HAVOC", "scene": preload("res://assets/models/cruelite.glb"), "textures": "res://assets/models/cruelite_",
-		"source_height": 1.89, "height": 1.95, "weapon": "shotgun", "shot": "shotgun", "voice": "bot_hurt_male",
-		"eyes": {"at": [Vector3(-0.057, 1.735, 0.184), Vector3(0.057, 1.735, 0.184)], "size": 0.02}
+		"label": "HAVOC", "scene": preload("res://assets/models/havoc.glb"), "textures": "res://assets/models/havoc_",
+		"source_height": 1.94, "height": 2.0, "weapon": "shotgun", "shot": "shotgun", "voice": "bot_hurt_male",
+		"eyes": {"mask": "res://assets/models/havoc_glow.png", "size": 0.031,
+			"at": [Vector3(-0.0606, 1.7811, 0.1689), Vector3(0.043, 1.7896, 0.1735)],
+			"facing": [Vector3(-0.571, -0.389, 0.723), Vector3(0.548, -0.267, 0.793)]}
 	},
+	# Ghost: a hood over a gas mask with round lenses, and a long coat.
 	"ghost": {
-		"label": "GHOST", "scene": preload("res://assets/models/cruelite.glb"), "textures": "res://assets/models/cruelite_",
-		"source_height": 1.89, "height": 1.88, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male",
-		"eyes": {"at": [Vector3(-0.057, 1.735, 0.184), Vector3(0.057, 1.735, 0.184)], "size": 0.02}
+		"label": "GHOST", "scene": preload("res://assets/models/ghost.glb"), "textures": "res://assets/models/ghost_",
+		"source_height": 1.9, "height": 1.9, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male",
+		"eyes": {"mask": "res://assets/models/ghost_glow.png", "size": 0.025,
+			"at": [Vector3(-0.0373, 1.6898, 0.1212), Vector3(0.0422, 1.6911, 0.1197)],
+			"facing": [Vector3(-0.526, -0.329, 0.785), Vector3(0.455, -0.298, 0.839)]}
 	},
 	"nadja": {
 		"label": "NADJA", "scene": preload("res://assets/models/nadja.glb"), "textures": "res://assets/models/nadja_",
@@ -233,11 +244,31 @@ func _ready() -> void:
 	legs.seek(randf() * legs.current_animation_length, true)
 	arms.play("idle")
 
-## What the eyes of the operators glow with (see LOOKS, "eyes").
+## What the eyes of the operators glow with (see LOOKS, "eyes"): the colour of a disc laid
+## on an eye, and the colour and strength of the glass where the look has a mask of it.
 const EYE_GLOW := Color(0.45, 1.5, 3.4)
+const EYE_GLASS := Color(0.2, 0.58, 1.0)
+const EYE_POWER := 4.2
 
-## Eyes that glow: a small bright ball at each, fixed to the head, and a faint light of the
-## same colour on the face. Only for looks that say where their eyes are.
+## The picture of this look's eye glass (see LOOKS, "eyes"), or null if it has none.
+func _eye_mask() -> Texture2D:
+	if not config.has("eyes") or not (config.eyes as Dictionary).has("mask") or not ResourceLoader.exists(str(config.eyes.mask)):
+		return null
+	return load(str(config.eyes.mask)) as Texture2D
+
+## Whether the eyes of this look glow, by a mask in its material or by discs on its face.
+func eyes_glow() -> bool:
+	if not config.has("eyes") or skeleton == null:
+		return false
+	var mount := skeleton.find_child("Eyes", false, false)
+	if mount == null:
+		return false
+	return (materials[look] as StandardMaterial3D).emission_enabled if _eye_mask() != null else mount.get_child_count() == (config.eyes.at as Array).size() + 1
+
+## Eyes that glow, for looks that say where their eyes are. With a mask the glass glows by
+## itself (see _material); without one a bright disc lies on each eye, turned the way the
+## eye looks. Either way a faint light of the same colour falls on the face, fixed to the
+## head.
 func _fit_eyes() -> void:
 	if not config.has("eyes") or skeleton == null:
 		return
@@ -247,32 +278,42 @@ func _fit_eyes() -> void:
 	skeleton.add_child(mount)
 	mount.bone_idx = head
 	var rest := skeleton.get_bone_global_rest(head).affine_inverse()
-	var paint := StandardMaterial3D.new()
-	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	paint.albedo_color = EYE_GLOW
-	var size := float(config.eyes.size)
+	var places: Array = config.eyes.at
 	var middle := Vector3.ZERO
-	for at in config.eyes.at:
+	var ahead := Vector3.ZERO
+	var size := float(config.eyes.size)
+	var masked := _eye_mask() != null
+	for i in range(places.size()):
+		var at: Vector3 = places[i]
+		var facing: Vector3 = (config.eyes.facing[i] as Vector3).normalized() if (config.eyes as Dictionary).has("facing") else Vector3.BACK
+		middle += at / float(places.size())
+		ahead += facing / float(places.size())
+		if masked:
+			continue
 		var ball := SphereMesh.new()
 		ball.radius = size
 		ball.height = size * 2.0
-		ball.radial_segments = 10
-		ball.rings = 5
+		ball.radial_segments = 12
+		ball.rings = 6
+		var paint := StandardMaterial3D.new()
+		paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		paint.albedo_color = EYE_GLOW
 		var eye := MeshInstance3D.new()
 		eye.mesh = ball
 		eye.material_override = paint
 		eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mount.add_child(eye)
-		# Flat against the face rather than a ball standing out of it.
-		eye.transform = rest * Transform3D(Basis.from_scale(Vector3(1.0, 1.0, 0.45)), at)
-		middle += (at as Vector3) / float((config.eyes.at as Array).size())
+		# Flat against the glass rather than a ball standing out of it.
+		var turned := Basis.looking_at(facing, Vector3.UP) if absf(facing.y) < 0.95 else Basis.IDENTITY
+		eye.transform = rest * Transform3D(turned * Basis.from_scale(Vector3(1.0, 1.0, 0.3)), at)
 	var glow := OmniLight3D.new()
+	glow.name = "Light"
 	glow.light_color = Color("58b8ff")
 	glow.light_energy = 0.55
 	glow.omni_range = 0.7
 	glow.shadow_enabled = false
 	mount.add_child(glow)
-	glow.transform = rest * Transform3D(Basis.IDENTITY, middle + Vector3(0, 0, 0.1))
+	glow.transform = rest * Transform3D(Basis.IDENTITY, middle + ahead.normalized() * 0.1)
 
 func _player(title: String) -> AnimationPlayer:
 	var player := AnimationPlayer.new()
@@ -293,6 +334,14 @@ func _material() -> StandardMaterial3D:
 	built.roughness_texture = load(base + "roughness.png")
 	built.metallic = 1.0
 	built.metallic_texture = load(base + "metallic.png")
+	# Eyes of glass that glow: only where the look's mask is white.
+	var glass := _eye_mask()
+	if glass != null:
+		built.emission_enabled = true
+		built.emission = EYE_GLASS
+		built.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
+		built.emission_texture = glass
+		built.emission_energy_multiplier = EYE_POWER
 	return built
 
 ## Puts the weapon into the right hand so that, in the firing stance, it runs through

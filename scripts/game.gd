@@ -28,6 +28,8 @@ const ROUND_HEAL := 100.0
 const TRADE_IN := 0.5
 ## How far a flashbang thrown at the survivors blinds.
 const BLIND_REACH := 16.0
+## What is left of it for someone who has turned his back on it.
+const BLIND_AWAY := 0.25
 ## How many shield bearers stand in the yard at once; one more comes as a plain soldier.
 const SHIELD_LIMIT := 1
 ## The last round of a night with an end brings this share of what its table says.
@@ -901,7 +903,7 @@ func show_blind(center: Vector3) -> void:
 	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
 		return
 	var facing := (-player.camera.global_basis.z).dot((center - eye).normalized())
-	var strength := clampf(1.2 - gap / BLIND_REACH, 0.0, 1.0) * lerpf(0.45, 1.0, clampf(facing * 0.5 + 0.5, 0.0, 1.0))
+	var strength := clampf(1.2 - gap / BLIND_REACH, 0.0, 1.0) * lerpf(BLIND_AWAY, 1.0, clampf(facing * 0.5 + 0.5, 0.0, 1.0))
 	if strength > 0.05:
 		hud.blind(strength)
 		sounds.play_sound("ring", lerpf(-14.0, 0.0, strength))

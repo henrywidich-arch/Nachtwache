@@ -25,6 +25,12 @@ const SHAKEN_AT := [0.7, 0.42, 0.16]
 ## Seconds between two taunts on the radio, and how long a stun lasts on him at most.
 const TAUNT_EVERY := Vector2(24.0, 38.0)
 const STUN_AT_MOST := 1.2
+## A hunter does not wait outside: when he has not seen his prey for CLOSE_AFTER seconds
+## he starts to come nearer, and CLOSE_OVER seconds later he stands at CLOSE_REACH from
+## it, whatever his weapon would like.
+const CLOSE_AFTER := 5.0
+const CLOSE_OVER := 8.0
+const CLOSE_REACH := Vector2(5.0, 11.0)
 ## What marks him on the screen: the colour of his name, his bar and his eyes.
 const TINT := Color("69c8ff")
 
@@ -40,6 +46,8 @@ var taunt_wait := 14.0
 ## His bar is empty: he is on his way out and nothing touches him any more.
 var leaving := false
 var gloated := false
+## Seconds without sight of his prey; it runs down twice as fast while he sees it.
+var unseen_for := 0.0
 
 func _ready() -> void:
 	super._ready()
@@ -143,9 +151,15 @@ func _physics_process(delta: float) -> void:
 			if vanish_in < 0.0:
 				_vanish()
 				return
+		unseen_for = maxf(0.0, unseen_for - delta * 2.0) if seen_for > 0.0 else unseen_for + delta
 		_consider_flash(delta)
 		_talk(delta)
 	super._physics_process(delta)
+
+func _reach() -> Vector2:
+	var far := super._reach()
+	var share := clampf((unseen_for - CLOSE_AFTER) / CLOSE_OVER, 0.0, 1.0)
+	return Vector2(minf(far.x, lerpf(far.x, CLOSE_REACH.x, share)), minf(far.y, lerpf(far.y, CLOSE_REACH.y, share)))
 
 ## Decides whether it is time to throw a flashbang and be gone behind it.
 func _consider_flash(delta: float) -> void:

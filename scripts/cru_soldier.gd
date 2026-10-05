@@ -494,6 +494,10 @@ func _find_patient() -> void:
 	if patient != null and patient != before:
 		say("medic")
 
+## How far from its target it wants to stand: the nearest and the farthest.
+func _reach() -> Vector2:
+	return Vector2(float(role.range[0]), float(role.range[1]))
+
 ## Picks where to stand: at the role's distance from the target, with a line of fire, next
 ## to something solid if possible, away from the rest of the squad. Flankers work their
 ## way round; the wounded look for a place the target cannot see.
@@ -505,9 +509,10 @@ func _choose_post(target: Vector3) -> void:
 	var squad := _squad()
 	var best := Vector3.INF
 	var best_score := -INF
+	var reach := _reach()
 	for attempt in range(16):
 		var angle := base + randf_range(-0.9, 0.9)
-		var gap := randf_range(float(role.range[0]), float(role.range[1]))
+		var gap := randf_range(reach.x, reach.y)
 		if retreating > 0.0:
 			gap = randf_range(26.0, 36.0)
 		elif flanker:

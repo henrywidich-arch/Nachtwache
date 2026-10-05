@@ -4,7 +4,8 @@
 // in that order: [{speaker, cue, n, text}]. Each line is trimmed, freed of overlong
 // pauses, levelled and written as
 // assets/voice/<speaker>/<cue>_<n>.ogg. Everything that comes over the radio (Coleman, and
-// Nadja while she is still locked in) is band-limited and compressed like a radio channel.
+// Nadja while she is still locked in, the operators who break into the channel) is
+// band-limited and compressed like a radio channel.
 const fs = require('fs');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
@@ -17,7 +18,7 @@ const dry = args.includes('--dry');
 const skip = Number((args.find(a => a.startsWith('--skip=')) || '--skip=0').slice(7));
 const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
-const VOICES = { coleman: 'Colonel Coleman', nadja: 'Daisy Sweetwood', viper: 'Matilda', scorpion: 'Callum', raven: 'Lily', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura' };
+const VOICES = { coleman: 'Colonel Coleman', nadja: 'Daisy Sweetwood', viper: 'Matilda', scorpion: 'Callum', raven: 'Lily', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura', phantom: 'Phantom', havoc: 'Havoc', ghost: 'Ghost' };
 // The three later voices of the C.R.U. are meant to sound hard and without feeling. Each is
 // pitched down a little (semitones) and put through a helmet set: a narrow band, pressed
 // flat, the roughest of them with a little grit.
@@ -31,10 +32,15 @@ function hard(speaker) {
   return ',aresample=44100,asetrate=' + Math.round(44100 * ratio) + ',aresample=44100,atempo=' + (1 / ratio).toFixed(5) + ',' + HELMET + (how.grit ? ',volume=5dB,asoftclip=type=tanh' : '');
 }
 // Nadja speaks in person once she is out of her room.
-const IN_PERSON = ['nadja_freed', 'nadja_follow', 'nadja_pain', 'nadja_board'];
+const IN_PERSON = ['nadja_freed', 'nadja_follow', 'nadja_pain', 'nadja_board', 'nadja_channel', 'nadja_static'];
 // Coleman is slowed down a touch: calm and unhurried even when things go wrong.
 const RADIO = 'atempo=0.94,highpass=f=330,lowpass=f=3300,acompressor=threshold=-22dB:ratio=5:attack=4:release=90:makeup=5,highpass=f=330,lowpass=f=3300';
 const SPEAKER = 'highpass=f=260,lowpass=f=4200,acompressor=threshold=-20dB:ratio=3:attack=5:release=120:makeup=3,aecho=0.8:0.5:38:0.22';
+// The three operators break into the Fireteam's channel with sets of their own: a narrower,
+// harder band than Coleman's, driven a little too hot. What they shout across the yard
+// (every cue that does not begin with op_) stays as it was recorded.
+const INTRUDER = 'highpass=f=420,lowpass=f=2900,acompressor=threshold=-24dB:ratio=6:attack=3:release=80:makeup=6,volume=3dB,asoftclip=type=tanh,highpass=f=420,lowpass=f=2900';
+const OPERATORS = ['phantom', 'havoc', 'ghost'];
 const TRIM = 'silenceremove=start_periods=1:start_threshold=-46dB:start_silence=0.03,areverse,silenceremove=start_periods=1:start_threshold=-46dB:start_silence=0.06,areverse';
 // A pause inside a line may last this long; a longer one is cut down to it. The voice
 // generator now and then leaves seconds of dead air in the middle of a sentence.
@@ -86,9 +92,10 @@ for (let i = 0; i < files.length; i++) {
     problems++;
     continue;
   }
-  const radio = line.speaker === 'coleman' || (line.speaker === 'nadja' && !IN_PERSON.includes(line.cue));
+  const intruder = OPERATORS.includes(line.speaker) && line.cue.startsWith('op_');
+  const radio = intruder || line.speaker === 'coleman' || (line.speaker === 'nadja' && !IN_PERSON.includes(line.cue));
   const pause = pauses(file, PAUSES[line.speaker] || PAUSE);
-  const chain = pause.filter + TRIM + (line.speaker === 'coleman' ? ',' + RADIO : (radio ? ',' + SPEAKER : '')) + hard(line.speaker);
+  const chain = pause.filter + TRIM + (line.speaker === 'coleman' ? ',' + RADIO : (intruder ? ',' + INTRUDER : (radio ? ',' + SPEAKER : ''))) + hard(line.speaker);
   const measured = probe(file, chain);
   // Radio lines sit a little under full level; the calls of people nearby use all of it.
   const gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0);

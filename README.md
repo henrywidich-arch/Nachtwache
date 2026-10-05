@@ -164,7 +164,7 @@ Oben rechts liegt eine **Karte**: was im Umkreis von 26 Metern um dich ist, von 
 | weißer Pfeil in der Mitte | du |
 | **roter Punkt** | gewöhnlicher Infizierter (Mauler) |
 | **gelber Punkt mit Rand** | Spezial-Infizierter (Charger, Ripper, Leech, Striker, Medic); der Crusher ist ein großer |
-| **blaues Quadrat** | Soldat der C.R.U. |
+| **blaues Quadrat** | Soldat der C.R.U.; ein **großes** ist einer der drei Helix-Jäger (solange er hinter seiner Blendgranate verschwunden ist, fehlt er) |
 | grüner Punkt | Viper, Scorpion, dein Koop-Mitspieler (ein Ring, wenn er am Boden liegt) |
 | helle Raute | offener Auftrag |
 
@@ -213,6 +213,26 @@ Helix' Eliteeinheit: Sie soll Beweise vernichten, Nadja holen und alle ausschalt
 
 Je höher die Schwierigkeit, desto schneller reagieren sie, desto besser treffen sie und desto öfter weichen sie aus, flankieren und werfen.
 
+### Helix-Jäger – Phantom, Havoc und Ghost
+
+Drei Elite-Einheiten von Helix, die euch jagen. Du erkennst sie an den **blau leuchtenden Augen**, am eigenen **Lebensbalken** oben im Bild und am großen blauen Quadrat auf der Karte.
+
+| Jäger | Waffe | Auftreten |
+|---|---|---|
+| **Phantom** | schallgedämpfter Karabiner, kurze schnelle Feuerstöße | Schlank, Nachtsichtgerät. Arbeitet sich fast immer um dich herum. Glatt und überheblich |
+| **Havoc** | Schrotflinte, kommt nah heran | Der Schwerste der drei, Kapuze, Maske, ein Bein aus Metall. Laut, und es macht ihm Spaß |
+| **Ghost** | Gewehr, einzelne gezielte Schüsse aus der Distanz | Kapuze und Gasmaske, langer Mantel. Sagt wenig |
+
+- **Sie sterben nicht.** Ist der Balken leer, brechen sie ab und verschwinden – „… ZIEHT SICH ZURÜCK“, und der Trupp bekommt Vorrat und Punkte dafür.
+- **Blendgranate:** Alle 18 bis 28 Sekunden – und sofort, wenn sie viel Leben verlieren – werfen sie eine Blendgranate, verschwinden dahinter und **tauchen woanders wieder auf**, am liebsten in deinem Rücken. Die Warnung „BLENDGRANATE! Wegsehen!“ ist ernst gemeint: Je direkter du hinsiehst und je näher sie platzt, desto länger und greller ist das Bild weiß – bis zu drei Sekunden, dazu ein Pfeifen im Ohr. Wer ihr den Rücken zudreht, bekommt nur ein Viertel ab; hinter einer Wand gar nichts. Bots, die sie sehen, halten gut zweieinhalb Sekunden das Feuer. Solange einer verschwunden ist, kann ihn nichts treffen.
+- **Sie kommen dir nach.** Phantom arbeitet auf mittlere Entfernung, Havoc sucht die Nähe, Ghost bleibt eigentlich 20 bis 34 Meter weg. Aber wer sich im Haus verschanzt, wird besucht: Sieht ein Jäger sein Ziel länger als fünf Sekunden nicht, rückt er Schritt für Schritt nach – nach einer Viertelminute steht auch Ghost auf fünf bis elf Meter vor dir.
+- **Sie reden.** Über **euren eigenen Funk** (blaue Zeile) – beim Kommen, im Kampf, wenn einer von euch liegt, beim Abhauen.
+- Die Infizierten lassen sie in Ruhe, wie die C.R.U. Panzerbrechende Fähigkeiten des Brechers wirken auch gegen sie; Kopfschüsse zählen bei ihnen weniger.
+- **Wie viele kommen:** in der Geschichte je nach Stufe – Leicht **einer**, Normal **zwei**, Schwer und Albtraum **alle drei** –, aber jeder in einer eigenen Runde, nie zwei gleichzeitig, nie neben einem Crusher und nie in der letzten Runde. Welche es sind, wechselt von Nacht zu Nacht. Im **Endlosmodus** kommt ab Runde 5 alle vier Runden einer, ab Runde 13 kommen zwei zusammen, ab Runde 25 alle drei.
+- Eigene Spezialfähigkeiten haben sie noch nicht: Das kommt später.
+
+Die Werte stehen in `TYPES` (`scripts/infected.gd`: Leben), `ROLES` (`scripts/cru_soldier.gd`: Waffe, Panzerung) und oben in `scripts/operator.gd` (Blendgranate, Abstände); der Fahrplan in `OPERATOR_COUNT`, `OPERATOR_ROUNDS` und `OPERATOR_ENDLESS` in `scripts/game.gd`.
+
 ### Waffen
 
 #### Waffen-Plätze
@@ -259,7 +279,7 @@ In der Shop-Liste **Aufsätze**, für jede dieser Waffen eigens zu kaufen. Die L
 
 | Aufsatz | Preis | Wirkung |
 |---|---|---|
-| Rotpunktvisier | 120 | Ein **holografisches Visier** (dein Modell): ein Gehäuse mit Haube, durch dessen Fenster du hindurchschaust, darunter die Tasten − und +, an den Seiten die Stellräder, unten die Hebelklemme. Im Fenster ein feiner, matter Leuchtpunkt in einem hauchdünnen Ring – derselbe wie bisher. Das Fenster steht 7 cm über der Schiene und damit über jeder Kimme. Etwas mehr Vergrößerung als über Kimme und Korn, beim Zielen 45 % weniger Streuung |
+| Rotpunktvisier | 120 | Ein **holografisches Visier** (dein Modell): ein Gehäuse mit Haube, durch dessen Fenster du hindurchschaust, darunter die Tasten − und +, an den Seiten die Stellräder, unten die Hebelklemme. Im Fenster ein feiner, matter Leuchtpunkt in einem hauchdünnen Ring – derselbe wie bisher. Das Fenster steht 7 cm über der Schiene und damit über jeder Kimme. Etwas mehr Vergrößerung als über Kimme und Korn, beim Zielen 45 % weniger Streuung Auf dem G36 ist es ein Fünftel kleiner als auf den anderen Gewehren; beim Zielen sieht es gleich aus |
 | Zielfernrohr 4× | 260 | Vierfache Vergrößerung. Das Bild füllt fast den ganzen Bildschirm; das Fadenkreuz hat Haltemarken für weite Schüsse. Beim Zielen 65 % weniger Streuung; die Sicht dreht langsamer |
 | Schalldämpfer | 180 (AK-47: 200) | Leiser Schuss, kaum Mündungsfeuer, 20 bis 25 % weniger Rückstoß, etwas weniger Streuung, 5 % weniger Schaden – und die C.R.U. weicht deinen Schüssen nicht mehr aus |
 
@@ -327,6 +347,7 @@ Wer steht und nichts zu bekämpfen hat, **behält seine Blickrichtung** und dreh
 | Raven (Honey Badger) | nach dem ersten gewonnenen Einsatz | ja |
 | C.R.U.-Rüstung | 40 C.R.U.-Soldaten ausgeschaltet | nein |
 | Breacher-Rüstung | 500 Gegner ausgeschaltet | nein |
+| **Phantom**, **Havoc**, **Ghost** | den jeweiligen Jäger einmal in die Flucht geschlagen (zählt für beide Koop-Spieler) | nein |
 
 Was du selbst trägst, bleibt für die Bots wählbar: Du kannst als Viper spielen und trotzdem Viper im Trupp haben. Zum Ausprobieren lässt sich der Trupp auch beim Start festlegen: `SPIELEN.cmd` um ` -- --squad=raven,viper` ergänzen. Die Zähler stehen in der Laufbahn deines Profils (`user://nachtwache_profile.json`); automatische Testläufe schreiben dort nichts hinein.
 
@@ -432,6 +453,7 @@ Was am Mac anders ist:
 | `scripts/radio.gd` | Alle Funksprüche (`LINES`) und Rufe (`BARKS`) auf Englisch, nach Stichwort und Sprecher |
 | `scripts/profile.gd` | Schwierigkeitsstufen (`DIFFICULTIES`), Bestenliste, Laufbahn, Skins (`SKINS`) |
 | `scripts/cru_soldier.gd`, `scripts/cru_visual.gd` | Die C.R.U.: Rollen (`ROLES`), Stellungswahl, Feuerstöße, Flankieren, Rückzug, Ausweichrolle, Granaten, Sanitäter; ihre Waffen- und Markerlampen (`_fit_lamps`) |
+| `scripts/operator.gd` | Die Helix-Jäger Phantom, Havoc und Ghost: Blendgranate, Verschwinden und Wiederkommen, Rückzug statt Tod, ihre Sprüche im Funk |
 | `scripts/infected.gd` | Werte und Verhalten aller Gegnertypen (`TYPES`): Leben, Tempo, Schaden, Taumeln, Sprünge, Explosion |
 | `scripts/infected_visual.gd` | Modelle, Skelett-Erkennung, Mixamo-Clips (`CLIPS`) samt Übertragung auf alle Skelette, Todesvarianten |
 | `scripts/ripper_visual.gd` | Der Hund: eigenes Skelett und eigene Clips |
@@ -506,6 +528,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 
 ## Stand und Grenzen
 
+**v0.19** bringt die drei **Helix-Jäger Phantom, Havoc und Ghost** (deine Modelle, deine Stimmen): zäh, mit Lebensbalken, mit Blendgranate und Ortswechsel, nie zu töten, nur zu vertreiben – und sie reden über euren Funk. Ihre Ausrüstung gibt es als **Skins**, sobald du den jeweiligen einmal vertrieben hast. Das **Visier auf dem G36** ist kleiner. Im **Koop** steht der Mitspieler jetzt auf der Karte (in v0.18 fehlte er dort). Und ab dem Moment, in dem Nadja aus ihrem Raum kommt, ist **der Funk gestört** – das gehört zur Geschichte.
+
 **v0.18** macht den **Crusher gefährlich** (schneller, härter, ein weiter flacher Sprung mit Beben beim Landen – der alte Sprung ging fast nur nach oben, das war die Verzerrung), verstärkt das **M14** (100 Schaden, geht durch einen Körper) und lässt die **Granate des Werfers langsamer** fliegen. Bei den **Fähigkeiten** verteilst du die Punkte frei auf alle drei Wege und aktivierst einen davon; neu ist **Ausgebrannt** (brennende Charger und Striker-Wucherungen tun dem Trupp nichts). Oben rechts gibt es eine **Karte** mit eigenen Zeichen für gewöhnliche Infizierte, Spezial-Infizierte und Soldaten. Der **Shop** ist neu gebaut (Liste und Auswahl, Waffen als drehendes Modell mit Vergleich, verkaufen, wählen was geht), die **Werkbank** hat ein Menü mit fünf Linien je Waffe. Das **Labor** ist ausgestaltet: Infizierte in den Tanks, einer davon geplatzt, und sechs feste Serverschränke, aus denen die Festplatten des Auftrags gezogen werden. Das Rotpunktvisier ist jetzt **dein holografisches Visier** – auf allen vier Gewehren, die eines nehmen.
 
 **v0.17** gibt dem **Rotpunktvisier** ein richtiges Gehäuse, lässt die **Bots Aufträge übernehmen** (je eine Fähigkeit pro Weg: Spürtrupp, Techniker, Wachposten), lässt **Schrotflinten durch Schilde schießen** (Brecher, Schildbrecher II), macht die **Ripper zu Mutanten statt Hunden** (neu gebaute Geräusche), gibt **Nadja eine neue Stimme**, bringt in der **letzten Runde** wieder etwas mehr Gegner (80 statt 70 % der Tabelle) und hält die **Bots in den ersten Runden zurück**, damit die Abschüsse dir gehören.
@@ -543,6 +567,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 - Aufsätze gibt es für M4A4, UMP45, AK-47 und G36. Beim G36 bleiben Kimme und Korn stehen, wenn ein Visier draufsitzt: Das Rotpunktvisier schaut über sie hinweg, die Spitze des Korns steht unten im Glas. Für andere Waffen genügt ein Eintrag in `ATTACHMENTS` und ein Modell des Teils an der Waffe; der Magazinwechsel der anderen Waffen läuft weiter unterhalb des Bildes ab.
 - Wie die UMP klingt, ist aus vorhandenen Schüssen abgeleitet (`ump.wav`, `ump_sil.wav`) und nicht probegehört.
 - **Platzhalter in v0.14:** Die fünf neuen Waffen (M14, SVD, Flammenwerfer, Doppelbüchse, M107) sind per Skript gebaute Blender-Modelle ohne Texturen – sauber, aber schlicht. Eigene Modelle: Datei in `assets/models` ersetzen und die Punkte in `MODELS` und `VIEWS` in `scripts/weapon_view.gd` anpassen (Bauskripte und Maße: `Nachtwache-Modelle/phase7`). Ihre Sounds und die von Nahkampf, Molotow und Feuer sind seit v0.15 Aufnahmen, wie die drei neuen C.R.U.-Stimmen – **nichts davon ist probegehört**: Auswahl und Pegel folgen Messwerten, und ob die Stimmen so hart klingen wie gewünscht, entscheidet das Ohr.
+- **Nicht von Hand gespielt, nicht gehört (v0.19):** Wie zäh und wie gefährlich die drei Jäger sind (Leben, Schaden, wie oft die Blendgranate kommt und wie lange sie blendet), ist geschätzt. Die Funkstörung nach Nadjas Befreiung entsteht beim Abspielen (tiefer, Aussetzer, Datengeräusche) und ist nur gemessen, nicht gehört: `FAKE_PITCH` und `_break_up` in `scripts/sound.gd`. Als Bots lassen sich die drei Skins nicht einsetzen, weil sie keine Trupp-Sprüche haben.
 - **Nicht von Hand gespielt (v0.18):** Alles ist automatisch geprüft und auf Bildern angesehen, aber nicht gespielt. Schätzwerte sind: wie gefährlich der Crusher jetzt ist (Tempo, Schaden, Sprungweite, Beben: oben in `scripts/infected.gd` unter `LEAP_…` und `QUAKE_…`), die Preise und Stufen der Werkbank, wie groß das holografische Visier beim Zielen im Bild steht (`HOLO_EYE` in `scripts/weapon_view.gd`: größer = weiter weg = kleiner) und seine Farbe (`HOLO_PAINT`). Die Karte dreht sich mit dir; eine feste Nord-Ausrichtung gibt es nicht. Die Fähigkeiten-Regel habe ich so verstanden: ein gemeinsamer Vorrat von 15 Punkten für alle drei Wege – nicht 15 je Weg.
 - **Nicht von Hand gespielt, nicht gehört (v0.17):** Wie stark die Bots am Anfang gebremst sind (40 % Schaden in Runde 1, voll ab Runde 7), wie schnell sie Aufträge erledigen (`SQUAD_PACE` in `mission.gd`) und der Anteil der letzten Runde (`FINAL_SHARE` in `game.gd`) sind Schätzwerte. Nadjas neue Stimme und die Ripper-Geräusche sind nur gemessen. Die Bots übernehmen keine Aufträge der Geschichte, bei denen etwas getragen wird (Hack-Modul holen und anbringen, Evakuierung).
 - **Nicht von Hand gespielt, nicht gehört (v0.16):** Die Werte des G36 (450 Vorrat, Schaden 35, 750 Schuss/min) und der Schrotflinten (Schaden 24 × 9 und 17 × 8, Stoß `push` in `WEAPONS`, Reichweite des Stoßes `PUSH_NEAR`/`PUSH_FAR` in `player.gd`) sind Schätzwerte. Wie das G36, die Schrotflinten und die neuen Stimmen klingen, ist nur gemessen. Die Aufsätze sitzen beim G36 auf dem schmalen Tragebügel und sind breiter als er.
@@ -555,7 +580,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 
 ## Prüfung
 
-459 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins, die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug – und was mit v0.14 kam (ein Block für sich: `--smoke-test --only=arsenal`): Nahkampf, Molotow und Feuer, die fünf neuen Waffen, Einzelschuss, Klassenwaffen und ihre Sperre, Team-Upgrades, Nadja, die vier Stimmen und zwölf Stürze der C.R.U. (jeder Sturz jedes Soldatentyps endet am Boden), Rollen nur mit Platz, Fähigkeitspunkte vergeben und zurücknehmen, Endlosmodus und Modifikationen – und v0.15 (`--only=loadout`): Waffen-Plätze, Tausch und Gurte, Tasten nach Waffenart, Heilspritze, Ducken hinter Deckung, Heilung und Munition am Rundenende, ein Schild-Soldat gleichzeitig.
+469 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins, die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug – und was mit v0.14 kam (ein Block für sich: `--smoke-test --only=arsenal`): Nahkampf, Molotow und Feuer, die fünf neuen Waffen, Einzelschuss, Klassenwaffen und ihre Sperre, Team-Upgrades, Nadja, die vier Stimmen und zwölf Stürze der C.R.U. (jeder Sturz jedes Soldatentyps endet am Boden), Rollen nur mit Platz, Fähigkeitspunkte vergeben und zurücknehmen, Endlosmodus und Modifikationen – und v0.15 (`--only=loadout`): Waffen-Plätze, Tausch und Gurte, Tasten nach Waffenart, Heilspritze, Ducken hinter Deckung, Heilung und Munition am Rundenende, ein Schild-Soldat gleichzeitig.
 
 ```text
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test

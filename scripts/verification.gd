@@ -2812,8 +2812,26 @@ func _newer(game: Node3D) -> void:
 	profile.squad = ["viper", "scorpion"]
 	game.start_run()
 
+## Below this much health the bot of --bot-check is healed at once.
+const BOT_FLOOR := 70.0
+
+## The enemies within reach of the survivor, nearest first, for the bot's log.
+func _near(game: Node3D, reach: float) -> String:
+	var found: Array = []
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		var distance := enemy.global_position.distance_to(game.player.global_position)
+		if distance <= reach and not enemy.dead:
+			found.append([distance, "%s %.1fm %s" % [enemy.kind, distance, enemy.model.state]])
+	found.sort_custom(func(a: Array, b: Array) -> bool: return float(a[0]) < float(b[0]))
+	var names: Array = []
+	for entry in found.slice(0, 6):
+		names.append(entry[1])
+	return "[" + ", ".join(PackedStringArray(names)) + "]"
+
 ## Run with -- --bot-check [--bot-seconds=180] [--bot-pos=x,z] [--bot-round=1]
-## [--bot-speed=4]. With a window (no --headless) it also reports the frame rate; use
+## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]. With a window (no --headless)
+## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
 ## position while the real spawner runs, which exercises navigation, special infected and
 ## round flow over a long stretch and reports infected that get stuck on the way.
@@ -2827,6 +2845,11 @@ func bot(game: Node3D) -> void:
 	var frame_time := 0.0
 	var slowest := 0.0
 	var hitches := 0
+	# --bot-duel=ghost: no round, only this one operator of round --bot-round against the bot.
+	var duel := ""
+	var hunter: Operator = null
+	var harm := 0.0
+	var next_look := 2.0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bot-round="):
 			first_round = int(arg.trim_prefix("--bot-round="))
@@ -2837,6 +2860,13 @@ func bot(game: Node3D) -> void:
 			post = Vector3(float(parts[0]), 0.05, float(parts[1]))
 		if arg.begins_with("--bot-speed="):
 			pace = maxf(0.25, float(arg.trim_prefix("--bot-speed=")))
+		# Only for this run: nothing of it is saved.
+		if arg.begins_with("--bot-duel="):
+			duel = arg.trim_prefix("--bot-duel=")
+		if arg.begins_with("--bot-mode="):
+			game.profile.mode = arg.trim_prefix("--bot-mode=")
+		if arg.begins_with("--bot-level="):
+			game.profile.difficulty = arg.trim_prefix("--bot-level=")
 	Engine.time_scale = pace
 	await wait(1.0)
 	game.start_run()
@@ -2860,8 +2890,29 @@ func bot(game: Node3D) -> void:
 	var durations: Array[String] = []
 	var last_tick := Time.get_ticks_usec()
 	var last_frame := Engine.get_process_frames()
+	if duel != "":
+		game.preparation_left = 99999.0
+		game.wave = first_round
+		hunter = game.spawn_enemy(duel) as Operator
+	var health_before: float = game.player.health
+	var was_down := false
+	var blows := 0
 	while game.state == "playing" and game.elapsed < limit:
 		await get_tree().physics_frame
+		# What hits hard, and what takes the survivor off his feet.
+		var lost: float = health_before - game.player.health
+		harm += maxf(0.0, lost)
+		if duel != "":
+			if not is_instance_valid(hunter):
+				print("BOT_DUEL over at t=%.1f harm=%.0f driven_off=%d" % [game.elapsed, harm, int(game.stats.get(duel, 0))])
+				break
+			if game.elapsed >= next_look:
+				next_look += 2.0
+				print("BOT_DUEL t=%05.1f gap=%4.1f bar=%.2f absent=%s leaving=%s aiming=%s state=%s at=%s harm=%.0f mates_up=%d" % [game.elapsed, hunter.global_position.distance_to(game.player.global_position), hunter.health / hunter.max_health, str(hunter.absent), str(hunter.leaving), str((hunter.model as CruVisual).aiming), hunter.model.state, str(hunter.global_position.snapped(Vector3.ONE * 0.1)), harm, game.team.filter(func(mate: Teammate) -> bool: return not mate.down).size()])
+		if (lost >= 30.0 and blows < 40) or (game.player.down and not was_down) or game.state != "playing":
+			blows += 1
+			print("BOT_BLOW -%.0f at t=%.1f round=%d left=%.0f down=%s state=%s mates_up=%d near=%s" % [lost, game.elapsed, game.wave, game.player.health, str(game.player.down), game.state, game.team.filter(func(mate: Teammate) -> bool: return not mate.down).size(), _near(game, 7.0)])
+		was_down = game.player.down
 		# Frame times of rendered frames, once the first second of loading is over.
 		if Engine.get_process_frames() != last_frame:
 			var now := Time.get_ticks_usec()
@@ -2879,7 +2930,7 @@ func bot(game: Node3D) -> void:
 						var last_one := game.enemies.get_child(game.enemies.get_child_count() - 1) as Infected
 						newest = "%s/%s" % [last_one.kind, last_one.visual_kind]
 					print("BOT_HITCH %.0f ms at t=%.1f round=%d alive=%d spawned=%d growths=%d clouds=%d decals=%d flash=%.2f brownout=%.2f newest=%s process=%.1f ms physics=%.1f ms" % [spent, game.elapsed, game.wave, game.alive_count, game.spawned_this_wave, game.fx.growths.size(), game.fx.clouds.size(), game.fx.decals.size(), game.cabin.flash_left, game.cabin.brownout_left, newest, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
-		if game.phase == "preparing":
+		if game.phase == "preparing" and duel == "":
 			game.preparation_left = minf(game.preparation_left, 1.0)
 		if game.phase != last_phase:
 			if game.phase == "wave":
@@ -2887,9 +2938,12 @@ func bot(game: Node3D) -> void:
 			else:
 				durations.append("%d:%ds" % [game.wave, int(game.elapsed - wave_began)])
 			last_phase = game.phase
-		if game.player.health < 40:
+		# The bot is here to see the whole night, not to survive it: nothing that hits takes
+		# more than BOT_FLOOR at once (the Crusher's blow with its quake comes to 62).
+		if game.player.health < BOT_FLOOR:
 			game.player.health = 100
 			heals += 1
+		health_before = game.player.health
 		if game.player.reserve == 0:
 			game.player.reserve = game.player.max_reserve()
 		blasts = maxi(blasts, game.fx.growths.size())
@@ -3933,7 +3987,7 @@ func _operators(game: Node3D) -> void:
 	var marks: Array = hud.minimap.marks().filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.SOLDIER)
 	var glowing := hunter.model.find_child("Eyes", true, false)
 	var talked: bool = hud.radio_label.text.begins_with("PHANTOM:") and hud.radio_label.get_theme_color("font_color") == Operator.TINT
-	expect(hunter is Operator and game.operators.has(hunter) and Skills.kind_of(hunter) == "cru" and bar_shown and marks.size() == 1 and float(marks[0].size) == 4.0 and glowing != null and glowing.get_child_count() == 3 and talked and game.alive_count == 1, "An operator is a soldier with a bar on the screen, a big mark on the map, eyes that glow, and a word for the Fireteam on its own radio")
+	expect(hunter is Operator and game.operators.has(hunter) and Skills.kind_of(hunter) == "cru" and bar_shown and marks.size() == 1 and float(marks[0].size) == 4.0 and glowing != null and glowing.find_child("Light", false, false) != null and (hunter.model as CruVisual).soldier.eyes_glow() and talked and game.alive_count == 1, "An operator is a soldier with a bar on the screen, a big mark on the map, eyes that glow, and a word for the Fireteam on its own radio")
 	# --- he cannot be killed: with his bar empty he breaks off, and the Fireteam is paid
 	var whole: float = hunter.max_health
 	hunter.receive_hit(whole * 0.2, Vector3.BACK, false)
@@ -3988,6 +4042,15 @@ func _operators(game: Node3D) -> void:
 			fled = true
 			break
 	expect(fled and ghost.breaks_done >= 1 and not ghost.leaving, "Hit hard, an operator breaks contact at once")
+	# A hunter does not wait outside for somebody who stays in the house.
+	ghost.unseen_for = 0.0
+	var far_reach: Vector2 = ghost._reach()
+	ghost.unseen_for = Operator.CLOSE_AFTER + Operator.CLOSE_OVER * 0.5
+	var nearing: Vector2 = ghost._reach()
+	ghost.unseen_for = Operator.CLOSE_AFTER + Operator.CLOSE_OVER
+	var close_reach: Vector2 = ghost._reach()
+	ghost.unseen_for = 0.0
+	expect(far_reach == Vector2(20.0, 34.0) and nearing.y < far_reach.y and nearing.y > close_reach.y and close_reach == Operator.CLOSE_REACH, "An operator who has lost sight of his prey comes nearer, whatever his weapon would like (%s, then %s, then %s)" % [str(far_reach), str(nearing), str(close_reach)])
 	ghost.set_physics_process(false)
 	ghost._retire()
 	ghost.queue_free()
