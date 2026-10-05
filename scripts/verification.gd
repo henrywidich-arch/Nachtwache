@@ -3182,6 +3182,33 @@ func coop(game: Node3D, as_host: bool) -> void:
 			if arg.begins_with("--mp-address="):
 				address = arg.trim_prefix("--mp-address=")
 		game.join_match(address)
+	if "--mp-clash" in OS.get_cmdline_user_args():
+		# One of the two was started as another version (--mp-version=): neither may get
+		# into a match, and whoever can know why has to be told.
+		var told := 0.0
+		var met := false
+		# (The side that plays an old version - "none" - is told nothing: it waits as long
+		# as the other needs to find out.)
+		while told < 14.0 and game.net.clash == "" and not (met and told > 6.0):
+			await wait(0.25)
+			told += 0.25
+			met = met or game.net.partner != 0
+		await wait(0.5)
+		# What the lobby says, and whether a match could be started from it.
+		var lobby := ""
+		for node in game.hud.modal.find_children("*", "Label", true, false):
+			if (node as Label).text.contains("VERSIONEN"):
+				lobby = "shown"
+		var start_open := false
+		for node in game.hud.modal.find_children("*", "Button", true, false):
+			if (node as Button).text.contains("EINSATZ ZU ZWEIT") and not (node as Button).disabled:
+				start_open = true
+		print("%s_CLASH after %.1fs met=%s phase=%s partner=%d matched=%s state=%s menu=%s lobby=%s start_open=%s clash=%s" % [tag, told, str(met), game.net.phase, game.net.partner, str(game.net.matched()), game.state, game.hud.current_menu, lobby, str(start_open), game.net.clash])
+		# The host waits a moment longer, so that the guest is not cut off before it has printed.
+		if as_host:
+			await wait(2.5)
+		get_tree().call_deferred("quit", 0)
+		return
 	var waited := 0.0
 	while waited < 45.0 and (game.net.partner == 0 if as_host else game.state != "playing"):
 		await wait(0.25)
@@ -4154,3 +4181,40 @@ func _operators(game: Node3D) -> void:
 	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and not Radio.hijacked and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel"), "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's")
 	game.radio_queue.clear()
 	game.radio_busy = 0.0
+	# --- two versions of the game cannot play together, and both are told so
+	# (In the lobby, that is: with a match running it would also end the match.)
+	var net: NetLink = game.net
+	var state_before: String = game.state
+	game.state = "menu"
+	net.close()
+	net.clash = ""
+	net.partner = 7
+	net._on_hello(net.version)
+	var same: bool = net.matched() and net.clash == ""
+	hud.show_menu("join")
+	net._on_hello("0.18")
+	var other: bool = not net.matched() and net.partner == 7 and net.clash.contains("v0.18") and net.clash.contains("v" + NetLink.VERSION)
+	# Such a host starts nothing here.
+	var run_before: int = game.wave
+	game.wave = 77
+	net._begin("hard")
+	other = other and game.wave == 77 and game.state == "menu"
+	game.wave = run_before
+	var written := ""
+	for node in hud.modal.find_children("*", "Label", true, false):
+		written += (node as Label).text + " "
+	# One that never says its version is one from before the greeting.
+	net.clash = ""
+	net.partner_version = ""
+	net.hello_left = 0.05
+	net._process(0.1)
+	var silent: bool = net.clash.contains("ältere") and not net.matched()
+	net.close()
+	net.clash = ""
+	game.state = state_before
+	hud.show_menu("main")
+	var stamp := ""
+	for node in hud.modal.find_children("*", "Label", true, false):
+		stamp += (node as Label).text + " "
+	expect(same and other and silent and written.contains("VERSIONEN PASSEN NICHT") and written.contains("v0.18") and stamp.contains("v" + NetLink.VERSION) and net.hello != null and net.hello.name == "Hello", "Two players with different versions of the game are told so in the lobby instead of getting into a match that cannot work; one that never says its version counts as an older one")
+	hud.hide_menu()

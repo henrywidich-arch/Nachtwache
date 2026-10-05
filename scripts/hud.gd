@@ -952,7 +952,7 @@ func show_menu(mode: String) -> void:
 			first = _menu_skins(column)
 		"skills":
 			first = _menu_skills(column)
-	var version := label("SOLO + KOOP   ·   v0.19", 12, MUTED, true)
+	var version := label("SOLO + KOOP   ·   v" + NetLink.VERSION, 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
 	modal.add_child(version)
@@ -1083,6 +1083,9 @@ func _menu_settings(column: VBoxContainer) -> Control:
 	column.add_child(back)
 	return back
 
+## What two players with different versions of the game are told to do.
+const CLASH_HELP := "Für den Koop brauchen beide denselben Stand: Wer die ältere Version hat, holt das Update\n(GitHub Desktop: „Fetch origin“, dann „Pull origin“) und startet das Spiel neu."
+
 func _menu_host(column: VBoxContainer) -> Control:
 	var net: NetLink = game.net
 	_title(column, "KOOP\nHOSTEN")
@@ -1100,19 +1103,24 @@ func _menu_host(column: VBoxContainer) -> Control:
 		_:
 			description += "Über das Internet:  Router wird gefragt …\n" if net.forwarding != null else "Über das Internet:  nicht gefragt.\n"
 	description += "Im selben Netz / per VPN:  %s\n" % ", ".join(net.local_addresses())
-	description += "\n" + ("MITSPIELER VERBUNDEN  ✓" if net.partner != 0 else ("Port %d ist belegt – läuft das Spiel schon einmal?" % NetLink.PORT if net.phase == "failed" else "Warte auf Mitspieler …"))
+	if net.clash != "":
+		description += "\nVERSIONEN PASSEN NICHT  ✗   %s\n%s\n" % [net.clash, CLASH_HELP]
+	var joined_note := "MITSPIELER VERBUNDEN  ✓" if net.matched() else ("Mitspieler verbunden – aber mit einer anderen Version: kein gemeinsamer Einsatz." if net.clash != "" else "Mitspieler verbunden – Version wird geprüft …")
+	description += "\n" + (joined_note if net.partner != 0 else ("Port %d ist belegt – läuft das Spiel schon einmal?" % NetLink.PORT if net.phase == "failed" else "Warte auf Mitspieler …"))
 	_text(column, description, 16)
 	_gap(column, 8)
 	var start := _button("EINSATZ ZU ZWEIT STARTEN", game.start_run, true)
-	start.disabled = net.partner == 0
+	# Only with a partner of the same version.
+	start.disabled = not net.matched()
 	column.add_child(start)
 	column.add_child(_pair(_button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty), _button("ABBRECHEN", game.leave_lobby)))
 	return start
 
 func _menu_join(column: VBoxContainer) -> Control:
 	_title(column, "KOOP\nBEITRETEN")
-	var states := {"": "Trage die Adresse ein, die dein Mitspieler im Menü „Koop hosten“ sieht.", "connecting": "Verbinde …", "connected": "VERBUNDEN  ✓   Der Host startet den Einsatz.", "failed": "Keine Verbindung. Stimmt die Adresse? Hat der Host das Spiel eröffnet?"}
-	_text(column, str(states.get(game.net.phase, "")))
+	var states := {"": "Trage die Adresse ein, die dein Mitspieler im Menü „Koop hosten“ sieht.", "connecting": "Verbinde …", "connected": "VERBUNDEN  ✓   Der Host startet den Einsatz.", "failed": "Keine Verbindung. Stimmt die Adresse? Hat der Host das Spiel eröffnet?", "lost": "Die Verbindung zum Host ist abgerissen."}
+	# Connected to a host of another version: that, and what to do about it.
+	_text(column, "VERSIONEN PASSEN NICHT  ✗   %s\n%s" % [game.net.clash, CLASH_HELP] if game.net.clash != "" else str(states.get(game.net.phase, "")))
 	_gap(column, 8)
 	address_field = LineEdit.new()
 	address_field.text = _saved_address()

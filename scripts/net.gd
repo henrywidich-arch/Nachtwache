@@ -10,6 +10,12 @@ extends Node
 ##   both ways     : own position and stance 20 times a second, shots fired, helping up
 
 const PORT := 24565
+## The version of the game. Two players can only play together with the same one: each
+## says his on connecting (NetHello), and the lobby tells both when they differ.
+const VERSION := "0.19"
+## Seconds the other side has to say its version; one that stays silent is older than this
+## greeting (v0.18 and before).
+const HELLO_WAIT := 3.0
 const STATE_INTERVAL := 0.05
 const SNAPSHOT_INTERVAL := 1.0 / 15.0
 const STATUS_INTERVAL := 0.25
@@ -36,6 +42,14 @@ var router: UPNP
 var remote: RemoteSurvivor
 ## The look the partner chose.
 var partner_skin := "main"
+## This side's version (VERSION; a check can start as another one with --mp-version=).
+var version := VERSION
+var hello: NetHello
+## The partner's version: "" until it has said so.
+var partner_version := ""
+var hello_left := 0.0
+## Why the two cannot play together, as the lobby says it; "" if nothing stands in the way.
+var clash := ""
 ## Guest side: the host's infected by their number.
 var puppets: Dictionary = {}
 var seen: Dictionary = {}
@@ -61,6 +75,15 @@ func _ready() -> void:
 	multiplayer.connected_to_server.connect(_on_connected)
 	multiplayer.connection_failed.connect(_on_failed)
 	multiplayer.server_disconnected.connect(_on_server_lost)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--mp-version="):
+			version = arg.trim_prefix("--mp-version=")
+	# "none" plays a version from before the greeting: it has no such node at all.
+	if version != "none":
+		hello = NetHello.new()
+		hello.name = "Hello"
+		add_child(hello)
+		hello.heard.connect(_on_hello)
 
 # ---------------------------------------------------------------- connecting
 
@@ -157,6 +180,9 @@ func close() -> void:
 	hosting = false
 	joined = false
 	partner = 0
+	partner_version = ""
+	hello_left = 0.0
+	clash = ""
 	phase = ""
 	# What the router opened for this match is closed with it.
 	_unmap()
@@ -168,6 +194,12 @@ func close() -> void:
 	changed.emit()
 
 func _on_peer_connected(id: int) -> void:
+	# First of all each says which version it is.
+	partner_version = ""
+	clash = ""
+	hello_left = HELLO_WAIT
+	if hello != null:
+		hello.hello.rpc_id(id, version)
 	# Each tells the other what it wears.
 	_skin.rpc_id(id, game.profile.skin)
 	if hosting:
@@ -175,10 +207,42 @@ func _on_peer_connected(id: int) -> void:
 		phase = "connected"
 		changed.emit()
 
+## The other side has said which version it is.
+func _on_hello(theirs: String) -> void:
+	partner_version = theirs
+	if theirs != version:
+		_clash(theirs)
+	else:
+		# (A greeting that took longer than HELLO_WAIT puts right what the wait made of it.)
+		clash = ""
+		hello_left = 0.0
+		changed.emit()
+
+## Whether the two are connected and of the same version: only then can a match begin.
+func matched() -> bool:
+	return partner != 0 and partner_version == version
+
+func _process(delta: float) -> void:
+	# Connected, and not a word about its version: it is from before versions were said.
+	if hello != null and hello_left > 0.0 and partner != 0 and partner_version == "":
+		hello_left -= delta
+		if hello_left <= 0.0:
+			_clash("")
+
+## Two different versions cannot play together. Each is told why (the lobby shows
+## `clash`) and no match begins between them. Nobody hangs up: the two stay connected
+## until one leaves the lobby, so that each has the time to hear the other's version.
+func _clash(theirs: String) -> void:
+	hello_left = 0.0
+	clash = "Du hast v%s, dein Mitspieler %s." % [version, ("v" + theirs) if theirs != "" else "eine ältere Version (vor v0.19)"]
+	changed.emit()
+
 func _on_peer_disconnected(_id: int) -> void:
 	if not hosting:
 		return
 	partner = 0
+	partner_version = ""
+	hello_left = 0.0
 	phase = "waiting"
 	_drop_remote()
 	if game.state != "menu":
@@ -285,6 +349,9 @@ func start_match() -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _begin(level: String, mode: String = "story", modifiers: bool = false) -> void:
+	# Not with a host of another version, whatever it thinks it can start.
+	if clash != "":
+		return
 	game.level = level
 	game.mode = mode
 	game.modifiers_on = modifiers
