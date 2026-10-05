@@ -265,6 +265,9 @@ var knock := Vector3.ZERO
 var burn_left := 0.0
 var burn_tick := 0.0
 var burn_source: Node
+## Lit by somebody with the sweeper's ability: while it burns, what it does when it bursts
+## does the survivors no harm (a Charger's blast, a Striker's growths).
+var burn_tame := false
 var flames: CPUParticles3D
 var flame_lamp: OmniLight3D
 ## Seconds a body that fell burning burns on.
@@ -552,7 +555,7 @@ func show_cue(action: String, args: Array) -> void:
 			model.hide()
 			game.fx.charger_burst(global_position + Vector3(0, 0.9, 0))
 		"shed":
-			game.fx.drop_growths(global_position + Vector3(0, 1.0, 0), int(args[0]), puppet)
+			game.fx.drop_growths(global_position + Vector3(0, 1.0, 0), int(args[0]), puppet, args.size() > 1 and bool(args[1]))
 		"enrage":
 			enraged = true
 			model.scream("roar")
@@ -1087,7 +1090,7 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 	burst_left = 0.7
 	if kind == "striker" and not shed and health > 0.0 and health <= max_health * 0.5:
 		shed = true
-		cue("shed", [1])
+		cue("shed", [1, burn_tame])
 	if health <= 0.0:
 		_die(direction, headshot, source, amount >= max_health * OVERKILL_SHARE)
 		return
@@ -1159,7 +1162,7 @@ func shove(direction: Vector3, speed: float, seconds: float, damage: float, sour
 
 ## Set alight: it burns for `seconds`, which hurts it every half second; whoever lit it
 ## gets the credit (`source`: a teammate or the co-op partner, empty for the player).
-func ignite(seconds: float, source: Node = null) -> void:
+func ignite(seconds: float, source: Node = null, tame: bool = false) -> void:
 	if dead:
 		return
 	if burn_left <= 0.0:
@@ -1167,6 +1170,7 @@ func ignite(seconds: float, source: Node = null) -> void:
 		cue("burn", [true])
 	burn_left = maxf(burn_left, seconds)
 	burn_source = source
+	burn_tame = burn_tame or tame
 
 func _burn(delta: float) -> void:
 	if burn_left <= 0.0:
@@ -1181,6 +1185,7 @@ func _burn(delta: float) -> void:
 		game.blasting = false
 	if burn_left <= 0.0 and not dead:
 		cue("burn", [false])
+		burn_tame = false
 
 ## Flames on the body while it burns.
 func _show_flames(on: bool) -> void:
@@ -1250,7 +1255,7 @@ func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: boo
 			var across := direction.dot(Vector3(-facing().z, 0, facing().x))
 			cue("die", [model.pick_death(_shot_from_behind(direction), headshot, across, overkill), headshot, direction, overkill])
 			if kind == "striker":
-				cue("shed", [3])
+				cue("shed", [3, burn_tame])
 
 ## The Charger reached its victim and blows itself up; nobody is credited.
 func detonate() -> void:
@@ -1261,7 +1266,9 @@ func detonate() -> void:
 func _explode() -> void:
 	var centre := global_position + Vector3(0, 0.9, 0)
 	cue("burst")
-	game.explode(centre, CHARGER_BLAST, spec.damage, 110.0, "charger", self)
+	# One that burnt out (the sweeper's ability) still tears the infected around it apart,
+	# but does the survivors nothing.
+	game.explode(centre, CHARGER_BLAST, 0.0 if burn_tame else float(spec.damage), 110.0, "charger", self)
 	queue_free()
 
 func _shot_from_behind(direction: Vector3) -> bool:

@@ -3,17 +3,19 @@ extends RefCounted
 ## Three trees of abilities, each with a focus of its own: against the mass of the
 ## infected, against the special ones, and against the soldiers of the C.R.U.
 ##
-## A player specialises in ONE of the trees (chosen): points go into that tree only. Taking
-## the points back (for nothing, at any time, in the menu) also frees the choice.
+## A player has ONE pool of points and spreads it over the three trees as he likes, but
+## only one tree is in force at a time (chosen): only its abilities count, only its weapon
+## is on sale. Which one that is can be changed in the menu at any time, for nothing; the
+## points stay where they were put. They can also all be taken back, for nothing as well.
 ##
 ## Finished nights earn experience (from the career totals in the profile), experience
 ## gives levels, every level after the first one point. A point buys one rank of an
 ## ability. The abilities of a tree come in three tiers; a tier opens once enough points
-## have gone into the tree. The last level leaves a player with LEVELS - 1 points: just
-## enough for every rank of the one tree.
+## have gone into that tree. The last level leaves a player with LEVELS - 1 points: about
+## enough for every rank of one tree, or for the better part of two.
 ##
-## Each tree also has a weapon of its own, which the shop only sells to somebody who has
-## chosen that tree and put WEAPON_NEEDS points into it.
+## Each tree also has a weapon of its own, which the shop only sells while that tree is in
+## force and WEAPON_NEEDS points are in it.
 ##
 ## IN_SERVICE false puts all of it out of service again: the trees can then still be looked
 ## at, but no points can be spent and nothing here changes a night.
@@ -41,8 +43,11 @@ const TREES := {
 			{"id": "sweeper_ammo", "label": "VOLLE TASCHEN", "tier": 2, "ranks": 2, "gives": {"reserve": 0.15}, "note": "+%s %% Reservemunition"},
 			{"id": "sweeper_head", "label": "KOPFJÄGER", "tier": 2, "ranks": 2, "gives": {"head_common": 0.12}, "note": "+%s %% Kopfschuss-Schaden gegen gewöhnliche Infizierte"},
 			# What the squad takes over by itself: see MissionDirector.SQUAD_JOBS. Each tree has one.
-			{"id": "sweeper_squad", "label": "SPÜRTRUPP", "tier": 2, "ranks": 1, "gives": {"squad_search": 1.0}, "note": "Begleiter bergen Zugangscodes, Probenkoffer und Festplatten"},
-			{"id": "sweeper_pierce", "label": "DURCHSCHLAG", "tier": 3, "ranks": 1, "gives": {"pierce_common": 1.0}, "note": "Gewehrkugeln durchschlagen einen gewöhnlichen Infizierten und treffen den dahinter"}
+			{"id": "sweeper_squad", "label": "SPÜRTRUPP", "tier": 2, "ranks": 1, "gives": {"squad_search": 1.0}, "note": "Begleiter bergen Codes, Koffer und Festplatten"},
+			# The flamethrower is this tree's weapon. What it sets alight goes off without harm to
+			# the survivors (Infected.burn_tame): a Charger's blast, a Striker's growths.
+			{"id": "sweeper_fire", "label": "AUSGEBRANNT", "tier": 2, "ranks": 1, "gives": {"fire_tame": 1.0}, "note": "Flammenwerfer entschärft Charger und Wucherungen"},
+			{"id": "sweeper_pierce", "label": "DURCHSCHLAG", "tier": 3, "ranks": 1, "gives": {"pierce_common": 1.0}, "note": "Gewehrkugeln durchschlagen gewöhnliche Infizierte"}
 		]
 	},
 	"hunter": {
@@ -54,7 +59,7 @@ const TREES := {
 			{"id": "hunter_acid", "label": "SÄUREFEST", "tier": 2, "ranks": 3, "gives": {"harm_acid": 0.2}, "note": "%s %% weniger Schaden durch Säure"},
 			{"id": "hunter_grip", "label": "LOSREISSEN", "tier": 2, "ranks": 2, "gives": {"shake": 0.3}, "note": "Einen Leech %s %% schneller abschütteln"},
 			{"id": "hunter_squad", "label": "TECHNIKER", "tier": 2, "ranks": 1, "gives": {"squad_switch": 1.0}, "note": "Begleiter bedienen Sicherungen, Funkmast und Kisten"},
-			{"id": "hunter_trophy", "label": "TROPHÄE", "tier": 3, "ranks": 1, "gives": {"trophy": 12.0}, "note": "Jeder erlegte Spezial-Infizierte gibt %s Lebenspunkte zurück"}
+			{"id": "hunter_trophy", "label": "TROPHÄE", "tier": 3, "ranks": 1, "gives": {"trophy": 12.0}, "note": "+%s Leben für jeden erlegten Spezial-Infizierten"}
 		]
 	},
 	"breacher": {
@@ -65,8 +70,8 @@ const TREES := {
 			{"id": "breacher_frag", "label": "SPLITTERSCHUTZ", "tier": 2, "ranks": 3, "gives": {"harm_frag": 0.12}, "note": "%s %% weniger Schaden durch Granaten"},
 			{"id": "breacher_shield", "label": "SCHILDBRECHER", "tier": 2, "ranks": 1, "gives": {"shield_sniper": 1.0}, "note": "Das Scharfschützengewehr schießt durch den Schild"},
 			{"id": "breacher_head", "label": "SAUBERER SCHUSS", "tier": 2, "ranks": 3, "gives": {"head_cru": 0.12}, "note": "+%s %% Kopfschuss-Schaden gegen die C.R.U."},
-			{"id": "breacher_squad", "label": "WACHPOSTEN", "tier": 2, "ranks": 1, "gives": {"squad_guard": 1.0}, "note": "Begleiter halten Stellungen, starten Generator und Hack neu"},
-			{"id": "breacher_shield2", "label": "SCHILDBRECHER II", "tier": 3, "ranks": 1, "gives": {"shield_heavy": 0.5}, "note": "Auch Magnum, AK-47 und beide Schrotflinten schießen durch den Schild, mit halbem Schaden"}
+			{"id": "breacher_squad", "label": "WACHPOSTEN", "tier": 2, "ranks": 1, "gives": {"squad_guard": 1.0}, "note": "Begleiter halten Stellungen, Generator und Hack"},
+			{"id": "breacher_shield2", "label": "SCHILDBRECHER II", "tier": 3, "ranks": 1, "gives": {"shield_heavy": 0.5}, "note": "Magnum, AK-47 und Schrotflinten: 50 % durch Schilde"}
 		]
 	}
 }
@@ -77,7 +82,7 @@ const RIFLES := ["rifle", "ak", "g36", "badger"]
 
 ## Ability id -> rank the player has in it.
 var ranks: Dictionary = {}
-## The tree the player has specialised in ("" until one is chosen).
+## The tree that is in force ("" until one is: the first point puts its tree in force).
 var chosen := ""
 ## While false, nothing here has any effect. The checks switch it on for themselves.
 var active := IN_SERVICE
@@ -140,10 +145,6 @@ func barred(id: String, totals: Dictionary) -> String:
 	if not active:
 		return "In Wartung"
 	var tree := tree_of(id)
-	if chosen == "":
-		return "Erst einen Weg wählen"
-	if tree != chosen:
-		return "Nicht dein Weg"
 	if rank(id) >= int(skill.ranks):
 		return "Voll ausgebaut"
 	var need: int = TIER_NEEDS[int(skill.tier) - 1]
@@ -153,22 +154,24 @@ func barred(id: String, totals: Dictionary) -> String:
 		return "Kein Punkt frei"
 	return ""
 
-## Raises an ability by one rank. True if it did.
+## Raises an ability by one rank. True if it did. The very first point also puts its tree
+## in force.
 func learn(id: String, totals: Dictionary) -> bool:
 	if barred(id, totals) != "":
 		return false
 	ranks[id] = rank(id) + 1
+	if chosen == "":
+		chosen = tree_of(id)
 	return true
 
-## Specialises in a tree. Only somebody who has not chosen yet can: to change, the points
-## are taken back first (reset). True if it did.
+## Puts a tree in force, whichever was before. True if it did.
 func choose(tree: String) -> bool:
-	if not active or chosen != "" or not TREES.has(tree):
+	if not active or not TREES.has(tree):
 		return false
 	chosen = tree
 	return true
 
-## Takes back every point, and the choice of a tree with them.
+## Takes back every point; with none spent, no tree is in force either.
 func reset() -> void:
 	ranks.clear()
 	chosen = ""
@@ -181,20 +184,20 @@ static func weapon_tree(id: String) -> String:
 	return ""
 
 ## Why the shop does not sell a weapon to this player ("" if it does): a tree's own
-## weapon wants points in that tree.
+## weapon wants points in that tree, and that tree in force.
 func weapon_barred(id: String) -> String:
 	var tree := weapon_tree(id)
 	if tree == "":
 		return ""
 	if not active:
 		return "In Wartung"
-	if tree != chosen:
-		return "nur für %s" % TREES[tree].label
-	return "" if spent(tree) >= WEAPON_NEEDS else "%d Punkte in %s" % [WEAPON_NEEDS, TREES[tree].label]
+	if spent(tree) < WEAPON_NEEDS:
+		return "%d Punkte in %s" % [WEAPON_NEEDS, TREES[tree].label]
+	return "" if tree == chosen else "%s nicht aktiv" % TREES[tree].label
 
-## What is kept in the profile: the ranks and the chosen tree. Only ranks that exist and
-## fit are taken back in, and only those of the chosen tree. A profile from before there
-## was a choice has ranks but no tree: the tree with the most points counts as chosen.
+## What is kept in the profile: the ranks and the tree in force. Only ranks that exist and
+## fit are taken back in. A profile that has ranks but names no tree: the tree with the
+## most points is in force.
 func adopt(stored: Variant, tree: String = "") -> void:
 	ranks.clear()
 	chosen = tree if TREES.has(tree) else ""
@@ -209,9 +212,6 @@ func adopt(stored: Variant, tree: String = "") -> void:
 			if spent(id) > most:
 				most = spent(id)
 				chosen = id
-	for id in ranks.keys():
-		if tree_of(str(id)) != chosen:
-			ranks.erase(id)
 
 ## The note of an ability for the menu, with the amount it gives at `at_rank`.
 static func note(skill: Dictionary, at_rank: int) -> String:
@@ -223,14 +223,16 @@ static func note(skill: Dictionary, at_rank: int) -> String:
 
 # ---------------------------------------------------------------- what the game asks
 
-## The sum of what the learnt abilities give under a key; 0 while out of service.
+## The sum of what the abilities of the tree in force give under a key; 0 while out of
+## service. Ranks in the other trees rest until theirs is put in force.
 func value(key: String) -> float:
-	if not active:
+	if not active or not TREES.has(chosen):
 		return 0.0
 	var sum := 0.0
-	for id in ranks:
-		var gives: Dictionary = find(str(id)).get("gives", {})
-		sum += float(gives.get(key, 0.0)) * int(ranks[id])
+	for skill in TREES[chosen].skills:
+		var have := rank(str(skill.id))
+		if have > 0:
+			sum += float((skill.gives as Dictionary).get(key, 0.0)) * have
 	return sum
 
 ## "common", "special" or "cru": what kind of enemy this is to the trees.

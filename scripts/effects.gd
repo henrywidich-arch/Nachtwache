@@ -883,7 +883,9 @@ func charger_burst(center: Vector3) -> void:
 
 ## Explosive growths roll free of a Striker and burst a moment later. `cosmetic` ones
 ## only look the part: the host of a co-op match decides when and where they go off.
-func drop_growths(center: Vector3, count: int, cosmetic: bool = false) -> void:
+## `spent` ones come from a Striker that burnt (the sweeper's ability): charred, and they
+## only fizzle out.
+func drop_growths(center: Vector3, count: int, cosmetic: bool = false, spent: bool = false) -> void:
 	for i in range(count):
 		var orb := RigidBody3D.new()
 		orb.collision_layer = 0
@@ -897,10 +899,10 @@ func drop_growths(center: Vector3, count: int, cosmetic: bool = false) -> void:
 		shape.shape = ball
 		orb.add_child(shape)
 		var skin := StandardMaterial3D.new()
-		skin.albedo_color = Color("c98a86")
-		skin.roughness = 0.35
+		skin.albedo_color = Color("3a2a26") if spent else Color("c98a86")
+		skin.roughness = 0.9 if spent else 0.35
 		skin.emission_enabled = true
-		skin.emission = Color(1.0, 0.72, 0.2)
+		skin.emission = Color(1.0, 0.35, 0.08) if spent else Color(1.0, 0.72, 0.2)
 		skin.emission_energy_multiplier = 0.3
 		var body := MeshInstance3D.new()
 		body.mesh = growth_mesh
@@ -909,13 +911,13 @@ func drop_growths(center: Vector3, count: int, cosmetic: bool = false) -> void:
 		var glow := OmniLight3D.new()
 		glow.light_color = Color(1.0, 0.75, 0.3)
 		glow.light_energy = 0.6
-		glow.omni_range = 3.0
+		glow.omni_range = 1.2 if spent else 3.0
 		orb.add_child(glow)
 		transient.add_child(orb)
 		var angle := randf() * TAU
 		orb.global_position = center + Vector3(cos(angle), 0, sin(angle)) * 0.2
 		orb.linear_velocity = Vector3(cos(angle) * randf_range(1.2, 2.6), randf_range(1.5, 3.0), sin(angle) * randf_range(1.2, 2.6))
-		growths.append({"body": orb, "material": skin, "light": glow, "fuse": randf_range(1.7, 2.4) + i * 0.22, "age": 0.0, "cosmetic": cosmetic})
+		growths.append({"body": orb, "material": skin, "light": glow, "fuse": randf_range(1.7, 2.4) + i * 0.22, "age": 0.0, "cosmetic": cosmetic, "spent": spent})
 	game.sounds.play_at("squish", center)
 
 ## Removes the cosmetic growth closest to a blast the host reported.
@@ -1170,6 +1172,18 @@ func _physics_process(delta: float) -> void:
 		# The pulse quickens as the growth is about to burst.
 		var urgency: float = clampf(1.0 - float(growth.fuse) / 2.2, 0.0, 1.0)
 		var pulse := 0.5 + 0.5 * sin(float(growth.age) * (8.0 + urgency * 26.0))
+		if growth.spent:
+			# Burnt out: it glows down like an ember, shrinks and is gone with a hiss.
+			(growth.material as StandardMaterial3D).emission_energy_multiplier = 0.5 * (1.0 - urgency)
+			(growth.light as OmniLight3D).light_energy = 0.25 * (1.0 - urgency)
+			orb.get_child(1).scale = Vector3.ONE * (1.0 - urgency * 0.45)
+			if growth.fuse <= 0.0:
+				var where := orb.global_position
+				growths.remove_at(i)
+				orb.queue_free()
+				dust(where, Vector3.UP)
+				game.sounds.play_at("hiss", where, -9.0, 1.5)
+			continue
 		(growth.material as StandardMaterial3D).emission_energy_multiplier = 0.15 + pulse * (0.45 + urgency * 1.5)
 		(growth.light as OmniLight3D).light_energy = 0.3 + pulse * (0.6 + urgency * 1.6)
 		orb.get_child(1).scale = Vector3.ONE * (1.0 + urgency * 0.35 + pulse * 0.08)

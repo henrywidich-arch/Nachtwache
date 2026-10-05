@@ -769,7 +769,7 @@ func _physics_process(delta: float) -> void:
 			burn_wait = 0.2
 			for enemy in burn_report:
 				if is_instance_valid(enemy):
-					game.net.report_burn(enemy, float(burn_report[enemy]))
+					game.net.report_burn(enemy, float(burn_report[enemy]), game.skills.value("fire_tame") > 0.0)
 			burn_report.clear()
 	_hold_throw(delta)
 	throw_pose = move_toward(throw_pose, 1.0 if throw_kind != "" else 0.0, delta * (9.0 if throw_kind != "" else 4.5))
@@ -982,7 +982,7 @@ func _flame(data: Dictionary) -> void:
 			# The host works out what the fire does; a guest reports it a few times a second.
 			burn_report[enemy] = float(burn_report.get(enemy, 0.0)) + damage
 		else:
-			game.scorch(enemy, damage, to.normalized())
+			game.scorch(enemy, damage, to.normalized(), null, 2.5, game.skills.value("fire_tame") > 0.0)
 	if touched and flame_mark <= 0.0:
 		flame_mark = 0.3
 		game.hud.hit_marker(false)

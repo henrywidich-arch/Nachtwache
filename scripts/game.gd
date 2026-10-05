@@ -281,8 +281,8 @@ func _ready() -> void:
 		profile.stored = false
 	profile.open()
 	skills.adopt(profile.skills, profile.skill_tree)
-	# A profile from before a tree had to be chosen: what adopt() made of it is kept from
-	# the next save on.
+	# A profile that names no tree in force: what adopt() made of it is kept from the next
+	# save on.
 	profile.skill_tree = skills.chosen
 	profile.skills = skills.ranks.duplicate()
 	if profile.stored:
@@ -1019,7 +1019,8 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 	sounds.play_at("pop" if style == "growth" else "explosion", center)
 	net.send_explosion(center, radius, player_damage, style)
 	for survivor in survivors:
-		if not is_instance_valid(survivor) or not survivor.takes_local_damage() or not survivor.is_targetable():
+		# A blast without harm for the survivors (a Charger that burnt out) leaves them be.
+		if player_damage <= 0.0 or not is_instance_valid(survivor) or not survivor.takes_local_damage() or not survivor.is_targetable():
 			continue
 		var chest: Vector3 = survivor.global_position + Vector3(0, 0.9, 0)
 		var distance := chest.distance_to(center)
@@ -1070,12 +1071,16 @@ func fire_burst(center: Vector3, by: Node = null) -> void:
 	net.send_fire(at)
 
 ## Fire on an enemy: it goes round a shield, and whoever it touches burns on for a while.
-## `source`: who gets the credit (empty for the player of this machine).
-func scorch(enemy: Infected, damage: float, direction: Vector3, source: Node = null, seconds: float = 2.5) -> void:
+## `source`: who gets the credit (empty for the player of this machine). `tame`: whoever
+## lit it has the sweeper's ability that lets it go off harmlessly while it burns.
+func scorch(enemy: Infected, damage: float, direction: Vector3, source: Node = null, seconds: float = 2.5, tame: bool = false) -> void:
+	# Before the hit: the hit itself may be what sets a Charger off.
+	if tame:
+		enemy.burn_tame = true
 	blasting = true
 	enemy.receive_hit(damage, direction, false, source)
 	blasting = false
-	enemy.ignite(seconds, source)
+	enemy.ignite(seconds, source, tame)
 
 ## A flashbang goes off: the infected that can see it reel for a few seconds.
 func flash_bang(center: Vector3) -> void:
@@ -1510,10 +1515,12 @@ func learn_skill(id: String) -> bool:
 	if not skills.learn(id, profile.totals):
 		return false
 	profile.skills = skills.ranks.duplicate()
+	# The very first point puts its tree in force.
+	profile.skill_tree = skills.chosen
 	profile.save()
 	return true
 
-## Specialises in one of the trees and keeps that in the profile. True if it could.
+## Puts one of the trees in force and keeps that in the profile. True if it could.
 func choose_tree(tree: String) -> bool:
 	if not skills.choose(tree):
 		return false
@@ -1521,8 +1528,7 @@ func choose_tree(tree: String) -> bool:
 	profile.save()
 	return true
 
-## Takes every point back, and the choice of a tree with them, for nothing: each of the
-## trees can be tried out.
+## Takes every point back, for nothing: they can be spread anew.
 func reset_skills() -> void:
 	skills.reset()
 	profile.skills = {}

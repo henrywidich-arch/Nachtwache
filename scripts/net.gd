@@ -491,17 +491,19 @@ func _shove(id: int, direction: Vector3, damage: float) -> void:
 			return
 
 ## What a guest's flamethrower did to an enemy since his last report.
-func report_burn(enemy: Infected, damage: float) -> void:
-	_burn.rpc_id(1, enemy.net_id, damage)
+## `tame`: the guest has the ability that lets what its flamethrower lights go off
+## harmlessly.
+func report_burn(enemy: Infected, damage: float, tame: bool = false) -> void:
+	_burn.rpc_id(1, enemy.net_id, damage, tame)
 
 @rpc("any_peer", "call_remote", "reliable")
-func _burn(id: int, damage: float) -> void:
+func _burn(id: int, damage: float, tame: bool = false) -> void:
 	if not hosting or not is_instance_valid(remote):
 		return
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
 		if enemy.net_id == id:
-			game.scorch(enemy, clampf(damage, 0.0, 150.0), (enemy.global_position - remote.global_position).normalized(), remote)
+			game.scorch(enemy, clampf(damage, 0.0, 150.0), (enemy.global_position - remote.global_position).normalized(), remote, 2.5, tame)
 			return
 
 ## A guest hammers [E] to shake off the Leech that hangs on to it.

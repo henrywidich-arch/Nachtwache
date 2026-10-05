@@ -1194,6 +1194,7 @@ func _latest(game: Node3D) -> void:
 	var skills: Skills = game.skills
 	var totals := {"kills": 1697, "special_kills": 635, "cru_kills": 91, "objectives": 28, "revives": 10, "victories": 3}
 	var counted := true
+	var abilities := 0
 	var ids := {}
 	for tree in Skills.TREES:
 		var ranks := 0
@@ -1203,23 +1204,24 @@ func _latest(game: Node3D) -> void:
 			counted = counted and str(skill.id).begins_with(tree + "_") and not ids.has(skill.id) and int(skill.tier) >= tier and int(skill.tier) <= 3 and Skills.note(skill, 1) != "" and not Skills.note(skill, 1).contains("%s")
 			tier = int(skill.tier)
 			ids[skill.id] = true
-		counted = counted and ranks == 15 and ranks == Skills.LEVELS - 1 and (Skills.TREES[tree].skills as Array).size() == 7
-	expect(counted and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven abilities each, and levels enough for every rank of one tree; a career gives experience and levels")
+		counted = counted and ranks >= Skills.LEVELS - 1 and ranks <= Skills.LEVELS and (Skills.TREES[tree].skills as Array).size() >= 7
+		abilities += (Skills.TREES[tree].skills as Array).size()
+	expect(counted and abilities == 22 and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven or eight abilities each, and levels enough for about one tree; a career gives experience and levels")
 	game.hud.show_menu("skills")
 	var marked := false
 	for node in game.hud.modal.find_children("*", "Label", true, false):
 		marked = marked or (node as Label).text == "IN WARTUNG"
-	# Nothing is chosen yet: every tree offers itself, and no ability can be raised.
+	# No tree is in force yet: each offers itself, and each takes points.
 	var chips := 0
 	var picks := 0
 	for node in game.hud.modal.find_children("*", "Button", true, false):
 		if (node as Button).text == "+":
 			chips += 1
-		if (node as Button).text == "WÄHLEN":
+		if (node as Button).text == "AKTIVIEREN":
 			picks += 1
-	var unchosen: bool = skills.chosen == "" and chips == 0 and picks == 3 and skills.barred("sweeper_damage", totals) == "Erst einen Weg wählen" and not skills.learn("sweeper_damage", totals)
-	# One of them is chosen: its seven abilities get their buttons, the others none.
-	var took: bool = game.choose_tree("sweeper") and not game.choose_tree("hunter") and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper"
+	var unchosen: bool = skills.chosen == "" and chips == abilities and picks == 3 and skills.barred("sweeper_damage", totals) == "" and skills.value("damage_common") == 0.0
+	# One of them is put in force, then another, then the first again: nothing is lost.
+	var took: bool = game.choose_tree("sweeper") and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper" and game.choose_tree("hunter") and game.profile.skill_tree == "hunter" and not game.choose_tree("nonsense") and game.choose_tree("sweeper") and skills.chosen == "sweeper"
 	game.hud.show_menu("skills")
 	chips = 0
 	picks = 0
@@ -1227,11 +1229,11 @@ func _latest(game: Node3D) -> void:
 	for node in game.hud.modal.find_children("*", "Button", true, false):
 		if (node as Button).text == "+":
 			chips += 1
-		if (node as Button).text == "WÄHLEN":
+		if (node as Button).text == "AKTIVIEREN":
 			picks += 1
-		undo = undo or (node as Button).text.begins_with("NEU WÄHLEN")
+		undo = undo or (node as Button).text.begins_with("PUNKTE ZURÜCK")
 	game.hud.hide_menu()
-	var other_way: bool = skills.barred("hunter_damage", totals) == "Nicht dein Weg" and skills.weapon_barred("nitro") == "nur für JÄGER"
+	var other_way: bool = skills.barred("hunter_damage", totals) == "" and skills.weapon_barred("nitro") == "3 Punkte in JÄGER"
 	# With an empty career there is no level, so no point to spend.
 	var career: Dictionary = game.profile.totals.duplicate()
 	for key in game.profile.totals:
@@ -1239,7 +1241,7 @@ func _latest(game: Node3D) -> void:
 	var pointless: bool = not game.learn_skill("sweeper_damage") and skills.barred("sweeper_damage", game.profile.totals) == "Kein Punkt frei"
 	game.profile.totals = career
 	game.reset_skills()
-	expect(Skills.IN_SERVICE and skills.active and not marked and unchosen and took and chips == 7 and picks == 0 and undo and other_way and pointless and skills.chosen == "" and game.profile.skill_tree == "" and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are in service: one of the three trees is chosen, only its abilities can be raised, and choosing anew takes everything back; without a level nothing can be bought, and without a rank nothing has an effect")
+	expect(Skills.IN_SERVICE and skills.active and not marked and unchosen and took and chips == abilities and picks == 2 and undo and other_way and pointless and skills.chosen == "" and game.profile.skill_tree == "" and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are in service: every tree takes points, one of the three is in force and another can be put in force at will; without a level nothing can be bought, and without a rank nothing has an effect")
 	# --- what they do
 	skills.active = true
 	skills.chosen = "breacher"
@@ -1303,7 +1305,10 @@ func _latest(game: Node3D) -> void:
 	crusher.position = Vector3(-8.0, 0.05, 30.0)
 	await frames(2)
 	player.mask_level = 2
+	skills.chosen = "hunter"
 	var filter: float = player.filter_capacity()
+	var hunting: bool = is_equal_approx(skills.damage_factor(crusher, true), 1.16) and is_equal_approx(skills.harm_factor("", "special"), 0.7) and is_equal_approx(skills.harm_factor("gas", ""), 0.7) and is_equal_approx(skills.harm_factor("acid", ""), 0.6) and is_equal_approx(filter, 20.0 * 1.5) and is_equal_approx(skills.damage_factor(mauler, false), 1.0) and is_equal_approx(skills.harm_factor("", "common"), 1.0) and player.reserve_cap("rifle") == 180
+	skills.chosen = "sweeper"
 	player.mask_level = 0
 	player.equip_weapon("rifle", true)
 	player.ammo = 3
@@ -1312,7 +1317,7 @@ func _latest(game: Node3D) -> void:
 	var quick: float = player.reload_left
 	player.reload_left = 0.0
 	player.ammo = int(Survivor.WEAPONS.rifle.magazine)
-	expect(is_equal_approx(skills.damage_factor(mauler, false), 1.24) and is_equal_approx(skills.damage_factor(mauler, true), 1.48) and is_equal_approx(skills.damage_factor(crusher, true), 1.16) and is_equal_approx(skills.harm_factor("", "common"), 0.76) and is_equal_approx(skills.harm_factor("", "special"), 0.7) and is_equal_approx(skills.harm_factor("gas", ""), 0.7) and is_equal_approx(skills.harm_factor("acid", ""), 0.6) and is_equal_approx(filter, 20.0 * 1.5) and is_equal_approx(quick, float(Survivor.WEAPONS.rifle.reload_time) * 0.76) and player.reserve_cap("rifle") == 234, "The other abilities count rank by rank: harder hits, a thicker skin, a longer filter, quicker hands, deeper pockets")
+	expect(hunting and is_equal_approx(skills.damage_factor(mauler, false), 1.24) and is_equal_approx(skills.damage_factor(mauler, true), 1.48) and is_equal_approx(skills.damage_factor(crusher, true), 1.0) and is_equal_approx(skills.harm_factor("", "common"), 0.76) and is_equal_approx(skills.harm_factor("", "special"), 1.0) and is_equal_approx(skills.harm_factor("acid", ""), 1.0) and is_equal_approx(quick, float(Survivor.WEAPONS.rifle.reload_time) * 0.76) and player.reserve_cap("rifle") == 234, "The other abilities count rank by rank, and only those of the tree in force: harder hits, a thicker skin, a longer filter, quicker hands, deeper pockets")
 	for foe in [mauler, crusher]:
 		foe.receive_hit(99999.0, Vector3.FORWARD)
 	# Taken back, with nothing left behind.
@@ -1526,11 +1531,15 @@ func _arsenal(game: Node3D) -> void:
 	player.extra_slots = 3
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
 	game.interact()
-	var shut: bool = not game.buy_weapon("flamer") and not game.buy_weapon("nitro") and not game.buy_weapon("fifty") and skills.weapon_barred("fifty") == "nur für BRECHER" and skills.weapon_barred("m14") == "" and game.credits == 9000
+	var shut: bool = not game.buy_weapon("flamer") and not game.buy_weapon("nitro") and not game.buy_weapon("fifty") and skills.weapon_barred("fifty") == "3 Punkte in BRECHER" and skills.weapon_barred("m14") == "" and game.credits == 9000
 	skills.chosen = "sweeper"
 	var early: bool = not game.buy_weapon("flamer") and skills.weapon_barred("flamer") == "3 Punkte in SÄUBERER"
 	skills.ranks = {"sweeper_damage": 3}
-	var first: bool = game.buy_weapon("flamer") and not game.buy_weapon("fifty") and not game.buy_weapon("nitro") and player.current_weapon == "flamer"
+	# Points in a tree that is not in force do not open its weapon.
+	skills.chosen = "hunter"
+	var resting: bool = not game.buy_weapon("flamer") and skills.weapon_barred("flamer") == "SÄUBERER nicht aktiv"
+	skills.chosen = "sweeper"
+	var first: bool = resting and game.buy_weapon("flamer") and not game.buy_weapon("fifty") and not game.buy_weapon("nitro") and player.current_weapon == "flamer"
 	skills.reset()
 	skills.chosen = "breacher"
 	skills.ranks = {"breacher_armour": 2, "breacher_plates": 1}
@@ -1542,7 +1551,7 @@ func _arsenal(game: Node3D) -> void:
 	game.resume_run()
 	game.wave = 0
 	skills.reset()
-	expect(shut and early and first and others and Skills.weapon_tree("flamer") == "sweeper" and Skills.weapon_tree("nitro") == "hunter" and Skills.weapon_tree("fifty") == "breacher" and Skills.weapon_tree("svd") == "", "Each tree of abilities has a weapon of its own, which the shop sells only to somebody who has chosen that tree and put three points into it")
+	expect(shut and early and first and others and Skills.weapon_tree("flamer") == "sweeper" and Skills.weapon_tree("nitro") == "hunter" and Skills.weapon_tree("fifty") == "breacher" and Skills.weapon_tree("svd") == "", "Each tree of abilities has a weapon of its own, which the shop sells only while that tree is in force and three points are in it")
 	# The .50 against a shield and against armour, with no ability at all.
 	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
 	bearer.set_physics_process(false)
@@ -1802,12 +1811,11 @@ func _arsenal(game: Node3D) -> void:
 	for key in game.profile.totals:
 		game.profile.totals[key] = 0
 	game.profile.totals.victories = 3
-	var unchosen: bool = not game.learn_skill("sweeper_damage")
-	var learnt: bool = unchosen and game.choose_tree("sweeper") and game.learn_skill("sweeper_damage") and game.learn_skill("sweeper_damage") and not game.learn_skill("sweeper_damage") and not game.learn_skill("hunter_damage") and int(game.profile.skills.get("sweeper_damage", 0)) == 2 and game.profile.skill_tree == "sweeper" and skills.points_left(game.profile.totals) == 0
+	var learnt: bool = game.learn_skill("sweeper_damage") and game.profile.skill_tree == "sweeper" and game.learn_skill("hunter_damage") and not game.learn_skill("sweeper_damage") and int(game.profile.skills.get("sweeper_damage", 0)) == 1 and int(game.profile.skills.get("hunter_damage", 0)) == 1 and skills.chosen == "sweeper" and skills.points_left(game.profile.totals) == 0 and game.choose_tree("hunter") and game.profile.skill_tree == "hunter" and skills.spent() == 2
 	game.reset_skills()
 	var returned: bool = skills.ranks.is_empty() and skills.chosen == "" and game.profile.skills.is_empty() and game.profile.skill_tree == "" and skills.points_left(game.profile.totals) == 2
 	game.profile.totals = career
-	expect(learnt and returned, "Points are spent on the abilities of the chosen tree, kept in the profile and taken back for nothing, the choice with them")
+	expect(learnt and returned, "Points are spent on the abilities of any tree (the first puts its tree in force), kept in the profile and taken back for nothing")
 	# --- the endless night
 	game.team_enabled = false
 	game.profile.mode = "endless"
@@ -3431,7 +3439,8 @@ func _squadwork(game: Node3D) -> void:
 	game.start_run()
 
 ## What came with v0.18: a Crusher that is a danger, a harder M14, a shell that can be
-## watched on its way.
+## watched on its way, points for all three trees with one of them in force, fire that
+## lets a Charger and a Striker's growths go off harmlessly.
 func _overhaul(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var skills: Skills = game.skills
@@ -3520,3 +3529,107 @@ func _overhaul(game: Node3D) -> void:
 	var reach := Vector2(landing.x - flight[0].x, landing.z - flight[0].z).length()
 	var seconds := (flight.size() - 1) * 0.05
 	expect(reach > 14.0 and reach < 30.0 and seconds > 1.0 and reach / seconds < 18.5 and float(Survivor.LAUNCH_SPEED) < 20.0 and float(Survivor.LAUNCH_SHOWN) >= seconds, "The launcher's shell can be watched on its way: %.1f m in %.2f seconds when held level" % [reach, seconds])
+	# --- points are spread over the trees, and one tree is in force
+	player.inventory.erase("launcher")
+	player.equip_weapon("rifle", true)
+	var career: Dictionary = game.profile.totals.duplicate()
+	for key in game.profile.totals:
+		game.profile.totals[key] = 0
+	game.profile.totals.victories = 40
+	game.reset_skills()
+	var spread := true
+	for id in ["sweeper_damage", "sweeper_damage", "sweeper_damage", "sweeper_fire", "hunter_damage", "hunter_damage", "hunter_damage", "hunter_squad"]:
+		spread = spread and game.learn_skill(id)
+	var all_in: bool = Skills.level_of(Skills.experience(game.profile.totals)) == 9 and skills.points_left(game.profile.totals) == 0 and skills.spent("sweeper") == 4 and skills.spent("hunter") == 4 and not game.learn_skill("breacher_armour")
+	var sweeping: bool = skills.chosen == "sweeper" and is_equal_approx(skills.value("damage_common"), 0.24) and skills.value("fire_tame") == 1.0 and skills.value("damage_special") == 0.0 and skills.value("squad_switch") == 0.0
+	var switched: bool = game.choose_tree("hunter")
+	var hunting: bool = skills.chosen == "hunter" and is_equal_approx(skills.value("damage_special"), 0.24) and skills.value("squad_switch") == 1.0 and skills.value("damage_common") == 0.0 and skills.value("fire_tame") == 0.0 and skills.spent() == 8
+	# A row of a tree opens by the points in that tree, however many are in the others.
+	var rows: bool = skills.barred("breacher_shield", {"victories": 9999}).begins_with("Erst 3 Punkte") and skills.barred("sweeper_pierce", {"victories": 9999}).begins_with("Erst 7 Punkte")
+	game.hud.show_menu("main")
+	var named := ""
+	for node in game.hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("FÄHIGKEITEN"):
+			named = (node as Button).text
+	game.hud.show_menu("skills")
+	var marks := 0
+	for node in game.hud.modal.find_children("*", "Label", true, false):
+		if (node as Label).text == "AKTIV":
+			marks += 1
+	game.hud.hide_menu()
+	# The profile keeps the ranks of every tree and the tree in force.
+	var kept := Skills.new()
+	kept.adopt(game.profile.skills, game.profile.skill_tree)
+	var stored: bool = game.profile.skill_tree == "hunter" and kept.chosen == "hunter" and kept.spent("sweeper") == 4 and kept.spent("hunter") == 4 and kept.rank("sweeper_fire") == 1
+	game.profile.totals = career
+	game.reset_skills()
+	expect(spread and all_in and sweeping and switched and hunting and rows and named.ends_with("JÄGER") and marks == 1 and stored and skills.spent() == 0, "Points go into any of the trees; only the tree in force counts, another can be put in force without losing a point, and the profile keeps all of it")
+	# --- what the sweeper's flamethrower sets alight goes off without harm
+	var post := Vector3(0, 0.05, 22.0)
+	skills.chosen = "sweeper"
+	skills.ranks = {"sweeper_damage": 3, "sweeper_fire": 1}
+	player.unlock("flamer")
+	player.equip_weapon("flamer", true)
+	var harms: Array = []
+	var torn: Array = []
+	for tame in [true, false]:
+		if not tame:
+			skills.ranks.erase("sweeper_fire")
+		_wipe(game)
+		await frames(3)
+		face(game, post, PI)
+		player.health = 100.0
+		var bomb: Infected = game.spawn_enemy("charger")
+		bomb.set_physics_process(false)
+		bomb.position = post + Vector3(0, 0, 2.2)
+		bomb.health = 1.0
+		var near_it: Infected = game.spawn_enemy("mauler")
+		near_it.set_physics_process(false)
+		near_it.position = post + Vector3(2.4, 0, 3.4)
+		near_it.health = 2000.0
+		await frames(3)
+		player.shot_cooldown = 0.0
+		player.shoot()
+		await wait(0.5)
+		harms.append(100.0 - player.health)
+		torn.append(2000.0 - near_it.health)
+	expect(harms[0] == 0.0 and harms[1] > 10.0 and torn[0] > 20.0 and torn[1] > 20.0, "A Charger the sweeper's flamethrower set alight bursts without harming him (%.0f; without the ability %.0f), and still tears the infected beside it apart" % [harms[0], harms[1]])
+	# A Striker's growths: charred, and they only fizzle out.
+	skills.ranks = {"sweeper_damage": 3, "sweeper_fire": 1}
+	_wipe(game)
+	await frames(3)
+	face(game, post, PI)
+	player.health = 100.0
+	var runner: Infected = game.spawn_enemy("striker")
+	runner.set_physics_process(false)
+	runner.position = post + Vector3(0, 0, 2.0)
+	runner.shed = true
+	runner.health = 1.0
+	await frames(3)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	await frames(3)
+	var charred := 0
+	for growth in game.fx.growths:
+		if growth.spent:
+			charred += 1
+	await wait(3.6)
+	var fizzled: bool = charred == 3 and game.fx.growths.is_empty() and player.health == 100.0
+	# The fire has to be burning: once it is out, a Charger is as dangerous as ever.
+	var late: Infected = game.spawn_enemy("charger")
+	late.set_physics_process(false)
+	late.position = post + Vector3(0, 0, 2.2)
+	await frames(2)
+	game.scorch(late, 1.0, Vector3.FORWARD, null, 0.2, true)
+	var lit: bool = late.burn_tame and late.burn_left > 0.0
+	late._burn(0.3)
+	var out: bool = not late.burn_tame and late.burn_left <= 0.0
+	late.receive_hit(99999.0, Vector3.FORWARD)
+	await wait(0.5)
+	expect(fizzled and lit and out and player.health < 100.0 and Skills.tree_of("sweeper_fire") == "sweeper" and int(Skills.find("sweeper_fire").tier) == 2, "The growths of a Striker that burnt come off charred and only fizzle out; once the fire is out a Charger is as dangerous as before")
+	_wipe(game)
+	await wait(0.5)
+	skills.reset()
+	player.health = 100.0
+	player.inventory.erase("flamer")
+	player.equip_weapon("rifle", true)
