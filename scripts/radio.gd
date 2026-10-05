@@ -187,9 +187,9 @@ const BARKS := {
 	"shield": {"viper": ["Shield! Get around him!", "Do not shoot the shield, flank!"], "scorpion": ["Shield guy! Hit him from the side!", "Bullets bounce off that thing!"], "raven": ["Shield. Go for his back.", "Circle him. The shield holds."]},
 	"big_kill": {"viper": ["Special is down.", "Big target neutralized."], "scorpion": ["The big one is down! Ha!", "That freak is finished!"], "raven": ["The monster is dead.", "It bleeds like the rest."]},
 	"idle": {"viper": ["Check your ammo while it is quiet.", "Shop is open. Use the time.", "Breathe. It will not stay quiet."], "scorpion": ["I could use a drink.", "Is that all they have got?", "Somebody tell me this pays extra."], "raven": ["Too quiet.", "I do not like this place.", "Count your rounds."]},
-	"contact": {"phantom": ["There you are."], "havoc": ["There you are!"], "ghost": ["Target."], "cru": ["Contact!", "Hostiles, engage!", "Targets in the house!"], "cru2": ["Contact.", "Targets ahead. Engaging.", "Hostiles in the house."], "cru3": ["Kill them all.", "There they are. Light them up.", "Targets. Drop them."], "cru4": ["Hostiles confirmed.", "Engaging targets.", "Weapons free."]},
+	"contact": {"phantom": ["There you are."], "havoc": ["There you are!"], "ghost": ["I see you."], "cru": ["Contact!", "Hostiles, engage!", "Targets in the house!"], "cru2": ["Contact.", "Targets ahead. Engaging.", "Hostiles in the house."], "cru3": ["Kill them all.", "There they are. Light them up.", "Targets. Drop them."], "cru4": ["Hostiles confirmed.", "Engaging targets.", "Weapons free."]},
 	"frag": {"cru": ["Frag out!", "Grenade!"], "cru2": ["Frag out.", "Grenade."], "cru3": ["Frag out. Burn.", "Eat this."], "cru4": ["Grenade out.", "Frag."]},
-	"flank": {"phantom": ["Behind you."], "havoc": ["Surprise!"], "ghost": ["Here."], "cru": ["Moving left!", "Flanking!"], "cru2": ["Moving left.", "Flanking."], "cru3": ["Going around.", "Cutting them off."], "cru4": ["Flanking right.", "Repositioning."]},
+	"flank": {"phantom": ["Behind you."], "havoc": ["Surprise!"], "ghost": ["Over here."], "cru": ["Moving left!", "Flanking!"], "cru2": ["Moving left.", "Flanking."], "cru3": ["Going around.", "Cutting them off."], "cru4": ["Flanking right.", "Repositioning."]},
 	"cover": {"phantom": ["Reloading. Do not get excited."], "havoc": ["Loading! Do not go anywhere!"], "ghost": ["Reloading."], "cru": ["Reloading!", "Cover me!"], "cru2": ["Reloading.", "Cover me."], "cru3": ["Changing mag.", "Empty. Cover."], "cru4": ["Reloading.", "Magazine change."]},
 	"man_down": {"cru": ["Man down!", "We lost one!"], "cru2": ["Man down.", "We lost one."], "cru3": ["One down. Keep shooting.", "He is gone. Move."], "cru4": ["Operator down.", "Casualty."]},
 	"retreat": {"cru": ["Fall back!", "Pull back!"], "cru2": ["Falling back.", "Pulling back."], "cru3": ["Back. Now.", "Fall back."], "cru4": ["Withdrawing.", "Breaking contact."]},
@@ -211,13 +211,13 @@ const BARKS := {
 	},
 	"op_hurt": {
 		"phantom": ["A scratch. You are almost interesting now.", "That was my good jacket."],
-		"havoc": ["Ha! That tickled!", "Okay. Now you made me angry."],
+		"havoc": ["Ha! That tickled!", "Aim for the metal leg! Go on! It is metal!"],
 		"ghost": ["Noted.", "Good shot. It will not happen twice."]
 	},
 	"op_down": {
 		"phantom": ["And that is why they send me."],
 		"havoc": ["One down! Who is next?"],
-		"ghost": ["One."]
+		"ghost": ["That is one."]
 	},
 	"op_leave": {
 		"phantom": ["Enough for one night. Do keep the farm warm for me.", "I am leaving because I choose to. Remember that."],

@@ -149,7 +149,9 @@ func marks() -> Array:
 			size = 5.0 if enemy.kind == "crusher" else 3.2
 			shape = "ring"
 		out.append(_mark(enemy.global_position, here, yaw, tone(enemy), size, shape, cabin.level_of(enemy.global_position) == level))
-	var friends: Array = game.team.duplicate()
+	# (Not a copy of game.team: that list takes squad members only, and the partner is none.)
+	var friends: Array = []
+	friends.append_array(game.team)
 	if game.net != null and is_instance_valid(game.net.remote) and game.net.remote.visible:
 		friends.append(game.net.remote)
 	for friend in friends:

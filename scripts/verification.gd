@@ -3166,6 +3166,16 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var ducked := false
 	var blows := 0
 	var modifier_seen := ""
+	# --mp-operator: an operator comes into the fight (see below).
+	var op_run := "--mp-operator" in OS.get_cmdline_user_args()
+	var op: Operator = null
+	var op_step := 0
+	var op_seen := false
+	var op_away := false
+	var op_bar := 1.0
+	var op_blind := 0.0
+	var op_voice := false
+	var op_left := false
 	while clock < seconds and game.state == "playing":
 		await get_tree().physics_frame
 		clock += get_physics_process_delta_time()
@@ -3204,6 +3214,30 @@ func coop(game: Node3D, as_host: bool) -> void:
 				# is reported to the host can be tried on any of them.
 				if within == null or foe.global_position.distance_to(game.player.global_position) < within.global_position.distance_to(game.player.global_position):
 					within = foe
+		if op_run:
+			if as_host:
+				# He comes in by the front door, is hurt after a while and driven off in the end.
+				if op_step == 0 and clock > 4.0:
+					op_step = 1
+					op = game.spawn_enemy("ghost") as Operator
+					op.position = Vector3(0.0, 0.05, 6.4)
+					op.flash_wait = 1.5
+				elif op_step == 1 and clock > 15.0 and is_instance_valid(op) and not op.absent:
+					op_step = 2
+					op.health = op.max_health * 0.8
+				elif op_step == 2 and clock > 26.0 and is_instance_valid(op) and not op.absent:
+					op_step = 3
+					op.receive_hit(999999.0, Vector3.BACK)
+			var here := false
+			for foe in game.enemies.get_children():
+				if foe is Operator and not (foe as Operator).dead:
+					here = true
+					op_seen = true
+					op_away = op_away or (foe as Operator).absent
+					op_bar = minf(op_bar, (foe as Operator).health / (foe as Operator).max_health)
+			op_left = op_seen and not here
+			op_blind = maxf(op_blind, game.hud.blind_left)
+			op_voice = op_voice or game.hud.radio_label.text.begins_with("GHOST:")
 		if not as_host and clock > seconds * 0.25 and not game.player.down:
 			if not bottle_thrown:
 				bottle_thrown = true
@@ -3280,6 +3314,8 @@ func coop(game: Node3D, as_host: bool) -> void:
 	if is_instance_valid(game.net.remote):
 		partner_at = game.net.remote.global_position
 		partner_health = game.net.remote.health
+	if op_run:
+		print("%s_OPERATOR seen=%s away=%s bar=%.2f blind=%.1f voice=%s left=%s driven_off=%d" % [tag, str(op_seen), str(op_away), op_bar, op_blind, str(op_voice), str(op_left), int(game.stats.ghost)])
 	print("%s_RESULT state=%s wave=%d phase=%s infected_peak=%d shots=%d kills=%d credits=%d score=%d own_health=%.0f lowest=%.0f down=%s partner_at=%s partner_health=%.0f partner_seen_down=%s partner_moved=%s pickups=%d" % [tag, game.state, game.wave, game.phase, seen_peak, shots, game.kills, game.credits, game.score, game.player.health, lowest_health, str(game.player.down), str(partner_at.snapped(Vector3.ONE * 0.1)), partner_health, str(partner_downed), str(partner_moved), game.pickups.get_child_count()])
 	print("%s_CRU seen=%s fired=%s walked=%.1f team_kills=%d team_cru_kills=%d" % [tag, str(cru_seen), str(cru_fired), cru_walked, int(game.stats.kills), int(game.stats.cru_kills)])
 	print("%s_V14 %s=%s alight=%s fire=%s modifier=%s ducked=%s" % [tag, "shoved" if as_host else "blows", str(shoved) if as_host else str(blows), str(alight), str(fire_seen), modifier_seen, str(ducked)])

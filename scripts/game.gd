@@ -412,6 +412,10 @@ func _ready() -> void:
 	elif "--router-check" in args:
 		check_mode = true
 		call_deferred("_run_router_check")
+	elif "--ops-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_ops_check")
 	elif "--shop-check" in args:
 		check_mode = true
 		team_enabled = true
@@ -2065,6 +2069,82 @@ func _run_router_check() -> void:
 	net.close()
 	await get_tree().create_timer(1.5).timeout
 	print("ROUTER_CHECK_DONE")
+	get_tree().quit()
+
+## Pictures of the operators: the three side by side and each from close by, one of them
+## in the player's view with his bar and his mark on the map, the moments of a flashbang
+## (thrown, white, gone, back), a retreat, and the page of skins.
+func _run_ops_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	var stand := Vector3(0, 0.05, 24.0)
+	_place_player(stand, 0)
+	player.health = 100000.0
+	# --- the three, standing still
+	var line: Array = []
+	for i in range(Operator.KINDS.size()):
+		var one := spawn_enemy(str(Operator.KINDS[i]))
+		one.set_physics_process(false)
+		one.position = stand + Vector3(-1.6 + i * 1.6, 0, -7.0)
+		one.model.rotation.y = PI
+		line.append(one)
+	await tick.call(0.8)
+	hud.play_ui.hide()
+	await _capture_from(folder, "ops_01_line.png", stand + Vector3(0, 1.5, -2.6), stand + Vector3(0, 1.05, -7.0), 48)
+	for i in range(line.size()):
+		var at: Vector3 = (line[i] as Infected).global_position
+		await _capture_from(folder, "ops_02_%s.png" % Operator.KINDS[i], at + Vector3(0.35, 1.62, 1.5), at + Vector3(0, 1.5, 0), 40)
+		await _capture_from(folder, "ops_03_%s_back.png" % Operator.KINDS[i], at + Vector3(-0.9, 1.3, -2.3), at + Vector3(0, 1.0, 0), 50)
+	hud.play_ui.show()
+	player.camera.current = true
+	await tick.call(0.3)
+	await _capture(folder, "ops_04_view.png")
+	# --- one of them fights: the flashbang
+	for i in range(1, line.size()):
+		(line[i] as Infected)._retire()
+		(line[i] as Infected).queue_free()
+		alive_count -= 1
+	var hunter := line[0] as Operator
+	hunter.set_physics_process(true)
+	hunter.flash_wait = 0.0
+	var names := ["throw", "flight", "bang", "white", "gone", "clearing", "back", "after"]
+	var shot := 0
+	var clock := 0.0
+	var phase_seen := ""
+	while clock < 6.5 and shot < names.size():
+		await tick.call(0.1)
+		clock += 0.1
+		var now := "throw" if hunter.vanish_in >= 0.0 and phase_seen == "" else phase_seen
+		if hunter.absent and phase_seen in ["", "throw"]:
+			now = "gone"
+		elif not hunter.absent and phase_seen == "gone":
+			now = "back"
+		if now != phase_seen or (phase_seen in ["throw", "gone", "back"] and fmod(clock, 0.5) < 0.1):
+			phase_seen = now
+			await _capture(folder, "ops_05_flash_%d_%s.png" % [shot, names[shot]])
+			shot += 1
+	# --- his bar runs out
+	hud.blind_left = 0.0
+	hunter.receive_hit(hunter.max_health * 0.3, Vector3.BACK)
+	await tick.call(0.3)
+	await _capture(folder, "ops_06_hurt.png")
+	hunter.receive_hit(999999.0, Vector3.BACK)
+	await tick.call(0.25)
+	await _capture(folder, "ops_07_leaving.png")
+	await tick.call(1.2)
+	await _capture(folder, "ops_08_gone.png")
+	hud.show_menu("skins")
+	await tick.call(0.4)
+	await _capture(folder, "ops_09_skins.png")
+	print("OPS stats=%s credits=%d operators=%d" % [str(stats), credits, operators.size()])
+	print("OPS_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Pictures of the shop's counter and of the workbench: every list, a weapon picked, the

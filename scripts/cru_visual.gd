@@ -120,6 +120,9 @@ func _fit_lamps() -> void:
 	lamp.light_volumetric_fog_energy = 1.7
 	soldier.gun.add_child(lamp)
 	soldier.gun.add_child(_bead(at + Vector3(0, 0, -0.012), 0.016, Color(2.6, 2.8, 3.2)))
+	# An operator is told by his eyes; the red marker is the C.R.U.'s.
+	if Operator.KINDS.has(kind):
+		return
 	# The marker rides on the top of the spine, a hand's breadth in front of the chest.
 	var spine: Array = soldier.rig.spine
 	var bone: int = spine[spine.size() - 1].index
