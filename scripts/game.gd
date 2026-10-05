@@ -393,6 +393,10 @@ func _ready() -> void:
 	elif "--map-check" in args:
 		check_mode = true
 		call_deferred("_run_map_check")
+	elif "--shop-check" in args:
+		check_mode = true
+		team_enabled = true
+		call_deferred("_run_shop_check")
 	elif "--models-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -471,11 +475,11 @@ func is_playing() -> bool:
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") and not event.is_echo():
-		if overlay != "" or state in ["paused", "shop"]:
+		if overlay != "" or state in ["paused", "shop", "bench"]:
 			resume_run()
 		elif state == "playing":
 			pause_run()
-	if event.is_action_pressed("interact") and (state == "shop" or overlay == "shop"):
+	if event.is_action_pressed("interact") and (state in ["shop", "bench"] or overlay in ["shop", "bench"]):
 		resume_run()
 		get_viewport().set_input_as_handled()
 	if event.is_action_pressed("next_wave") and state == "playing" and phase == "preparing":
@@ -1129,9 +1133,6 @@ func item_price(id: String) -> int:
 			# Only for somebody who has a squad with him.
 			var level := int(squad_levels[id])
 			return -1 if team.is_empty() or level >= data.prices.size() else price(int(data.prices[level]))
-		"mags":
-			if player.inventory[player.current_weapon].get("mags", false):
-				return -1
 		_:
 			if int(player.items[id]) >= int(data.max):
 				return -1
@@ -1154,7 +1155,7 @@ func buy_item(id: String) -> bool:
 	else:
 		player.take_item(id)
 	sounds.play_menu("buy")
-	hud.show_menu("shop")
+	hud.refresh_counter()
 	return true
 
 ## Buys a part for a weapon the survivor owns and fits it. A part that is owned already
@@ -1175,7 +1176,7 @@ func buy_part(id: String, part: String) -> bool:
 		net.spend(cost)
 		sounds.play_menu("buy")
 	player.fit(id, part)
-	hud.show_menu("shop")
+	hud.refresh_counter()
 	return true
 
 ## Takes a pickup away, also for the co-op partner who did not grab it.
@@ -1379,7 +1380,7 @@ func interaction_prompt() -> String:
 	match station.kind:
 		"ammo": return "[E] %s-Munition auffüllen · %d Vorrat" % [player.weapon_label(), price(60)]
 		"health": return "[E] +%d Gesundheit · %d Vorrat" % [int(healing(50.0)), price(100)]
-		"upgrade": return "Waffe maximal verbessert" if player.weapon_level >= 3 else "[E] Waffenschaden +10 · %d Vorrat" % price(250)
+		"upgrade": return "[E] Werkbank: %s verbessern" % player.weapon_label()
 		"shop": return "[E] Waffenshop öffnen" if cabin.shop_open else "Waffenshop geschlossen · öffnet nach der Runde"
 	return ""
 
@@ -1420,6 +1421,9 @@ func interact() -> void:
 			hud.announce("WAFFENSHOP GESCHLOSSEN", "Der Rollladen geht nach der Runde wieder hoch.", 1.8)
 			sounds.play_sound("click", 0.0, 0.7)
 		return
+	if station.kind == "upgrade":
+		open_bench()
+		return
 	var cost := 0
 	match station.kind:
 		"ammo":
@@ -1432,9 +1436,6 @@ func interact() -> void:
 				hud.announce("ALLES IN ORDNUNG", "Du hast volle Gesundheit.", 1.7)
 				return
 			cost = price(100)
-		"upgrade":
-			if player.weapon_level >= 3: return
-			cost = price(250)
 	if credits < cost:
 		# Recovery prevents a permanent softlock after every bullet has been spent.
 		if station.kind == "ammo" and player.ammo + player.reserve == 0:
@@ -1449,7 +1450,6 @@ func interact() -> void:
 	match station.kind:
 		"ammo": player.reserve = player.max_reserve()
 		"health": player.health = minf(100, player.health + healing(50.0))
-		"upgrade": player.weapon_level += 1
 	sounds.play_sound("buy")
 	hud.announce("VERSORGT", station.title + " · Einsatzbereit.", 1.6)
 
@@ -1644,16 +1644,23 @@ func open_shop() -> void:
 func trade_in(id: String) -> int:
 	return price(int(round(int(Survivor.WEAPONS[id].price) * TRADE_IN)))
 
-## What buying a weapon costs right now: its price, less what the weapon is worth that has
-## to go because there is no place for both (see Survivor.to_replace).
-func weapon_cost(id: String) -> int:
+## The weapon that goes when `id` is bought: `instead_of` if that is one of those that can
+## make room (Survivor.replaceable), otherwise the one Survivor.to_replace names; "" if
+## there is room anyway.
+func outgoing(id: String, instead_of: String = "") -> String:
 	var old: String = player.to_replace(id)
+	return instead_of if old != "" and instead_of != "" and player.replaceable(id).has(instead_of) else old
+
+## What buying a weapon costs right now: its price, less what the weapon is worth that has
+## to go because there is no place for both.
+func weapon_cost(id: String, instead_of: String = "") -> int:
+	var old := outgoing(id, instead_of)
 	return price(int(Survivor.WEAPONS[id].price)) - (0 if old == "" else trade_in(old))
 
 ## Buys a weapon at the open shop counter. A survivor carries one weapon of each kind, and
-## more with slings: without a place for it, the new one takes the place of one of its
-## kind, which is traded in.
-func buy_weapon(id: String) -> bool:
+## more with slings: without a place for it, the new one takes the place of another, which
+## is traded in - `instead_of`, if the buyer named one that can make room.
+func buy_weapon(id: String, instead_of: String = "") -> bool:
 	var station := closest_station()
 	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop": return false
 	if not Survivor.WEAPONS.has(id) or player.inventory.has(id): return false
@@ -1661,8 +1668,8 @@ func buy_weapon(id: String) -> bool:
 	if skills.weapon_barred(id) != "": return false
 	# The heaviest weapons only reach the shop once the night is well under way.
 	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave: return false
-	var old: String = player.to_replace(id)
-	var cost := weapon_cost(id)
+	var old := outgoing(id, instead_of)
+	var cost := weapon_cost(id, instead_of)
 	if credits < cost: return false
 	credits -= cost
 	net.spend(cost)
@@ -1670,7 +1677,63 @@ func buy_weapon(id: String) -> bool:
 	if old != "":
 		player.drop_weapon(old)
 	sounds.play_menu("buy")
-	hud.show_menu("shop")
+	hud.refresh_counter()
+	return true
+
+## Sells a weapon the survivor carries at the open shop counter, for what it is worth as a
+## trade-in; what was fitted to it and done to it at the workbench goes with it. The last
+## weapon stays: nobody leaves the counter unarmed.
+func sell_weapon(id: String) -> bool:
+	var station := closest_station()
+	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop": return false
+	if not player.inventory.has(id) or player.inventory.size() < 2: return false
+	var worth := trade_in(id)
+	if id == player.current_weapon:
+		player.equip_weapon(player.other_weapon(id), true)
+	player.drop_weapon(id)
+	credits += worth
+	net.spend(-worth)
+	sounds.play_menu("buy")
+	hud.refresh_counter()
+	return true
+
+# ---------------------------------------------------------------- the workbench
+
+## Opens the workbench's menu: the weapons carried and what can be done to each.
+func open_bench() -> void:
+	if not is_playing(): return
+	if net.active:
+		# A co-op match keeps running behind the menu.
+		overlay = "bench"
+		player.menu_open = true
+	else:
+		pause_run()
+		state = "bench"
+	hud.show_menu("bench")
+
+## What the next level of a line of the workbench costs for a weapon, or -1 if there is
+## none (the line is full, or does nothing for this weapon).
+func upgrade_price(id: String, line: String) -> int:
+	if not player.inventory.has(id) or not Survivor.UPGRADES.has(line) or not Survivor.upgrade_fits(id, line):
+		return -1
+	var prices: Array = Survivor.UPGRADES[line].prices
+	var have: int = player.upgrade(id, line)
+	return -1 if have >= prices.size() else price(int(prices[have]))
+
+## Buys the next level of a line of the workbench, for the weapon in hand or another one
+## that is carried. The survivor has to stand at the bench.
+func buy_upgrade(line: String, id: String = "") -> bool:
+	if id == "":
+		id = player.current_weapon
+	var station := closest_station()
+	if station.is_empty() or station.kind != "upgrade": return false
+	var cost := upgrade_price(id, line)
+	if cost < 0 or credits < cost: return false
+	credits -= cost
+	net.spend(cost)
+	player.raise(id, line)
+	sounds.play_menu("buy")
+	hud.refresh_counter()
 	return true
 
 # ---------------------------------------------------------------- flow
@@ -1857,6 +1920,86 @@ func _run_crusher_check() -> void:
 		await tick.call(0.07)
 	print("CRUSHER came down at %s, %.1f m from the player; it travelled %.1f m; player health lost %.0f" % [str(giant.global_position.snapped(Vector3.ONE * 0.01)), giant.global_position.distance_to(player.global_position), from.distance_to(giant.global_position), 100000.0 - player.health])
 	print("CRUSHER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Pictures of the shop's counter and of the workbench: every list, a weapon picked, the
+## choice of what goes for it, a part on its weapon, a sale; then the lines of the bench.
+func _run_shop_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	wave = 7
+	credits = 6000
+	skills.chosen = "sweeper"
+	skills.ranks = {"sweeper_damage": 3}
+	var bench := Vector3.ZERO
+	for station in cabin.stations:
+		if station.kind == "upgrade":
+			bench = station.pos
+	var counter: Vector3 = cabin.points.shop
+	_place_player(counter + Vector3(0, 0.05, 0.6), 0)
+	await tick.call(0.3)
+	open_shop()
+	await tick.call(0.6)
+	await _capture(folder, "shop_01_weapons.png")
+	hud.counter.pick("weapon", "g36")
+	await tick.call(0.9)
+	await _capture(folder, "shop_02_g36.png")
+	buy_weapon("g36")
+	await tick.call(0.3)
+	hud.counter.pick("weapon", "ak")
+	await tick.call(0.6)
+	await _capture(folder, "shop_03_swap.png")
+	hud._open_tab("gear")
+	hud.counter.pick("good", "sling")
+	buy_item("sling")
+	await tick.call(0.3)
+	await _capture(folder, "shop_04_gear.png")
+	hud._open_tab("weapons")
+	hud.counter.pick("weapon", "m14")
+	buy_weapon("m14")
+	hud.counter.pick("weapon", "ak")
+	await tick.call(0.6)
+	await _capture(folder, "shop_05_choice.png")
+	hud.counter.pick("weapon", "g36")
+	await tick.call(0.6)
+	await _capture(folder, "shop_06_owned.png")
+	hud._open_tab("mods")
+	hud.counter.pick("part", "g36", "reddot")
+	await tick.call(0.7)
+	await _capture(folder, "shop_07_part.png")
+	buy_part("g36", "reddot")
+	hud.counter.pick("part", "g36", "silencer")
+	buy_part("g36", "silencer")
+	await tick.call(0.9)
+	await _capture(folder, "shop_08_fitted.png")
+	for tab in ["sidearms", "heavy", "class", "use", "team"]:
+		hud._open_tab(tab)
+		await tick.call(0.6)
+		await _capture(folder, "shop_09_%s.png" % tab)
+	resume_run()
+	await tick.call(0.3)
+	_place_player(bench + Vector3(0, 0.05, 1.0), 180)
+	player.equip_weapon("g36", true)
+	await tick.call(0.3)
+	interact()
+	await tick.call(0.8)
+	await _capture(folder, "bench_01.png")
+	for line in ["damage", "damage", "mags", "pouch", "drill"]:
+		buy_upgrade(line)
+	await tick.call(0.5)
+	await _capture(folder, "bench_02_bought.png")
+	hud.counter.pick("bench", "m14")
+	await tick.call(0.7)
+	await _capture(folder, "bench_03_other.png")
+	print("SHOP state=%s menu=%s credits=%d g36=%s" % [state, hud.current_menu, credits, str(player.inventory.get("g36", {}))])
+	print("SHOP_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Pictures of the map in the corner: in the yard with every kind of enemy around, turned a

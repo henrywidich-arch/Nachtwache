@@ -61,6 +61,19 @@ const KINDS := {
 	"heavy": {"key": 3, "label": "SCHWERE WAFFE", "groups": ["heavy", "class"]}
 }
 const CARRY := 1
+## What the workbench does to a weapon, line by line. key: where the weapon's record keeps
+## the level of the line ("level" is the damage, as it always was). prices: one for each
+## level, before the difficulty's factor. step: what one level gives (damage: per shot;
+## the others: a share).
+const UPGRADES := {
+	"damage": {"label": "SCHADEN", "key": "level", "prices": [250, 250, 250], "step": 10.0},
+	"mags": {"label": "MAGAZIN", "key": "mags", "prices": [200], "step": 0.5},
+	"pouch": {"label": "MUNITION", "key": "pouch", "prices": [150, 220], "step": 0.25},
+	"drill": {"label": "NACHLADEN", "key": "drill", "prices": [180, 260], "step": 0.12},
+	"brace": {"label": "STABILITÄT", "key": "brace", "prices": [150, 220], "step": 0.15}
+}
+## What a level of damage gives a weapon that fires no bullets (flame, shells): a share.
+const UPGRADE_SHARE := 0.15
 ## Parts the shop sells for a weapon. slot: only one part per slot is on the weapon at a
 ## time. set: values of the weapon's table that the part replaces (aim_spread: how much of
 ## the scatter is left when aiming; zoom: field of view when aiming; scope: field of view
@@ -99,7 +112,6 @@ const GOODS := {
 	"vest": {"label": "SCHUTZWESTE", "price": 150, "group": "gear", "note": "50 Rüstung. Rüstung fängt 60 % jedes Treffers ab."},
 	"armor": {"label": "SCHWERE RÜSTUNG", "price": 300, "group": "gear", "note": "100 Rüstung."},
 	"plates": {"label": "BALLISTISCHE WESTE", "prices": [160, 260, 400], "group": "gear", "note": "C.R.U.-Kugeln und -Granaten: 25 / 40 / 55 % weniger Schaden"},
-	"mags": {"label": "GRÖSSERE MAGAZINE", "price": 200, "group": "mods", "note": "+50 % Magazin für die Waffe in deiner Hand."},
 	"sling": {"label": "WAFFENGURT", "prices": [250, 400, 600], "group": "gear", "note": "Platz für eine Waffe mehr, egal welcher Art. Ohne Gurt trägst du je eine Primär-, eine Sekundär- und eine schwere Waffe."},
 	"mask": {"label": "GASMASKE", "prices": [150, 250, 400, 600], "group": "gear", "note": "Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas."},
 	# For the two who come along (Game.squad_levels); nothing the survivor carries.
@@ -353,8 +365,52 @@ func takes_local_damage() -> bool:
 	return true
 
 func magazine_size() -> int:
-	var size := int(WEAPONS[current_weapon].magazine)
-	return size * 3 / 2 if inventory[current_weapon].get("mags", false) else size
+	return magazine_of(current_weapon)
+
+## What the magazine of a weapon holds: more with the workbench's bigger magazine.
+func magazine_of(id: String) -> int:
+	var size := int(WEAPONS[id].magazine)
+	return size * 3 / 2 if upgrade(id, "mags") > 0 else size
+
+# ---------------------------------------------------------------- the workbench
+
+## The level a line of the workbench has on a weapon.
+func upgrade(id: String, line: String) -> int:
+	return int(inventory[id].get(UPGRADES[line].key, 0)) if inventory.has(id) else 0
+
+## Whether a line of the workbench does anything for a weapon: nothing to steady on one
+## that does not kick, no bigger magazine for two barrels.
+static func upgrade_fits(id: String, line: String) -> bool:
+	match line:
+		"brace":
+			return float(WEAPONS[id].kick) > 0.0
+		"mags":
+			return int(WEAPONS[id].magazine) >= 4
+	return UPGRADES.has(line)
+
+## Raises a line of the workbench on a weapon by one level. What is bigger is filled at
+## once: the magazine, the pockets.
+func raise(id: String, line: String) -> void:
+	var record: Dictionary = inventory[id]
+	var before := reserve_cap(id)
+	record[UPGRADES[line].key] = upgrade(id, line) + 1
+	record.erase("tuned")
+	match line:
+		"mags":
+			record.ammo = magazine_of(id)
+		"pouch":
+			record.reserve = int(record.reserve) + reserve_cap(id) - before
+
+## What a weapon does with each shot as it is now, the workbench counted in (for lists).
+func damage_of(id: String) -> float:
+	var data: Dictionary = WEAPONS[id]
+	if data.has("flame") or data.has("grenade"):
+		return float(data.damage) * (1.0 + UPGRADE_SHARE * upgrade(id, "damage"))
+	return float(data.damage) + float(UPGRADES.damage.step) * upgrade(id, "damage") / int(data.get("pellets", 1))
+
+## Seconds a reload of a weapon takes: quicker with the sweeper's hands and the workbench.
+func reload_of(id: String) -> float:
+	return float(WEAPONS[id].reload_time) * (1.0 - minf(0.6, game.skills.value("reload") + float(UPGRADES.drill.step) * upgrade(id, "drill")))
 
 func filter_capacity() -> float:
 	return MASK_SECONDS[mask_level] * (1.0 + game.skills.value("filter"))
@@ -368,9 +424,6 @@ func take_item(id: String) -> void:
 			armor = 100.0
 		"plates":
 			plate_level = mini(PLATE_SHARES.size() - 1, plate_level + 1)
-		"mags":
-			inventory[current_weapon]["mags"] = true
-			ammo = magazine_size()
 		"mask":
 			mask_level = mini(4, mask_level + 1)
 			filter_left = filter_capacity()
@@ -515,17 +568,19 @@ func max_reserve() -> int:
 
 ## How much ammunition for a weapon fits into the pockets; an ability makes them deeper.
 func reserve_cap(id: String) -> int:
-	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.value("reserve"))))
+	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.value("reserve") + float(UPGRADES.pouch.step) * upgrade(id, "pouch"))))
 
 ## The weapon in hand as it shoots now: its values from the table, changed by whatever is
 ## fitted to it.
 func gun() -> Dictionary:
 	var record: Dictionary = inventory[current_weapon]
 	var on: Dictionary = record.get("fitted", {})
-	if on.is_empty():
+	var steadied := upgrade(current_weapon, "brace")
+	if on.is_empty() and steadied == 0:
 		return WEAPONS[current_weapon]
 	if not record.has("tuned"):
 		var data: Dictionary = (WEAPONS[current_weapon] as Dictionary).duplicate()
+		data["kick"] = float(data.kick) * (1.0 - float(UPGRADES.brace.step) * steadied)
 		for slot in on:
 			var part: Dictionary = ATTACHMENTS[current_weapon][on[slot]]
 			var replaced: Dictionary = part.get("set", {})
@@ -612,6 +667,33 @@ func to_replace(id: String) -> String:
 		return ""
 	var same := carried(kind_of(id))
 	return current_weapon if same.has(current_weapon) else str(same[0])
+
+## Every weapon that could go to make room for another one: those of its kind, and of the
+## other kinds any that a sling carries. The one to_replace() names comes first; empty if
+## there is room anyway.
+func replaceable(id: String) -> Array:
+	var first := to_replace(id)
+	if first == "":
+		return []
+	var out: Array = [first]
+	for kind in KINDS:
+		var same := carried(kind)
+		if kind == kind_of(id) or same.size() > CARRY:
+			for other in same:
+				if not out.has(other):
+					out.append(other)
+	return out
+
+## The weapon to take in hand when `id` goes: one of its kind if there is one, otherwise
+## the first that is carried. "" if it is the only one.
+func other_weapon(id: String) -> String:
+	for other in carried(kind_of(id)):
+		if other != id:
+			return str(other)
+	for other in ORDER:
+		if other != id and inventory.has(other):
+			return str(other)
+	return ""
 
 ## Lays a weapon down for good, with whatever was fitted to it. Not the one in hand.
 func drop_weapon(id: String) -> void:
@@ -820,7 +902,8 @@ func _physics_process(delta: float) -> void:
 			jolt = 1.0
 			game.sounds.play_sound("shell_in")
 			if ammo < magazine_size() and reserve > 0:
-				reload_left = float(WEAPONS[current_weapon].reload_time)
+				# The workbench's drill makes every shell quicker.
+				reload_left = float(WEAPONS[current_weapon].reload_time) * (1.0 - float(UPGRADES.drill.step) * upgrade(current_weapon, "drill"))
 			else:
 				loading_shells = false
 				if chamber_empty:
@@ -946,6 +1029,7 @@ func _launch(data: Dictionary) -> void:
 	shell.game = game
 	shell.kind = "grenade"
 	shell.impact = true
+	shell.boost = 1.0 + UPGRADE_SHARE * weapon_level
 	game.ordnance.add_child(shell)
 	shell.global_position = camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12
 	shell.linear_velocity = -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT
@@ -977,7 +1061,7 @@ func _flame(data: Dictionary) -> void:
 		if not space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, chest, 1)).is_empty():
 			continue
 		touched = true
-		var damage: float = float(data.damage) * _bonus(data, enemy, false)
+		var damage: float = damage_of(current_weapon) * _bonus(data, enemy, false)
 		if game.net.joined:
 			# The host works out what the fire does; a guest reports it a few times a second.
 			burn_report[enemy] = float(burn_report.get(enemy, 0.0)) + damage
@@ -1335,7 +1419,7 @@ func shoot() -> void:
 
 func start_reload() -> void:
 	if reload_left <= 0 and ammo < magazine_size() and reserve > 0:
-		reload_left = float(WEAPONS[current_weapon].reload_time) * (1.0 - minf(0.6, game.skills.value("reload")))
+		reload_left = reload_of(current_weapon)
 		reload_cue = 0
 		loading_shells = WEAPONS[current_weapon].has("shells")
 		chamber_empty = ammo == 0

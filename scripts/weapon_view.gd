@@ -505,6 +505,78 @@ static func build_gun(id: String) -> Node3D:
 static func build_ump() -> Node3D:
 	return build_gun("ump")
 
+## The first-person view of any weapon: the model and the hands that hold it.
+static func build(id: String) -> Node3D:
+	match id:
+		"p90":
+			return build_p90()
+		"badger":
+			return build_badger()
+		"shotgun":
+			return build_shotgun()
+	return build_gun(id) if GUNS.has(id) else build_model(id)
+
+## A weapon by itself, to be looked at (the shop, the workbench): the model of the view
+## without the hands, its middle at the origin, the muzzle towards -z. The parts that can
+## be fitted are in it under "Mod_...", hidden. The materials are the view's without what
+## only that view wants, so that any camera shows it right. Metadata "size": its extent.
+static func display(id: String) -> Node3D:
+	var view := build(id)
+	for node in view.find_children("*", "", true, false):
+		# Freed with what held it (the hands under "Support").
+		if not is_instance_valid(node):
+			continue
+		var title := str(node.name)
+		# Hands and arms: what the builders commit as "Part" straight under the view, as
+		# "Hand" under the forend, and the hand that changes the magazine.
+		if title == "Support" or title.begins_with("Hand") or (title.begins_with("Part") and node.get_parent() == view and node is MeshInstance3D):
+			node.get_parent().remove_child(node)
+			node.free()
+	var box := AABB()
+	var first := true
+	for node in view.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		mesh.layers = 1
+		if mesh.material_override != null:
+			mesh.material_override = _plain(mesh.material_override)
+		elif mesh.mesh != null:
+			for surface in range(mesh.mesh.get_surface_count()):
+				mesh.set_surface_override_material(surface, _plain(mesh.get_active_material(surface)))
+		# What is hidden (a part not fitted, the shell of the shotgun) does not count.
+		var shown := true
+		var frame := Transform3D.IDENTITY
+		var at: Node = mesh
+		while at != view and at != null:
+			if at is Node3D:
+				shown = shown and (at as Node3D).visible
+				frame = (at as Node3D).transform * frame
+			at = at.get_parent()
+		if shown and mesh.mesh != null:
+			var part: AABB = frame * mesh.mesh.get_aabb()
+			box = part if first else box.merge(part)
+			first = false
+	var holder := Node3D.new()
+	holder.name = "Display"
+	holder.add_child(view)
+	view.position = -box.get_center()
+	holder.set_meta("size", box.size)
+	return holder
+
+static var plain_materials: Dictionary = {}
+
+## A material of the first-person view without that view's own field of view and its
+## squeezed depth.
+static func _plain(material: Material) -> Material:
+	var source := material as BaseMaterial3D
+	if source == null or not (source.use_fov_override or source.use_z_clip_scale):
+		return material
+	if not plain_materials.has(source):
+		var copy := source.duplicate() as BaseMaterial3D
+		copy.use_fov_override = false
+		copy.use_z_clip_scale = false
+		plain_materials[source] = copy
+	return plain_materials[source]
+
 static func build_ak_world() -> Node3D:
 	if ak_low == null:
 		ak_low = load(AK_LOW_SCENE) as PackedScene

@@ -25,6 +25,8 @@ var fuse := 2.3
 var hostile := false
 ## Fired from the launcher: goes off at the first thing it touches, once it is armed.
 var impact := false
+## Factor on what its blast does to the infected (the launcher's shell, by the workbench).
+var boost := 1.0
 var armed_in := 0.1
 ## The shell's body, turned along its flight.
 var shell: Node3D
@@ -203,7 +205,7 @@ func _physics_process(delta: float) -> void:
 	elif kind == "grenade" and hostile:
 		game.blast(global_position + Vector3(0, 0.15, 0), 6.0, 70.0, 110.0, "frag")
 	elif kind == "grenade":
-		game.blast(global_position + Vector3(0, 0.15, 0), BLAST[0], BLAST[1], BLAST[2])
+		game.blast(global_position + Vector3(0, 0.15, 0), BLAST[0], BLAST[1], BLAST[2] * boost)
 	else:
 		game.flash_bang(global_position + Vector3(0, 0.2, 0))
 	queue_free()

@@ -92,6 +92,8 @@ var loadout_box: VBoxContainer
 var loadout_left := 0.0
 ## The map in the top right corner.
 var minimap: Minimap
+## The open counter: the shop's or the workbench's.
+var counter: ShopScreen
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -763,7 +765,10 @@ func _pair(left: Button, right: Button) -> HBoxContainer:
 
 func _open_tab(tab: String) -> void:
 	shop_tab = tab
-	show_menu("shop")
+	if modal.visible and current_menu == "shop" and is_instance_valid(counter):
+		counter.open_tab(tab)
+	else:
+		show_menu("shop")
 
 func _wear(id: String) -> void:
 	game.profile.wear(id)
@@ -853,7 +858,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["shop", "settings", "skins", "board", "skills"]
+	var wide: bool = mode in ["shop", "bench", "settings", "skins", "board", "skills"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -866,8 +871,8 @@ func show_menu(mode: String) -> void:
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	modal.add_child(background)
 	var column := VBoxContainer.new()
-	# The page of abilities is the tallest of all and starts a little higher.
-	column.position = Vector2(84, 30 if mode == "skills" else 44)
+	# The page of abilities and the counters are the tallest of all and start a little higher.
+	column.position = Vector2(84, 30 if mode in ["skills", "shop", "bench"] else 44)
 	column.size = Vector2(900 if wide else 660, 640)
 	column.add_theme_constant_override("separation", 6)
 	modal.add_child(column)
@@ -882,8 +887,8 @@ func show_menu(mode: String) -> void:
 			first = _menu_end(column, mode)
 		"settings":
 			first = _menu_settings(column)
-		"shop":
-			first = _menu_shop(column)
+		"shop", "bench":
+			first = _menu_shop(column, mode)
 		"host":
 			first = _menu_host(column)
 		"join":
@@ -1255,171 +1260,20 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		column.add_child(back)
 	return back
 
-## One thing on sale: its name and what it is on the left, the button that buys it (or
-## says why not) on the right. Returns the button.
-func _card(list: VBoxContainer, title: String, note: String, offer: String, callback: Callable, usable: bool, bright: bool = false) -> Button:
-	var card := PanelContainer.new()
-	var plate := _plate(0.5)
-	plate.content_margin_top = 7
-	plate.content_margin_bottom = 7
-	card.add_theme_stylebox_override("panel", plate)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	card.add_child(row)
-	var words := VBoxContainer.new()
-	words.add_theme_constant_override("separation", -2)
-	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	words.add_child(label(title, 22, MINT if bright else IVORY, true))
-	var small := label(note, 14, MUTED)
-	small.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	small.custom_minimum_size.x = 430
-	words.add_child(small)
-	row.add_child(words)
-	var buy := _chip(offer, callback, usable, 176)
-	buy.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	buy.disabled = not usable
-	row.add_child(buy)
-	list.add_child(card)
-	return buy
+## The counter of the weapon shop or the workbench: a screen of its own (ShopScreen) that is
+## built once and refreshes itself when something is bought.
+func _menu_shop(column: VBoxContainer, mode: String) -> Control:
+	counter = ShopScreen.new()
+	counter.hud = self
+	counter.game = game
+	counter.mode = mode
+	column.add_child(counter)
+	return counter.first_focus()
 
-func _menu_shop(column: VBoxContainer) -> Control:
-	var head := HBoxContainer.new()
-	head.add_theme_constant_override("separation", 30)
-	head.add_child(label("WAFFENSHOP", 46, IVORY, true))
-	var purse := label("VORRAT  %d" % game.credits, 26, AMBER, true)
-	purse.size_flags_vertical = Control.SIZE_SHRINK_END
-	head.add_child(purse)
-	column.add_child(head)
-	# What is carried: one weapon of each kind, and as many more as there are slings.
-	var carried: Array[String] = []
-	for kind in Survivor.KINDS:
-		var names: Array = []
-		for id in game.player.carried(kind):
-			names.append(str(Survivor.WEAPONS[id].label))
-		carried.append("%d  %s" % [int(Survivor.KINDS[kind].key), "–" if names.is_empty() else " + ".join(names)])
-	_text(column, "Du trägst je eine Primär-, Sekundär- und schwere Waffe%s:   %s" % ["" if game.player.extra_slots == 0 else " und %d weitere" % game.player.extra_slots, "   ·   ".join(carried)], 15)
-	_gap(column, 4)
-	var halves := HBoxContainer.new()
-	halves.add_theme_constant_override("separation", 14)
-	column.add_child(halves)
-	var tabs := VBoxContainer.new()
-	tabs.add_theme_constant_override("separation", 6)
-	for tab in SHOP_TABS:
-		tabs.add_child(_chip(str(tab[1]), _open_tab.bind(tab[0]), shop_tab == tab[0], 168))
-	halves.add_child(tabs)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(690, 440)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	halves.add_child(scroll)
-	var list := VBoxContainer.new()
-	list.add_theme_constant_override("separation", 6)
-	list.custom_minimum_size.x = 670
-	scroll.add_child(list)
-	var first: Button = null
-	if shop_tab == "class":
-		list.add_child(label("Die Waffe deines Fähigkeiten-Wegs, sobald %d Punkte darin stecken (Hauptmenü, FÄHIGKEITEN)." % Skills.WEAPON_NEEDS, 14, AMBER, true))
-	elif shop_tab == "team":
-		list.add_child(label("Für deine beiden Begleiter, für diese Nacht." if not game.team.is_empty() else "Nur für Einsätze mit Begleitern: Im Koop sind keine dabei.", 14, AMBER, true))
-	# Weapons of this list: what each is, and the button that buys it.
-	for id in Survivor.ORDER:
-		var data: Dictionary = Survivor.WEAPONS[id]
-		var owned: bool = game.player.inventory.has(id)
-		# What costs nothing (the carbine everybody starts with) is only on offer to
-		# somebody who has traded it in.
-		if (int(data.price) <= 0 and owned) or str(data.get("group", "weapons")) != shop_tab:
-			continue
-		var locked: bool = int(data.get("from_round", 0)) > game.wave
-		var harm := "%d × %d" % [int(data.pellets), int(data.damage)] if data.has("pellets") else ("Explosion" if data.has("grenade") else str(int(data.damage)))
-		var rate := "Einzelschuss" if data.get("semi", false) else "%d Schuss/min" % (int(round(60.0 / float(data.interval) / 10.0)) * 10)
-		var facts := "%s\n%d Schuss   ·   Schaden %s   ·   %s   ·   Taste %d%s" % [SHOP_NOTES.get(id, ""), int(data.magazine), harm, rate, int(data.slot), "   ·   nimmt Aufsätze" if Survivor.ATTACHMENTS.has(id) else ""]
-		if data.has("flame"):
-			facts = "%s\nTank für %d Sekunden   ·   Taste %d" % [SHOP_NOTES.get(id, ""), int(round(int(data.magazine) * float(data.interval))), int(data.slot)]
-		# A tree's own weapon: for those who have put points into that tree.
-		var barred: String = game.skills.weapon_barred(id)
-		var tree := Skills.weapon_tree(id)
-		if tree != "":
-			facts += "\nKlassenwaffe  ·  %s" % (Skills.TREES[tree].label if barred == "" else (barred if barred.begins_with("nur") else "erst " + barred))
-		# Without a place for it, the weapon it replaces is traded in.
-		var cost: int = game.weapon_cost(id)
-		var goes: String = "" if owned else game.player.to_replace(id)
-		var offer := "KAUFEN   %d" % cost if cost > 0 else "KOSTENLOS"
-		if goes != "":
-			facts += "\nErsetzt %s  ·  dafür %d Vorrat zurück" % [Survivor.WEAPONS[goes].label, game.trade_in(goes)]
-			offer = "TAUSCHEN   %d" % cost if cost >= 0 else "TAUSCHEN   +%d" % -cost
-		if owned:
-			offer = "DABEI  ✓"
-		elif barred != "":
-			offer = "GESPERRT"
-		elif locked:
-			offer = "AB RUNDE %d" % int(data.from_round)
-		elif game.credits < cost:
-			offer = "%d  ·  ZU WENIG" % cost
-		var buy := _card(list, str(data.label), facts, offer, game.buy_weapon.bind(id), not owned and not locked and barred == "" and game.credits >= cost, owned)
-		if first == null and not buy.disabled:
-			first = buy
-	# Parts for the weapons: bought once, then put on or taken off for nothing. Only those
-	# for what is carried are listed: with one weapon of each kind the list stays short.
-	if shop_tab == "mods":
-		var takers: Array = []
-		var fitting := 0
-		for id in Survivor.ATTACHMENTS:
-			takers.append(str(Survivor.WEAPONS[id].label))
-			if not game.player.inventory.has(id):
-				continue
-			fitting += 1
-			var record: Dictionary = game.player.inventory[id]
-			var on: Dictionary = record.get("fitted", {})
-			list.add_child(label("%s   ·   AUFSÄTZE" % Survivor.WEAPONS[id].label, 14, AMBER, true))
-			for part in Survivor.ATTACHMENTS[id]:
-				var data: Dictionary = Survivor.ATTACHMENTS[id][part]
-				var fitted: bool = str(on.get(data.slot, "")) == part
-				var cost: int = game.price(int(data.price))
-				var offer := "KAUFEN   %d" % cost
-				var usable := true
-				if fitted:
-					offer = "ABNEHMEN"
-				elif game.player.owns_part(id, part):
-					offer = "ANBRINGEN"
-				elif game.credits < cost:
-					offer = "%d  ·  ZU WENIG" % cost
-					usable = false
-				var fit := _card(list, str(data.label) + ("   ✓" if fitted else ""), str(data.note), offer, game.buy_part.bind(id, part), usable, fitted)
-				if first == null and usable:
-					first = fit
-		list.add_child(label("%sVisiere und Schalldämpfer gibt es für: %s." % ["" if fitting > 0 else "Du trägst gerade keine Waffe, die Aufsätze nimmt.   ", ", ".join(takers)], 14, MUTED, true))
-	# The other lists: gear that stays, and things that get used up.
-	for id in Survivor.GOODS:
-		var goods: Dictionary = Survivor.GOODS[id]
-		if goods.group != shop_tab:
-			continue
-		var cost: int = game.item_price(id)
-		var have := ""
-		if id == "mask":
-			have = "Stufe %d von 4" % game.player.mask_level
-		elif id == "plates":
-			have = "Stufe %d von 3" % game.player.plate_level
-		elif id in ["vest", "armor"]:
-			have = "Rüstung jetzt: %d" % ceili(game.player.armor)
-		elif id == "mags":
-			have = "%s: %d Schuss" % [game.player.weapon_label(), game.player.magazine_size()]
-		elif game.squad_levels.has(id):
-			have = "Stufe %d von %d" % [int(game.squad_levels[id]), (goods.prices as Array).size()]
-		elif id == "sling":
-			have = "Gurte: %d von %d   ·   Platz für %d Waffen" % [game.player.extra_slots, (goods.prices as Array).size(), Survivor.KINDS.size() * Survivor.CARRY + game.player.extra_slots]
-		else:
-			have = "du hast %d von %d" % [int(game.player.items[id]), int(goods.max)]
-		var offer := "KAUFEN   %d" % cost
-		if cost < 0:
-			offer = "KEIN TEAM" if game.squad_levels.has(id) and game.team.is_empty() else "VOLL  ✓"
-		elif game.credits < cost:
-			offer = "%d  ·  ZU WENIG" % cost
-		var take := _card(list, str(goods.label), "%s\n%s" % [goods.note, have], offer, game.buy_item.bind(id), cost >= 0 and game.credits >= cost)
-		if first == null and not take.disabled:
-			first = take
-	_gap(column, 4)
-	var back := _button("ZURÜCK ZUM EINSATZ", game.resume_run)
-	column.add_child(back)
-	return first if first != null else back
+## After something was bought, sold or fitted: the open counter shows the new state.
+func refresh_counter() -> void:
+	if modal.visible and current_menu in ["shop", "bench"] and is_instance_valid(counter):
+		counter.refresh()
 
 ## A black curtain over the 3D view, behind the menus. The caller fades and frees it.
 func veil() -> ColorRect:

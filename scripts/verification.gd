@@ -325,8 +325,11 @@ func run(game: Node3D) -> void:
 	expect(game.player.health == 70 and game.credits == 0, "Medical station heals 50 and charges 100")
 	game.player.position = beside(game, "upgrade", spots.garage)
 	game.credits = 1000
-	for i in range(4): game.interact()
-	expect(game.player.weapon_level == 3 and game.credits == 250, "Upgrade station caps at level three without overcharging")
+	game.interact()
+	var at_bench: bool = game.state == "bench" and game.hud.current_menu == "bench"
+	for i in range(4): game.buy_upgrade("damage")
+	game.resume_run()
+	expect(at_bench and game.state == "playing" and game.player.weapon_level == 3 and game.credits == 250, "The workbench opens its menu; its damage line caps at level three without overcharging")
 	game.player.position = Vector3(11.5, 0.05, -6.0)
 	expect(game.closest_station().kind == "health", "Between two stations the nearer one answers")
 	game.player.position = beside(game, "ammo", spots.barn, 1)
@@ -499,7 +502,12 @@ func run(game: Node3D) -> void:
 	expect(game.player.items.grenade == 4 and game.item_price("grenade") == -1 and game.credits == 1760, "The pockets hold four grenades and no more")
 	expect(game.buy_item("vest") and game.player.armor == 50.0 and game.buy_item("armor") and game.player.armor == 100.0 and not game.buy_item("vest") and game.credits == 1310, "A vest gives 50 armour, heavy armour 100")
 	expect(game.buy_item("mask") and game.buy_item("mask") and game.player.mask_level == 2 and game.item_price("mask") == 400 and game.credits == 910, "The gas mask is bought level by level")
-	expect(game.buy_item("mags") and game.player.magazine_size() == 45 and game.player.ammo == 45 and not game.buy_item("mags") and game.credits == 710, "Bigger magazines hold half as much again")
+	# The bigger magazine is the workbench's now: bought there, for the weapon in hand.
+	var counter_place: Vector3 = game.player.position
+	game.player.position = beside(game, "upgrade", spots.garage)
+	var roomy: bool = not game.buy_item("mags") and game.buy_upgrade("mags") and game.player.magazine_size() == 45 and game.player.ammo == 45 and not game.buy_upgrade("mags") and game.credits == 710
+	game.player.position = counter_place
+	expect(roomy, "A bigger magazine from the workbench holds half as much again")
 	expect(game.buy_item("flashbang") and game.buy_item("claymore") and game.buy_item("revive") and not game.buy_item("revive") and game.credits == 275, "Flashbangs, mines and one adrenaline shot are on sale too")
 	game.resume_run()
 	game.player.receive_damage(20.0, Vector3(0, 0, 5))
@@ -1931,8 +1939,8 @@ func _loadout(game: Node3D) -> void:
 	# The carbine everybody starts with can be had back for nothing.
 	game.hud._open_tab("weapons")
 	var listed := false
-	for node in game.hud.modal.find_children("*", "Label", true, false):
-		listed = listed or (node as Label).text == "M4A4"
+	for node in game.hud.counter.row_buttons:
+		listed = listed or ((node as Button).text == "M4A4" and str(game.hud.counter.weapon_state("rifle")[0]) == "KOSTENLOS")
 	var back: bool = game.buy_weapon("rifle") and player.inventory.has("rifle") and not player.inventory.has("p90") and game.credits == 240 + 50
 	expect(first_cost == 300 and swapped and beside and offer == 100 - 150 and goes == "ak" and traded and listed and back and game.trade_in("sniper") == 225 and game.trade_in("rifle") == 0, "A survivor carries one weapon of each kind: a second one takes the place of the first, which is traded in for half its price")
 	# The keys.
@@ -2076,8 +2084,8 @@ func _loadout(game: Node3D) -> void:
 	# The list of parts: only for the two rifles that are carried.
 	game.hud._open_tab("mods")
 	var dots := 0
-	for node in game.hud.modal.find_children("*", "Label", true, false):
-		if (node as Label).text.begins_with("ROTPUNKTVISIER"):
+	for node in game.hud.counter.row_buttons:
+		if (node as Button).text.begins_with("ROTPUNKTVISIER"):
 			dots += 1
 	game.resume_run()
 	# The reload: the magazine leaves the weapon and comes back, with sounds of its own.
@@ -2508,7 +2516,7 @@ func _kit(game: Node3D) -> void:
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 7 and int(rows.heavy) == 6 and int(rows.mods) == 4 and parts == 12 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 7 and int(rows.heavy) == 6 and int(rows.mods) == 3 and not Survivor.GOODS.has("mags") and parts == 12 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
@@ -3440,7 +3448,8 @@ func _squadwork(game: Node3D) -> void:
 
 ## What came with v0.18: a Crusher that is a danger, a harder M14, a shell that can be
 ## watched on its way, points for all three trees with one of them in force, fire that
-## lets a Charger and a Striker's growths go off harmlessly, a map in the corner.
+## lets a Charger and a Striker's growths go off harmlessly, a map in the corner, a shop
+## that sells and takes back, a workbench with five lines.
 func _overhaul(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var skills: Skills = game.skills
@@ -3684,3 +3693,90 @@ func _overhaul(game: Node3D) -> void:
 		(body as Infected).queue_free()
 		game.alive_count -= 1
 	await frames(2)
+	# --- the shop: a weapon can be sold, and what goes for a new one can be chosen
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	skills.reset()
+	var hud: SurvivalHUD = game.hud
+	var shelf: Vector3 = game.cabin.points.shop
+	var bench := Vector3.ZERO
+	for station in game.cabin.stations:
+		if station.kind == "upgrade":
+			bench = (station.pos as Vector3) + Vector3(0, 0.05, 1.0)
+	game.wave = 3
+	game.credits = 3000
+	player.position = shelf + Vector3(0, 0.05, 0.6)
+	game.interact()
+	var screen: ShopScreen = hud.counter
+	var opened: bool = game.state == "shop" and screen != null and screen.mode == "shop"
+	var lone: bool = not game.sell_weapon("rifle") and player.inventory.has("rifle")
+	var armed: bool = game.buy_weapon("pistol") and game.sell_weapon("rifle") and not player.inventory.has("rifle") and player.current_weapon == "pistol" and game.credits == 3000 - 60
+	var back: bool = game.buy_weapon("ak") and game.sell_weapon("ak") and player.current_weapon == "pistol" and game.credits == 3000 - 60 - 300 + 150
+	# With a sling there are two rifles; a third takes the place of the one the buyer names.
+	var two: bool = game.buy_item("sling") and game.buy_weapon("g36") and game.buy_weapon("m14") and player.carried("primary").size() == 2 and game.credits == 2790 - 250 - 450 - 320
+	var choices: Array = player.replaceable("ak")
+	var usual: String = game.outgoing("ak")
+	var picks_one: bool = choices.size() == 2 and usual == "m14" and choices[0] == "m14" and choices.has("g36") and game.weapon_cost("ak") == 300 - 160 and game.weapon_cost("ak", "g36") == 300 - 225 and game.outgoing("ak", "pistol") == "m14"
+	var chosen: bool = game.buy_weapon("ak", "g36") and player.inventory.has("ak") and player.inventory.has("m14") and not player.inventory.has("g36") and game.credits == 1770 - 75
+	expect(opened and lone and armed and back and two and picks_one and chosen and hud.counter == screen, "The shop takes a weapon back for half its price (never the last one), and the buyer chooses which weapon goes for a new one")
+	# --- its screen: a list, the weapon picked in it turning in a picture, one button
+	hud._open_tab("weapons")
+	screen.pick("weapon", "g36")
+	var rifles := 0
+	for id in Survivor.ORDER:
+		if str(Survivor.WEAPONS[id].get("group", "weapons")) == "weapons":
+			rifles += 1
+	var shown_gun: Node3D = screen.stage.models.get("g36")
+	var bare := shown_gun != null
+	if bare:
+		for node in shown_gun.find_children("*", "", true, false):
+			bare = bare and not str(node.name).begins_with("Hand") and str(node.name) != "Support"
+		bare = bare and (shown_gun.get_meta("size") as Vector3).z > 0.6 and shown_gun.find_child("Magazine", true, false) != null and shown_gun.find_child("Mod_reddot", true, false) != null
+	var offered: bool = screen.row_buttons.size() == rifles and screen.stage.shown == "g36" and screen.stage.visible and screen.action != null and screen.action.text.begins_with("TAUSCHEN") and not screen.action.disabled
+	screen.pick("weapon", "ak")
+	var mine: bool = screen.action.text.begins_with("VERKAUFEN") and str(screen.weapon_state("ak")[0]).begins_with("DABEI")
+	# A part is shown on its weapon before it is bought.
+	hud._open_tab("mods")
+	screen.pick("part", "ak", "scope")
+	var tried: bool = (screen.stage.models.ak as Node3D).find_child("Mod_scope", true, false).visible and not player.owns_part("ak", "scope") and screen.action.text.begins_with("KAUFEN")
+	# What gets used up is bought from its line.
+	hud._open_tab("use")
+	var quick: Button = null
+	for shelf_row in screen.row_buttons:
+		if (shelf_row as Button).text == str(Survivor.GOODS.grenade.label):
+			for child in (shelf_row as Button).get_children():
+				if child is Button:
+					quick = child
+	var before_buy: int = game.credits
+	if quick != null:
+		quick.pressed.emit()
+	expect(bare and offered and mine and tried and quick != null and int(player.items.grenade) == 1 and game.credits == before_buy - 60 and hud.counter == screen and screen.stock("grenade").begins_with("●○"), "The shop's screen lists what is on sale, shows the picked weapon by itself (no hands) with a part tried on, and stays as it is when something is bought")
+	game.resume_run()
+	# --- the workbench: five lines to choose from, each for one weapon
+	player.position = bench
+	player.equip_weapon("ak", true)
+	game.credits = 3000
+	game.interact()
+	screen = hud.counter
+	var benched: bool = game.state == "bench" and screen.mode == "bench" and screen.row_buttons.size() == player.inventory.size() and str(screen.picked.get("id", "")) == "ak"
+	var plain_kick: float = float(player.gun().kick)
+	var plain_cap: int = player.reserve_cap("ak")
+	var plain_reload: float = player.reload_of("ak")
+	var pockets: int = player.reserve
+	var raised := true
+	for line in ["damage", "mags", "pouch", "drill", "brace"]:
+		raised = raised and game.upgrade_price("ak", line) == game.price(int(Survivor.UPGRADES[line].prices[0])) and game.buy_upgrade(line)
+	var worked: bool = is_equal_approx(player.damage_of("ak"), float(Survivor.WEAPONS.ak.damage) + 10.0) and player.magazine_size() == 45 and player.ammo == 45 and player.reserve_cap("ak") == int(round(plain_cap * 1.25)) and player.reserve == pockets + player.reserve_cap("ak") - plain_cap and is_equal_approx(player.reload_of("ak"), plain_reload * 0.88) and is_equal_approx(float(player.gun().kick), plain_kick * 0.85)
+	var paid: bool = game.credits == 3000 - 250 - 200 - 150 - 180 - 150 and game.upgrade_price("ak", "mags") == -1 and not game.buy_upgrade("mags") and game.upgrade_price("ak", "pouch") == 220
+	# Another weapon has lines of its own; not every line is for every weapon.
+	var own_lines: bool = player.upgrade("m14", "damage") == 0 and game.buy_upgrade("damage", "m14") and player.upgrade("m14", "damage") == 1 and player.upgrade("ak", "damage") == 1
+	var fitting: bool = not Survivor.upgrade_fits("nitro", "mags") and not Survivor.upgrade_fits("flamer", "brace") and Survivor.upgrade_fits("flamer", "damage") and screen.line_effect("ak", "damage").contains("→")
+	game.resume_run()
+	# What was done to a weapon goes with it.
+	player.position = shelf + Vector3(0, 0.05, 0.6)
+	game.interact()
+	player.equip_weapon("pistol", true)
+	var gone: bool = game.sell_weapon("ak") and game.buy_weapon("ak") and player.upgrade("ak", "damage") == 0 and player.magazine_of("ak") == 30
+	game.resume_run()
+	expect(benched and raised and worked and paid and own_lines and fitting and gone and game.state == "playing", "The workbench has five lines to choose from (damage, magazine, pockets, reload, steadiness), each for one weapon and each with its price; they go with the weapon")
