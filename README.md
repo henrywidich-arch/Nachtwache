@@ -143,10 +143,10 @@ Mehr als 24 Angreifer sind nie gleichzeitig auf dem Hof (plus drei je Mitkämpfe
 | **Farmhaus, Erdgeschoss** | Große Halle mit Galerie (Waffenshop in der Mitte), Kaminzimmer, Esszimmer, Küche, Treppenhaus, Lagerraum mit **Munition (60)** und **Erste Hilfe (100)** |
 | **Farmhaus, Obergeschoss** | Galerie rund um die Halle, vier Zimmer, Balkon mit Außentreppe; im Lagerboden (Nordosten) eine dritte **Munitionsstation**. Hier bist du sicher, wenn unten Gas steht, und manche Aufträge führen hier hinauf |
 | **Scheune** (Nordosten) | zweite **Munitionsstation**, Heuboden, Tore an beiden Giebeln |
-| **Werkstatt / Garage** (Nordwesten) | **Werkbank** (250, max. dreimal je Waffe) |
+| **Werkstatt / Garage** (Nordwesten) | **Werkbank**: **E** öffnet ihr Menü mit fünf Linien für jede Waffe, die du trägst (siehe „Werkbank“) |
 | **Gästehütte** (Südwesten) | zweite **Erste Hilfe** |
 | **Schuppen** (Südosten), Koppel, Brunnen, Gemüsebeet, Straße mit Tor | Deckung und Wege zwischen den Gebäuden |
-| **Keller und Labor** (unter dem Haus) | Hinter der Helix-Sicherheitstür unter der Treppe: Kellertreppe, Gang, Laborhalle mit Arbeitstischen, Serverschränken und Probentanks, im Westen **Nadjas Isolationsraum** hinter Panzerglas |
+| **Keller und Labor** (unter dem Haus) | Hinter der Helix-Sicherheitstür unter der Treppe: Kellertreppe, Gang und die Laborhalle – verkleidete Wände, Leuchtbänder, Arbeitsinseln, Spinde mit Schutzanzügen. An der Wand stehen **sechs Serverschränke** (B-01 bis B-06) mit Laufwerksschächten; ringsum **Probentanks, in denen Infizierte in grüner Flüssigkeit hängen** – einer ist geplatzt, die Spuren führen davon weg. Im Westen **Nadjas Isolationsraum** hinter Panzerglas |
 | **Versorgungstunnel** | Vom Labor nach Norden zu einem Betonbunker im Hof hinter dem Haus – der zweite Weg ins Labor |
 | **Landeplatz** (Südwesten) | Freie Fläche mit Knicklichtern: Hier seilt ihr euch ab, hier landet am Ende der Helikopter |
 | **Funkmast** (Südosten) | Gittermast mit Schaltkasten; ist er eingeschaltet, blinkt oben das rote Licht |
@@ -154,6 +154,21 @@ Mehr als 24 Angreifer sind nie gleichzeitig auf dem Hof (plus drei je Mitkämpfe
 **Nicht alles ist von Anfang an offen.** Bretter versperren das Kaminzimmer (samt Seitentür), eine Barrikade die Treppe im Haus, ein Gittertor die Außentreppe; die Kellertür, Nadjas Tür und der Tunnel sind verriegelt. Das Kaminzimmer öffnet sich nach Runde 1, das Obergeschoss nach Runde 3, der Rest durch die Geschichte. Rote Lampen an den Sperren werden grün, wenn der Weg frei ist. Auch die Infizierten kommen nur durch, wo offen ist.
 
 Der **Waffenshop** in der Halle ist **vor der ersten und nach jeder überstandenen Runde geöffnet** (grüne Lampe, Rollladen oben) und **während einer Runde geschlossen**. Die Pause dauert 20 Sekunden; im Solo-Spiel steht die Zeit, solange das Shop-Menü offen ist.
+
+### Die Karte in der Ecke
+
+Oben rechts liegt eine **Karte**: was im Umkreis von 26 Metern um dich ist, von oben gesehen und so gedreht, dass **vorn oben** ist (das „N“ am Rand zeigt nach Norden). Wände, Zäune, Bäume und Möbel sind als Umrisse gezeichnet – im Hof, im Obergeschoss und im Keller jeweils der Plan des Stockwerks, auf dem du stehst.
+
+| Zeichen | Bedeutung |
+|---|---|
+| weißer Pfeil in der Mitte | du |
+| **roter Punkt** | gewöhnlicher Infizierter (Mauler) |
+| **gelber Punkt mit Rand** | Spezial-Infizierter (Charger, Ripper, Leech, Striker, Medic); der Crusher ist ein großer |
+| **blaues Quadrat** | Soldat der C.R.U. |
+| grüner Punkt | Viper, Scorpion, dein Koop-Mitspieler (ein Ring, wenn er am Boden liegt) |
+| helle Raute | offener Auftrag |
+
+Wer weiter weg ist, als die Karte reicht, sitzt kleiner **am Rand** in seiner Richtung – so findest du den letzten Gegner einer Runde. Wer auf einem **anderen Stockwerk** steht, ist blass. Der **Stalker** erscheint nie auf der Karte. Größe, Reichweite und Farben stehen oben in `scripts/minimap.gd`.
 
 ### Infizierte
 
@@ -166,7 +181,7 @@ Der **Waffenshop** in der Halle ist **vor der ersten und nach jeder überstanden
 | **Striker** | 5 | Schlank und schnell. Verliert angeschossen eine explosive Wucherung und lässt beim Tod drei weitere fallen |
 | **Medic** | 4 | Der Infizierte mit den Tanks auf dem Rücken. Hält sich hinter den anderen und kommt nicht näher als nötig. Um ihn kriechen flache **grüne Gasschwaden** über den Boden – er selbst bleibt darüber gut zu sehen. Jeder Infizierte, den das Gas berührt, ist sofort und für acht Sekunden **verstärkt**: Er heilt, steckt nur noch gut die Hälfte ein und ist schneller – auch der Crusher. Du erkennst Verstärkte an **grün glühenden Augen, einem grünen Schimmer am Körper und leuchtenden Armen**. Für dich ist das Gas Giftgas. **Zuerst ausschalten**; deine Bots zielen bevorzugt auf ihn |
 | **Stalker** | ab 2, außerhalb der Wellen | Gehört zu keiner Runde. Steht in der Ferne, am Fenster oder auf der Galerie und beobachtet – sieht man hin, ist er weg. Sprintet manchmal durchs Bild. Später in der Nacht schleicht er sich an: Er bewegt sich nur, wenn niemand hinsieht, packt zu und verschwindet. Genug Treffer vertreiben ihn; wer ihn über die Nacht ganz erledigt, bekommt 500 Vorrat. Sehr selten steht er direkt vor dir, wenn du den Shop verlässt |
-| **Crusher** | 6, 8 und letzte | Der große Blaue. Vor der letzten Runde kommt er mitten in der Runde und ist noch nicht ausgewachsen (gut die Hälfte bzw. drei Viertel seines Lebens); am Ende steht er in voller Größe da. Sehr viel Leben, große Reichweite, kopfschussresistent. Springt dich an, wenn du Abstand hältst, wird ab halbem Leben rasend und löst sich beim Tod in eine Säurewolke auf |
+| **Crusher** | 6, 8 und letzte | Der große Blaue. Vor der letzten Runde kommt er mitten in der Runde und ist noch nicht ausgewachsen (gut die Hälfte bzw. drei Viertel seines Lebens); am Ende steht er in voller Größe da. Sehr viel Leben, große Reichweite, kopfschussresistent – und seit v0.18 **fast doppelt so schnell zu Fuß** (2,9 m/s), mit härteren Schlägen (44 statt 34). Hältst du Abstand, **springt er dich an**: aus 5 bis 12 Metern, flach und weit, dorthin, wo du beim Aufkommen sein wirst – er landet gut einen Meter vor dir. **Wo er landet, bebt der Boden:** Wer näher als 4,5 Meter steht, nimmt Schaden, auch wenn ihn der Hieb selbst verfehlt. Ab halbem Leben wird er rasend; beim Tod löst er sich in eine Säurewolke auf |
 
 - **Treffer wirken:** Jeder Treffer reißt den Körper herum, konzentriertes Feuer bringt Infizierte ins Taumeln. Tote fallen je nach Schussrichtung nach hinten, vorn oder zur Seite; es gibt mehrere Todesanimationen pro Richtung.
 - **Blut:** Kopfschüsse und schwere Treffer können Kopf oder Arm abreißen, Leichen bluten aus, Blut bleibt an Boden und Wänden.
@@ -204,7 +219,8 @@ Je höher die Schwierigkeit, desto schneller reagieren sie, desto besser treffen
 
 Du trägst **eine Primärwaffe, eine Sekundärwaffe und eine schwere Waffe** – Tasten **1**, **2** und **3**.
 
-- Kaufst du eine Waffe, für deren Art kein Platz mehr frei ist, **ersetzt sie die alte**: Die geht für die **Hälfte ihres Kaufpreises** in Zahlung (der Shop zeigt „TAUSCHEN“, was ersetzt wird und was es dafür gibt). Ersetzt wird die Waffe dieser Art, die du in der Hand hältst, sonst die erste. Ihre Munition und ihre Aufsätze sind dann weg.
+- Kaufst du eine Waffe, für deren Art kein Platz mehr frei ist, **ersetzt sie eine andere**: Die geht für die **Hälfte ihres Kaufpreises** in Zahlung. **Welche geht, bestimmst du** – unter „DAFÜR GEHT“ stehen alle, die Platz machen können (jede Waffe derselben Art, und mit Gurt auch die zusätzlichen der anderen Arten), jeweils mit dem, was sie einbringt. Vorgeschlagen ist die Waffe dieser Art, die du in der Hand hältst. Munition, Aufsätze und Werkbank-Stufen der alten Waffe sind dann weg.
+- **Verkaufen** geht auch ohne Neukauf: Waffe in der Liste oder oben unter „DU TRÄGST“ anklicken, dann **VERKAUFEN** – für die Hälfte des Kaufpreises. Die letzte Waffe gibt der Shop nicht heraus.
 - Das M4A4, mit dem jeder anfängt, bringt beim Tausch nichts ein – dafür gibt es das Gewehr im Shop jederzeit kostenlos zurück.
 - Der **Waffengurt** (Reiter Ausrüstung, 250 / 400 / 600) schafft Platz für **je eine Waffe mehr, egal welcher Art** – bis zu drei Gurte, also höchstens sechs Waffen. Gurte gelten für die Nacht.
 
@@ -217,13 +233,13 @@ Du trägst **eine Primärwaffe, eine Sekundärwaffe und eine schwere Waffe** –
 | UMP45 | Primär | 220 | 25 | Schwere MP: langsamer als die P90, dafür trifft jede Kugel härter. Das Magazin wird sichtbar gewechselt. Nimmt **Aufsätze** (siehe unten) |
 | Schrotflinte | Primär | 250 | 6 | Neun Schrotkugeln pro Schuss, zusammen über 200 Schaden: aus der Nähe fällt fast alles mit einer Ladung. Wer sie überlebt, wird **zurückgeworfen** – je näher und je mehr Kugeln treffen, desto weiter (ab etwa zwölf Metern gar nicht mehr; Schilde fangen den Stoß ab, den Crusher bewegt nichts). Wuchtiger Rückstoß, Vorderschaft-Repetieren; volle Wirkung bis acht Meter, ab etwa 25 m fast wirkungslos |
 | Honey Badger | Primär | 350 | 30 | Schallgedämpft, präzise, hoher Einzelschaden |
-| M14 | Primär | 320 | 20 | **Einzelschuss:** ein Schuss pro Klick, mehr als doppelt so hart wie eine M4A4-Kugel und sehr genau. Kimme und Korn. |
+| M14 | Primär | 320 | 20 | **Einzelschuss:** ein Schuss pro Klick, **100 Schaden** – mehr als dreimal so hart wie eine M4A4-Kugel –, sehr genau, und die Kugel **geht durch einen Körper** und trifft den dahinter. Kimme und Korn. |
 | Auto-Schrotflinte | Schwer | 500 | 8 | Halbautomatisch mit Kastenmagazin: kein Repetieren, drei Ladungen in der Sekunde, schnelles Nachladen. Jede Ladung schwächer als die der Pump-Flinte und mit weniger Stoß, dafür steht nichts lange, was davor steht. Eigener Schuss-Sound |
 | M9 Pistole | Sekundär | 60 | 15 | Leicht und schnell, billige Zweitwaffe |
 | .44 Magnum | Sekundär | 220 | 6 | Sechs Schuss, jeder ein Hammer |
 | Scharfschützengewehr | Schwer | 450 | 5 | Zielfernrohr (rechte Maustaste), Repetierer; die Kugel geht durch bis zu vier Körper |
 | SVD Dragunow | Schwer | 650 | 10 | Das zweite Scharfschützengewehr: **halbautomatisch**, ein Schuss pro Klick ohne Repetieren, zehn Schuss. Pro Treffer schwächer als der Repetierer, dafür rund dreimal so schnell; die Kugel geht durch zwei Körper. **Erst nach Runde 2** im Shop |
-| Granatwerfer | Schwer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. Das Geschoss fliegt im **Bogen**: Gerade gehalten kommt es nach rund 20 m herunter, für weitere Ziele hältst du höher. Die **rechte Maustaste** zeigt Flugbahn und Einschlagpunkt; der Werfer bleibt dabei neben der Sichtlinie. **Erst nach Runde 4** im Shop |
+| Granatwerfer | Schwer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. Das Geschoss fliegt im **Bogen** und so langsam, dass du ihm nachsehen kannst (gut eine Sekunde für 20 m): Gerade gehalten kommt es nach rund 20 m herunter, für weitere Ziele hältst du höher. Die **rechte Maustaste** zeigt Flugbahn und Einschlagpunkt; der Werfer bleibt dabei neben der Sichtlinie. **Erst nach Runde 4** im Shop |
 | Maschinengewehr | Schwer | 800 | 100 | Gurtgefüttert aus einem Kasten unter der Waffe: **100 Schuss und 400 in Reserve**, 700 Schuss pro Minute, etwas mehr Schaden pro Kugel als das M4A4. Dafür streut es aus der Hüfte, und der Kastenwechsel dauert gut vier Sekunden. **Erst nach Runde 3** im Shop |
 | Minigun | Schwer | 1500 | 200 | Läuft kurz an und feuert dann 1300 Schuss pro Minute; macht langsam. **Erst nach Runde 6** im Shop |
 
@@ -243,13 +259,22 @@ In der Shop-Liste **Aufsätze**, für jede dieser Waffen eigens zu kaufen. Die L
 
 | Aufsatz | Preis | Wirkung |
 |---|---|---|
-| Rotpunktvisier | 120 | Ein offenes Reflexvisier: das Fenster in einem Rahmen mit Dach und zwei Streben, darunter das Gehäuse mit Batteriedeckel, Stellschrauben und den Tasten + und −, festgeklemmt mit zwei Querbolzen und einer Rändelmutter. Im Fenster ein großes, klares Glas mit einem feinen, matten Leuchtpunkt in einem hauchdünnen Ring. Es sitzt dicht am Auge und über Kimme und Korn, sodass kaum etwas vom Gewehr im Bild steht. Etwas mehr Vergrößerung als über Kimme und Korn, beim Zielen 45 % weniger Streuung |
+| Rotpunktvisier | 120 | Ein **holografisches Visier** (dein Modell): ein Gehäuse mit Haube, durch dessen Fenster du hindurchschaust, darunter die Tasten − und +, an den Seiten die Stellräder, unten die Hebelklemme. Im Fenster ein feiner, matter Leuchtpunkt in einem hauchdünnen Ring – derselbe wie bisher. Das Fenster steht 7 cm über der Schiene und damit über jeder Kimme. Etwas mehr Vergrößerung als über Kimme und Korn, beim Zielen 45 % weniger Streuung |
 | Zielfernrohr 4× | 260 | Vierfache Vergrößerung. Das Bild füllt fast den ganzen Bildschirm; das Fadenkreuz hat Haltemarken für weite Schüsse. Beim Zielen 65 % weniger Streuung; die Sicht dreht langsamer |
 | Schalldämpfer | 180 (AK-47: 200) | Leiser Schuss, kaum Mündungsfeuer, 20 bis 25 % weniger Rückstoß, etwas weniger Streuung, 5 % weniger Schaden – und die C.R.U. weicht deinen Schüssen nicht mehr aus |
 
 ### Ausrüstung aus dem Shop
 
 Der Shop hat acht Reiter: **Waffen**, **Pistolen**, **Schwer**, **Klasse**, **Aufsätze**, **Ausrüstung**, **Verbrauch** und **Team**. Hinter dem Tresen steht die Händlerin.
+
+So ist er aufgebaut (seit v0.18):
+
+- **Links die Liste** des Reiters mit Preis oder Zustand (DABEI ✓, GESPERRT, AB RUNDE 4), **rechts das, was du darin anklickst**. Mit den Pfeiltasten gehst du durch die Liste; das Bild rechts folgt.
+- **Waffen siehst du als Modell**, das sich langsam hin und her dreht, mit fünf Werten daneben – Schaden, Feuerrate, Magazin und Reserve, Nachladen, Präzision – und dem **Vergleich mit der Waffe, die sie ersetzen würde** (▲ besser, ▼ schlechter).
+- **Aufsätze** siehst du schon vor dem Kauf **an der Waffe**.
+- **Ausrüstung und Verbrauch** kaufst du direkt in der Zeile (der Preis ist der Knopf); die Zeile zeigt, wie viel du schon hast (●●○○).
+- Oben steht, **was du trägst**, nach Tasten sortiert; jede Waffe dort ist ein Knopf, der sie zeigt (zum Verkaufen).
+- Nach einem Kauf bleibt alles, wo es war: die Liste springt nicht zurück.
 
 | Gegenstand | Preis | Wirkung |
 |---|---|---|
@@ -260,13 +285,26 @@ Der Shop hat acht Reiter: **Waffen**, **Pistolen**, **Schwer**, **Klasse**, **Au
 | Adrenalinspritze | 300 | Rettet dich einmal, wenn dein Leben auf null fällt |
 | Schutzweste / Schwere Rüstung | 150 / 300 | 50 bzw. 100 Rüstung; Rüstung fängt 60 % jedes Treffers ab |
 | Ballistische Weste | 160 / 260 / 400 | Drei Stufen gegen die C.R.U.: 25, 40 und 55 % weniger Schaden durch ihre Kugeln und Granaten. Verbraucht sich nicht und wirkt zusätzlich zur Rüstung; gegen Infizierte hilft sie nicht. Die Stufe steht neben der Lebensanzeige |
-| Größere Magazine | 200 | +50 % Magazin für die Waffe in deiner Hand (im Reiter Aufsätze) |
 | Waffengurt | 250 / 400 / 600 | Drei Stufen: Platz für je eine Waffe mehr, egal welcher Art (siehe „Waffen-Plätze“) |
 | Gasmaske | 150 / 250 / 400 / 600 | Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas; erholt sich an frischer Luft. Wofür sie gut ist, steht unter „Gas und Gasmaske“ |
 | Team: Schutzplatten | 180 / 300 / 450 | Drei Stufen: **+30 % Leben je Stufe** für deine beiden Bots (bis 190). Gilt für diese Nacht; nur im Einsatz mit Bots |
 | Team: Scharfe Munition | 180 / 300 / 450 | Drei Stufen: **+20 % Schaden je Stufe** für deine beiden Bots (bis +60 %) |
 
 Die Preise gelten für „Normal“ und steigen mit der Schwierigkeit.
+
+### Werkbank
+
+An der Werkbank in der Garage öffnet **E** ein Menü. Links wählst du eine deiner Waffen (die in der Hand ist vorgewählt), rechts stehen **fünf Linien** – jede zeigt, was sie aus der Waffe gemacht hat und was die nächste Stufe bringt:
+
+| Linie | Stufen | Preis | Wirkung |
+|---|---|---|---|
+| **Schaden** | 3 | je 250 | +10 Schaden pro Schuss und Stufe (bei Schrot auf die Kugeln verteilt); Flammenwerfer und Granatwerfer +15 % je Stufe |
+| **Magazin** | 1 | 200 | +50 % Magazin (was der Shop früher als „Größere Magazine“ verkauft hat) |
+| **Munition** | 2 | 150 / 220 | +25 % Reservemunition je Stufe, sofort aufgefüllt |
+| **Nachladen** | 2 | 180 / 260 | je Stufe 12 % schneller |
+| **Stabilität** | 2 | 150 / 220 | je Stufe 15 % weniger Rückstoß |
+
+Jede Linie gilt **nur für diese eine Waffe** und geht mit ihr, wenn du sie verkaufst oder eintauschst. Nicht jede Linie passt zu jeder Waffe (kein größeres Magazin für die Doppelbüchse, keine Stabilität für den Flammenwerfer). Die Zahlen stehen in `UPGRADES` in `scripts/player.gd`.
 
 ### Dein Team
 
@@ -294,11 +332,11 @@ Was du selbst trägst, bleibt für die Bots wählbar: Du kannst als Viper spiele
 
 ### Fähigkeiten
 
-Im Hauptmenü unter **FÄHIGKEITEN** stehen drei Wege. **Du wählst einen davon** – nur in ihm vergibst du Punkte, nur seine Klassenwaffe gibt es für dich:
+Im Hauptmenü unter **FÄHIGKEITEN** stehen drei Wege. **Deine Punkte kannst du frei auf alle drei verteilen – im Einsatz wirkt aber immer nur einer: der aktive.** Nur seine Fähigkeiten zählen, nur seine Klassenwaffe gibt es im Shop:
 
 | Weg | Schwerpunkt | Fähigkeiten | Klassenwaffe |
 |---|---|---|---|
-| **Säuberer** | gegen die Masse der Infizierten | mehr Schaden und Kopfschuss-Schaden gegen gewöhnliche Infizierte, schneller nachladen, weniger Schaden durch sie, mehr Reservemunition, **Spürtrupp** (die Bots bergen Zugangscodes, Probenkoffer und Festplatten); zuletzt: Gewehrkugeln durchschlagen einen Infizierten | Flammenwerfer |
+| **Säuberer** | gegen die Masse der Infizierten | mehr Schaden und Kopfschuss-Schaden gegen gewöhnliche Infizierte, schneller nachladen, weniger Schaden durch sie, mehr Reservemunition, **Spürtrupp** (die Bots bergen Zugangscodes, Probenkoffer und Festplatten), **Ausgebrannt** (was dein Flammenwerfer anzündet, platzt harmlos – siehe unten); zuletzt: Gewehrkugeln durchschlagen einen Infizierten | Flammenwerfer |
 | **Jäger** | gegen Spezial-Infizierte | mehr Schaden gegen sie und weniger durch sie, der Maskenfilter hält länger, weniger Säureschaden, einen Leech schneller abschütteln, **Techniker** (die Bots schalten Sicherungen und den Funkmast ein und öffnen Versorgungskisten); zuletzt: jeder erlegte Spezial-Infizierte heilt | Doppelbüchse .600 |
 | **Brecher** | gegen die Soldaten der C.R.U. | ihre Panzerung hält weniger ab, weniger Schaden durch Kugeln und Granaten, **das Scharfschützengewehr schießt durch den Schild**, **Wachposten** (die Bots halten markierte Stellungen, starten den Generator und starten ihn und das Hack-Modul neu, wenn sie stehen); zuletzt: auch Magnum, AK-47 und **beide Schrotflinten** schießen durch den Schild, mit halbem Schaden (der Stoß der Schrotflinte geht nicht hindurch) | M107 Kaliber .50 |
 
@@ -306,9 +344,12 @@ So funktioniert es:
 
 - Deine Laufbahn ergibt **Erfahrung**: jeder Abschuss 1, jeder Spezial-Infizierte 4, jeder C.R.U.-Soldat 6, jeder Auftrag 60, jede Wiederbelebung 30, jeder gewonnene Einsatz 500. Erfahrung ergibt **Stufen** (Stufe 2 bei 500, Stufe 5 bei 5.000, Stufe 10 bei 22.500), jede Stufe ab der zweiten **einen Punkt**. Was du bisher gespielt hast, zählt schon mit. Nach jedem Einsatz steht auf dem Schlussbild, was er gebracht hat.
 - Ein Punkt kauft einen Rang (der Knopf **+** neben der Fähigkeit). Die zweite Reihe eines Wegs öffnet sich ab **drei**, die dritte ab **sieben** Punkten in diesem Weg.
-- Ab **drei Punkten** in deinem Weg verkauft der Shop dessen **Klassenwaffe**.
-- **NEU WÄHLEN · PUNKTE ZURÜCK** nimmt alle Punkte zurück und gibt die Wahl wieder frei – kostenlos, du kannst jeden Weg ausprobieren, aber immer nur einen gleichzeitig spielen. (Hattest du in v0.14 Punkte in mehreren Wegen, gilt der mit den meisten als gewählt; die anderen Punkte sind wieder frei.)
-- Bei Stufe 16 ist Schluss: 15 Punkte, genau genug für alle Ränge eines Wegs (Stufe 16 bei 60.000 Erfahrung).
+- Ab **drei Punkten** in einem Weg verkauft der Shop dessen **Klassenwaffe** – solange dieser Weg aktiv ist.
+- **AKTIVIEREN** auf der Seite der Fähigkeiten schaltet einen Weg scharf – jederzeit im Hauptmenü, kostenlos, und **ohne dass ein Punkt verloren geht**. Der aktive Weg trägt die Marke **AKTIV**; der Hauptmenü-Knopf nennt ihn. Der allererste Punkt, den du vergibst, aktiviert seinen Weg gleich mit.
+- Du kannst also einen Weg ganz ausbauen oder zwei zur Hälfte und vor jeder Nacht wählen, welchen du nimmst. Die Punkte in den anderen Wegen ruhen so lange.
+- **PUNKTE ZURÜCK · NEU VERTEILEN** nimmt alle Punkte zurück – kostenlos.
+- **Ausgebrannt** (Säuberer, zweite Reihe): Solange ein Gegner von **deinem Flammenwerfer** brennt, schadet es dem Trupp nicht, wenn er platzt. Ein **Charger** reißt weiter die Infizierten um sich mit, tut euch aber nichts; die **Wucherungen eines Strikers** fallen verkohlt ab und verglimmen nur. Ist das Feuer aus (zweieinhalb Sekunden nach dem letzten Strahl), ist er wieder gefährlich. Im Koop gilt es für alles, was derjenige mit der Fähigkeit anzündet.
+- Bei Stufe 16 ist Schluss: 15 Punkte – so viele wie bisher, genug für (fast) alle Ränge eines Wegs oder für den größeren Teil von zweien (Stufe 16 bei 60.000 Erfahrung).
 - Die Punkte stehen in deinem Profil; im Koop hat jeder seine eigenen. Der Hauptmenü-Knopf zeigt, wie viele noch frei sind.
 
 Die Zahlen stehen in `scripts/skills.gd` (`TREES`, `TIER_NEEDS`, `WEAPON_NEEDS`, `WORTH`). `IN_SERVICE := false` nimmt alles wieder außer Betrieb.
@@ -386,7 +427,10 @@ Was am Mac anders ist:
 | `scripts/player.gd` | Bewegung, Waffenwerte und Preise (`WEAPONS`), Aufsätze und was sie an den Werten ändern (`ATTACHMENTS`), Shop-Gegenstände (`GOODS`), Schießen, Nachladen, Werfen, Rüstung, ballistische Weste (`PLATE_SHARES`), Gasmaske |
 | `scripts/throwable.gd`, `scripts/claymore.gd` | Granate, Blendgranate und Mine |
 | `scripts/weapon_view.gd` | Ego-Ansicht der Waffen samt Händen (`VIEWS` = Position in der Hand), die UMP mit ihren Aufsätzen (`build_ump`, `SIGHTS`) und ihrem Magazinwechsel (`reload_step`) |
-| `scripts/hud.gd` | Menüs, Shop-Menü, Koop-Lobby und Anzeigen |
+| `scripts/hud.gd` | Menüs, Koop-Lobby und Anzeigen |
+| `scripts/shop_screen.gd`, `scripts/weapon_show.gd` | Der Bildschirm von Shop und Werkbank (Liste links, Auswahl rechts) und das Bild der Waffe, die sich darin dreht |
+| `scripts/minimap.gd` | Die Karte in der Ecke: Größe, Reichweite (`REACH`), Farben und Zeichen |
+| `scripts/lab_specimen.gd` | Die Infizierten in den Probentanks des Labors |
 | `scripts/sound.gd` | Lädt die Sounds aus `assets/sounds`, Lautstärken (`MIX`), Hall drinnen/draußen |
 | `scripts/music.gd` | Die Musik: welche Datei zu welchem Teil der Nacht gehört (`PHASES`), wann gewechselt und wie lange übergeblendet wird |
 | `scripts/skills.gd` | Die drei Wege der Fähigkeiten (`TREES`), Erfahrung, Stufen und Punkte, und was jede Fähigkeit bewirkt. `IN_SERVICE` nimmt sie in Betrieb |
@@ -444,6 +488,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 
 ## Stand und Grenzen
 
+**v0.18** macht den **Crusher gefährlich** (schneller, härter, ein weiter flacher Sprung mit Beben beim Landen – der alte Sprung ging fast nur nach oben, das war die Verzerrung), verstärkt das **M14** (100 Schaden, geht durch einen Körper) und lässt die **Granate des Werfers langsamer** fliegen. Bei den **Fähigkeiten** verteilst du die Punkte frei auf alle drei Wege und aktivierst einen davon; neu ist **Ausgebrannt** (brennende Charger und Striker-Wucherungen tun dem Trupp nichts). Oben rechts gibt es eine **Karte** mit eigenen Zeichen für gewöhnliche Infizierte, Spezial-Infizierte und Soldaten. Der **Shop** ist neu gebaut (Liste und Auswahl, Waffen als drehendes Modell mit Vergleich, verkaufen, wählen was geht), die **Werkbank** hat ein Menü mit fünf Linien je Waffe. Das **Labor** ist ausgestaltet: Infizierte in den Tanks, einer davon geplatzt, und sechs feste Serverschränke, aus denen die Festplatten des Auftrags gezogen werden. Das Rotpunktvisier ist jetzt **dein holografisches Visier** – auf allen vier Gewehren, die eines nehmen.
+
 **v0.17** gibt dem **Rotpunktvisier** ein richtiges Gehäuse, lässt die **Bots Aufträge übernehmen** (je eine Fähigkeit pro Weg: Spürtrupp, Techniker, Wachposten), lässt **Schrotflinten durch Schilde schießen** (Brecher, Schildbrecher II), macht die **Ripper zu Mutanten statt Hunden** (neu gebaute Geräusche), gibt **Nadja eine neue Stimme**, bringt in der **letzten Runde** wieder etwas mehr Gegner (80 statt 70 % der Tabelle) und hält die **Bots in den ersten Runden zurück**, damit die Abschüsse dir gehören.
 
 **v0.16** bringt das **G36** als bestes Sturmgewehr (dein Modell, mit Kimme und Korn, Magazinwechsel, drei Aufsätzen und eigenen Sounds), **stärkere Schrotflinten** (mehr Schaden, ein wuchtigerer Schuss, und eine Ladung aus der Nähe wirft zurück, wen sie nicht tötet), **sechs weitere Stürze** für Zombies und Soldaten samt eigenem Sturz für den Kopfschuss von hinten und für Treffer mit viel zu viel Schaden, die **drei härteren C.R.U.-Stimmen** und echte Aufnahmen für Molotow, Feuer, Flammenwerfer und Kolbenschlag. Behoben: In der **Ankunft** schwebte deine Waffe im Bild, und deine Taschenlampe leuchtete die leere Landezone an.
@@ -479,6 +525,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 - Aufsätze gibt es für M4A4, UMP45, AK-47 und G36. Beim G36 bleiben Kimme und Korn stehen, wenn ein Visier draufsitzt: Das Rotpunktvisier schaut über sie hinweg, die Spitze des Korns steht unten im Glas. Für andere Waffen genügt ein Eintrag in `ATTACHMENTS` und ein Modell des Teils an der Waffe; der Magazinwechsel der anderen Waffen läuft weiter unterhalb des Bildes ab.
 - Wie die UMP klingt, ist aus vorhandenen Schüssen abgeleitet (`ump.wav`, `ump_sil.wav`) und nicht probegehört.
 - **Platzhalter in v0.14:** Die fünf neuen Waffen (M14, SVD, Flammenwerfer, Doppelbüchse, M107) sind per Skript gebaute Blender-Modelle ohne Texturen – sauber, aber schlicht. Eigene Modelle: Datei in `assets/models` ersetzen und die Punkte in `MODELS` und `VIEWS` in `scripts/weapon_view.gd` anpassen (Bauskripte und Maße: `Nachtwache-Modelle/phase7`). Ihre Sounds und die von Nahkampf, Molotow und Feuer sind seit v0.15 Aufnahmen, wie die drei neuen C.R.U.-Stimmen – **nichts davon ist probegehört**: Auswahl und Pegel folgen Messwerten, und ob die Stimmen so hart klingen wie gewünscht, entscheidet das Ohr.
+- **Nicht von Hand gespielt (v0.18):** Alles ist automatisch geprüft und auf Bildern angesehen, aber nicht gespielt. Schätzwerte sind: wie gefährlich der Crusher jetzt ist (Tempo, Schaden, Sprungweite, Beben: oben in `scripts/infected.gd` unter `LEAP_…` und `QUAKE_…`), die Preise und Stufen der Werkbank, wie groß das holografische Visier beim Zielen im Bild steht (`HOLO_EYE` in `scripts/weapon_view.gd`: größer = weiter weg = kleiner) und seine Farbe (`HOLO_PAINT`). Die Karte dreht sich mit dir; eine feste Nord-Ausrichtung gibt es nicht. Die Fähigkeiten-Regel habe ich so verstanden: ein gemeinsamer Vorrat von 15 Punkten für alle drei Wege – nicht 15 je Weg.
 - **Nicht von Hand gespielt, nicht gehört (v0.17):** Wie stark die Bots am Anfang gebremst sind (40 % Schaden in Runde 1, voll ab Runde 7), wie schnell sie Aufträge erledigen (`SQUAD_PACE` in `mission.gd`) und der Anteil der letzten Runde (`FINAL_SHARE` in `game.gd`) sind Schätzwerte. Nadjas neue Stimme und die Ripper-Geräusche sind nur gemessen. Die Bots übernehmen keine Aufträge der Geschichte, bei denen etwas getragen wird (Hack-Modul holen und anbringen, Evakuierung).
 - **Nicht von Hand gespielt, nicht gehört (v0.16):** Die Werte des G36 (450 Vorrat, Schaden 35, 750 Schuss/min) und der Schrotflinten (Schaden 24 × 9 und 17 × 8, Stoß `push` in `WEAPONS`, Reichweite des Stoßes `PUSH_NEAR`/`PUSH_FAR` in `player.gd`) sind Schätzwerte. Wie das G36, die Schrotflinten und die neuen Stimmen klingen, ist nur gemessen. Die Aufsätze sitzen beim G36 auf dem schmalen Tragebügel und sind breiter als er.
 - **Nicht von Hand gespielt (v0.15):** Mit Heilspritze, voller Heilung und halber Munition nach jeder Runde ist die Nacht spürbar leichter als in v0.14 – ob zu leicht, zeigt erst das Spielen. Die Stellschrauben: `SYRINGE_HEAL`, `SYRINGE_WAIT` und `ROUND_AMMO` in `player.gd`, `ROUND_HEAL`, `TRADE_IN`, `SHIELD_LIMIT` und `FINAL_SHARE` in `game.gd`.
@@ -490,7 +537,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 
 ## Prüfung
 
-446 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins, die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug – und was mit v0.14 kam (ein Block für sich: `--smoke-test --only=arsenal`): Nahkampf, Molotow und Feuer, die fünf neuen Waffen, Einzelschuss, Klassenwaffen und ihre Sperre, Team-Upgrades, Nadja, die vier Stimmen und zwölf Stürze der C.R.U. (jeder Sturz jedes Soldatentyps endet am Boden), Rollen nur mit Platz, Fähigkeitspunkte vergeben und zurücknehmen, Endlosmodus und Modifikationen – und v0.15 (`--only=loadout`): Waffen-Plätze, Tausch und Gurte, Tasten nach Waffenart, Heilspritze, Ducken hinter Deckung, Heilung und Munition am Rundenende, ein Schild-Soldat gleichzeitig.
+458 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins, die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug – und was mit v0.14 kam (ein Block für sich: `--smoke-test --only=arsenal`): Nahkampf, Molotow und Feuer, die fünf neuen Waffen, Einzelschuss, Klassenwaffen und ihre Sperre, Team-Upgrades, Nadja, die vier Stimmen und zwölf Stürze der C.R.U. (jeder Sturz jedes Soldatentyps endet am Boden), Rollen nur mit Platz, Fähigkeitspunkte vergeben und zurücknehmen, Endlosmodus und Modifikationen – und v0.15 (`--only=loadout`): Waffen-Plätze, Tausch und Gurte, Tasten nach Waffenart, Heilspritze, Ducken hinter Deckung, Heilung und Munition am Rundenende, ein Schild-Soldat gleichzeitig.
 
 ```text
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test
