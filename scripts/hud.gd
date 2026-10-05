@@ -1034,12 +1034,18 @@ func _menu_host(column: VBoxContainer) -> Control:
 	var net: NetLink = game.net
 	_title(column, "KOOP\nHOSTEN")
 	var description := "Dein Mitspieler wählt „Koop beitreten“ und trägt deine Adresse ein.\n"
-	if net.public_address != "":
-		description += "Über das Internet:  %s   (Port %d wurde im Router freigegeben)\n" % [net.public_address, NetLink.PORT]
-	elif net.forwarding != null:
-		description += "Über das Internet:  Router wird gefragt …\n"
-	else:
-		description += "Über das Internet:  keine automatische Freigabe. Entweder im Router UDP-Port %d\nauf diesen PC weiterleiten oder beide ein VPN-Tool nutzen (z. B. Radmin VPN, ZeroTier).\n" % NetLink.PORT
+	# What the router said when it was asked to pass the port on (NetLink.forward).
+	match net.forward:
+		"open":
+			description += "Über das Internet:  %s   ✓ Der Router hat UDP-Port %d für dich geöffnet.\n" % [net.public_address, NetLink.PORT]
+		"refused":
+			description += "Über das Internet:  %s  –  der Router öffnet UDP-Port %d NICHT von selbst.\nDie Adresse gilt nur, wenn der Port im Router freigegeben ist (FRITZ!Box: Internet →\nFreigaben → Portfreigaben → diesen PC; Schritt für Schritt in der README, „Koop zu zweit“).\nOhne Router: beide ein VPN-Tool (ZeroTier, Radmin VPN) und die Adresse darunter.\n" % [net.public_address, NetLink.PORT]
+		"walled":
+			description += "Über das Internet:  nicht direkt erreichbar – dein Anschluss hat keine eigene\nöffentliche Adresse (der Anbieter teilt sie). Nutzt beide ein VPN-Tool (ZeroTier,\nRadmin VPN) und die Adresse darunter, oder dein Mitspieler hostet.\n"
+		"none":
+			description += "Über das Internet:  keine automatische Freigabe. Entweder im Router UDP-Port %d\nauf diesen PC weiterleiten oder beide ein VPN-Tool nutzen (z. B. Radmin VPN, ZeroTier).\n" % NetLink.PORT
+		_:
+			description += "Über das Internet:  Router wird gefragt …\n" if net.forwarding != null else "Über das Internet:  nicht gefragt.\n"
 	description += "Im selben Netz / per VPN:  %s\n" % ", ".join(net.local_addresses())
 	description += "\n" + ("MITSPIELER VERBUNDEN  ✓" if net.partner != 0 else ("Port %d ist belegt – läuft das Spiel schon einmal?" % NetLink.PORT if net.phase == "failed" else "Warte auf Mitspieler …"))
 	_text(column, description, 16)

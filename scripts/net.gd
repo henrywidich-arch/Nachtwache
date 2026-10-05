@@ -23,7 +23,16 @@ var joined := false
 var partner := 0
 ## What the lobby shows: "", "waiting", "connecting", "connected", "failed", "lost".
 var phase := ""
+## The router's address towards the internet, once a router has been found.
 var public_address := ""
+## What came of asking the router to pass the port on to this PC (the lobby says so):
+## "" not asked or still asking, "open" it did, "refused" it answers but lets this PC open
+## no port (a FRITZ!Box does that until it is told otherwise), "walled" it has no address
+## of its own on the internet (the provider shares one among many), "none" no router that
+## takes such requests was found.
+var forward := ""
+## The router, kept while its mapping for this match stands, to take it away again.
+var router: UPNP
 var remote: RemoteSurvivor
 ## The look the partner chose.
 var partner_skin := "main"
@@ -35,6 +44,7 @@ var snapshot_left := 0.0
 var status_left := 0.0
 var clock := 0.0
 var forwarding: Thread
+var unmapping: Thread
 
 var active: bool:
 	get: return hosting or joined
@@ -60,8 +70,9 @@ func host(forward_port: bool = true) -> bool:
 	multiplayer.multiplayer_peer = peer
 	hosting = true
 	phase = "waiting"
-	if forward_port:
+	if forward_port and forwarding == null:
 		# Asks the router to pass the port on to this PC; takes a few seconds, so off the main thread.
+		# (One that was asked a moment ago, for a match closed since, answers for this one.)
 		forwarding = Thread.new()
 		forwarding.start(_forward_port)
 	changed.emit()
@@ -70,17 +81,48 @@ func host(forward_port: bool = true) -> bool:
 func _forward_port() -> void:
 	var upnp := UPNP.new()
 	if upnp.discover(2500, 2, "InternetGatewayDevice") == UPNP.UPNP_RESULT_SUCCESS and upnp.get_gateway() != null and upnp.get_gateway().is_valid_gateway():
-		upnp.add_port_mapping(PORT, PORT, "Nachtwache", "UDP")
-		_forwarded.call_deferred(upnp.query_external_address())
+		var address := upnp.query_external_address()
+		# A router answering is not a router agreeing: what it says to the request counts.
+		var agreed := upnp.add_port_mapping(PORT, PORT, "Nachtwache", "UDP") == UPNP.UPNP_RESULT_SUCCESS
+		_forwarded.call_deferred(address, ("open" if agreed else "refused") if reachable(address) else "walled", upnp if agreed else null)
 	else:
-		_forwarded.call_deferred("")
+		_forwarded.call_deferred("", "none", null)
 
-func _forwarded(address: String) -> void:
-	public_address = address
+func _forwarded(address: String, outcome: String, gate: UPNP = null) -> void:
+	router = gate
 	if forwarding != null:
 		forwarding.wait_to_finish()
 		forwarding = null
+	# The match was closed while the router was being asked: the mapping goes again.
+	if not hosting:
+		_unmap()
+		return
+	public_address = address
+	forward = outcome
 	changed.emit()
+
+## Whether somebody on the internet can reach an address at all: not one of a home network,
+## and not one a provider shares among many customers (100.64.0.0/10, 192.0.0.0/24).
+static func reachable(address: String) -> bool:
+	var parts := address.split(".")
+	if parts.size() != 4:
+		return false
+	var a := int(parts[0])
+	var b := int(parts[1])
+	if a == 10 or a == 127 or a == 0 or (a == 172 and b >= 16 and b <= 31) or (a == 192 and b == 168) or (a == 169 and b == 254):
+		return false
+	return not ((a == 100 and b >= 64 and b <= 127) or (a == 192 and b == 0 and int(parts[2]) == 0))
+
+## Takes the mapping this match asked the router for away again, off the main thread.
+func _unmap() -> void:
+	if router == null:
+		return
+	var gate := router
+	router = null
+	if unmapping != null:
+		unmapping.wait_to_finish()
+	unmapping = Thread.new()
+	unmapping.start(func() -> void: gate.delete_port_mapping(PORT, "UDP"))
 
 func local_addresses() -> PackedStringArray:
 	var found := PackedStringArray()
@@ -111,6 +153,10 @@ func close() -> void:
 	joined = false
 	partner = 0
 	phase = ""
+	# What the router opened for this match is closed with it.
+	_unmap()
+	forward = ""
+	public_address = ""
 	_drop_remote()
 	puppets.clear()
 	seen.clear()
@@ -577,3 +623,7 @@ func _revive() -> void:
 func _exit_tree() -> void:
 	if forwarding != null:
 		forwarding.wait_to_finish()
+	# A game that is quit while it hosts leaves no open port behind.
+	_unmap()
+	if unmapping != null:
+		unmapping.wait_to_finish()

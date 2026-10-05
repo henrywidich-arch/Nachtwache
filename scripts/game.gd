@@ -393,6 +393,9 @@ func _ready() -> void:
 	elif "--map-check" in args:
 		check_mode = true
 		call_deferred("_run_map_check")
+	elif "--router-check" in args:
+		check_mode = true
+		call_deferred("_run_router_check")
 	elif "--shop-check" in args:
 		check_mode = true
 		team_enabled = true
@@ -1920,6 +1923,23 @@ func _run_crusher_check() -> void:
 		await tick.call(0.07)
 	print("CRUSHER came down at %s, %.1f m from the player; it travelled %.1f m; player health lost %.0f" % [str(giant.global_position.snapped(Vector3.ONE * 0.01)), giant.global_position.distance_to(player.global_position), from.distance_to(giant.global_position), 100000.0 - player.health])
 	print("CRUSHER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Opens a match the way the menu does, router and all, and prints what the router said to
+## the request for the port (NetLink.forward); then closes it again, which takes away what
+## the router may have opened. Runs without a window:
+##   Godot --headless --path . -- --router-check
+func _run_router_check() -> void:
+	await get_tree().create_timer(1.0).timeout
+	var opened := net.host(true)
+	var waited := 0.0
+	while opened and net.forward == "" and waited < 12.0:
+		await get_tree().create_timer(0.25).timeout
+		waited += 0.25
+	print("ROUTER port=%d listening=%s forward=%s address=%s local=%s after %.1fs" % [NetLink.PORT, str(opened), net.forward if net.forward != "" else "no answer", net.public_address, ", ".join(net.local_addresses()), waited])
+	net.close()
+	await get_tree().create_timer(1.5).timeout
+	print("ROUTER_CHECK_DONE")
 	get_tree().quit()
 
 ## Pictures of the shop's counter and of the workbench: every list, a weapon picked, the

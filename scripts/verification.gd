@@ -3106,7 +3106,13 @@ func coop(game: Node3D, as_host: bool) -> void:
 	if as_host:
 		game.host_match()
 	else:
-		game.join_match("127.0.0.1")
+		# --mp-address=<address> joins a host somewhere else than on this machine (or this
+		# machine by the router's address, which tells whether the router lets a guest in).
+		var address := "127.0.0.1"
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--mp-address="):
+				address = arg.trim_prefix("--mp-address=")
+		game.join_match(address)
 	var waited := 0.0
 	while waited < 45.0 and (game.net.partner == 0 if as_host else game.state != "playing"):
 		await wait(0.25)
@@ -3461,7 +3467,8 @@ func _squadwork(game: Node3D) -> void:
 ## What came with v0.18: a Crusher that is a danger, a harder M14, a shell that can be
 ## watched on its way, points for all three trees with one of them in force, fire that
 ## lets a Charger and a Striker's growths go off harmlessly, a map in the corner, a shop
-## that sells and takes back, a workbench with five lines, the holographic sight.
+## that sells and takes back, a workbench with five lines, the holographic sight, a
+## lobby that says what the router said.
 func _overhaul(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var skills: Skills = game.skills
@@ -3824,3 +3831,21 @@ func _overhaul(game: Node3D) -> void:
 		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE) and rail_y + WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5 > (spec.mount as Vector3).y + float(spec.irons)
 		sights += 1
 	expect(sights == 4 and seated and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all four guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
+	# --- the lobby says what the router said
+	var link: NetLink = game.net
+	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")
+	var said := {}
+	for outcome in ["open", "refused", "walled", "none"]:
+		link.hosting = true
+		link._forwarded("203.0.113.7", outcome)
+		game.hud.show_menu("host")
+		var words := ""
+		for node in game.hud.modal.find_children("*", "Label", true, false):
+			words += (node as Label).text + "\n"
+		said[outcome] = words
+		link.close()
+	game.hud.hide_menu()
+	var truthful: bool = str(said.open).contains("geöffnet") and str(said.open).contains("203.0.113.7") and str(said.refused).contains("NICHT von selbst") and not str(said.refused).contains("geöffnet") and str(said.walled).contains("nicht direkt erreichbar") and not str(said.walled).contains("203.0.113.7") and str(said.none).contains("keine automatische Freigabe")
+	# An answer that comes after the match was closed changes nothing.
+	link._forwarded("203.0.113.7", "open")
+	expect(sorted and truthful and link.forward == "" and link.public_address == "" and link.router == null and not link.hosting, "The host's lobby says what the router said to the request for the port - opened, refused, or no address of its own - and nothing of it outlasts the match")
