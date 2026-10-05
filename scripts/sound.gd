@@ -31,7 +31,8 @@ const MIX := {
 	"attack": [-6.0, 0.1, 0], "moan": [-9.0, 0.1, 0], "death_female": [-4.0, 0.08, 1], "pain_female": [-6.0, 0.08, 0],
 	"melee": [-2.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
 	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0],
-	"g36_mag_out": [-7.0, 0.04, 1], "g36_mag_in": [-7.0, 0.04, 1], "g36_bolt": [-7.0, 0.04, 1]
+	"g36_mag_out": [-7.0, 0.04, 1], "g36_mag_in": [-7.0, 0.04, 1], "g36_bolt": [-7.0, 0.04, 1],
+	"ring": [-4.0, 0.0, 2], "glitch": [-6.0, 0.06, 1]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -41,7 +42,9 @@ const SPECS := {
 	"explosion": [1.3, 11025], "pop": [0.55, 22050], "fuse": [0.55, 22050], "squish": [0.32, 22050],
 	"thud": [0.35, 11025], "swipe": [0.25, 22050], "hiss": [1.6, 22050],
 	"growl": [0.95, 16000], "gurgle": [0.8, 16000], "screech": [0.7, 22050], "roar": [1.7, 11025],
-	"thunder": [3.2, 11025], "wind": [4.0, 11025], "rain": [3.0, 22050]
+	"thunder": [3.2, 11025], "wind": [4.0, 11025], "rain": [3.0, 22050],
+	# ring: the ears after a flashbang. glitch: a radio channel that somebody has got into.
+	"ring": [3.4, 22050], "glitch": [0.34, 22050]
 }
 const STAND_INS := {
 	"badger": "p90", "mag_out": "click", "mag_in": "click", "bolt": "click", "equip": "click",
@@ -61,6 +64,8 @@ const STAND_INS := {
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):
 ## everything, the music, the sounds of the world, and voices and radio.
 const VOLUMES := {"Master": 1.0, "Music": 0.6, "SFX": 1.0, "Voice": 1.0}
+## How much lower the voice on a taken-over radio channel speaks (see play_voice).
+const FAKE_PITCH := 0.955
 
 var clips: Dictionary = {}
 var recorded: Dictionary = {}
@@ -77,6 +82,11 @@ var rng := RandomNumberGenerator.new()
 ## While set, nothing new is played (the warm-up at start shows effects without sound).
 var hush := false
 var radio_voice: AudioStreamPlayer
+## Where the line on a taken-over channel still breaks up: [second, kind] in order; the
+## seconds since it began; and how long until a break is over.
+var breaks: Array = []
+var fake_clock := 0.0
+var mend_left := 0.0
 ## Recorded lines that were already played: path -> stream.
 var speech: Dictionary = {}
 
@@ -223,6 +233,12 @@ func _synth(kind: String) -> AudioStreamWAV:
 			"thunder": value = slow * 7.0 * exp(-t * 1.1) * (0.6 + 0.4 * sin(t * TAU * 2.3 + sin(t * 5.0))) * minf(1.0, t * 6) + noise * exp(-t * 9) * 0.2
 			"wind": value = slow * 4.5 * (0.6 + 0.15 * sin(t * TAU / duration))
 			"rain": value = (noise * 0.5 - soft * 0.9) * (0.5 + slow * 2.5)
+			"ring": value = (sin(t * TAU * 3150.0) * 0.5 + sin(t * TAU * 4420.0) * 0.25 + sin(t * TAU * 2380.0) * 0.12) * minf(1.0, t * 40.0) * exp(-t * 1.25) * 0.5
+			"glitch":
+				# Squares of jumping pitch, chopped: a burst of data where a voice should be.
+				var step := int(t * 46.0)
+				var tone := 380.0 + 1900.0 * absf(sin(step * 12.9898) * 43758.5453 - floorf(sin(step * 12.9898) * 43758.5453))
+				value = (signf(sin(t * TAU * tone)) * 0.32 + noise * 0.12) * (1.0 if step % 3 != 1 else 0.0) * minf(1.0, t * 80.0) * minf(1.0, (duration - t) * 60.0)
 		samples[i] = value
 	if looped:
 		# Blend the tail into the head so the loop has no seam.
@@ -322,8 +338,9 @@ func _speech(path: String) -> AudioStream:
 	return speech[path]
 
 ## A recorded radio line. One at a time: a new line cuts off the one before. Returns its
-## length in seconds.
-func play_voice(path: String) -> float:
+## length in seconds. `fake`: the voice of somebody who sits on the channel and passes
+## himself off as the speaker - a little lower, and it breaks up now and then.
+func play_voice(path: String, fake: bool = false) -> float:
 	if hush:
 		return 0.0
 	if radio_voice == null:
@@ -332,8 +349,45 @@ func play_voice(path: String) -> float:
 		radio_voice.bus = "Voice"
 		add_child(radio_voice)
 	radio_voice.stream = _speech(path)
+	radio_voice.pitch_scale = FAKE_PITCH if fake else 1.0
+	radio_voice.volume_db = 1.0
 	radio_voice.play()
-	return radio_voice.stream.get_length()
+	var length := radio_voice.stream.get_length() / radio_voice.pitch_scale
+	breaks.clear()
+	if fake:
+		# Where the line breaks up: the first one early, so that nobody can miss it.
+		var at := randf_range(0.5, 1.1)
+		while at < length - 0.4:
+			breaks.append([at, ["drop", "stutter", "sag"][rng.randi() % 3]])
+			at += randf_range(1.3, 3.2)
+	fake_clock = 0.0
+	return length
+
+## The voice on a taken-over channel breaks up: it drops out for a blink, says a syllable
+## twice, or sags - and a burst of data is heard each time.
+func _break_up(delta: float) -> void:
+	if radio_voice == null or not radio_voice.playing:
+		breaks.clear()
+		return
+	fake_clock += delta
+	if mend_left > 0.0:
+		mend_left -= delta
+		if mend_left <= 0.0:
+			radio_voice.volume_db = 1.0
+			radio_voice.pitch_scale = FAKE_PITCH
+	if breaks.is_empty() or fake_clock < float(breaks[0][0]):
+		return
+	var kind := str((breaks.pop_front() as Array)[1])
+	play_sound("glitch", -7.0, randf_range(0.8, 1.3))
+	match kind:
+		"drop":
+			radio_voice.volume_db = -60.0
+			mend_left = randf_range(0.07, 0.13)
+		"stutter":
+			radio_voice.seek(maxf(0.0, radio_voice.get_playback_position() - randf_range(0.12, 0.2)))
+		"sag":
+			radio_voice.pitch_scale = FAKE_PITCH * 0.86
+			mend_left = randf_range(0.16, 0.28)
 
 ## A recorded call of somebody who stands in the world. Returns its length in seconds, or
 ## 0 if no voice was free for it.
@@ -361,6 +415,7 @@ func set_shelter(indoors: bool) -> void:
 	sheltered = indoors
 
 func _process(delta: float) -> void:
+	_break_up(delta)
 	if weather_filter == null:
 		return
 	var blend := minf(1.0, delta * 3.0)

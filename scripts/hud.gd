@@ -12,6 +12,7 @@ const MINT := Color("7fe3b4")
 const CYAN := Color("74d8ea")
 const DANGER := Color("ff6b57")
 const INK := Color("0f1317")
+const RADIO_INK := Color("e9dfa3")
 const SHOP_NOTES := {
 	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action: brutal auf kurze Distanz, wirft Getroffene zurück",
 	"pistol": "Leicht, schnell gezogen", "revolver": "Sechs Schuss, jeder ein Hammer", "autoshotgun": "Halbautomatisch, Kastenmagazin: drei Ladungen in der Sekunde",
@@ -71,6 +72,13 @@ var hit_is_head := false
 var banner_left := 0.0
 var radio_left := 0.0
 var flash_left := 0.0
+## Blinded by a flashbang: seconds left, how long it lasts in all, and how white it gets.
+var blind_left := 0.0
+var blind_span := 1.0
+var blind_peak := 0.0
+## The bars of the operators: [name, bar, the box of both] for up to three.
+var operator_box: HBoxContainer
+var operator_rows: Array = []
 var hurt_angle := 0.0
 var hurt_left := 0.0
 var pulse := 0.0
@@ -275,6 +283,22 @@ func _build_play_ui() -> void:
 	boss_bar = _bar(Color("4f8fe8"), 420)
 	boss_box.add_child(boss_bar)
 	boss_box.hide()
+	operator_box = HBoxContainer.new()
+	operator_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	operator_box.add_theme_constant_override("separation", 18)
+	operator_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_anchored(operator_box, Control.PRESET_CENTER_TOP, -400, 100, 400, 140)
+	for i in range(3):
+		var column := VBoxContainer.new()
+		column.alignment = BoxContainer.ALIGNMENT_CENTER
+		var who := label("PHANTOM", 16, Operator.TINT, true)
+		who.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		column.add_child(who)
+		var bar := _bar(Color("3fa9f5"), 230)
+		column.add_child(bar)
+		column.hide()
+		operator_box.add_child(column)
+		operator_rows.append([who, bar, column])
 	# Banner in the upper middle.
 	banner_label = label("", 44, IVORY, true)
 	banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -494,8 +518,10 @@ func announce(title: String, detail: String = "", duration: float = 3.0) -> void
 	banner_left = duration
 
 ## Message from command, shown in the radio strip at the top.
-func radio(text: String, duration: float = 6.0) -> void:
+## `tint`: the colour of the line when somebody else than command speaks (none: the usual).
+func radio(text: String, duration: float = 6.0, tint: Color = Color(0, 0, 0, 0)) -> void:
 	radio_label.text = text
+	radio_label.add_theme_color_override("font_color", tint if tint.a > 0.0 else RADIO_INK)
 	radio_left = duration
 	game.sounds.play_sound("radio")
 
@@ -564,6 +590,13 @@ func kill_feed(what: String, points: int, headshot: bool, dim: bool = false) -> 
 func flash(color: Color, strength: float) -> void:
 	flash_overlay.color = Color(color.r, color.g, color.b, clampf(strength, 0.0, 0.95))
 	flash_left = 1.0
+
+## Blinded by a flashbang: white for a moment, then the picture comes back slowly. The
+## stronger, the longer (`strength` 0 to 1).
+func blind(strength: float) -> void:
+	blind_span = lerpf(1.0, 3.0, clampf(strength, 0.0, 1.0))
+	blind_left = maxf(blind_left, blind_span)
+	blind_peak = maxf(blind_peak if blind_left > 0.0 else 0.0, lerpf(0.55, 1.0, clampf(strength, 0.0, 1.0)))
 
 func damage_from(source: Vector3) -> void:
 	var local: Vector3 = game.player.to_local(source)
@@ -677,6 +710,26 @@ func _process(delta: float) -> void:
 	splatter_overlay.modulate.a = minf(1.0, splatter_left)
 	flash_left = maxf(0, flash_left - delta * 0.9)
 	flash_overlay.color.a = minf(flash_overlay.color.a, flash_left * flash_left)
+	if blind_left > 0.0:
+		# Full white for the first third, then it clears.
+		blind_left = maxf(0.0, blind_left - delta)
+		var white := blind_peak * clampf(blind_left / (blind_span * 0.66), 0.0, 1.0)
+		if white > flash_overlay.color.a:
+			flash_overlay.color = Color(1, 1, 1, white)
+	# The operators on the field: a bar for each, under the Crusher's if he is there too.
+	var slot := 0
+	for who in game.operators:
+		if slot < operator_rows.size() and is_instance_valid(who) and not who.dead and not who.leaving:
+			(operator_rows[slot][0] as Label).text = str(who.spec.label)
+			(operator_rows[slot][1] as ProgressBar).max_value = who.max_health
+			(operator_rows[slot][1] as ProgressBar).value = who.health
+			(operator_rows[slot][2] as Control).modulate.a = 0.45 if who.absent else 1.0
+			(operator_rows[slot][2] as Control).show()
+			slot += 1
+	for i in range(slot, operator_rows.size()):
+		(operator_rows[i][2] as Control).hide()
+	operator_box.offset_top = 148.0 if boss_box.visible else 100.0
+	operator_box.offset_bottom = operator_box.offset_top + 40.0
 	reticle.queue_redraw()
 
 # ---------------------------------------------------------------- menus

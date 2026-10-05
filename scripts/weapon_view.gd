@@ -56,9 +56,11 @@ const GUNS := {
 	},
 	# The G36: the user's model, prepared like the M4A4 (Nachtwache-Modelle/g36).
 	# Its iron sights stand on a bridge, 12 mm above its flat top; a sight is clamped to that top and looks over them.
+	# holo: the holographic sight is this much smaller on it than on the others (a compact
+	# carbine with a narrow bridge: at full size the sight looked too big for it).
 	"g36": {
 		"scene": "res://assets/models/g36.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0.0001, 0.0901, -0.4811), "bore": 0.0095,
-		"rail": 0.1638, "optic": -0.108, "irons": 0.1757,
+		"rail": 0.1638, "optic": -0.108, "irons": 0.1757, "holo": 0.8,
 		"support": Vector3(0, 0.0792, -0.3323), "handle": Vector3(0, 0.1249, -0.2339),
 		"magazine_out": Vector3(0, -0.9687, -0.2483), "magazine_foot": Vector3(0.0002, -0.08, -0.1577)
 	},
@@ -663,10 +665,14 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 static func sight_height(id: String, sight: String) -> float:
 	var gun: Dictionary = GUNS[id]
 	if sight == "reddot":
-		return float(gun.rail) + HOLO_AXIS
+		return float(gun.rail) + HOLO_AXIS * holo_size(id)
 	# Iron sights that fold away leave nothing for a sight to clear.
 	var clear := (0.0 if gun.get("folding", false) else maxf(float(gun.irons) - float(gun.rail), 0.0)) + 0.006
 	return float(gun.rail) + clear + 0.0195
+
+## How big the holographic sight is on a gun (1: as it was made).
+static func holo_size(id: String) -> float:
+	return float(GUNS[id].get("holo", 1.0))
 
 ## Where the weapon sits when the eye is behind a fitted sight.
 static func sight_aim(id: String, sight: String) -> Vector3:
@@ -674,7 +680,8 @@ static func sight_aim(id: String, sight: String) -> Vector3:
 	var mount: Vector3 = gun.mount
 	var along := mount.z + float(gun.optic)
 	if sight == "reddot":
-		return Vector3(0.0, -(mount.y + sight_height(id, sight)), -HOLO_EYE - (along + HOLO_BACK))
+		# A smaller sight is looked through from closer by: the picture stays the same.
+		return Vector3(0.0, -(mount.y + sight_height(id, sight)), -HOLO_EYE * holo_size(id) - (along + HOLO_BACK))
 	return Vector3(0.0, -(mount.y + sight_height(id, sight)), -SCOPE_EYE - (along + 0.066))
 
 ## The parts the shop sells for a gun, each under a node of its own.
@@ -695,7 +702,9 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 	var dot := mount.y + sight_height(id, "reddot")
 	var face := z + HOLO_BACK
 	var holo := (load(HOLO_SCENE) as PackedScene).instantiate() as Node3D
+	var small := holo_size(id)
 	holo.position = Vector3(0, rail, face)
+	holo.scale = Vector3.ONE * small
 	reflex.add_child(holo)
 	for node in holo.find_children("*", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
@@ -711,12 +720,12 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mesh.layers = 2
 	# The glass stands half way through the tunnel.
-	var glass := face + (HOLO_TUNNEL.x + HOLO_TUNNEL.y) * 0.5
-	_view_quad(reflex, Vector3(0, dot, glass), HOLO_GLASS, _view_glow("lens", Color(0.55, 0.75, 0.8, 0.045), false))
+	var glass := face + (HOLO_TUNNEL.x + HOLO_TUNNEL.y) * 0.5 * small
+	_view_quad(reflex, Vector3(0, dot, glass), HOLO_GLASS * small, _view_glow("lens", Color(0.55, 0.75, 0.8, 0.045), false))
 	# The mark is small and dim on purpose: a fine dot that does not cover the target, in a
 	# hair-thin ring that is only just there. It is as big to the eye as it always was,
 	# whatever the distance of this glass.
-	var seen := (HOLO_EYE - (HOLO_TUNNEL.x + HOLO_TUNNEL.y) * 0.5) / MARK_EYE
+	var seen := (HOLO_EYE - (HOLO_TUNNEL.x + HOLO_TUNNEL.y) * 0.5) * small / MARK_EYE
 	_view_quad(reflex, Vector3(0, dot, glass + 0.0002), Vector2(0.0082, 0.0082) * seen, _view_ring("ring", Color(1.0, 0.1, 0.06, 0.22)))
 	_view_quad(reflex, Vector3(0, dot, glass + 0.0003), Vector2(0.0015, 0.0015) * seen, _view_glow("dot", Color(1.35, 0.12, 0.07, 1.0), true))
 	# --- Telescopic sight, four times: tube, bell and eyepiece on two rings.

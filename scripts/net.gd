@@ -48,6 +48,11 @@ var unmapping: Thread
 
 var active: bool:
 	get: return hosting or joined
+## The port a match uses. The automatic checks take one ten higher, so that they can never
+## get into a match the player has open on this machine at the same time (unless one is
+## told to try the router, which knows the real port only).
+var port: int:
+	get: return PORT + (10 if game != null and game.check_mode and not "--mp-router" in OS.get_cmdline_user_args() else 0)
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -63,7 +68,7 @@ func _ready() -> void:
 func host(forward_port: bool = true) -> bool:
 	close()
 	var peer := ENetMultiplayerPeer.new()
-	if peer.create_server(PORT, 1) != OK:
+	if peer.create_server(port, 1) != OK:
 		phase = "failed"
 		changed.emit()
 		return false
@@ -135,7 +140,7 @@ func local_addresses() -> PackedStringArray:
 func join(address: String) -> bool:
 	close()
 	var peer := ENetMultiplayerPeer.new()
-	if peer.create_client(address.strip_edges(), PORT) != OK:
+	if peer.create_client(address.strip_edges(), port) != OK:
 		phase = "failed"
 		changed.emit()
 		return false
@@ -254,7 +259,11 @@ func _physics_process(delta: float) -> void:
 		if is_instance_valid(game.boss) and not game.boss.dead:
 			boss_id = game.boss.net_id
 			boss_health = game.boss.health
-		_status.rpc_id(partner, game.wave, game.phase, game.preparation_left, game.credits, game.score, game.remaining_to_spawn + game.alive_count, boss_id, boss_health, game.elapsed)
+		var bars := PackedFloat32Array()
+		for who in game.operators:
+			if is_instance_valid(who) and not who.dead:
+				bars.append_array([who.net_id, who.health])
+		_status.rpc_id(partner, game.wave, game.phase, game.preparation_left, game.credits, game.score, game.remaining_to_spawn + game.alive_count, boss_id, boss_health, game.elapsed, bars)
 
 ## Guest: infected the host no longer mentions are gone.
 func _prune(_delta: float) -> void:
@@ -287,7 +296,7 @@ func send_spawn(enemy: Infected) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _spawned(id: int, kind: String, look: String, at: Vector3, wave: int) -> void:
-	var puppet: Infected = CruSoldier.new() if Infected.TYPES[kind].get("human", false) else Infected.new()
+	var puppet: Infected = game.body_for(kind)
 	puppet.game = game
 	puppet.kind = kind
 	puppet.visual_kind = look
@@ -334,7 +343,11 @@ func _snapshot(data: PackedFloat32Array) -> void:
 			seen[id] = clock
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _status(wave: int, phase_now: String, break_left: float, credits: int, score: int, remaining: int, boss_id: int, boss_health: float, elapsed: float) -> void:
+func _status(wave: int, phase_now: String, break_left: float, credits: int, score: int, remaining: int, boss_id: int, boss_health: float, elapsed: float, bars: PackedFloat32Array = PackedFloat32Array()) -> void:
+	for i in range(0, bars.size() - 1, 2):
+		var who: Variant = puppets.get(int(bars[i]))
+		if is_instance_valid(who):
+			(who as Infected).health = bars[i + 1]
 	game.wave = wave
 	game.phase = phase_now
 	game.preparation_left = break_left
@@ -461,13 +474,23 @@ func _task_use(task_id: int, index: int, seconds: float) -> void:
 	if hosting:
 		game.mission.apply_use(task_id, index, clampf(seconds, 0.0, 0.5))
 
-func send_radio(cue: String, seconds: float) -> void:
+## `speaker`: somebody else than command who has got into the channel (an operator).
+func send_radio(cue: String, seconds: float, speaker: String = "") -> void:
 	if hosting and partner != 0:
-		_radio.rpc_id(partner, cue, seconds)
+		_radio.rpc_id(partner, cue, seconds, speaker)
 
 @rpc("authority", "call_remote", "reliable")
-func _radio(cue: String, seconds: float) -> void:
-	game._say(cue, seconds)
+func _radio(cue: String, seconds: float, speaker: String = "") -> void:
+	game._say(cue, seconds, speaker)
+
+## A flashbang thrown at the survivors has gone off: the guest is blinded on its own machine.
+func send_blind(center: Vector3) -> void:
+	if hosting and partner != 0:
+		_blind.rpc_id(partner, center)
+
+@rpc("authority", "call_remote", "reliable")
+func _blind(center: Vector3) -> void:
+	game.show_blind(center)
 
 func send_notice(title: String, detail: String, seconds: float) -> void:
 	if hosting and partner != 0:

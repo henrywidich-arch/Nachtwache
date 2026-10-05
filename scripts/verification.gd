@@ -37,6 +37,9 @@ func beside(game: Node3D, kind: String, room: Vector3, index: int = 0) -> Vector
 	return Vector3.ZERO
 
 func run(game: Node3D) -> void:
+	# The operators stay out of the older checks, which count what a round brings; the block
+	# that is about them lets them in.
+	game.operators_enabled = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	game.set_process(false)
 	# The rule checks below count exact kills and damage, so they run without the squad.
@@ -1088,6 +1091,7 @@ func run(game: Node3D) -> void:
 	await _loadout(game)
 	await _squadwork(game)
 	await _overhaul(game)
+	await _operators(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -3823,14 +3827,16 @@ func _overhaul(game: Node3D) -> void:
 			elif mesh.get_surface_override_material(0) == WeaponView.holo_material and mesh.layers == 2:
 				bodies += 1
 		var rail_y: float = (spec.mount as Vector3).y + float(spec.rail)
+		# On the G36 the sight is a little smaller, and the eye that much closer to it.
+		var small: float = WeaponView.holo_size(id)
 		var face_z: float = (spec.mount as Vector3).z + float(spec.optic) + WeaponView.HOLO_BACK
 		var eye: Vector3 = WeaponView.sight_aim(id, "reddot")
 		# One body from the model and three panes (glass, ring, dot); the dot sits inside the
 		# tunnel, in the middle of the window; the eye is behind the face that looks at it.
-		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x and mark_z > face_z + WeaponView.HOLO_TUNNEL.y
-		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE) and rail_y + WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5 > (spec.mount as Vector3).y + float(spec.irons)
+		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x * small and mark_z > face_z + WeaponView.HOLO_TUNNEL.y * small
+		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS * small) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE * small) and rail_y + (WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5) * small > (spec.mount as Vector3).y + float(spec.irons)
 		sights += 1
-	expect(sights == 4 and seated and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all four guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
+	expect(sights == 4 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all four guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
 	# --- the lobby says what the router said
 	var link: NetLink = game.net
 	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")
@@ -3849,3 +3855,184 @@ func _overhaul(game: Node3D) -> void:
 	# An answer that comes after the match was closed changes nothing.
 	link._forwarded("203.0.113.7", "open")
 	expect(sorted and truthful and link.forward == "" and link.public_address == "" and link.router == null and not link.hosting, "The host's lobby says what the router said to the request for the port - opened, refused, or no address of its own - and nothing of it outlasts the match")
+
+## What came with v0.19: the operators Phantom, Havoc and Ghost - tough, never killed, gone
+## behind a flashbang and back from somewhere else, loud on the Fireteam's radio -, their
+## looks as skins, and a voice of command that is not Coleman's once Nadja is out.
+func _operators(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hud: SurvivalHUD = game.hud
+	game.operators_enabled = true
+	game.profile.mode = "survival"
+	game.profile.modifiers = false
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	game.skills.reset()
+	_wipe(game)
+	await frames(4)
+	# --- three of a kind
+	var complete := true
+	for kind in Operator.KINDS:
+		var spec: Dictionary = Infected.TYPES[kind]
+		complete = complete and bool(spec.get("operator", false)) and bool(spec.human) and CruSoldier.ROLES.has(str(spec.role)) and bool(CruSoldier.ROLES[str(spec.role)].get("operator", false)) and float(spec.health) >= 1200.0
+		complete = complete and SoldierVisual.LOOKS.has(kind) and SoldierVisual.LOOKS[kind].has("eyes") and Radio.NAMES.has(kind) and Profile.SKINS.has(kind) and str(Profile.SKINS[kind].need) == kind
+		for cue in ["op_arrive", "op_taunt", "op_flash", "op_hurt", "op_down", "op_leave", "contact", "cover", "flank"]:
+			complete = complete and not Radio.bark(kind, cue).is_empty()
+	expect(complete and Operator.KINDS.size() == 3 and Radio.LINES.has("operator_seen"), "Three operators - Phantom, Havoc, Ghost - each with a body, a role, a look with eyes that glow, a skin to earn and a line for everything he has to say")
+	# --- one of them on the field: a soldier with a bar who is told from the rest
+	var open := Vector3(0, 0.05, 24.0)
+	face(game, open, 0.0)
+	player.health = 100.0
+	var purse: int = game.credits
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	var hunter: Infected = game.spawn_enemy("phantom")
+	hunter.set_physics_process(false)
+	hunter.position = open + Vector3(0, 0, -10.0)
+	await frames(3)
+	hud._process(0.05)
+	var bar_shown: bool = (hud.operator_rows[0][2] as Control).visible and (hud.operator_rows[0][0] as Label).text == "PHANTOM" and not (hud.operator_rows[1][2] as Control).visible
+	var marks: Array = hud.minimap.marks().filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.SOLDIER)
+	var glowing := hunter.model.find_child("Eyes", true, false)
+	var talked: bool = hud.radio_label.text.begins_with("PHANTOM:") and hud.radio_label.get_theme_color("font_color") == Operator.TINT
+	expect(hunter is Operator and game.operators.has(hunter) and Skills.kind_of(hunter) == "cru" and bar_shown and marks.size() == 1 and float(marks[0].size) == 4.0 and glowing != null and glowing.get_child_count() == 3 and talked and game.alive_count == 1, "An operator is a soldier with a bar on the screen, a big mark on the map, eyes that glow, and a word for the Fireteam on its own radio")
+	# --- he cannot be killed: with his bar empty he breaks off, and the Fireteam is paid
+	var whole: float = hunter.max_health
+	hunter.receive_hit(whole * 0.2, Vector3.BACK, false)
+	var hurts: bool = hunter.health < whole and hunter.health > whole * 0.8
+	hunter.receive_hit(99999.0, Vector3.BACK, false)
+	var off: bool = (hunter as Operator).leaving and hunter.absent and not hunter.model.visible and int(game.stats.phantom) == 1 and game.credits == purse + int(Infected.TYPES.phantom.reward) and game.alive_count == 0 and int(game.stats.cru_kills) == 0
+	await wait(1.2)
+	hud._process(0.05)
+	expect(hurts and off and not is_instance_valid(hunter) and game.operators.is_empty() and not (hud.operator_rows[0][2] as Control).visible and hud.radio_label.text.begins_with("PHANTOM:"), "With his bar empty an operator does not die: he breaks off and is gone, and the Fireteam gets what he was worth")
+	# --- a flashbang, and he is somewhere else
+	face(game, open, 0.0)
+	player.health = 5000.0
+	hud.blind_left = 0.0
+	var ghost: Operator = game.spawn_enemy("ghost") as Operator
+	ghost.position = open + Vector3(0, 0, -10.0)
+	await frames(3)
+	var stood: Vector3 = ghost.global_position
+	ghost.flash_wait = 0.0
+	var thrown := false
+	var gone := false
+	var blinded := 0.0
+	for i in range(60 * 3):
+		await get_tree().physics_frame
+		for node in game.ordnance.get_children():
+			thrown = thrown or (node is Throwable and (node as Throwable).kind == "flashbang" and (node as Throwable).hostile)
+		blinded = maxf(blinded, hud.blind_left)
+		if ghost.absent:
+			gone = true
+			break
+	var unreachable: bool = gone and ghost.collision_layer == 0 and hud.minimap.marks().filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.SOLDIER).is_empty()
+	var before_hit: float = ghost.health
+	ghost.receive_hit(500.0, Vector3.BACK, false)
+	unreachable = unreachable and ghost.health == before_hit
+	var back := false
+	for i in range(60 * 4):
+		await get_tree().physics_frame
+		blinded = maxf(blinded, hud.blind_left)
+		if not ghost.absent:
+			back = true
+			break
+	var moved: float = ghost.global_position.distance_to(stood)
+	var from_prey: float = Vector2(ghost.global_position.x - player.global_position.x, ghost.global_position.z - player.global_position.z).length()
+	expect(thrown and gone and unreachable and blinded > 0.5 and back and ghost.model.visible and ghost.collision_layer == 4 and moved > 2.0 and from_prey > Operator.BACK.x - 1.0 and from_prey < Operator.BACK.y + 1.0, "An operator throws a flashbang that blinds the player, is gone behind it - out of reach and off the map - and comes back somewhere else (%.1f m away from where he stood, blind for %.1f s)" % [moved, blinded])
+	# Badly hit he breaks contact at once, whatever his clock says.
+	ghost.set_physics_process(true)
+	ghost.flash_wait = 999.0
+	ghost.health = ghost.max_health * 0.5
+	var fled := false
+	for i in range(60 * 4):
+		await get_tree().physics_frame
+		if ghost.absent:
+			fled = true
+			break
+	expect(fled and ghost.breaks_done >= 1 and not ghost.leaving, "Hit hard, an operator breaks contact at once")
+	ghost.set_physics_process(false)
+	ghost._retire()
+	ghost.queue_free()
+	game.alive_count = 0
+	player.health = 100.0
+	hud.blind_left = 0.0
+	await frames(3)
+	# --- what a flashbang does to whoever looks at it
+	face(game, open, 0.0)
+	game.show_blind(open + Vector3(0, 1.2, -4.0))
+	var faced: float = hud.blind_left
+	hud.blind_left = 0.0
+	hud.blind_peak = 0.0
+	face(game, open, PI)
+	await frames(2)
+	game.show_blind(open + Vector3(0, 1.2, -4.0))
+	var turned_away: float = hud.blind_left
+	hud.blind_left = 0.0
+	face(game, open, 0.0)
+	await frames(2)
+	game.show_blind(open + Vector3(0, 1.2, -40.0))
+	var far_off: float = hud.blind_left
+	expect(faced > 2.0 and turned_away > 0.5 and turned_away < faced and far_off == 0.0 and game.sounds.clips.has("ring") and game.sounds.clips.has("glitch"), "A flashbang blinds longer the straighter one looks at it (%.1f s against %.1f s), and not at all from far off" % [faced, turned_away])
+	hud.blind_left = 0.0
+	# --- who comes when
+	var mode_before: String = game.mode
+	var counts := {}
+	var apart := true
+	for level in Profile.ORDER:
+		game.level = level
+		game.mode = "story"
+		game.plan_operators()
+		counts[level] = game.operators_due.size()
+		var rounds := {}
+		var kinds := {}
+		for entry in game.operators_due:
+			rounds[int(entry[0])] = true
+			kinds[str(entry[1])] = true
+			apart = apart and int(entry[0]) < game.ROUNDS.size() and Operator.KINDS.has(str(entry[1]))
+		apart = apart and rounds.size() == game.operators_due.size() and kinds.size() == game.operators_due.size()
+	game.level = "hard"
+	game.plan_operators()
+	var first_round: int = int(game.operators_due[0][0])
+	var early: bool = game.operators_for(first_round - 1, false).is_empty() and game.operators_due.size() == 3
+	var beside_boss: bool = game.operators_for(first_round, true).is_empty() and game.operators_due.size() == 3
+	var came: Array = game.operators_for(first_round, false)
+	var never_last: bool = game.operators_for(game.ROUNDS.size(), false).is_empty()
+	game.mode = "endless"
+	var endless_counts := {}
+	for number in [4, 5, 6, 9, 13, 21, 25, 26, 29]:
+		endless_counts[number] = game.operators_for(number, false).size()
+	game.mode = mode_before
+	game.level = game.profile.difficulty
+	game.operators_due.clear()
+	expect(int(counts.easy) == 1 and int(counts.normal) == 2 and int(counts.hard) == 3 and int(counts.nightmare) == 3 and apart and early and beside_boss and came.size() == 1 and never_last and endless_counts == {4: 0, 5: 1, 6: 0, 9: 1, 13: 2, 21: 2, 25: 3, 26: 0, 29: 3}, "The harder the night, the more operators come - one, two, three - each in a round of his own, never beside a Crusher, never in the last; the endless night brings one, later two, in the end all three at once (%s)" % str(endless_counts))
+	# --- their looks are skins for whoever drove them off
+	var book := Profile.new()
+	book.stored = false
+	var locked: bool = not book.unlocked("phantom") and not book.unlocked("havoc") and not book.unlocked("ghost")
+	book.record("normal", {"victory": false, "score": 10, "seconds": 60, "kills": 3, "havoc": 1})
+	expect(locked and book.unlocked("havoc") and not book.unlocked("ghost") and int(book.totals.havoc) == 1 and book.progress("ghost").contains("0 / 1"), "An operator's look is a skin for whoever has driven him off once")
+	# --- once Nadja is out, the voice of command is not Coleman's
+	var story: StoryDirector = game.story
+	var was_on: bool = story.enabled
+	var was_at: String = story.stage
+	story.enabled = true
+	story.stage = "lab"
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game._say("round_clear")
+	var honest: bool = not Radio.hijacked and not hud.radio_label.text.contains("#")
+	story.stage = "escort"
+	game.radio_busy = 0.0
+	game._say("round_clear")
+	var taken: bool = Radio.hijacked and hud.radio_label.text.begins_with("COLEMAN:") and hud.radio_label.text.contains("#")
+	var said: Dictionary = Radio.pick("evac_start")
+	var nadja_line: Dictionary = Radio.pick("nadja_static")
+	story.stage = was_at
+	story.enabled = was_on
+	game.radio_busy = 0.0
+	game._say("round_clear")
+	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and not Radio.hijacked and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel"), "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's")
+	game.radio_queue.clear()
+	game.radio_busy = 0.0

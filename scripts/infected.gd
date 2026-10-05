@@ -130,6 +130,32 @@ const TYPES := {
 		"radius": 0.31, "height": 1.89, "head": 1.6, "head_size": 0.16, "head_factor": 1.0, "reward": 110, "score": 450,
 		"stagger": "flinch"
 	},
+	# The three operators (see Operator): hunters of Helix who are driven off, never killed.
+	# operator: true makes the game build an Operator for them.
+	"phantom": {
+		"label": "PHANTOM", "visuals": ["phantom"], "human": true, "role": "phantom", "operator": true,
+		"voice": "", "idle": "", "strike": "", "pain": "bot_hurt_male", "death": "bot_hurt_male",
+		"health": 1500.0, "health_per_round": 40.0, "speed": 4.0, "speed_per_round": 0.02,
+		"damage": 0.0, "reach": 1.2, "attack_time": 0.5, "attack_gap": 1.0, "strike_at": 0.2,
+		"radius": 0.32, "height": 1.9, "head": 1.62, "head_size": 0.16, "head_factor": 0.6, "reward": 350, "score": 1500,
+		"stagger": ""
+	},
+	"havoc": {
+		"label": "HAVOC", "visuals": ["havoc"], "human": true, "role": "havoc", "operator": true,
+		"voice": "", "idle": "", "strike": "", "pain": "bot_hurt_male", "death": "bot_hurt_male",
+		"health": 2100.0, "health_per_round": 55.0, "speed": 3.6, "speed_per_round": 0.02,
+		"damage": 0.0, "reach": 1.2, "attack_time": 0.5, "attack_gap": 1.0, "strike_at": 0.2,
+		"radius": 0.34, "height": 1.95, "head": 1.66, "head_size": 0.17, "head_factor": 0.6, "reward": 400, "score": 1700,
+		"stagger": ""
+	},
+	"ghost": {
+		"label": "GHOST", "visuals": ["ghost"], "human": true, "role": "ghost", "operator": true,
+		"voice": "", "idle": "", "strike": "", "pain": "bot_hurt_male", "death": "bot_hurt_male",
+		"health": 1250.0, "health_per_round": 35.0, "speed": 3.9, "speed_per_round": 0.02,
+		"damage": 0.0, "reach": 1.2, "attack_time": 0.5, "attack_gap": 1.0, "strike_at": 0.2,
+		"radius": 0.31, "height": 1.88, "head": 1.6, "head_size": 0.16, "head_factor": 0.6, "reward": 350, "score": 1500,
+		"stagger": ""
+	},
 	"cru_shield": {
 		"label": "C.R.U. SHIELD", "visuals": ["cru2", "cru3"], "human": true, "role": "shield",
 		"voice": "", "idle": "", "strike": "", "pain": "bot_hurt_male", "death": "bot_hurt_male",
@@ -230,6 +256,9 @@ var wave := 1
 var net_id := 0
 ## A puppet only shows what the host's infected does; it has no will of its own.
 var puppet := false
+## Nowhere for the moment (an operator between two places): nobody aims at it, nothing
+## reaches it, the map does not show it.
+var absent := false
 var net_position := Vector3.ZERO
 var net_yaw := 0.0
 var spec: Dictionary

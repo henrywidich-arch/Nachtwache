@@ -8,7 +8,7 @@ extends RefCounted
 
 const VOICE_FOLDER := "res://assets/voice/"
 ## How a speaker is named in the subtitle.
-const NAMES := {"coleman": "COLEMAN", "nadja": "NADJA", "viper": "VIPER", "scorpion": "SCORPION", "raven": "RAVEN", "cru": "C.R.U.", "cru2": "C.R.U.", "cru3": "C.R.U.", "cru4": "C.R.U.", "shop": "HÄNDLERIN"}
+const NAMES := {"coleman": "COLEMAN", "nadja": "NADJA", "viper": "VIPER", "scorpion": "SCORPION", "raven": "RAVEN", "cru": "C.R.U.", "cru2": "C.R.U.", "cru3": "C.R.U.", "cru4": "C.R.U.", "shop": "HÄNDLERIN", "phantom": "PHANTOM", "havoc": "HAVOC", "ghost": "GHOST"}
 ## cue -> [speaker, [variants]]
 const LINES := {
 	"intro_drop": ["coleman", ["Fireteam, you are over the drop point. Ropes out. Good hunting."]],
@@ -134,6 +134,10 @@ const LINES := {
 		"Fireteam, I had a contact on thermal for a second and then nothing. Something is watching you out there.",
 		"Did you see that? Whatever it was, it does not show up on any of my feeds."
 	]],
+	"operator_seen": ["coleman", [
+		"Fireteam, that one is not C.R.U. Helix keeps three hunters for work like this. You will not kill one out here, but hurt him enough and he pulls back.",
+		"That is one of the Helix hunters. Forget about killing him. Make it cost him, and he will break contact."
+	]],
 	"stalker_dead": ["coleman", ["That thing is finally down. I do not know what Helix made there, and I do not want to know."]],
 	"task_failed": ["coleman", ["Too late for that one. Stay focused, there will be other chances.", "We lost that objective. Shake it off.", "We missed that one. Let it go and keep fighting."]],
 	"mate_down": ["coleman", ["You have a man down, Fireteam. Get them back on their feet.", "One of yours is down. Help them up.", "One of yours is on the ground. Pick them up before it is too late."]],
@@ -152,6 +156,8 @@ const LINES := {
 	"nadja_story_3": ["nadja", ["Those soldiers are C.R.U. The infected ignore them, because of an aerosol they wear. That was my work, too. I am so sorry."]],
 	"nadja_jam": ["nadja", ["The door stopped moving! Please, the module!", "No, no, no... it stopped! Do something!"]],
 	"nadja_freed": ["nadja", ["It is open! Thank you... thank you! I have the formula with me. Please, get me out of here!"]],
+	"nadja_channel": ["nadja", ["Your colonel talks to you on an open channel? ... Never mind. Let us go."]],
+	"nadja_static": ["nadja", ["That noise on your radio? Interference. The gas does that.", "Do not worry about the static. It is the gas. It is always the gas."]],
 	"nadja_follow": ["nadja", ["I am right behind you!", "Do not leave me out here!", "Wait... wait for me!"]],
 	"nadja_pain": ["nadja", ["I am hit!", "Help me, please!", "They are on me!"]],
 	"nadja_board": ["nadja", ["We made it... We really made it!", "I cannot believe it. We are out. We are really out!"]]
@@ -181,19 +187,54 @@ const BARKS := {
 	"shield": {"viper": ["Shield! Get around him!", "Do not shoot the shield, flank!"], "scorpion": ["Shield guy! Hit him from the side!", "Bullets bounce off that thing!"], "raven": ["Shield. Go for his back.", "Circle him. The shield holds."]},
 	"big_kill": {"viper": ["Special is down.", "Big target neutralized."], "scorpion": ["The big one is down! Ha!", "That freak is finished!"], "raven": ["The monster is dead.", "It bleeds like the rest."]},
 	"idle": {"viper": ["Check your ammo while it is quiet.", "Shop is open. Use the time.", "Breathe. It will not stay quiet."], "scorpion": ["I could use a drink.", "Is that all they have got?", "Somebody tell me this pays extra."], "raven": ["Too quiet.", "I do not like this place.", "Count your rounds."]},
-	"contact": {"cru": ["Contact!", "Hostiles, engage!", "Targets in the house!"], "cru2": ["Contact.", "Targets ahead. Engaging.", "Hostiles in the house."], "cru3": ["Kill them all.", "There they are. Light them up.", "Targets. Drop them."], "cru4": ["Hostiles confirmed.", "Engaging targets.", "Weapons free."]},
+	"contact": {"phantom": ["There you are."], "havoc": ["There you are!"], "ghost": ["Target."], "cru": ["Contact!", "Hostiles, engage!", "Targets in the house!"], "cru2": ["Contact.", "Targets ahead. Engaging.", "Hostiles in the house."], "cru3": ["Kill them all.", "There they are. Light them up.", "Targets. Drop them."], "cru4": ["Hostiles confirmed.", "Engaging targets.", "Weapons free."]},
 	"frag": {"cru": ["Frag out!", "Grenade!"], "cru2": ["Frag out.", "Grenade."], "cru3": ["Frag out. Burn.", "Eat this."], "cru4": ["Grenade out.", "Frag."]},
-	"flank": {"cru": ["Moving left!", "Flanking!"], "cru2": ["Moving left.", "Flanking."], "cru3": ["Going around.", "Cutting them off."], "cru4": ["Flanking right.", "Repositioning."]},
-	"cover": {"cru": ["Reloading!", "Cover me!"], "cru2": ["Reloading.", "Cover me."], "cru3": ["Changing mag.", "Empty. Cover."], "cru4": ["Reloading.", "Magazine change."]},
+	"flank": {"phantom": ["Behind you."], "havoc": ["Surprise!"], "ghost": ["Here."], "cru": ["Moving left!", "Flanking!"], "cru2": ["Moving left.", "Flanking."], "cru3": ["Going around.", "Cutting them off."], "cru4": ["Flanking right.", "Repositioning."]},
+	"cover": {"phantom": ["Reloading. Do not get excited."], "havoc": ["Loading! Do not go anywhere!"], "ghost": ["Reloading."], "cru": ["Reloading!", "Cover me!"], "cru2": ["Reloading.", "Cover me."], "cru3": ["Changing mag.", "Empty. Cover."], "cru4": ["Reloading.", "Magazine change."]},
 	"man_down": {"cru": ["Man down!", "We lost one!"], "cru2": ["Man down.", "We lost one."], "cru3": ["One down. Keep shooting.", "He is gone. Move."], "cru4": ["Operator down.", "Casualty."]},
 	"retreat": {"cru": ["Fall back!", "Pull back!"], "cru2": ["Falling back.", "Pulling back."], "cru3": ["Back. Now.", "Fall back."], "cru4": ["Withdrawing.", "Breaking contact."]},
 	"push": {"cru": ["Push them! Go!", "Hold the line!"], "cru2": ["Push them.", "Hold the line."], "cru3": ["Forward. No prisoners.", "Finish them."], "cru4": ["Advancing.", "Pressing the attack."]},
+	"op_arrive": {
+		"phantom": ["Fireteam. I have heard so much about you. Mostly from the people you failed to save.", "Good evening, Fireteam. Phantom. Helix sends its regards. And me."],
+		"havoc": ["Knock, knock, Fireteam! Havoc is here, and I brought the whole toolbox!", "Hey, Fireteam! Which one of you wants to be the first hole in the wall?"],
+		"ghost": ["Ghost. You will not see me. That is the point.", "Fireteam. Count your people. Then count again."]
+	},
+	"op_taunt": {
+		"phantom": ["You are loud, you are slow, and you are standing in the open. Pick one to fix.", "I have been behind you twice already. You are welcome.", "Is that your aim, or are you just waving?", "Tell Coleman he trained you well. For target practice."],
+		"havoc": ["Stand still! I am trying to ruin your day!", "Is that all you have? My grandmother hits harder, and she is dead!", "I love this farm! So much to break!", "Run, little soldiers! It makes it fun!"],
+		"ghost": ["You blinked.", "I can wait all night. Can you?", "The wind is still. Lucky me.", "You are easier to read than your radio."]
+	},
+	"op_flash": {
+		"phantom": ["Smile for the camera.", "Now you see me."],
+		"havoc": ["Lights out!", "Eyes on me... oops!"],
+		"ghost": ["Look away.", "Boo."]
+	},
+	"op_hurt": {
+		"phantom": ["A scratch. You are almost interesting now.", "That was my good jacket."],
+		"havoc": ["Ha! That tickled!", "Okay. Now you made me angry."],
+		"ghost": ["Noted.", "Good shot. It will not happen twice."]
+	},
+	"op_down": {
+		"phantom": ["And that is why they send me."],
+		"havoc": ["One down! Who is next?"],
+		"ghost": ["One."]
+	},
+	"op_leave": {
+		"phantom": ["Enough for one night. Do keep the farm warm for me.", "I am leaving because I choose to. Remember that."],
+		"havoc": ["Bah! You got lucky. Next time I bring the big gun!", "Fine, fine! I am going! This is not over, Fireteam!"],
+		"ghost": ["Another night, then.", "You earned this one. Do not expect a second."]
+	},
 	"greet": {"shop": ["What do you need?", "Back again? Good.", "Cash first, questions never."]},
 	"sold": {"shop": ["Good choice.", "Pleasure doing business."]},
 	"bye": {"shop": ["Try not to die with my stock."]}
 }
 
 static var last: Dictionary = {}
+## From the moment Nadja is out of her cell, the voice that answers as Coleman is not his
+## (the story's second part will say whose). The game plays his lines a little lower then,
+## with drop-outs and bursts of data (Sound.play_voice), and now and then a letter of the
+## subtitle is lost. Set by the story; reset when a night begins.
+static var hijacked := false
 ## Which recordings exist: path -> bool, looked up once.
 static var known: Dictionary = {}
 
@@ -226,7 +267,22 @@ static func pick(cue: String) -> Dictionary:
 	var speaker := str(LINES[cue][0])
 	var variants: Array = LINES[cue][1]
 	var index := _variant(cue, speaker, cue, variants.size())
-	return {"speaker": speaker, "name": str(NAMES[speaker]), "text": str(variants[index]), "sound": _sound(speaker, cue, index)}
+	var fake := hijacked and speaker == "coleman"
+	return {"speaker": speaker, "name": str(NAMES[speaker]), "text": garbled(str(variants[index])) if fake else str(variants[index]), "sound": _sound(speaker, cue, index), "fake": fake}
+
+## A subtitle that came through a channel somebody sits on: one or two of its letters are
+## lost, never the first of a word.
+static func garbled(text: String) -> String:
+	var out := text
+	var lost := 0
+	for attempt in range(40):
+		if lost >= 1 + (1 if text.length() > 60 else 0):
+			break
+		var at := randi_range(6, maxi(7, out.length() - 5))
+		if at < out.length() and out[at] != " " and out[at] != "#" and out[at - 1] != " ":
+			out = out.substr(0, at) + "#" + out.substr(at + 1)
+			lost += 1
+	return out
 
 ## The same for a call of somebody nearby; empty when this speaker has nothing to say.
 static func bark(speaker: String, cue: String) -> Dictionary:

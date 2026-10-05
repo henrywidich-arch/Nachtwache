@@ -21,6 +21,12 @@ const ROLES := {
 	"elite": {"damage": 5.0, "interval": 0.1, "burst": [4, 7], "pause": [0.6, 1.1], "magazine": 30, "reload": 2.0, "spread": 0.036, "pellets": 1, "sound": "ak", "range": [10.0, 26.0], "grenades": 2, "flank": 0.45, "armour": 0.6, "gas": true},
 	# shield: nothing gets through from the front; he turns slowly, never dodges and
 	# never falls back. Run round him, or use something that explodes.
+	# The operators (see Operator): one of a kind each, alone, and tougher than a squad.
+	# Phantom works his way round with a suppressed carbine, Havoc comes close with a
+	# shotgun, Ghost stays back with a rifle. operator: he never falls back to hide.
+	"phantom": {"damage": 4.6, "interval": 0.085, "burst": [5, 8], "pause": [0.5, 0.9], "magazine": 30, "reload": 1.7, "spread": 0.034, "pellets": 1, "sound": "badger", "range": [8.0, 19.0], "grenades": 0, "flank": 0.85, "armour": 0.55, "operator": true},
+	"havoc": {"damage": 4.0, "interval": 0.85, "burst": [2, 3], "pause": [0.5, 0.9], "magazine": 8, "reload": 2.4, "spread": 0.085, "pellets": 7, "sound": "shotgun", "range": [4.0, 10.0], "grenades": 0, "flank": 0.4, "armour": 0.45, "operator": true},
+	"ghost": {"damage": 22.0, "interval": 1.5, "burst": [1, 1], "pause": [1.4, 2.2], "magazine": 6, "reload": 2.3, "spread": 0.005, "pellets": 1, "sound": "shot", "range": [20.0, 34.0], "grenades": 0, "flank": 0.3, "armour": 0.6, "operator": true},
 	"shield": {"damage": 3.2, "interval": 0.3, "burst": [2, 3], "pause": [1.0, 1.7], "magazine": 12, "reload": 2.6, "spread": 0.05, "pellets": 1, "sound": "pistol", "range": [3.0, 6.5], "grenades": 0, "flank": 0.0, "armour": 1.0, "shield": true}
 }
 ## The shield covers this angle to either side of where its bearer faces (radians), and
@@ -208,7 +214,7 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		return
 	threatened()
 	# Badly hurt, the rank and file fall back to lick their wounds.
-	if health < max_health * 0.35 and retreating <= 0.0 and not str(spec.role) in ["heavy", "commander", "shield"]:
+	if health < max_health * 0.35 and retreating <= 0.0 and not str(spec.role) in ["heavy", "commander", "shield"] and not role.get("operator", false):
 		retreating = randf_range(6.0, 9.0)
 		post_left = 0.0
 		say("retreat")
@@ -480,7 +486,7 @@ func _find_patient() -> void:
 	patient = null
 	var best := MEDIC_RANGE
 	for ally in _squad():
-		if ally != self and ally.health < ally.max_health * 0.6:
+		if ally != self and ally.health < ally.max_health * 0.6 and not ally is Operator:
 			var gap: float = ally.global_position.distance_to(global_position)
 			if gap < best:
 				best = gap

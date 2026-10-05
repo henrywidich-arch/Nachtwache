@@ -26,10 +26,20 @@ const BREAK_SECONDS := 20.0
 const ROUND_HEAL := 100.0
 ## Share of its price a weapon is worth when it is traded in for another.
 const TRADE_IN := 0.5
+## How far a flashbang thrown at the survivors blinds.
+const BLIND_REACH := 16.0
 ## How many shield bearers stand in the yard at once; one more comes as a plain soldier.
 const SHIELD_LIMIT := 1
 ## The last round of a night with an end brings this share of what its table says.
 const FINAL_SHARE := 0.8
+## The operators Phantom, Havoc and Ghost (see Operator). In a night of the story as many
+## of them come as the difficulty says, each in a round of his own and never two at once;
+## OPERATOR_ROUNDS: the rounds for one, two and three of them (moved on by a round when a
+## Crusher has that one, and never into the last). In the endless night one comes every
+## few rounds from "first" on, two together from "two" on, all three from "three" on.
+const OPERATOR_COUNT := {"easy": 1, "normal": 2, "hard": 3, "nightmare": 3}
+const OPERATOR_ROUNDS := {1: [7], 2: [5, 9], 3: [3, 6, 9]}
+const OPERATOR_ENDLESS := {"first": 5, "every": 4, "two": 13, "three": 25}
 ## How many attackers are in the yard at once, at the most: what a late round on normal
 ## difficulty comes to, and what no difficulty and no modifier gets past.
 const MAX_ALIVE := 16
@@ -93,6 +103,12 @@ var spawned_this_wave := 0
 var spawn_left := 0.0
 var last_spawn := -1
 var boss: Infected
+## The operators on the field right now (see Operator), and the kinds that are still to
+## come this night with the round each is due in: [[round, kind], ...].
+var operators: Array = []
+var operators_due: Array = []
+## Off in the older automatic checks, which count what a round brings.
+var operators_enabled := true
 ## The gap in the fence a C.R.U. squad is coming through, and how many have used it.
 var cru_gate := -1
 var cru_gate_uses := 0
@@ -128,7 +144,7 @@ var last_modifier := ""
 var level := "normal"
 var rules: Dictionary = Profile.DIFFICULTIES["normal"]
 ## What the whole squad did in this match, for the leaderboard.
-var stats := {"kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0}
+var stats := {"kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0, "phantom": 0, "havoc": 0, "ghost": 0}
 ## Place of the last finished run on the leaderboard, 0 if it did not make the list.
 var last_place := 0
 var squad_order := "follow"
@@ -597,9 +613,11 @@ func start_run() -> void:
 	for key in stats:
 		stats[key] = 0
 	last_place = 0
+	operators.clear()
 	if not net.joined:
 		story.begin()
 		mission.prepare()
+		plan_operators()
 	for station in cabin.stations:
 		if station.has("label"):
 			(station.label as Label3D).text = "%s\n%d VORRAT" % [station.title, price(int(station.detail))]
@@ -770,6 +788,9 @@ func begin_wave() -> void:
 		bosses += 1
 	for i in range(bosses):
 		spawn_queue.insert(int(spawn_queue.size() * 0.55), "crusher")
+	# The operators come once the round is under way, before the Crusher would.
+	for kind in operators_for(wave, bosses > 0):
+		spawn_queue.insert(int(spawn_queue.size() * 0.4), kind)
 	gas.begin_round(wave, story.enabled and story.stage in ["module", "rescue", "evac"])
 	if modifier == "gas":
 		# More banks in the yard, sooner, and a part of the yard under the fog as well.
@@ -798,6 +819,89 @@ func present_wave_begin() -> void:
 	cabin.set_shop_open(false)
 	sounds.play_at("shutter_close", shop_position())
 
+## Which operators come in a round. In the story: those that are due (see plan_operators),
+## one at a time, not beside a Crusher and not in the last round. In the endless night:
+## by the round's number alone.
+func operators_for(round_number: int, crusher: bool) -> Array:
+	if not operators_enabled:
+		return []
+	if endless:
+		var rule: Dictionary = OPERATOR_ENDLESS
+		if round_number < int(rule.first) or (round_number - int(rule.first)) % int(rule.every) != 0:
+			return []
+		var kinds: Array = Operator.KINDS.duplicate()
+		kinds.shuffle()
+		return kinds.slice(0, 3 if round_number >= int(rule.three) else (2 if round_number >= int(rule.two) else 1))
+	if operators_due.is_empty() or crusher or round_number >= ROUNDS.size() or round_number < int(operators_due[0][0]):
+		return []
+	return [str((operators_due.pop_front() as Array)[1])]
+
+## Decides at the start of a night of the story which operators will come, and when.
+func plan_operators() -> void:
+	operators_due.clear()
+	if endless or not operators_enabled:
+		return
+	var count: int = int(OPERATOR_COUNT.get(level, 2))
+	var kinds: Array = Operator.KINDS.duplicate()
+	kinds.shuffle()
+	var rounds: Array = OPERATOR_ROUNDS[count]
+	for i in range(count):
+		operators_due.append([int(rounds[i]), str(kinds[i])])
+
+## An operator has come through the fence: both players are told, and he says hello.
+func operator_arrived(who: Operator) -> void:
+	var name_shown := str(who.spec.label)
+	notice(name_shown, "Helix-Jäger im Anmarsch. Er lässt sich vertreiben, nicht töten.", 5.0)
+	# He has the first word; command explains him afterwards, the first time one comes.
+	op_radio(who.kind, "op_arrive", 6.0, true)
+	tell_once("operator", "operator_seen", 8.0)
+
+## An operator's bar is empty: he breaks off. The Fireteam gets what he was worth.
+func operator_driven_off(who: Operator, source: Node = null) -> void:
+	enemy_defeated(who, true, false, source)
+	stats[who.kind] = int(stats.get(who.kind, 0)) + 1
+	notice("%s ZIEHT SICH ZURÜCK" % who.spec.label, "+%d Vorrat" % int(round(int(who.spec.reward) * float(rules.get("loot", 1.0)))), 4.0)
+	op_radio(who.kind, "op_leave", 6.0, true)
+
+## An operator says something on the Fireteam's own radio, for both players. Small talk
+## waits its turn and is dropped when the channel is busy; `must` lines are always said.
+func op_radio(speaker: String, cue: String, seconds: float = 6.0, must: bool = false) -> void:
+	if not must and (radio_busy > 0.0 or not radio_queue.is_empty()):
+		return
+	_say(cue, seconds, speaker)
+	net.send_radio(cue, seconds, speaker)
+
+## A flashbang thrown at the survivors has gone off: whoever sees it is blinded, the squad
+## holds its fire for a moment. In a co-op match the host tells the guest.
+func blind(center: Vector3) -> void:
+	if net.joined:
+		return
+	show_blind(center)
+	net.send_blind(center)
+	for mate in team:
+		if not mate.down and mate.global_position.distance_to(center) < BLIND_REACH * 0.8:
+			var query := PhysicsRayQueryParameters3D.create(center, mate.global_position + Vector3(0, 1.5, 0), 1)
+			if get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+				mate.hold_fire = maxf(mate.hold_fire, 2.6)
+
+## What such a flashbang does to the player of this machine: white, and a ringing in the
+## ears, the more the closer it was and the straighter he looked at it.
+func show_blind(center: Vector3) -> void:
+	fx.explosion(center, 2.4, "growth")
+	sounds.play_at("pop", center, 5.0)
+	var eye: Vector3 = player.camera.global_position
+	var gap := eye.distance_to(center)
+	if gap > BLIND_REACH or player.down:
+		return
+	var query := PhysicsRayQueryParameters3D.create(center, eye, 1)
+	if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+		return
+	var facing := (-player.camera.global_basis.z).dot((center - eye).normalized())
+	var strength := clampf(1.2 - gap / BLIND_REACH, 0.0, 1.0) * lerpf(0.45, 1.0, clampf(facing * 0.5 + 0.5, 0.0, 1.0))
+	if strength > 0.05:
+		hud.blind(strength)
+		sounds.play_sound("ring", lerpf(-14.0, 0.0, strength))
+
 ## Spawns the next queued infected, or a specific kind for tests and previews.
 func spawn_enemy(forced_kind: String = "", visual: String = "") -> Infected:
 	var kind := forced_kind
@@ -812,7 +916,7 @@ func spawn_enemy(forced_kind: String = "", visual: String = "") -> Infected:
 		if standing >= SHIELD_LIMIT:
 			kind = "cru_assault"
 	var human: bool = Infected.TYPES[kind].get("human", false)
-	var enemy: Infected = CruSoldier.new() if human else Infected.new()
+	var enemy: Infected = body_for(kind)
 	enemy.game = self
 	enemy.wave = maxi(1, wave)
 	enemy.kind = kind
@@ -840,6 +944,13 @@ func spawn_enemy(forced_kind: String = "", visual: String = "") -> Infected:
 	elif kind == "ripper" and forced_kind == "" and randf() < 0.5:
 		sounds.play_at("dog_howl", enemy.position + Vector3.UP, 4.0)
 	return enemy
+
+## The right kind of body for a kind of enemy: an operator, a soldier, or one of the infected.
+static func body_for(kind: String) -> Infected:
+	var spec: Dictionary = Infected.TYPES[kind]
+	if spec.get("operator", false):
+		return Operator.new()
+	return CruSoldier.new() if spec.get("human", false) else Infected.new()
 
 ## The infected come out of the gas on the side where the survivors are: through one of
 ## the nearer gaps in the fence, never the same one twice in a row.
@@ -909,7 +1020,9 @@ func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node
 	score += points
 	stats.kills += 1
 	var human: bool = enemy.spec.get("human", false)
-	if human:
+	if enemy is Operator:
+		pass
+	elif human:
 		stats.cru_kills += 1
 		_check_squad_gone()
 	elif enemy.kind != "mauler":
@@ -1458,8 +1571,8 @@ func interact() -> void:
 
 ## A radio line: subtitle and recording. Lines never talk over each other; one that
 ## arrives while another is heard waits, and when too many pile up the oldest is dropped.
-func _say(cue: String, seconds: float = 7.0) -> void:
-	radio_queue.append([cue, seconds])
+func _say(cue: String, seconds: float = 7.0, speaker: String = "") -> void:
+	radio_queue.append([cue, seconds, speaker])
 	while radio_queue.size() > 4:
 		radio_queue.pop_front()
 	_run_radio(0.0)
@@ -1469,18 +1582,28 @@ func _run_radio(delta: float) -> void:
 	if radio_busy > 0.0 or radio_queue.is_empty():
 		return
 	var entry: Array = radio_queue.pop_front()
-	var line := Radio.pick(str(entry[0]))
+	# From the moment Nadja is out of her cell the voice of command is not Coleman's.
+	Radio.hijacked = story.enabled and story.stage in ["escort", "evac", "done"]
+	# A line of command, or somebody else who has got into the channel (an operator).
+	var intruder := str(entry[2]) if entry.size() > 2 else ""
+	var line := Radio.pick(str(entry[0])) if intruder == "" else Radio.bark(intruder, str(entry[0]))
+	if line.is_empty():
+		return
 	var seconds := float(entry[1])
 	var length := 0.0
+	if intruder != "":
+		sounds.play_sound("glitch", -9.0)
 	if str(line.sound) != "":
-		length = sounds.play_voice(str(line.sound))
+		length = sounds.play_voice(str(line.sound), bool(line.get("fake", false)))
+		if bool(line.get("fake", false)):
+			story.heard_fake(length)
 	if length > 0.0:
 		seconds = length + 0.7
 		radio_busy = length + 0.35
 	else:
 		# Only read, not heard: the next line may follow sooner.
 		radio_busy = minf(seconds, 3.0)
-	hud.radio("%s:  %s" % [line.name, line.text], seconds)
+	hud.radio("%s:  %s" % [line.name, line.text], seconds, Operator.TINT if intruder != "" else Color(0, 0, 0, 0))
 
 ## Somebody who stands in the world calls something out: a squad member, a C.R.U. soldier,
 ## the shopkeeper. Nobody talks over himself, and the C.R.U. take turns.
@@ -1810,6 +1933,7 @@ func finish(victory: bool) -> void:
 	last_place = profile.record(Profile.board(level, mode), {
 		"score": score, "round": wave, "seconds": int(elapsed), "victory": victory, "kills": stats.kills,
 		"special_kills": stats.special_kills, "cru_kills": stats.cru_kills, "revives": stats.revives,
+		"phantom": stats.phantom, "havoc": stats.havoc, "ghost": stats.ghost,
 		"objectives": stats.objectives, "team": squad, "date": Time.get_date_string_from_system()
 	})
 	# What the night was worth to the trees of abilities.

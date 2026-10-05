@@ -47,6 +47,11 @@ var nadja: Teammate
 var nadja_puppet: SoldierVisual
 var nadja_down := 0.0
 var nadja_call := 0.0
+## Two things Nadja says once she is out, each once: a remark about the radio a while
+## after her release, and an excuse for its noise after the second line that broke up.
+var channel_wait := -1.0
+var static_wait := -1.0
+var fakes_heard := 0
 var talk_left := 0.0
 var away_for := 0.0
 var away_wait := 0.0
@@ -95,6 +100,9 @@ func clear() -> void:
 	entered = false
 	met = false
 	nadja_down = 0.0
+	channel_wait = -1.0
+	static_wait = -1.0
+	fakes_heard = 0
 	away_for = 0.0
 	away_wait = 0.0
 	given.clear()
@@ -199,6 +207,7 @@ func task_done(task: Dictionary, success: bool) -> void:
 		"rescue":
 			game.cabin.unlock("lab_room")
 			stage = "escort"
+			channel_wait = 18.0
 			game.radio("nadja_freed", 7.0)
 			game.notice("NADJA IST FREI", "Hauptauftrag erfüllt. Bringt sie zum Landeplatz.", 6.0)
 			_free_nadja()
@@ -293,9 +302,32 @@ func _free_nadja() -> void:
 	nadja.global_position = at
 	game.survivors.append(nadja)
 
+## A line of command came over the taken-over channel and broke up (see Radio.hijacked).
+## After the second one Nadja has an explanation ready.
+func heard_fake(length: float) -> void:
+	if not enabled or game.net.joined or not is_instance_valid(nadja):
+		return
+	fakes_heard += 1
+	if fakes_heard == 2:
+		static_wait = length + 1.4
+
+## Says a line of Nadja's as soon as nobody else is talking. Returns the time to wait on.
+func _aside(cue: String, wait: float, delta: float) -> float:
+	if wait <= 0.0:
+		return wait
+	wait -= delta
+	if wait > 0.0:
+		return wait
+	if nadja.down or game.radio_busy > 0.0 or not game.radio_queue.is_empty():
+		return 1.5
+	game.radio(cue, 5.0)
+	return -1.0
+
 func _watch_nadja(delta: float) -> void:
 	if not is_instance_valid(nadja):
 		return
+	channel_wait = _aside("nadja_channel", channel_wait, delta)
+	static_wait = _aside("nadja_static", static_wait, delta)
 	nadja_call -= delta
 	if nadja.down:
 		if nadja_down <= 0.0:

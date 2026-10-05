@@ -155,7 +155,7 @@ func _pick_target() -> Infected:
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
 		var gap := enemy.global_position.distance_to(global_position)
-		if enemy.dead or gap > float(gun.reach):
+		if enemy.dead or enemy.absent or gap > float(gun.reach):
 			continue
 		# The Stalker is left alone unless it is coming for somebody close by.
 		if enemy.kind == "stalker" and (enemy.haunt != "hunt" or gap > 14.0):
@@ -184,7 +184,7 @@ func _hunting_ground(player: Survivor, anchor: Vector3, threat: float) -> Vector
 	var best := INF
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy.dead or enemy.kind == "stalker" or enemy.global_position.distance_to(player.global_position) > LEASH:
+		if enemy.dead or enemy.absent or enemy.kind == "stalker" or enemy.global_position.distance_to(player.global_position) > LEASH:
 			continue
 		var gap := enemy.global_position.distance_squared_to(global_position)
 		if gap < best:

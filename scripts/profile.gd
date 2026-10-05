@@ -30,7 +30,11 @@ const SKINS := {
 	"scorpion": {"label": "SCORPION", "need": "", "count": 0, "note": "von Anfang an", "bot": true},
 	"raven": {"label": "RAVEN", "need": "victories", "count": 1, "note": "Einsatz einmal abschließen", "bot": true},
 	"cru": {"label": "C.R.U.-RÜSTUNG", "need": "cru_kills", "count": 40, "note": "C.R.U.-Soldaten ausschalten", "bot": false},
-	"cru2": {"label": "BREACHER-RÜSTUNG", "need": "kills", "count": 500, "note": "Gegner ausschalten", "bot": false}
+	"cru2": {"label": "BREACHER-RÜSTUNG", "need": "kills", "count": 500, "note": "Gegner ausschalten", "bot": false},
+	# The operators: whoever has driven one of them off may wear his kit.
+	"phantom": {"label": "PHANTOM", "need": "phantom", "count": 1, "note": "Phantom in die Flucht schlagen", "bot": false},
+	"havoc": {"label": "HAVOC", "need": "havoc", "count": 1, "note": "Havoc in die Flucht schlagen", "bot": false},
+	"ghost": {"label": "GHOST", "need": "ghost", "count": 1, "note": "Ghost in die Flucht schlagen", "bot": false}
 }
 
 ## Off during automatic checks: nothing is read from or written to the player's file.
@@ -42,7 +46,7 @@ var mode := "story"
 var modifiers := false
 ## Difficulty -> finished runs, best first.
 var runs: Dictionary = {}
-var totals := {"missions": 0, "victories": 0, "kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0, "seconds": 0}
+var totals := {"missions": 0, "victories": 0, "kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0, "seconds": 0, "phantom": 0, "havoc": 0, "ghost": 0}
 ## What the player wears (seen by a co-op partner and in the arrival), and the two who
 ## come along.
 var skin := "main"
@@ -153,7 +157,7 @@ func record(level: String, run: Dictionary) -> int:
 	totals.missions += 1
 	if run.victory:
 		totals.victories += 1
-	for key in ["kills", "special_kills", "cru_kills", "revives", "objectives", "seconds"]:
+	for key in ["kills", "special_kills", "cru_kills", "revives", "objectives", "seconds", "phantom", "havoc", "ghost"]:
 		totals[key] += int(run.get(key, 0))
 	var list: Array = runs.get(level, [])
 	list.append(run)

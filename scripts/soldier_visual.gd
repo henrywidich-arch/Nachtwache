@@ -97,6 +97,24 @@ const LOOKS := {
 		"label": "C.R.U.", "scene": preload("res://assets/models/cru.glb"), "textures": "res://assets/models/cru_",
 		"source_height": 1.85, "height": 1.99, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male"
 	},
+	# The three operators (see Operator), who are also looks the player can earn. eyes: where
+	# their eyes glow, on the model as it stands at rest (x across, y up, z to its front),
+	# and how big each is.
+	"phantom": {
+		"label": "PHANTOM", "scene": preload("res://assets/models/cruelite.glb"), "textures": "res://assets/models/cruelite_",
+		"source_height": 1.89, "height": 1.9, "weapon": "badger", "shot": "badger", "voice": "bot_hurt_male",
+		"eyes": {"at": [Vector3(-0.057, 1.735, 0.184), Vector3(0.057, 1.735, 0.184)], "size": 0.02}
+	},
+	"havoc": {
+		"label": "HAVOC", "scene": preload("res://assets/models/cruelite.glb"), "textures": "res://assets/models/cruelite_",
+		"source_height": 1.89, "height": 1.95, "weapon": "shotgun", "shot": "shotgun", "voice": "bot_hurt_male",
+		"eyes": {"at": [Vector3(-0.057, 1.735, 0.184), Vector3(0.057, 1.735, 0.184)], "size": 0.02}
+	},
+	"ghost": {
+		"label": "GHOST", "scene": preload("res://assets/models/cruelite.glb"), "textures": "res://assets/models/cruelite_",
+		"source_height": 1.89, "height": 1.88, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male",
+		"eyes": {"at": [Vector3(-0.057, 1.735, 0.184), Vector3(0.057, 1.735, 0.184)], "size": 0.02}
+	},
 	"nadja": {
 		"label": "NADJA", "scene": preload("res://assets/models/nadja.glb"), "textures": "res://assets/models/nadja_",
 		"source_height": 1.68, "height": 1.68, "weapon": "", "shot": "badger", "voice": "bot_hurt_female"
@@ -210,9 +228,51 @@ func _ready() -> void:
 	arms.add_animation_library("", upper[look])
 	arms.add_animation_library("move", upper_moves[look])
 	_build_weapon()
+	_fit_eyes()
 	legs.play("idle")
 	legs.seek(randf() * legs.current_animation_length, true)
 	arms.play("idle")
+
+## What the eyes of the operators glow with (see LOOKS, "eyes").
+const EYE_GLOW := Color(0.45, 1.5, 3.4)
+
+## Eyes that glow: a small bright ball at each, fixed to the head, and a faint light of the
+## same colour on the face. Only for looks that say where their eyes are.
+func _fit_eyes() -> void:
+	if not config.has("eyes") or skeleton == null:
+		return
+	var head: int = rig.head.index
+	var mount := BoneAttachment3D.new()
+	mount.name = "Eyes"
+	skeleton.add_child(mount)
+	mount.bone_idx = head
+	var rest := skeleton.get_bone_global_rest(head).affine_inverse()
+	var paint := StandardMaterial3D.new()
+	paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	paint.albedo_color = EYE_GLOW
+	var size := float(config.eyes.size)
+	var middle := Vector3.ZERO
+	for at in config.eyes.at:
+		var ball := SphereMesh.new()
+		ball.radius = size
+		ball.height = size * 2.0
+		ball.radial_segments = 10
+		ball.rings = 5
+		var eye := MeshInstance3D.new()
+		eye.mesh = ball
+		eye.material_override = paint
+		eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mount.add_child(eye)
+		# Flat against the face rather than a ball standing out of it.
+		eye.transform = rest * Transform3D(Basis.from_scale(Vector3(1.0, 1.0, 0.45)), at)
+		middle += (at as Vector3) / float((config.eyes.at as Array).size())
+	var glow := OmniLight3D.new()
+	glow.light_color = Color("58b8ff")
+	glow.light_energy = 0.55
+	glow.omni_range = 0.7
+	glow.shadow_enabled = false
+	mount.add_child(glow)
+	glow.transform = rest * Transform3D(Basis.IDENTITY, middle + Vector3(0, 0, 0.1))
 
 func _player(title: String) -> AnimationPlayer:
 	var player := AnimationPlayer.new()

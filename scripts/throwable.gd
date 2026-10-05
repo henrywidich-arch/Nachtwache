@@ -206,6 +206,9 @@ func _physics_process(delta: float) -> void:
 		game.blast(global_position + Vector3(0, 0.15, 0), 6.0, 70.0, 110.0, "frag")
 	elif kind == "grenade":
 		game.blast(global_position + Vector3(0, 0.15, 0), BLAST[0], BLAST[1], BLAST[2] * boost)
+	elif hostile:
+		# Thrown at the survivors (an operator's): it blinds them, not the infected.
+		game.blind(global_position + Vector3(0, 0.2, 0))
 	else:
 		game.flash_bang(global_position + Vector3(0, 0.2, 0))
 	queue_free()
