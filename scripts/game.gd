@@ -390,6 +390,9 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_crusher_check")
+	elif "--map-check" in args:
+		check_mode = true
+		call_deferred("_run_map_check")
 	elif "--models-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -1854,6 +1857,59 @@ func _run_crusher_check() -> void:
 		await tick.call(0.07)
 	print("CRUSHER came down at %s, %.1f m from the player; it travelled %.1f m; player health lost %.0f" % [str(giant.global_position.snapped(Vector3.ONE * 0.01)), giant.global_position.distance_to(player.global_position), from.distance_to(giant.global_position), 100000.0 - player.health])
 	print("CRUSHER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Pictures of the map in the corner: in the yard with every kind of enemy around, turned a
+## quarter, on the upper floor and in the basement.
+func _run_map_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	cabin.unlock("upper", true)
+	cabin.unlock("cellar", true)
+	cabin.unlock("lab_room", true)
+	var stand := Vector3(0, 0.05, 22.0)
+	_place_player(stand, 0)
+	for i in range(team.size()):
+		team[i].global_position = stand + Vector3(-2.5 + i * 5.0, 0, 2.0)
+		team[i].set_physics_process(false)
+	# Common ones ahead, special ones to the left, soldiers to the right, one of each far
+	# off and one upstairs.
+	var cast := [
+		["mauler", Vector3(-3, 0, -6)], ["mauler", Vector3(1, 0, -8)], ["mauler", Vector3(4, 0, -5)], ["mauler", Vector3(-1, 0, -3.5)],
+		["charger", Vector3(-9, 0, -2)], ["striker", Vector3(-12, 0, 3)], ["ripper", Vector3(-7, 0, 5)], ["crusher", Vector3(-16, 0, -8)],
+		["cru_assault", Vector3(9, 0, -1)], ["cru_heavy", Vector3(12, 0, 4)], ["cru_shield", Vector3(15, 0, -4)],
+		["mauler", Vector3(30, 0, -60)], ["cru_assault", Vector3(60, 0, 10)], ["charger", Vector3(-50, 0, 30)],
+	]
+	for entry in cast:
+		var foe := spawn_enemy(str(entry[0]))
+		foe.set_physics_process(false)
+		foe.position = stand + (entry[1] as Vector3)
+	var above := spawn_enemy("mauler")
+	above.set_physics_process(false)
+	above.position = (cabin.points.gallery as Vector3) + Vector3(0, 0.05, 0)
+	mission._start_task("codes")
+	await tick.call(0.6)
+	await _capture(folder, "map_yard.png")
+	_place_player(stand, 90)
+	await tick.call(0.3)
+	await _capture(folder, "map_yard_turned.png")
+	_place_player((cabin.points.hall as Vector3) + Vector3(0, 0.05, 0), 0)
+	await tick.call(0.3)
+	await _capture(folder, "map_hall.png")
+	_place_player((cabin.points.gallery as Vector3) + Vector3(2.0, 0.05, 0), 0)
+	await tick.call(0.3)
+	await _capture(folder, "map_upper.png")
+	_place_player((cabin.points.lab as Vector3) + Vector3(0, 0.05, 0), 0)
+	await tick.call(0.4)
+	await _capture(folder, "map_cellar.png")
+	print("MAP_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Pictures of the six falls that were recorded on Scorpion's rig (InfectedVisual.MORE): on

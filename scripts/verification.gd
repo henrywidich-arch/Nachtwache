@@ -3440,7 +3440,7 @@ func _squadwork(game: Node3D) -> void:
 
 ## What came with v0.18: a Crusher that is a danger, a harder M14, a shell that can be
 ## watched on its way, points for all three trees with one of them in force, fire that
-## lets a Charger and a Striker's growths go off harmlessly.
+## lets a Charger and a Striker's growths go off harmlessly, a map in the corner.
 func _overhaul(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var skills: Skills = game.skills
@@ -3633,3 +3633,54 @@ func _overhaul(game: Node3D) -> void:
 	player.health = 100.0
 	player.inventory.erase("flamer")
 	player.equip_weapon("rifle", true)
+	# --- the map in the corner
+	_wipe(game)
+	await frames(3)
+	var map: Minimap = game.hud.minimap
+	map._draw_plans()
+	var drawn: bool = map.plans.size() == 3
+	for level in range(map.plans.size()):
+		drawn = drawn and Vector2i((map.plans[level] as Texture2D).get_size()) == game.cabin.navigation[level].region.size
+	face(game, post, 0.0)
+	var shown := {}
+	for entry in [["mauler", Vector3(0, 0, -8.0)], ["cru_assault", Vector3(8.0, 0, 0)], ["charger", Vector3(-8.0, 0, 0)], ["mauler", Vector3(0, 0, 70.0)]]:
+		var body: Infected = game.spawn_enemy(str(entry[0]))
+		body.set_physics_process(false)
+		body.position = post + (entry[1] as Vector3)
+		shown[body] = true
+	var ghost: Infected = game.spawn_stalker(post + Vector3(3.0, 0, -3.0), "watch", player)
+	ghost.set_physics_process(false)
+	await frames(3)
+	var spots: Array = map.marks()
+	var reds: Array = spots.filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.COMMON)
+	var blues: Array = spots.filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.SOLDIER)
+	var ambers: Array = spots.filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.SPECIAL)
+	var placed: bool = spots.size() == 4 and reds.size() == 2 and blues.size() == 1 and ambers.size() == 1
+	if placed:
+		var near_red: Dictionary = reds[0] if not reds[0].rim else reds[1]
+		var far_red: Dictionary = reds[1] if not reds[0].rim else reds[0]
+		# Ahead is up, right is right; what is too far off sits on the rim, behind is down.
+		placed = (near_red.at as Vector2).y < -15.0 and absf((near_red.at as Vector2).x) < 2.0 and (blues[0].at as Vector2).x > 15.0 and absf((blues[0].at as Vector2).y) < 2.0 and (ambers[0].at as Vector2).x < -15.0
+		placed = placed and far_red.rim and is_equal_approx((far_red.at as Vector2).y, Minimap.SIZE * 0.5 - Minimap.RIM) and not near_red.rim and str(blues[0].shape) == "square" and str(ambers[0].shape) == "ring" and str(near_red.shape) == "dot"
+	# Turned a quarter to the left, what stood on the left is ahead.
+	face(game, post, PI * 0.5)
+	var turned: Array = map.marks().filter(func(mark: Dictionary) -> bool: return mark.color == Minimap.SPECIAL)
+	var follows: bool = turned.size() == 1 and (turned[0].at as Vector2).y < -15.0 and absf((turned[0].at as Vector2).x) < 2.0
+	# Somebody on another floor is pale.
+	face(game, post, 0.0)
+	for body in shown:
+		if (body as Infected).kind == "cru_assault":
+			(body as Infected).position = (game.cabin.points.gallery as Vector3) + Vector3(0, 0.05, 0)
+	await frames(2)
+	var pale := false
+	for mark in map.marks():
+		pale = pale or (is_equal_approx((mark.color as Color).a, Minimap.ELSEWHERE) and (mark.color as Color).is_equal_approx(Color(Minimap.SOLDIER, Minimap.ELSEWHERE)))
+	var corner: bool = map.get_parent() == game.hud.play_ui and map.offset_right == -32.0 and map.offset_top == 22.0 and is_equal_approx(map.offset_right - map.offset_left, Minimap.SIZE)
+	expect(drawn and placed and follows and pale and corner and Minimap.COMMON != Minimap.SPECIAL and Minimap.SPECIAL != Minimap.SOLDIER and Minimap.COMMON != Minimap.SOLDIER, "A map in the top right corner: walls of each level, ahead is up; common infected, special ones and soldiers each in a colour of their own, the far ones on its rim, those on another floor pale, the Stalker never")
+	ghost._retire()
+	ghost.queue_free()
+	for body in shown:
+		(body as Infected)._retire()
+		(body as Infected).queue_free()
+		game.alive_count -= 1
+	await frames(2)

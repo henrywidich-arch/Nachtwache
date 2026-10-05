@@ -90,6 +90,8 @@ var settings_back := "main"
 ## The weapons carried, shown for a moment whenever another one is taken in hand.
 var loadout_box: VBoxContainer
 var loadout_left := 0.0
+## The map in the top right corner.
+var minimap: Minimap
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -230,11 +232,16 @@ func _build_play_ui() -> void:
 	round_box.add_child(enemy_label)
 	task_label = label("", 15, AMBER)
 	round_box.add_child(task_label)
-	# Top right: level, score, mission clock and supplies.
+	# Top right corner: the map of what lies around the survivor.
+	minimap = Minimap.new()
+	minimap.game = game
+	minimap.font = display
+	_anchored(minimap, Control.PRESET_TOP_RIGHT, -32 - Minimap.SIZE, 22, -32, 22 + Minimap.SIZE)
+	# Left of it: level, score, mission clock and supplies.
 	var score_box := VBoxContainer.new()
 	score_box.alignment = BoxContainer.ALIGNMENT_BEGIN
 	score_box.add_theme_constant_override("separation", -3)
-	_anchored(score_box, Control.PRESET_TOP_RIGHT, -330, 22, -32, 160)
+	_anchored(score_box, Control.PRESET_TOP_RIGHT, -344 - Minimap.SIZE, 22, -46 - Minimap.SIZE, 160)
 	difficulty_label = label("FIRETEAM  ·  NORMAL", 14, ORANGE, true)
 	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	score_box.add_child(difficulty_label)
@@ -436,6 +443,9 @@ func _draw_reticle() -> void:
 			if view.is_position_behind(spot):
 				at = Vector2(reticle.size.x - at.x, reticle.size.y)
 			at = at.clamp(Vector2(60, 110), reticle.size - Vector2(60, 200))
+			# Not on top of the map in the corner.
+			if at.x > reticle.size.x - Minimap.SIZE - 110.0:
+				at.y = maxf(at.y, Minimap.SIZE + 50.0)
 			var tint := Color(0.36, 0.86, 1.0, 0.92)
 			reticle.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -9), at + Vector2(9, 0), at + Vector2(0, 9), at + Vector2(-9, 0)]), tint)
 			reticle.draw_string(ThemeDB.fallback_font, at + Vector2(-70, 27), "%s  %d m" % [marker.text, int(view.global_position.distance_to(spot))], HORIZONTAL_ALIGNMENT_CENTER, 140, 13, tint)
