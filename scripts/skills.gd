@@ -23,7 +23,7 @@ const IN_SERVICE := true
 const TIER_NEEDS := [0, 3, 7]
 ## Points that must be in a tree before the shop sells its weapon.
 const WEAPON_NEEDS := 3
-const LEVELS := 15
+const LEVELS := 16
 ## Experience for the career totals of the profile.
 const WORTH := {"kills": 1, "special_kills": 4, "cru_kills": 6, "objectives": 60, "revives": 30, "victories": 500}
 
@@ -40,6 +40,8 @@ const TREES := {
 			{"id": "sweeper_skin", "label": "DICKES FELL", "tier": 2, "ranks": 3, "gives": {"harm_common": 0.08}, "note": "%s %% weniger Schaden durch gewöhnliche Infizierte"},
 			{"id": "sweeper_ammo", "label": "VOLLE TASCHEN", "tier": 2, "ranks": 2, "gives": {"reserve": 0.15}, "note": "+%s %% Reservemunition"},
 			{"id": "sweeper_head", "label": "KOPFJÄGER", "tier": 2, "ranks": 2, "gives": {"head_common": 0.12}, "note": "+%s %% Kopfschuss-Schaden gegen gewöhnliche Infizierte"},
+			# What the squad takes over by itself: see MissionDirector.SQUAD_JOBS. Each tree has one.
+			{"id": "sweeper_squad", "label": "SPÜRTRUPP", "tier": 2, "ranks": 1, "gives": {"squad_search": 1.0}, "note": "Begleiter bergen Zugangscodes, Probenkoffer und Festplatten"},
 			{"id": "sweeper_pierce", "label": "DURCHSCHLAG", "tier": 3, "ranks": 1, "gives": {"pierce_common": 1.0}, "note": "Gewehrkugeln durchschlagen einen gewöhnlichen Infizierten und treffen den dahinter"}
 		]
 	},
@@ -51,6 +53,7 @@ const TREES := {
 			{"id": "hunter_filter", "label": "FILTERTRAINING", "tier": 2, "ranks": 2, "gives": {"filter": 0.25, "harm_gas": 0.15}, "note": "Der Maskenfilter hält %s %% länger, Gas schadet weniger"},
 			{"id": "hunter_acid", "label": "SÄUREFEST", "tier": 2, "ranks": 3, "gives": {"harm_acid": 0.2}, "note": "%s %% weniger Schaden durch Säure"},
 			{"id": "hunter_grip", "label": "LOSREISSEN", "tier": 2, "ranks": 2, "gives": {"shake": 0.3}, "note": "Einen Leech %s %% schneller abschütteln"},
+			{"id": "hunter_squad", "label": "TECHNIKER", "tier": 2, "ranks": 1, "gives": {"squad_switch": 1.0}, "note": "Begleiter bedienen Sicherungen, Funkmast und Kisten"},
 			{"id": "hunter_trophy", "label": "TROPHÄE", "tier": 3, "ranks": 1, "gives": {"trophy": 12.0}, "note": "Jeder erlegte Spezial-Infizierte gibt %s Lebenspunkte zurück"}
 		]
 	},
@@ -62,12 +65,13 @@ const TREES := {
 			{"id": "breacher_frag", "label": "SPLITTERSCHUTZ", "tier": 2, "ranks": 3, "gives": {"harm_frag": 0.12}, "note": "%s %% weniger Schaden durch Granaten"},
 			{"id": "breacher_shield", "label": "SCHILDBRECHER", "tier": 2, "ranks": 1, "gives": {"shield_sniper": 1.0}, "note": "Das Scharfschützengewehr schießt durch den Schild"},
 			{"id": "breacher_head", "label": "SAUBERER SCHUSS", "tier": 2, "ranks": 3, "gives": {"head_cru": 0.12}, "note": "+%s %% Kopfschuss-Schaden gegen die C.R.U."},
-			{"id": "breacher_shield2", "label": "SCHILDBRECHER II", "tier": 3, "ranks": 1, "gives": {"shield_heavy": 0.5}, "note": "Auch Magnum und AK-47 schießen durch den Schild, mit halbem Schaden"}
+			{"id": "breacher_squad", "label": "WACHPOSTEN", "tier": 2, "ranks": 1, "gives": {"squad_guard": 1.0}, "note": "Begleiter halten Stellungen, starten Generator und Hack neu"},
+			{"id": "breacher_shield2", "label": "SCHILDBRECHER II", "tier": 3, "ranks": 1, "gives": {"shield_heavy": 0.5}, "note": "Auch Magnum, AK-47 und beide Schrotflinten schießen durch den Schild, mit halbem Schaden"}
 		]
 	}
 }
 ## Weapons that the second shield ability counts as heavy enough.
-const HEAVY := ["revolver", "ak"]
+const HEAVY := ["revolver", "ak", "shotgun", "autoshotgun"]
 ## Weapons whose bullets the sweeper's last ability sends through a body.
 const RIFLES := ["rifle", "ak", "g36", "badger"]
 

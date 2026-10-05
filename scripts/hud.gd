@@ -883,7 +883,7 @@ func show_menu(mode: String) -> void:
 			first = _menu_skins(column)
 		"skills":
 			first = _menu_skills(column)
-	var version := label("SOLO + KOOP   ·   v0.16", 12, MUTED, true)
+	var version := label("SOLO + KOOP   ·   v0.17", 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
 	modal.add_child(version)
@@ -1160,9 +1160,9 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		back_plate.border_color = tree.color
 		back_plate.border_width_top = 3
 		panel.add_theme_stylebox_override("panel", back_plate)
-		panel.custom_minimum_size = Vector2(336, 0)
+		panel.custom_minimum_size = Vector2(372, 0)
 		var list := VBoxContainer.new()
-		list.add_theme_constant_override("separation", 2)
+		list.add_theme_constant_override("separation", 1)
 		panel.add_child(list)
 		# Its name, and beside it the button that chooses it or the mark that it is chosen.
 		var mine: bool = skills.chosen == tree_id
@@ -1204,14 +1204,14 @@ func _menu_skills(column: VBoxContainer) -> Control:
 			row.add_child(label("●".repeat(have) + "○".repeat(int(skill.ranks) - have), 14, tree.color))
 			if Skills.IN_SERVICE and mine:
 				var more := _chip("+", _learn.bind(str(skill.id)), false, 34)
-				more.custom_minimum_size = Vector2(34, 26)
+				more.custom_minimum_size = Vector2(34, 23)
 				more.disabled = skills.barred(str(skill.id), totals) != ""
 				more.tooltip_text = skills.barred(str(skill.id), totals)
 				row.add_child(more)
 			list.add_child(row)
 			var note := label(Skills.note(skill, maxi(1, have)), 13, MUTED)
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			note.custom_minimum_size.x = 310
+			note.custom_minimum_size.x = 346
 			list.add_child(note)
 		trees.add_child(panel)
 	_gap(column, 8)

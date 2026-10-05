@@ -1078,6 +1078,7 @@ func run(game: Node3D) -> void:
 	await _latest(game)
 	await _arsenal(game)
 	await _loadout(game)
+	await _squadwork(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -1201,8 +1202,8 @@ func _latest(game: Node3D) -> void:
 			counted = counted and str(skill.id).begins_with(tree + "_") and not ids.has(skill.id) and int(skill.tier) >= tier and int(skill.tier) <= 3 and Skills.note(skill, 1) != "" and not Skills.note(skill, 1).contains("%s")
 			tier = int(skill.tier)
 			ids[skill.id] = true
-		counted = counted and ranks == 14 and (Skills.TREES[tree].skills as Array).size() == 6
-	expect(counted and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with six abilities each; a career gives experience and levels")
+		counted = counted and ranks == 15 and ranks == Skills.LEVELS - 1 and (Skills.TREES[tree].skills as Array).size() == 7
+	expect(counted and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven abilities each, and levels enough for every rank of one tree; a career gives experience and levels")
 	game.hud.show_menu("skills")
 	var marked := false
 	for node in game.hud.modal.find_children("*", "Label", true, false):
@@ -1216,7 +1217,7 @@ func _latest(game: Node3D) -> void:
 		if (node as Button).text == "WÄHLEN":
 			picks += 1
 	var unchosen: bool = skills.chosen == "" and chips == 0 and picks == 3 and skills.barred("sweeper_damage", totals) == "Erst einen Weg wählen" and not skills.learn("sweeper_damage", totals)
-	# One of them is chosen: its six abilities get their buttons, the others none.
+	# One of them is chosen: its seven abilities get their buttons, the others none.
 	var took: bool = game.choose_tree("sweeper") and not game.choose_tree("hunter") and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper"
 	game.hud.show_menu("skills")
 	chips = 0
@@ -1237,7 +1238,7 @@ func _latest(game: Node3D) -> void:
 	var pointless: bool = not game.learn_skill("sweeper_damage") and skills.barred("sweeper_damage", game.profile.totals) == "Kein Punkt frei"
 	game.profile.totals = career
 	game.reset_skills()
-	expect(Skills.IN_SERVICE and skills.active and not marked and unchosen and took and chips == 6 and picks == 0 and undo and other_way and pointless and skills.chosen == "" and game.profile.skill_tree == "" and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are in service: one of the three trees is chosen, only its abilities can be raised, and choosing anew takes everything back; without a level nothing can be bought, and without a rank nothing has an effect")
+	expect(Skills.IN_SERVICE and skills.active and not marked and unchosen and took and chips == 7 and picks == 0 and undo and other_way and pointless and skills.chosen == "" and game.profile.skill_tree == "" and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are in service: one of the three trees is chosen, only its abilities can be raised, and choosing anew takes everything back; without a level nothing can be bought, and without a rank nothing has an effect")
 	# --- what they do
 	skills.active = true
 	skills.chosen = "breacher"
@@ -1328,7 +1329,7 @@ func _latest(game: Node3D) -> void:
 	var over_irons: Vector3 = WeaponView.VIEWS.rifle.aim
 	var lined: bool = is_equal_approx(over_irons.y, -((m4_gun.mount as Vector3).y + float(m4_gun.irons))) and over_irons.x == 0.0
 	player.fit("rifle", "reddot")
-	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and WeaponView.sight_aim("rifle", "reddot").y > over_irons.y
+	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and absf(WeaponView.sight_aim("rifle", "reddot").y - over_irons.y) < 0.006
 	player.fit("rifle", "reddot")
 	expect(str(Survivor.WEAPONS.rifle.label) == "M4A4" and m4.get_node_or_null("Magazine") != null and m4.get_node_or_null("Support") != null and irons != null and irons.visible and lined and folded and (WeaponView.reload_step("rifle", 0.38).magazine as Vector3).length() > 0.2 and Survivor.ATTACHMENTS.has("rifle"), "The starting rifle is the M4A4: its magazine leaves the gun, the eye looks through its iron sights, and they fold away under a fitted sight")
 	# --- five kinds of dead bodies, and model trees at the edge of the open yard
@@ -3246,3 +3247,184 @@ func coop(game: Node3D, as_host: bool) -> void:
 	game.sounds.stop_all()
 	await wait(0.3)
 	get_tree().call_deferred("quit", 0)
+
+## Lets the night run for a while with the mission director at work, as it is in a game.
+func _work(game: Node3D, seconds: float, until: Callable = Callable()) -> void:
+	for i in range(int(seconds * 60.0)):
+		game.mission.update(1.0 / 60.0)
+		await get_tree().physics_frame
+		if until.is_valid() and until.call():
+			return
+
+## One task of a kind with its things laid out at `places`.
+func _task_at(game: Node3D, kind: String, item: String, places: Array) -> Dictionary:
+	var task: Dictionary = game.mission._start_task(kind)
+	task.items.clear()
+	for place in places:
+		task.items.append(game.mission._item(item, place))
+	task.brief = 0.0
+	return task
+
+## What came with v0.17: a squad that takes over tasks (one ability in each tree), shotguns
+## through shields, a squad that finds its feet over the first rounds, a fuller last round.
+func _squadwork(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var mission: MissionDirector = game.mission
+	var skills: Skills = game.skills
+	var stand := Vector3(0, 0.05, 22.0)
+	game.profile.mode = "story"
+	game.profile.modifiers = false
+	game.team_enabled = true
+	game.start_run()
+	mission.plain()
+	mission.sighting_left = 99999.0
+	game.preparation_left = 9999.0
+	skills.reset()
+	skills.active = true
+	face(game, stand, PI)
+	var team: Array = game.team
+	for i in range(team.size()):
+		(team[i] as Teammate).global_position = stand + Vector3(-1.8 + i * 3.6, 0, -2.0)
+		(team[i] as Teammate).velocity = Vector3.ZERO
+	await frames(5)
+	# --- one such ability in each tree
+	var trees := {}
+	for tree in Skills.TREES:
+		for skill in Skills.TREES[tree].skills:
+			for key in skill.gives:
+				if MissionDirector.SQUAD_JOBS.has(key) and int(skill.ranks) == 1:
+					trees[tree] = key
+	var kinds := {}
+	for key in MissionDirector.SQUAD_JOBS:
+		for kind in MissionDirector.SQUAD_JOBS[key]:
+			kinds[kind] = int(kinds.get(kind, 0)) + 1
+	expect(team.size() == 2 and trees.size() == 3 and trees.sweeper == "squad_search" and trees.hunter == "squad_switch" and trees.breacher == "squad_guard" and kinds.size() == 9 and kinds.values().max() == 1, "Each tree has an ability that lets the squad take over tasks, and each a different kind of them")
+	# --- without it the squad leaves the tasks to the player
+	skills.chosen = "sweeper"
+	var codes := _task_at(game, "codes", "corpse", [stand + Vector3(6.0, 0, -3.0), stand + Vector3(-6.0, 0, -3.0)])
+	await _work(game, 2.5)
+	var idle: bool = mission._open_items(codes) == 2 and (team[0] as Teammate).job.is_empty() and (team[1] as Teammate).job.is_empty()
+	# --- with it they search the dead by themselves
+	skills.ranks = {"sweeper_squad": 1}
+	var done_before: int = game.stats.objectives
+	var named := [false]
+	await _work(game, 14.0, func() -> bool:
+		named[0] = named[0] or "\n".join(mission.summary()).contains("hilft")
+		return str(codes.state) == "done")
+	expect(idle and str(codes.state) == "done" and game.stats.objectives == done_before + 1 and named[0] and player.global_position.distance_to(stand) < 0.5, "Without the ability the squad leaves the dead alone; with it the two search them for the codes while the player stands by")
+	# --- somebody told to hold a place stays there
+	for mate in team:
+		(mate as Teammate).order = "hold"
+		(mate as Teammate).hold_point = (mate as Teammate).global_position
+	var more := _task_at(game, "codes", "corpse", [stand + Vector3(5.0, 0, -4.0)])
+	await _work(game, 2.5)
+	var held: bool = mission._open_items(more) == 1 and (team[0] as Teammate).job.is_empty() and (team[1] as Teammate).job.is_empty()
+	for mate in team:
+		(mate as Teammate).order = "follow"
+	await _work(game, 12.0, func() -> bool: return str(more.state) == "done")
+	expect(held and str(more.state) == "done", "Somebody who was told to hold a place takes no job; sent on again, the job gets done")
+	# --- the hunter's squad switches things on, and leaves the dead alone
+	skills.chosen = "hunter"
+	skills.ranks = {"hunter_squad": 1}
+	var power := _task_at(game, "power", "breaker", [stand + Vector3(5.0, 0, -3.0), stand + Vector3(-5.0, 0, -3.0)])
+	var dark: bool = not game.cabin.powered
+	var left_alone := _task_at(game, "codes", "corpse", [stand + Vector3(0.0, 0, -6.0)])
+	await _work(game, 14.0, func() -> bool: return str(power.state) == "done")
+	expect(dark and str(power.state) == "done" and game.cabin.powered and mission._open_items(left_alone) == 1, "The hunter's squad throws the breakers and the light is back; searching the dead is not what it has learnt")
+	left_alone.state = "done"
+	# --- the breacher's squad stands guard and starts what stands still
+	skills.chosen = "breacher"
+	skills.ranks = {"breacher_squad": 1}
+	var zone := _task_at(game, "zone", "zone", [stand + Vector3(13.0, 0, -2.0)])
+	await _work(game, 7.0, func() -> bool: return float(zone.items[0].use) > 0.02)
+	var guarded: bool = float(zone.items[0].use) > 0.02 and str(zone.items[0].state) == "held" and player.global_position.distance_to(zone.items[0].pos) > MissionDirector.ZONE_RADIUS
+	zone.state = "done"
+	var engine := _task_at(game, "generator", "generator", [stand + Vector3(-7.0, 0, -3.0)])
+	engine.left = -1.0
+	await _work(game, 12.0, func() -> bool: return str(engine.items[0].state) == "running")
+	var started: bool = str(engine.items[0].state) == "running"
+	mission._stall(engine, engine.items[0])
+	var stalled: bool = str(engine.items[0].state) == "stalled"
+	await _work(game, 10.0, func() -> bool: return str(engine.items[0].state) == "running")
+	var module := {"kind": "hack", "done": false, "state": "", "use": 0.0}
+	var theirs: bool = not mission._squad_item({"state": "active"}, module)
+	module.state = "stalled"
+	theirs = theirs and mission._squad_item({"state": "active"}, module)
+	expect(guarded and started and stalled and str(engine.items[0].state) == "running" and theirs, "The breacher's squad holds a marked position, starts the generator and starts it again when it stands still; the hack module it only starts again")
+	engine.state = "done"
+	skills.reset()
+	# --- shotguns go through a shield with the breacher's last ability
+	skills.chosen = "breacher"
+	var bounced: bool = skills.shield_share("shotgun") == 0.0 and skills.shield_share("autoshotgun") == 0.0
+	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
+	bearer.set_physics_process(false)
+	bearer.position = Vector3(0, 0.05, 27.0)
+	bearer.model.rotation.y = 0.0
+	face(game, stand, PI)
+	player.unlock("shotgun")
+	await frames(3)
+	var sound: float = bearer.health
+	player.shot_cooldown = 0.0
+	player.shoot()
+	await frames(2)
+	var stopped: bool = bearer.health == sound and bearer.blocks(Vector3.BACK)
+	skills.ranks = {"breacher_shield2": 1}
+	face(game, stand, PI)
+	player.climb = 0.0
+	player.shot_cooldown = 0.0
+	player.pump_clock = -1.0
+	player.shoot()
+	await frames(2)
+	var through: float = sound - bearer.health
+	expect(bounced and stopped and through > 0.0 and through <= 9 * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.5 + 0.01 and bearer.knock == Vector3.ZERO and skills.shield_share("shotgun") == 0.5 and skills.shield_share("autoshotgun") == 0.5 and skills.shield_share("rifle") == 0.0, "With the breacher's last ability both shotguns shoot through a shield with half their force (%.0f), and it throws nobody back" % through)
+	bearer.receive_hit(99999.0, Vector3.FORWARD)
+	skills.reset()
+	# --- the squad finds its feet over the first rounds
+	var mate := team[0] as Teammate
+	for other in team:
+		# The one with a rifle: one bullet a shot.
+		if int((other as Teammate).gun.pellets) == 1:
+			mate = other
+	var by_round := {}
+	for number in [1, 4, 7, 12]:
+		game.wave = number
+		by_round[number] = lerpf(Teammate.GREEN_DAMAGE, 1.0, mate.seasoned())
+	# On open ground beside the player, where the jobs before have not left it.
+	mate.order = "hold"
+	mate.hold_point = stand + Vector3(0.9, 0, 0.6)
+	mate.global_position = mate.hold_point
+	mate.velocity = Vector3.ZERO
+	var dummy: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	dummy.set_physics_process(false)
+	dummy.max_health = 50000.0
+	dummy.health = 50000.0
+	dummy.position = mate.global_position + Vector3(0, 0, 5.0)
+	await frames(3)
+	var least := {}
+	for number in [1, 7]:
+		game.wave = number
+		var low := INF
+		for shot in range(8):
+			var before: float = dummy.health
+			mate.ammo = 30
+			mate._shoot(dummy.global_position + Vector3(0, 0.9, 0), false)
+			if before - dummy.health > 0.01:
+				low = minf(low, before - dummy.health)
+		least[number] = low
+	game.wave = 1
+	mate.target = null
+	mate.think_left = 0.0
+	mate.hold_fire = 0.0
+	mate.global_position = mate.hold_point
+	dummy.position = mate.global_position + Vector3(0, 0, 6.0)
+	await frames(8)
+	var waits: bool = mate.target == dummy and mate.hold_fire > 0.3
+	dummy.receive_hit(999999.0, Vector3.BACK)
+	game.wave = 0
+	var body_shot: float = float(mate.gun.damage)
+	expect(is_equal_approx(by_round[1], Teammate.GREEN_DAMAGE) and by_round[4] > by_round[1] and by_round[4] < 1.0 and by_round[7] == 1.0 and by_round[12] == 1.0 and is_equal_approx(least[1], body_shot * Teammate.GREEN_DAMAGE) and is_equal_approx(least[7], body_shot) and waits and Teammate.GREEN_DAMAGE < 0.6, "In the first round the squad's shots do %d %% of what they do from round %d on, and it holds its fire for a moment on somebody new (%s, %s, %s, factor %.2f)" % [int(Teammate.GREEN_DAMAGE * 100.0), Teammate.SEASONED_ROUND, str(least), str(by_round), str(waits), mate.damage_factor])
+	# --- the last round
+	expect(float(game.FINAL_SHARE) > 0.7 and float(game.FINAL_SHARE) < 0.9, "The last round brings a little more than it did, and still less than its table says")
+	_wipe(game)
+	game.team_enabled = false
+	game.start_run()

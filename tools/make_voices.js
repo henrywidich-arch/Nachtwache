@@ -17,7 +17,7 @@ const dry = args.includes('--dry');
 const skip = Number((args.find(a => a.startsWith('--skip=')) || '--skip=0').slice(7));
 const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
-const VOICES = { coleman: 'Colonel Coleman', nadja: 'Nadja', viper: 'Matilda', scorpion: 'Callum', raven: 'Lily', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura' };
+const VOICES = { coleman: 'Colonel Coleman', nadja: 'Daisy Sweetwood', viper: 'Matilda', scorpion: 'Callum', raven: 'Lily', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura' };
 // The three later voices of the C.R.U. are meant to sound hard and without feeling. Each is
 // pitched down a little (semitones) and put through a helmet set: a narrow band, pressed
 // flat, the roughest of them with a little grit.
@@ -39,19 +39,22 @@ const TRIM = 'silenceremove=start_periods=1:start_threshold=-46dB:start_silence=
 // A pause inside a line may last this long; a longer one is cut down to it. The voice
 // generator now and then leaves seconds of dead air in the middle of a sentence.
 const PAUSE = 0.9;
+// Nadja's voice leaves a second and more between her sentences. She is afraid and in a
+// hurry: her pauses are cut down further.
+const PAUSES = { nadja: 0.55 };
 
 // The filter that takes the middle out of every pause longer than PAUSE, or '' if the
 // recording has none. Also returns how many seconds are taken out.
-function pauses(file) {
-  const out = spawnSync(FFMPEG, ['-hide_banner', '-i', file, '-af', 'silencedetect=noise=-46dB:d=' + PAUSE, '-f', 'null', '-'], { encoding: 'utf8' });
+function pauses(file, limit) {
+  const out = spawnSync(FFMPEG, ['-hide_banner', '-i', file, '-af', 'silencedetect=noise=-46dB:d=' + limit, '-f', 'null', '-'], { encoding: 'utf8' });
   const text = out.stderr || '';
   const starts = [...text.matchAll(/silence_start: (-?[\d.]+)/g)].map(m => Math.max(0, Number(m[1])));
   const ends = [...text.matchAll(/silence_end: (-?[\d.]+)/g)].map(m => Number(m[1]));
   const cuts = [];
   let cut = 0;
   for (let i = 0; i < ends.length; i++) {
-    const from = starts[i] + PAUSE / 2;
-    const to = ends[i] - PAUSE / 2;
+    const from = starts[i] + limit / 2;
+    const to = ends[i] - limit / 2;
     if (to - from > 0.05) {
       cuts.push('between(t,' + from.toFixed(3) + ',' + to.toFixed(3) + ')');
       cut += to - from;
@@ -84,7 +87,7 @@ for (let i = 0; i < files.length; i++) {
     continue;
   }
   const radio = line.speaker === 'coleman' || (line.speaker === 'nadja' && !IN_PERSON.includes(line.cue));
-  const pause = pauses(file);
+  const pause = pauses(file, PAUSES[line.speaker] || PAUSE);
   const chain = pause.filter + TRIM + (line.speaker === 'coleman' ? ',' + RADIO : (radio ? ',' + SPEAKER : '')) + hard(line.speaker);
   const measured = probe(file, chain);
   // Radio lines sit a little under full level; the calls of people nearby use all of it.

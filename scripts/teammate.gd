@@ -26,6 +26,12 @@ const FOLLOW_NEAR := 3.2
 const LEASH := 30.0
 ## Seconds at the side of a downed player until that player is back on its feet.
 const HELP_SECONDS := 2.2
+## The squad finds its feet over the first rounds, whose kills are the player's: the share
+## of its full damage its shots do in the first round, the seconds it waits before it opens
+## fire on somebody new then, and the round from which on it is all it can be.
+const GREEN_DAMAGE := 0.4
+const GREEN_WAIT := 0.8
+const SEASONED_ROUND := 7
 
 var game: Node3D
 var look := "viper"
@@ -76,6 +82,10 @@ var damage_factor := 1.0
 ## To those who hunt the survivors this one seems that many times further away than it
 ## is: they go for the others first.
 var overlooked := 1.0
+## Something it was sent to see to (MissionDirector._assign_jobs): {task, index, pos, kind}.
+var job: Dictionary = {}
+## Seconds it still holds its fire on a target it has only just picked.
+var hold_fire := 0.0
 
 func _ready() -> void:
 	# The player's layer: bullets of the squad pass through, the infected bump into it.
@@ -119,6 +129,10 @@ func outfit(armor: int, rounds: int) -> void:
 
 func is_targetable() -> bool:
 	return not down and rising_left <= 0.0
+
+## How far along the squad is in this night, from 0 in the first round to 1.
+func seasoned() -> float:
+	return clampf(float(game.wave - 1) / float(SEASONED_ROUND - 1), 0.0, 1.0)
 
 func takes_local_damage() -> bool:
 	return true
@@ -192,6 +206,7 @@ func _physics_process(delta: float) -> void:
 		return
 	shot_left -= delta
 	pause_left -= delta
+	hold_fire -= delta
 	think_left -= delta
 	repath_left -= delta
 	dodge_left -= delta
@@ -210,6 +225,8 @@ func _physics_process(delta: float) -> void:
 		if chosen != target:
 			target = chosen
 			head_aim = randf() < 0.15
+			# Early in the night the first shots at somebody new are the player's.
+			hold_fire = lerpf(GREEN_WAIT, 0.0, seasoned())
 			# Something out of the ordinary is called out, but not every time.
 			if target != null and spot_wait <= 0.0:
 				if target is CruSoldier:
@@ -257,6 +274,15 @@ func _physics_process(delta: float) -> void:
 		away.y = 0.0
 		move = (away.normalized() + Vector3(home.x, 0, home.z).limit_length(1.0) * 0.5).normalized()
 		pace = WALK_SPEED * 1.3
+	elif not job.is_empty() and order != "hold":
+		# Sent to see to something: there it runs, and there it works (or stands guard).
+		goal = job.pos
+		var gap := goal - global_position
+		var reach := 2.0 if str(job.kind) == "zone" else MissionDirector.SQUAD_REACH
+		travelling = Vector2(gap.x, gap.z).length() > reach or absf(gap.y) > 1.2
+		pace = RUN_SPEED
+		if not travelling:
+			game.mission.squad_use(job, delta)
 	elif order == "hold":
 		# Stays on the spot it was sent to.
 		goal = hold_point
@@ -336,7 +362,7 @@ func _physics_process(delta: float) -> void:
 		look_dir = Vector3(line.x, 0, line.z)
 		wanted_pitch = atan2(line.y, Vector2(line.x, line.z).length())
 		var off := absf(angle_difference(facing, atan2(-line.x, -line.z)))
-		if reload_left <= 0.0 and ammo > 0 and off < 0.16 and pause_left <= 0.0:
+		if reload_left <= 0.0 and ammo > 0 and off < 0.16 and pause_left <= 0.0 and hold_fire <= 0.0:
 			if shot_left <= 0.0:
 				_shoot(aim_point, pace > 0.5)
 			# The recoil shows for a moment after every shot; automatic fire keeps it going.
@@ -358,8 +384,9 @@ func _physics_process(delta: float) -> void:
 	velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
 	move_and_slide()
 	visual.animate(delta, get_real_velocity(), target != null, firing)
-	# Lost or left far behind: catch up with the player in one go.
-	if global_position.distance_to(player.global_position) > 38.0 or global_position.y < -8.0:
+	# Lost or left far behind: catch up with the player in one go. Somebody who was sent
+	# off to see to something is neither.
+	if (job.is_empty() and global_position.distance_to(player.global_position) > 38.0) or global_position.y < -8.0:
 		global_position = player.global_position + Basis(Vector3.UP, player.rotation.y) * (slot * 0.6)
 		velocity = Vector3.ZERO
 
@@ -392,7 +419,7 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 			if body is Infected:
 				var enemy := body as Infected
 				var headshot := head_zone or enemy.is_headshot(hit.position)
-				var damage := float(gun.damage) * damage_factor * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
+				var damage := float(gun.damage) * damage_factor * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
 				if pellets > 1:
 					damage *= clampf(1.0 - (muzzle.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
 				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})

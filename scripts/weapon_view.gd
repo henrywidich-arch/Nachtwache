@@ -75,6 +75,9 @@ const GUNS := {
 ## aiming; how far behind the eyepiece of the telescopic sight.
 const REFLEX_GLASS := Vector2(0.05, 0.04)
 const REFLEX_EYE := 0.165
+## What the reflex sight needs between the rail and the lower edge of its glass: its clamp
+## and its body.
+const REFLEX_ROOM := 0.018
 const SCOPE_EYE := 0.07
 ## How far a suppressor moves the muzzle forward.
 const SILENCER_LENGTH := 0.15
@@ -573,7 +576,9 @@ static func sight_height(id: String, sight: String) -> float:
 	var gun: Dictionary = GUNS[id]
 	# Iron sights that fold away leave nothing for a sight to clear.
 	var clear := (0.0 if gun.get("folding", false) else maxf(float(gun.irons) - float(gun.rail), 0.0)) + 0.006
-	return float(gun.rail) + clear + (REFLEX_GLASS.y * 0.5 if sight == "reddot" else 0.0195)
+	if sight == "reddot":
+		return float(gun.rail) + maxf(clear, REFLEX_ROOM) + REFLEX_GLASS.y * 0.5
+	return float(gun.rail) + clear + 0.0195
 
 ## Where the weapon sits when the eye is behind a fitted sight.
 static func sight_aim(id: String, sight: String) -> Vector3:
@@ -600,16 +605,8 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 	reflex.name = "Mod_reddot"
 	view.add_child(reflex)
 	var dot := mount.y + sight_height(id, "reddot")
-	var half := REFLEX_GLASS * 0.5
-	var sill := dot - half.y - 0.002
 	var batch := MeshBatch.new()
-	var black := Color("0b0c0e")
-	batch.box(steel, Vector3(0, rail + 0.005, z), Vector3(0.03, 0.01, 0.046), black)
-	batch.box(steel, Vector3(0, (rail + 0.01 + sill) * 0.5, z - 0.004), Vector3(0.016, maxf(0.004, sill - rail - 0.01), 0.022), black)
-	batch.box(steel, Vector3(0, sill, z - 0.015), Vector3(REFLEX_GLASS.x + 0.0054, 0.003, 0.014), black)
-	for side in [-1.0, 1.0]:
-		batch.box(steel, Vector3(side * (half.x + 0.0014), dot, z - 0.019), Vector3(0.0018, REFLEX_GLASS.y + 0.002, 0.005), black)
-	batch.box(steel, Vector3(0, dot + half.y + 0.0009, z - 0.019), Vector3(REFLEX_GLASS.x + 0.0046, 0.0018, 0.005), black)
+	_reflex_parts(batch, steel, rail, z, dot)
 	for mesh in batch.commit(reflex, "Part", false):
 		mesh.layers = 2
 	_view_quad(reflex, Vector3(0, dot, z - 0.019), REFLEX_GLASS, _view_glow("lens", Color(0.55, 0.75, 0.8, 0.045), false))
@@ -656,6 +653,76 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 		mesh.layers = 2
 	for part in [reflex, scope, can]:
 		(part as Node3D).hide()
+
+## The reflex sight's body: a window in a hooded frame, braced by a strut on each side,
+## standing on a low housing with the emitter, the lid of the battery and two buttons, and
+## that on a clamp with two cross bolts. `rail` is the top of what it is clamped to, `z`
+## where it sits along the gun, `dot` the middle of its glass; between clamp and housing
+## is a riser as high as the gun needs. The glass is REFLEX_GLASS wide and 19 mm ahead of z.
+static func _reflex_parts(batch: MeshBatch, steel: Material, rail: float, z: float, dot: float) -> void:
+	var half := REFLEX_GLASS * 0.5
+	# Its housing is anodised and matt; only bolts and screws are bare steel.
+	var matt := shared("polymer")
+	var body := Color("111214")
+	var frame := Color("090a0b")
+	var rubber := Color("1d1f23")
+	var bolt := Color("565a60")
+	var mark := Color("43464c")
+	var across := Basis(Quaternion(Vector3.UP, Vector3.RIGHT))
+	var glass_z := z - 0.019
+	var front := glass_z - 0.006
+	var rear := glass_z + 0.044
+	var mid := (front + rear) * 0.5
+	var sill := dot - half.y - 0.002
+	# The underside of the housing, and the top of the clamp.
+	var deck := sill - 0.010
+	var clamp_top := rail + 0.006
+	# --- the clamp: a base on the rail, the bar that grips its left edge, two cross bolts
+	batch.box(matt, Vector3(0, rail + 0.003, mid), Vector3(0.032, 0.006, rear - front - 0.004), body)
+	batch.box(matt, Vector3(-0.0175, rail + 0.0005, mid), Vector3(0.004, 0.009, 0.038), frame)
+	for step in [-0.013, 0.013]:
+		batch.cylinder(steel, Vector3(-0.0195, rail + 0.0025, mid + float(step)), 0.002, 0.002, 0.039, bolt, 8, across)
+		batch.cylinder(steel, Vector3(0.016, rail + 0.0025, mid + float(step)), 0.0036, 0.0036, 0.0028, bolt, 6, across)
+	# The nut that is turned by hand, on the left of the rear bolt.
+	batch.cylinder(matt, Vector3(-0.0262, rail + 0.0025, mid + 0.013), 0.0062, 0.0062, 0.0068, frame, 12, across)
+	batch.cylinder(steel, Vector3(-0.0271, rail + 0.0025, mid + 0.013), 0.0034, 0.0034, 0.001, bolt, 10, across)
+	# --- the riser: two legs with a web between them, or a plain block where there is little room
+	var lift := deck - clamp_top
+	if lift > 0.012:
+		for step in [-0.014, 0.014]:
+			batch.box(matt, Vector3(0, clamp_top + lift * 0.5, mid + float(step)), Vector3(0.024, lift, 0.01), body)
+		batch.box(matt, Vector3(0, clamp_top + lift * 0.5, mid), Vector3(0.007, lift, 0.018), frame)
+	elif lift > 0.0005:
+		batch.box(matt, Vector3(0, clamp_top + lift * 0.5, mid), Vector3(0.026, lift, 0.04), body)
+	# --- the housing: a wide deck under the window and a narrower tail towards the eye
+	var deck_rear := glass_z + 0.03
+	batch.box(matt, Vector3(0, deck + 0.0035, (front + deck_rear) * 0.5), Vector3(REFLEX_GLASS.x + 0.008, 0.007, deck_rear - front), body)
+	batch.box(matt, Vector3(0, deck + 0.0035, (deck_rear + rear) * 0.5), Vector3(0.036, 0.007, rear - deck_rear), body)
+	# The seat of the window, a step higher.
+	batch.box(matt, Vector3(0, deck + 0.0085, glass_z), Vector3(REFLEX_GLASS.x + 0.008, 0.003, 0.012), body)
+	# The emitter at the rear, and the lid of the battery with its slot on the deck.
+	batch.box(matt, Vector3(0, deck + 0.0085, rear - 0.007), Vector3(0.013, 0.003, 0.011), frame)
+	batch.cylinder(matt, Vector3(0, deck + 0.007, glass_z + 0.019), 0.0082, 0.0082, 0.0016, rubber, 14)
+	batch.box(matt, Vector3(0, deck + 0.0088, glass_z + 0.019), Vector3(0.0105, 0.0006, 0.0015), frame)
+	# The two screws that move the dot: one on top, one on the right.
+	batch.cylinder(steel, Vector3(0.0125, deck + 0.007, rear - 0.007), 0.0026, 0.0026, 0.001, bolt, 8)
+	batch.cylinder(steel, Vector3(0.018, deck + 0.0035, rear - 0.007), 0.0026, 0.0026, 0.0012, bolt, 8, across)
+	# The buttons that make the dot brighter and dimmer, on the face towards the eye.
+	for side in [-1.0, 1.0]:
+		batch.box(matt, Vector3(float(side) * 0.0095, deck + 0.0035, rear + 0.0004), Vector3(0.0085, 0.0044, 0.0012), rubber)
+		batch.box(matt, Vector3(float(side) * 0.0095, deck + 0.0035, rear + 0.0011), Vector3(0.0026, 0.0005, 0.0003), mark)
+	batch.box(matt, Vector3(0.0095, deck + 0.0035, rear + 0.0011), Vector3(0.0005, 0.0026, 0.0003), mark)
+	# --- the window: two posts, each braced by a strut down to the deck, a sill and a hooded top
+	var post := half.x + 0.0015
+	for side in [-1.0, 1.0]:
+		batch.box(matt, Vector3(float(side) * post, dot + 0.0005, glass_z), Vector3(0.003, REFLEX_GLASS.y + 0.005, 0.007), frame)
+		var top := Vector3(float(side) * post, dot + 0.006, glass_z + 0.0035)
+		var foot := Vector3(float(side) * post, deck + 0.007, glass_z + 0.028)
+		var span := foot - top
+		batch.box(matt, (top + foot) * 0.5, Vector3(0.0024, 0.0036, span.length()), frame, Basis(Vector3.RIGHT, atan2(-span.y, span.z)))
+	batch.box(matt, Vector3(0, sill + 0.001, glass_z), Vector3(REFLEX_GLASS.x + 0.006, 0.002, 0.007), frame)
+	batch.box(matt, Vector3(0, dot + half.y + 0.0015, glass_z), Vector3(REFLEX_GLASS.x + 0.006, 0.003, 0.007), frame)
+	batch.box(matt, Vector3(0, dot + half.y + 0.0036, glass_z + 0.003), Vector3(REFLEX_GLASS.x + 0.011, 0.0012, 0.015), body)
 
 ## Where the magazine and the hand that changes it are at a moment of the reload (0 to 1),
 ## as offsets from where they rest.

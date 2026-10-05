@@ -66,6 +66,16 @@ const RUNNERS := {
 const START_CUES := {"module": "", "hack": "", "rescue": "", "evac": "evac_start"}
 const DONE_CUES := {"module": "hack_picked", "hack": "cellar_open", "rescue": "nadja_free", "evac": ""}
 const USE_RANGE := 2.4
+## What the squad takes over once the player has learnt to send it (an ability in each of
+## the trees of Skills): the key of the ability -> the kinds of thing its members then see
+## to by themselves. They work at SQUAD_PACE of a player's speed, from SQUAD_REACH metres.
+const SQUAD_JOBS := {
+	"squad_search": ["corpse", "case", "drive"],
+	"squad_switch": ["breaker", "antenna", "crate"],
+	"squad_guard": ["generator", "hack", "zone"]
+}
+const SQUAD_PACE := 0.5
+const SQUAD_REACH := 1.7
 ## Seconds the generator has to run (kept for the tests; see RUNNERS).
 const GENERATOR_SECONDS := 80.0
 const GENERATOR_HEALTH := 260.0
@@ -121,6 +131,8 @@ var targets: Dictionary = {}
 var blocked_cells: Array[Vector2i] = []
 var trickle_left := 0.0
 var report_left := 0.0
+## Seconds until the squad's jobs are handed out again.
+var jobs_left := 0.0
 var use_buffer := 0.0
 var clock := 0.0
 var gas_brief := 0.0
@@ -662,6 +674,10 @@ func update(delta: float) -> void:
 		if trickle_left <= 0.0 and game.alive_count < (7 if pressing else 5) + 2 * game.extra_guns():
 			trickle_left = 2.2 if pressing else 3.0
 			game.spawn_queue.append(_reinforcement())
+	jobs_left -= delta
+	if jobs_left <= 0.0:
+		jobs_left = 0.5
+		_assign_jobs()
 	_local_use(delta)
 	_sync_props()
 	game.story.update(delta)
@@ -727,7 +743,13 @@ func damage_item(item: Dictionary, amount: float) -> void:
 func _run_zone(task: Dictionary, delta: float) -> void:
 	var item: Dictionary = task.items[0]
 	var held := false
-	for body in [game.player, game.net.remote]:
+	var bodies_there: Array = [game.player, game.net.remote]
+	# A squad that has learnt to stand guard holds the position as well as the player.
+	if game.skills.value("squad_guard") > 0.0:
+		for mate in game.team:
+			if not mate.unarmed:
+				bodies_there.append(mate)
+	for body in bodies_there:
 		if is_instance_valid(body) and body.is_targetable():
 			var gap: Vector3 = body.global_position - (item.pos as Vector3)
 			if Vector2(gap.x, gap.z).length() < ZONE_RADIUS and absf(gap.y) < 1.5:
@@ -769,6 +791,66 @@ func _run_evac(task: Dictionary, delta: float) -> void:
 	elif game.story.everyone_aboard(item.pos):
 		item.done = true
 		_finish(task, true)
+
+## Whether the squad may see to this thing now: the player has learnt to send it to things
+## of this kind, and it wants a hand.
+func _squad_item(task: Dictionary, item: Dictionary) -> bool:
+	if task.state != "active" or item.done:
+		return false
+	var kind := str(item.kind)
+	var learnt := false
+	for key in SQUAD_JOBS:
+		learnt = learnt or ((SQUAD_JOBS[key] as Array).has(kind) and game.skills.value(key) > 0.0)
+	if not learnt:
+		return false
+	match kind:
+		"zone":
+			return true
+		"hack":
+			# Putting the module on is the player's part of the story; one that stands still
+			# they start again.
+			return str(item.state) == "stalled"
+		"generator":
+			return str(item.state) in ["", "stalled"]
+	return not str(item.state) in ["running", "falling"]
+
+## Hands the things the squad may see to out to its members, the nearest free one each.
+## Somebody who was told to hold a place stays there.
+func _assign_jobs() -> void:
+	var free: Array = []
+	for mate in game.team:
+		mate.job = {}
+		if mate.is_targetable() and not mate.unarmed and mate.order != "hold":
+			free.append(mate)
+	for task in tasks:
+		for i in range(task.items.size()):
+			var item: Dictionary = task.items[i]
+			if free.is_empty() or not _squad_item(task, item):
+				continue
+			var best: Teammate = null
+			var best_gap := INF
+			for mate in free:
+				var off: Vector3 = (mate as Teammate).global_position - (item.pos as Vector3)
+				# Another floor is further away than it looks.
+				var gap := Vector2(off.x, off.z).length() + absf(off.y) * 4.0
+				if gap < best_gap:
+					best_gap = gap
+					best = mate
+			best.job = {"task": int(task.id), "index": i, "pos": item.pos, "kind": str(item.kind)}
+			free.erase(best)
+
+## A squad member stands at the thing it was sent to and works on it.
+func squad_use(job: Dictionary, delta: float) -> void:
+	if str(job.kind) != "zone":
+		apply_use(int(job.task), int(job.index), delta * SQUAD_PACE)
+
+## The names of the squad members who are seeing to a task.
+func _helpers(task: Dictionary) -> Array:
+	var names: Array = []
+	for mate in game.team:
+		if not (mate.job as Dictionary).is_empty() and int(mate.job.task) == int(task.id):
+			names.append(str(mate.label))
+	return names
 
 ## The nearest thing the local player could work on: [task, item index] or [].
 func nearest_item() -> Array:
@@ -978,6 +1060,9 @@ func summary() -> Array[String]:
 				text += "  %d/%d" % [task.items.size() - _open_items(task), task.items.size()]
 			if float(task.left) > 0.0:
 				text += "  ·  " + _clock_text(float(task.left))
+		var helpers := _helpers(task)
+		if not helpers.is_empty():
+			text += "  ·  %s hilft" % " + ".join(helpers)
 		lines.append("◆  " + text)
 	return lines
 

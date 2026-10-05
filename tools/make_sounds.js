@@ -56,10 +56,23 @@ function loudness(x, rate, seconds = 0.2) {
   return Math.sqrt(best / win);
 }
 
-// One layer of a mixed sound: mono, optionally filtered, peak at `gain`.
+// A take played slower (pitch below 1: lower and longer) or faster.
+function pitched(x, pitch) {
+  if (!pitch || pitch === 1) return x;
+  const out = new Float32Array(Math.floor(x.length / pitch));
+  for (let i = 0; i < out.length; i++) {
+    const at = i * pitch;
+    const a = Math.floor(at);
+    const b = Math.min(x.length - 1, a + 1);
+    out[i] = x[a] + (x[b] - x[a]) * (at - a);
+  }
+  return out;
+}
+
+// One layer of a mixed sound: mono, optionally played lower or higher, filtered, peak at `gain`.
 function component(part) {
   const src = wav.read(find(part.from, part.variant || 1, part.stamp));
-  let x = wav.mono(src);
+  let x = pitched(wav.mono(src), part.pitch);
   if (part.lowpass) x = lowpass(x, src.rate, part.lowpass, 2);
   if (part.highpass) x = highpass(x, src.rate, part.highpass, 1);
   const peak = wav.peak(x);
@@ -83,6 +96,7 @@ function build(spec) {
     const src = wav.read(find(spec.from, spec.variant || 1, spec.stamp));
     rate = src.rate;
     channels = spec.stereo ? src.channels.map(c => Float32Array.from(c)) : [wav.mono(src)];
+    if (spec.pitch) channels = channels.map(c => pitched(c, spec.pitch));
   }
   if (spec.lowpass) channels = channels.map(c => lowpass(c, rate, spec.lowpass, 2));
   if (spec.highpass) channels = channels.map(c => highpass(c, rate, spec.highpass, 1));
@@ -321,23 +335,69 @@ const SET = [
   { name: 'bodyfall_2', from: 'Body_falling_on_wood_', variant: 3, length: 0.35, fade: 0.08 },
   { name: 'bodyfall_3', from: 'Body_falling_on_wood_', variant: 4, length: 0.3, fade: 0.08 },
   // Ripper, the mutant hound
-  { name: 'dog_growl_1', from: 'Vicious_mutant_dog_s_', variant: 1, fade: 0.2 },
-  { name: 'dog_growl_2', from: 'Vicious_mutant_dog_s_', variant: 3, fade: 0.2 },
-  { name: 'dog_growl_3', from: 'Vicious_mutant_dog_s_', variant: 4, fade: 0.2 },
-  { name: 'dog_growl_4', from: 'Vicious_mutant_dog_s_', variant: 2, fade: 0.2 },
-  { name: 'dog_bark_1', from: 'Monstrous_dog_attack_', variant: 2, length: 0.7, fade: 0.1 },
-  { name: 'dog_bark_2', from: 'Monstrous_dog_attack_', variant: 3, length: 0.6, fade: 0.1 },
-  { name: 'dog_bark_3', from: 'Monstrous_dog_attack_', variant: 4, length: 0.65, fade: 0.1 },
-  { name: 'dog_bite_1', from: 'Monstrous_dog_bite,__', variant: 4, length: 0.6, fade: 0.1 },
-  { name: 'dog_bite_2', from: 'Monstrous_dog_bite,__', variant: 3, length: 0.55, fade: 0.1 },
-  { name: 'dog_bite_3', from: 'Monstrous_dog_bite,__', variant: 2, length: 0.55, fade: 0.1 },
-  { name: 'dog_death_1', from: 'Large_monstrous_dog__', variant: 1, fade: 0.15 },
-  { name: 'dog_death_2', from: 'Large_monstrous_dog__', variant: 3, fade: 0.15 },
-  { name: 'dog_death_3', from: 'Large_monstrous_dog__', variant: 2, fade: 0.15 },
-  { name: 'dog_howl_1', from: 'Demonic_hound_howlin_', variant: 1, fade: 0.3 },
-  { name: 'dog_howl_2', from: 'Demonic_hound_howlin_', variant: 2, fade: 0.3 },
-  { name: 'dog_howl_3', from: 'Demonic_hound_howlin_', variant: 3, fade: 0.3 },
-  // More voices for the infected
+  // The Ripper is no dog. What it had were growls, barks and howls of dogs: the same takes
+  // are played two thirds as fast (lower, heavier), and what made them a dog's is taken
+  // out or covered: a mutant's rasp instead of the bark, a screech instead of the howl,
+  // the clicking of the Striker's kind under the growl.
+  { name: 'dog_growl_1', mix: [
+    { from: 'Vicious_mutant_dog_s_', variant: 1, pitch: 0.68, gain: 1.0 },
+    { from: 'Insect-like_creature_', variant: 2, pitch: 0.7, gain: 0.5 }
+  ], length: 2.4, fade: 0.25 },
+  { name: 'dog_growl_2', mix: [
+    { from: 'Vicious_mutant_dog_s_', variant: 3, pitch: 0.66, gain: 1.0 },
+    { from: 'Insect-like_creature_', variant: 1, pitch: 0.55, gain: 0.45 }
+  ], length: 2.4, fade: 0.25 },
+  { name: 'dog_growl_3', mix: [
+    { from: 'Vicious_mutant_dog_s_', variant: 4, pitch: 0.72, gain: 1.0 },
+    { from: 'Insect-like_creature_', variant: 2, pitch: 0.6, gain: 0.5 }
+  ], length: 2.4, fade: 0.25 },
+  { name: 'dog_growl_4', mix: [
+    { from: 'Vicious_mutant_dog_s_', variant: 2, pitch: 0.7, gain: 1.0 },
+    { from: 'Insect-like_creature_', variant: 4, pitch: 0.5, gain: 0.45 }
+  ], length: 2.4, fade: 0.25 },
+  // The leap: a rasping shriek, with only the thump of the old bark under it.
+  { name: 'dog_bark_1', mix: [
+    { from: 'Shrill_raspy_mutant__', variant: 1, pitch: 0.72, gain: 1.0 },
+    { from: 'Monstrous_dog_attack_', variant: 2, pitch: 0.6, lowpass: 700, gain: 0.7 }
+  ], length: 0.9, fade: 0.18 },
+  { name: 'dog_bark_2', mix: [
+    { from: 'Shrill_raspy_mutant__', variant: 3, pitch: 0.7, gain: 1.0 },
+    { from: 'Monstrous_dog_attack_', variant: 3, pitch: 0.6, lowpass: 700, gain: 0.7 }
+  ], length: 0.85, fade: 0.18 },
+  { name: 'dog_bark_3', mix: [
+    { from: 'Shrill_raspy_mutant__', variant: 2, pitch: 0.66, gain: 1.0 },
+    { from: 'Monstrous_dog_attack_', variant: 4, pitch: 0.62, lowpass: 700, gain: 0.7 }
+  ], length: 0.9, fade: 0.18 },
+  { name: 'dog_bite_1', from: 'Monstrous_dog_bite,__', variant: 4, pitch: 0.8, length: 0.7, fade: 0.1 },
+  { name: 'dog_bite_2', from: 'Monstrous_dog_bite,__', variant: 3, pitch: 0.8, length: 0.65, fade: 0.1 },
+  { name: 'dog_bite_3', from: 'Monstrous_dog_bite,__', variant: 2, pitch: 0.8, length: 0.65, fade: 0.1 },
+  { name: 'dog_death_1', mix: [
+    { from: 'Large_monstrous_dog__', variant: 1, pitch: 0.66, gain: 1.0 },
+    { from: 'Screeching_mutant_cr_', variant: 2, pitch: 0.7, gain: 0.55 }
+  ], length: 1.9, fade: 0.3 },
+  { name: 'dog_death_2', mix: [
+    { from: 'Large_monstrous_dog__', variant: 3, pitch: 0.64, gain: 1.0 },
+    { from: 'Screeching_mutant_cr_', variant: 3, pitch: 0.72, gain: 0.55 }
+  ], length: 1.9, fade: 0.3 },
+  { name: 'dog_death_3', mix: [
+    { from: 'Large_monstrous_dog__', variant: 2, pitch: 0.68, gain: 1.0 },
+    { from: 'Screeching_mutant_cr_', variant: 1, pitch: 0.8, gain: 0.5 }
+  ], length: 1.9, fade: 0.3 },
+  // The pack arrives: an inhuman screech played at half speed over what is left of the
+  // howl once it is no higher than a drone.
+  { name: 'dog_howl_1', mix: [
+    { from: 'High-pitched_inhuman_', variant: 1, pitch: 0.5, gain: 1.0 },
+    { from: 'Demonic_hound_howlin_', variant: 1, pitch: 0.55, lowpass: 600, gain: 0.6 }
+  ], length: 3.0, fade: 0.5 },
+  { name: 'dog_howl_2', mix: [
+    { from: 'High-pitched_inhuman_', variant: 2, pitch: 0.55, gain: 1.0 },
+    { from: 'Demonic_hound_howlin_', variant: 2, pitch: 0.55, lowpass: 600, gain: 0.6 }
+  ], length: 3.0, fade: 0.5 },
+  { name: 'dog_howl_3', mix: [
+    { from: 'Screeching_mutant_cr_', variant: 1, pitch: 0.6, gain: 1.0 },
+    { from: 'High-pitched_inhuman_', variant: 1, pitch: 0.42, gain: 0.6 },
+    { from: 'Demonic_hound_howlin_', variant: 3, pitch: 0.55, lowpass: 600, gain: 0.5 }
+  ], length: 3.0, fade: 0.5 },
   { name: 'striker_attack_1', from: 'Shrill_raspy_mutant__', variant: 1, fade: 0.1 },
   { name: 'striker_attack_2', from: 'Shrill_raspy_mutant__', variant: 2, fade: 0.1 },
   { name: 'striker_attack_3', from: 'Shrill_raspy_mutant__', variant: 3, fade: 0.1 },

@@ -29,7 +29,7 @@ const TRADE_IN := 0.5
 ## How many shield bearers stand in the yard at once; one more comes as a plain soldier.
 const SHIELD_LIMIT := 1
 ## The last round of a night with an end brings this share of what its table says.
-const FINAL_SHARE := 0.7
+const FINAL_SHARE := 0.8
 ## How many attackers are in the yard at once, at the most: what a late round on normal
 ## difficulty comes to, and what no difficulty and no modifier gets past.
 const MAX_ALIVE := 16
