@@ -146,6 +146,26 @@ function build(spec) {
 }
 
 const SET = [
+  // The G36, from takes of the first batches that no other weapon uses.
+  // Its shot: the sharpest of the rifle takes, pressed short so that it stays clear at
+  // 750 rounds a minute, with a carbine's thump under it and the ring of a third as tail.
+  { name: 'g36', mix: [
+    { from: 'Gunshot,_M4_assault__', variant: 2, gain: 1.0 },
+    { from: 'Gunshot,_M4_assault__', variant: 4, gain: 0.5, lowpass: 240 },
+    { from: 'Single_assault_rifle_', variant: 3, gain: 0.28, highpass: 900 }
+  ], length: 0.5, decay: 0.75, hold: 0.03, fade: 0.14, drive: 1.3, target: -13 },
+  // Suppressed: the cough of a suppressed take, the thump of another under it, and what
+  // is left of the bullet's crack over it (the round stays faster than sound).
+  { name: 'g36_sil', mix: [
+    { from: 'Gunshot,_suppressed__', variant: 3, gain: 1.0, highpass: 150 },
+    { from: 'Gunshot,_suppressed__', variant: 1, gain: 0.5, lowpass: 300 },
+    { from: 'Gunshot,_M4_assault__', variant: 2, gain: 0.2, highpass: 2800 }
+  ], lowpass: 7000, length: 0.3, decay: 0.24, hold: 0.012, fade: 0.06, target: -17 },
+  // Magazine and bolt have takes of their own: the catch and the magazine sliding out, the
+  // full one clicking home, the cocking handle let go.
+  { name: 'g36_mag_out', from: 'Rifle_magazine_relea_', variant: 4, length: 0.42, fade: 0.05 },
+  { name: 'g36_mag_in', from: 'Rifle_magazine_inser_', variant: 2, skip: 0.4, length: 0.3, fade: 0.05 },
+  { name: 'g36_bolt', from: 'Rifle_charging_handl_', variant: 3, length: 0.34, fade: 0.05 },
   // v0.15: what came with the Molotov cocktail, the flamethrower, the blow with the weapon
   // and three of the newer guns (raw files in Nachtwache-ElevenLabs/sfx_v14).
   // The bottle: the take with the most fire in it, and the sharpest crash of glass over it.
@@ -256,12 +276,23 @@ const SET = [
   { name: 'thunder_2', from: 'Distant_thunder_clap_', variant: 2, stereo: true, gate: 0.02, fade: 0.6 },
   { name: 'wind', from: 'Cold_night_wind_blow_', stereo: true, loop: true, target: -20 },
   { name: 'rain', from: 'Steady_heavy_rain_fa_', stereo: true, loop: true, target: -20 },
-  // Shotgun: a sharp crack layered over a deep boom
+  // The pump gun: the boomiest shotgun take as its body, the deep thump of a .50 under it,
+  // the sharp crack of another on top and the long roll of a third as its tail; pressed
+  // together, so that the blast is heavy rather than bright.
   { name: 'shotgun', mix: [
+    { from: 'Gunshot,_Remington_8_', variant: 4, gain: 1.0 },
+    { from: 'Gunshot,_.50_caliber_', variant: 4, gain: 0.7, lowpass: 250 },
     { from: 'Shotgun_blast,_singl_', variant: 1, gain: 1.0 },
-    { from: 'Gunshot,_Remington_8_', variant: 4, gain: 1.0, lowpass: 420 },
-    { from: 'Gunshot,_Remington_8_', variant: 3, gain: 0.45 }
-  ], length: 1.0, fade: 0.3, target: -11 },
+    { from: 'Gunshot,_Remington_8_', variant: 3, gain: 0.4 },
+    { from: 'Shotgun_blast,_singl_', variant: 4, gain: 0.35 }
+  ], length: 1.3, fade: 0.5, drive: 1.7, target: -8.5 },
+  // The automatic one fires three times a second: the same body with a harder crack and
+  // a short tail.
+  { name: 'autoshotgun', mix: [
+    { from: 'Gunshot,_Remington_8_', variant: 4, gain: 1.0 },
+    { from: 'Gunshot,_Remington_8_', variant: 3, gain: 0.6 },
+    { from: 'Gunshot,_.50_caliber_', variant: 4, gain: 0.5, lowpass: 250 }
+  ], length: 0.6, decay: 0.7, hold: 0.04, fade: 0.2, drive: 1.5, target: -10 },
   { name: 'shotgun_pump', from: 'Pump_action_shotgun__', variant: 1, length: 0.6 },
   { name: 'shell_in_1', from: 'Loading_one_shotgun__', variant: 2, gate: 0.3, length: 0.3 },
   { name: 'shell_in_2', from: 'Loading_one_shotgun__', variant: 3, gate: 0.3, length: 0.3 },

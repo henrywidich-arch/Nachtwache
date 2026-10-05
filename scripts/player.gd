@@ -9,6 +9,9 @@ const WEAPONS := {
 	"rifle": {"label": "M4A4", "slot": 1, "price": 0, "sound": "shot", "magazine": 30, "reserve_max": 180, "reload_time": 1.75, "interval": 0.115, "damage": 28.0, "head_multiplier": 2.7, "spread": 0.011, "kick": 0.011, "flash": 1.0, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	# The AK-47: harder hits, more kick. Parts: see ATTACHMENTS.
 	"ak": {"label": "AK-47", "slot": 1, "price": 300, "sound": "ak", "magazine": 30, "reserve_max": 180, "reload_time": 2.5, "interval": 0.1, "damage": 36.0, "head_multiplier": 2.6, "spread": 0.014, "kick": 0.014, "flash": 1.1, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	# The G36: the quickest and steadiest of the rifles, with a reload that sounds like no
+	# other's. Parts: see ATTACHMENTS.
+	"g36": {"label": "G36", "slot": 1, "price": 450, "sound": "g36", "magazine": 30, "reserve_max": 240, "reload_time": 2.2, "interval": 0.08, "damage": 35.0, "head_multiplier": 2.7, "spread": 0.0085, "kick": 0.009, "flash": 1.0, "cues": [[0.15, "g36_mag_out"], [0.62, "g36_mag_in"], [0.85, "g36_bolt"]]},
 	"p90": {"label": "P90", "slot": 1, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
 	# cues: when in its reload each step is heard. Parts for it: see ATTACHMENTS.
 	"ump": {"label": "UMP45", "slot": 1, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
@@ -16,12 +19,13 @@ const WEAPONS := {
 	"badger": {"label": "HONEY BADGER", "slot": 1, "price": 350, "quiet": true, "sound": "badger", "magazine": 30, "reserve_max": 210, "reload_time": 1.9, "interval": 0.082, "damage": 34.0, "head_multiplier": 2.6, "spread": 0.008, "kick": 0.0085, "flash": 0.4},
 	# pellets: shots per blast, each doing `damage`. shells: loaded one at a time, `reload_time`
 	# each. punch: how hard the weapon slams back. settle: share of the muzzle climb that
-	# comes back down by itself.
-	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 6, "reserve_max": 42, "reload_time": 0.52, "interval": 0.95, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.05, "kick": 0.062, "flash": 1.8, "pellets": 9, "shells": true, "punch": 2.7, "settle": 0.72},
+	# comes back down by itself. push: how fast a blast from close by throws back whoever
+	# it does not kill, in metres a second with every pellet on the body.
+	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 6, "reserve_max": 42, "reload_time": 0.52, "interval": 0.95, "damage": 24.0, "head_multiplier": 1.5, "spread": 0.05, "kick": 0.066, "flash": 2.2, "pellets": 9, "shells": true, "punch": 3.1, "settle": 0.72, "push": 8.5},
 	# group: the shop tab it is sold on. from_round: the round after which the shop has it.
 	"pistol": {"label": "M9 PISTOLE", "slot": 2, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
 	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
-	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "shotgun", "magazine": 8, "reserve_max": 56, "reload_time": 2.3, "interval": 0.3, "damage": 14.0, "head_multiplier": 1.5, "spread": 0.06, "kick": 0.036, "flash": 1.7, "pellets": 8, "punch": 1.9, "settle": 0.7},
+	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 8, "reserve_max": 56, "reload_time": 2.3, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.06, "kick": 0.038, "flash": 2.0, "pellets": 8, "punch": 2.1, "settle": 0.7, "push": 4.5},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
 	# through. bolt: the action is worked by hand after every shot.
 	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 3, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
@@ -46,8 +50,8 @@ const WEAPONS := {
 	"fifty": {"label": "M107 KALIBER .50", "slot": 3, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
-const QUIET_SOUNDS := ["badger", "ump_sil"]
-const ORDER := ["rifle", "ak", "p90", "ump", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "minigun", "flamer", "nitro", "fifty"]
+const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil"]
+const ORDER := ["rifle", "ak", "g36", "p90", "ump", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
 ## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
 ## kind, and as many more of any kind as slings were bought (extra_slots).
@@ -67,6 +71,11 @@ const ATTACHMENTS := {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "badger", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	},
+	"g36": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt über Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "g36_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"ump": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt: freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
@@ -155,7 +164,7 @@ const THROW_SWING := 0.16
 const THROW_AIM_AFTER := 0.2
 ## The key that readies and throws each thing.
 const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov"}
-## A blow with the weapon (key Q): how far it reaches and how wide (the cosine of half its
+## A blow with the weapon (key V): how far it reaches and how wide (the cosine of half its
 ## angle), what it does, how fast whoever is struck is thrown back and for how long he
 ## reels, and the seconds until the next blow.
 const MELEE_REACH := 2.4
@@ -164,6 +173,11 @@ const MELEE_DAMAGE := 30.0
 const MELEE_PUSH := 6.5
 const MELEE_DAZE := 1.7
 const MELEE_GAP := 0.85
+## A blast of shot throws a body back with its full force up to PUSH_NEAR metres and not
+## at all beyond PUSH_FAR; slower than PUSH_LEAST it moves nobody.
+const PUSH_NEAR := 3.0
+const PUSH_FAR := 12.0
+const PUSH_LEAST := 0.8
 ## The syringe every survivor carries (key Q): the health it gives back, the seconds until
 ## it is ready again, and how long the hands are busy with it.
 const SYRINGE_HEAL := 30.0
@@ -298,6 +312,7 @@ func _ready() -> void:
 func _build_weapon() -> void:
 	weapon_models["rifle"] = WeaponView.build_gun("rifle")
 	weapon_models["mg"] = WeaponView.build_gun("mg")
+	weapon_models["g36"] = WeaponView.build_gun("g36")
 	weapon_models["p90"] = WeaponView.build_p90()
 	weapon_models["badger"] = WeaponView.build_badger()
 	weapon_models["shotgun"] = WeaponView.build_shotgun()
@@ -1215,8 +1230,8 @@ func shoot() -> void:
 	game.sounds.play_sound(data.sound)
 	if data.has("pellets"):
 		# The blast shoves the whole view; a pump gun has to be worked before the next shot.
-		trauma = minf(1.0, trauma + (0.34 if data.has("shells") else 0.18))
-		camera.fov += 3.5 if data.has("shells") else 1.8
+		trauma = minf(1.0, trauma + (0.44 if data.has("shells") else 0.24))
+		camera.fov += 4.4 if data.has("shells") else 2.3
 		if data.has("shells"):
 			pump_clock = 0.0
 			pump_cued = false
@@ -1260,12 +1275,13 @@ func shoot() -> void:
 				var damage: float = float(data.damage) + weapon_level * (10.0 / pellets)
 				if pellets > 1:
 					# Shot spreads and slows: full force up close, a third of it at long range.
-					damage *= clampf(1.0 - (origin.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
+					damage *= clampf(1.0 - (origin.distance_to(endpoint) - 8.0) / 18.0, 0.33, 1.0)
 				if headshot:
 					damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
 				damage *= share * _bonus(data, enemy, headshot)
-				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction, "through": false})
+				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction, "through": false, "pellets": 0, "near": origin.distance_to(endpoint)})
 				entry.damage += damage
+				entry.pellets += 1
 				entry.headshot = entry.headshot or headshot
 				entry.through = entry.through or shielded
 				struck[enemy] = entry
@@ -1279,15 +1295,19 @@ func shoot() -> void:
 				passes = 1
 			if passes > 0 and target is Infected and (not shielded or share > 0.0):
 				endpoint = _pierce(data, passes, direction, target as Infected, struck, endpoint)
-		if pellet < 5:
+		if pellet < 8:
 			game.fx.tracer(muzzle, endpoint)
 	var any_head := false
 	for enemy in struck:
 		var entry: Dictionary = struck[enemy]
 		any_head = any_head or entry.headshot
+		# A blast of shot from close by throws back whoever is still standing after it.
+		var push := 0.0
+		if data.has("push") and not bool(entry.get("through", false)):
+			push = float(data.push) * float(entry.pellets) / pellets * clampf(1.0 - (float(entry.near) - PUSH_NEAR) / (PUSH_FAR - PUSH_NEAR), 0.0, 1.0)
 		if game.net.joined:
 			# The host decides what the hit does; show the flinch right away.
-			game.net.report_hit(enemy, entry.damage, entry.direction, entry.headshot, bool(entry.get("through", false)))
+			game.net.report_hit(enemy, entry.damage, entry.direction, entry.headshot, bool(entry.get("through", false)), push)
 			(enemy as Infected).show_cue("hit", [1.0, float(entry.damage) / (enemy as Infected).max_health * 2.5])
 		else:
 			# A bullet that went through a shield is not stopped by it a second time.
@@ -1296,6 +1316,8 @@ func shoot() -> void:
 			(enemy as Infected).receive_hit(entry.damage, entry.direction, entry.headshot)
 			game.blasting = false
 			game.piercing = 1.0
+			if push >= PUSH_LEAST:
+				(enemy as Infected).blown(entry.direction, push)
 	if not struck.is_empty():
 		game.hud.hit_marker(any_head)
 	# A suppressed shot gives nobody the direction it came from.

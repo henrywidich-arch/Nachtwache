@@ -105,7 +105,7 @@ func stagger(_heavy: bool, _clip_name: String = "") -> float:
 func scream(_clip_name: String = "scream") -> float:
 	return 0.0
 
-func pick_death(_forward: bool, _headshot: bool = false, _side: float = 0.0) -> String:
+func pick_death(_forward: bool, _headshot: bool = false, _side: float = 0.0, _hard: bool = false) -> String:
 	return ["death_side", "death_roll"].pick_random()
 
 func die(clip_name: String) -> void:

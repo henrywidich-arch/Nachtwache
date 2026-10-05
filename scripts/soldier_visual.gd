@@ -47,7 +47,7 @@ const THROW_RATE := 1.5
 const FALLS := ["death_back", "death_forward"]
 ## More ways to go down, for somebody who stays there (see mortal): the falls of the
 ## infected (InfectedVisual.DEATHS says which fits which shot).
-const DEATHS := ["death_side", "death_side_left", "death_headshot", "death_from_back", "death_from_front", "death_from_right", "death_from_left", "death_drop_back", "death_drop_left", "death_drop_right"]
+const DEATHS := ["death_side", "death_side_left", "death_headshot", "death_from_back", "death_from_front", "death_from_right", "death_from_left", "death_drop_back", "death_drop_left", "death_drop_right", "death_dying_back", "death_fall_back", "death_fall_forward", "death_fly_back", "death_bow_forward", "death_back_headshot"]
 const RISE_RATE := 2.3
 ## weapon: what is carried. grip-relative points of each weapon are listed in WEAPONS.
 const LOOKS := {
@@ -203,6 +203,7 @@ func _ready() -> void:
 	if mortal:
 		if not deaths.has(look):
 			deaths[look] = InfectedVisual._bake(skeleton, rig, "zombie", {}, DEATHS)
+			InfectedVisual._add_more(deaths[look], skeleton, rig, "zombie", DEATHS)
 		legs.add_animation_library("death", deaths[look])
 	legs.add_animation_library("move", full_moves[look])
 	arms = _player("Arms")

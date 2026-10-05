@@ -56,13 +56,27 @@ const CLIPS := {
 	"roar": {"file": "anim_mutant_roar", "start": 0.4, "end": 3.3, "set": "mutant"},
 	"mutant_death": {"file": "anim_mutant_death", "fall": true, "set": "mutant"}
 }
+## Falls that were made on another rig, the soldier Scorpion's: a clip is read on the rig it
+## was made for and then carried over like every other.
+const MORE_RIG := "res://assets/models/mixamo/skorpion_rig.fbx"
+const MORE := {
+	"death_dying_back": {"file": "anim_death_dying_back", "fall": true, "set": "zombie"},
+	"death_fall_back": {"file": "anim_death_fall_back", "fall": true, "set": "zombie"},
+	"death_fall_forward": {"file": "anim_death_fall_forward", "fall": true, "set": "zombie"},
+	"death_fly_back": {"file": "anim_death_fly_back", "fall": true, "set": "zombie"},
+	"death_bow_forward": {"file": "anim_death_bow_forward", "fall": true, "set": "zombie"},
+	"death_back_headshot": {"file": "anim_death_back_headshot", "fall": true, "set": "zombie"}
+}
 ## Which death fits which shot. Sides are the infected's own left and right.
 const DEATHS := {
-	"front": ["death_back", "death_drop_back", "death_from_front", "death_side", "death_side_left"],
-	"head": ["death_headshot", "death_headshot", "death_back", "death_drop_back"],
-	"behind": ["death_forward", "death_from_back", "death_from_front"],
+	"front": ["death_back", "death_drop_back", "death_from_front", "death_side", "death_side_left", "death_dying_back", "death_fall_back"],
+	"head": ["death_headshot", "death_headshot", "death_back", "death_drop_back", "death_fall_back"],
+	"behind": ["death_forward", "death_from_back", "death_from_front", "death_fall_forward", "death_bow_forward"],
+	"behind_head": ["death_back_headshot", "death_back_headshot", "death_fall_forward", "death_forward"],
 	"from_right": ["death_from_right", "death_drop_left"],
-	"from_left": ["death_from_left", "death_drop_right"]
+	"from_left": ["death_from_left", "death_drop_right"],
+	# A hit from the front that was far harder than it took: thrown back.
+	"hard": ["death_fly_back", "death_fly_back", "death_fall_back"]
 }
 
 ## set: which clips the skeleton gets. moves: the clips a kind uses; where several are
@@ -111,7 +125,7 @@ const KINDS := {
 		"eye_color": Color(0.85, 1.0, 0.35), "eye_height": 1.674, "eye_gap": 0.031, "eye_center": -0.011, "eye_size": 0.009,
 		"metallic": 1.0,
 		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]},
-		"deaths": ["death_drop_back", "death_forward", "death_from_front", "death_from_left", "death_from_right"]
+		"deaths": ["death_drop_back", "death_forward", "death_from_front", "death_from_left", "death_from_right", "death_bow_forward", "death_back_headshot"]
 	},
 	"zombiehelm": {
 		"scene": preload("res://assets/models/zombiehelm.glb"), "source_height": 1.78, "height": 1.78, "set": "zombie",
@@ -125,7 +139,7 @@ const KINDS := {
 		"maps": "res://assets/models/stalker_",
 		"eye_color": Color(0.85, 0.95, 1.0), "eye_height": 1.892, "eye_gap": 0.038, "eye_center": -0.002, "eye_size": 0.011,
 		"metallic": 1.0,
-		"deaths": ["death_back", "death_headshot", "death_forward", "death_from_back", "death_from_left", "death_from_right", "death_drop_left", "death_drop_right"],
+		"deaths": ["death_back", "death_headshot", "death_forward", "death_from_back", "death_from_left", "death_from_right", "death_drop_left", "death_drop_right", "death_dying_back", "death_fall_back", "death_bow_forward", "death_back_headshot"],
 		"moves": {"run": ["feral"], "walk": ["creep"], "attacks": ["swipe", "swipe_left", "punch", "punch_left"], "pace": [0.6, 1.6]}
 	},
 	"leech": {
@@ -133,7 +147,7 @@ const KINDS := {
 		"maps": "res://assets/models/smallzombie_",
 		"eye_color": Color(0.75, 1.0, 0.3), "eye_height": 0.956, "eye_gap": 0.053, "eye_center": 0.003, "eye_size": 0.008,
 		"metallic": 1.0,
-		"deaths": ["death_back", "death_headshot", "death_from_back", "death_from_left", "death_from_right", "death_drop_left", "death_drop_right", "death_side", "death_side_left"],
+		"deaths": ["death_back", "death_headshot", "death_from_back", "death_from_left", "death_from_right", "death_drop_left", "death_drop_right", "death_side", "death_side_left", "death_dying_back", "death_fall_back", "death_fly_back"],
 		"moves": {"run": ["feral"], "walk": ["creep"], "attacks": ["headbutt", "punch", "swipe"], "pace": [0.7, 2.2]}
 	},
 	"crusher": {
@@ -163,6 +177,8 @@ const CHARGER_LIFT := 0.9192
 const LIMBS := ["clav", "upper", "fore", "hand", "thigh", "shin", "foot", "toe"]
 
 static var source: Dictionary = {}
+## The clips of MORE, sampled on their own rig.
+static var more: Dictionary = {}
 static var rigs: Dictionary = {}
 static var libraries: Dictionary = {}
 static var materials: Dictionary = {}
@@ -248,6 +264,7 @@ func _ready() -> void:
 	rig = rigs[kind]
 	if not libraries.has(kind):
 		libraries[kind] = _bake(skeleton, rig, str(config.set))
+		_add_more(libraries[kind], skeleton, rig, str(config.set))
 	stride_scale = float(rig.leg_length) / float(source.leg_length)
 	if not materials.has(kind):
 		materials[kind] = _material()
@@ -457,6 +474,14 @@ static func _order(skel: Skeleton3D) -> Array:
 static func _prepare_source() -> void:
 	if source.is_empty():
 		source = sample(RIG_SCENE, CLIPS)
+		more = sample(MORE_RIG, MORE)
+
+## Adds the clips of MORE to a library that was built for this skeleton.
+static func _add_more(library: AnimationLibrary, skel: Skeleton3D, rig: Dictionary, clip_set: String, only: Array = []) -> void:
+	_prepare_source()
+	var extra := _bake(skel, rig, clip_set, more, only)
+	for clip_name in extra.get_animation_list():
+		library.add_animation(clip_name, extra.get_animation(clip_name))
 
 ## Samples every clip of `table` on the rig it was made for: per limb role, how far the
 ## bone has turned away from its rest pose in model space, plus the movement of the hips.
@@ -891,7 +916,7 @@ func set_buffed(on: bool) -> void:
 # ---------------------------------------------------------------- animation
 
 func _clip(clip_name: String) -> Dictionary:
-	return source.clips[clip_name]
+	return source.clips[clip_name] if source.clips.has(clip_name) else more.clips[clip_name]
 
 ## Advances the animation. `speed` is how fast the body really moves, so the stride
 ## matches the ground instead of sliding over it.
@@ -1036,25 +1061,38 @@ func scream(clip_name: String = "scream") -> float:
 		_: _begin(clip_name, 0.15, 1.3, 0.35, 1.25, "scream")
 	return busy_left
 
-## The death that fits the shot: `forward` when hit from behind, `side` is where the
-## bullet was heading across the body (negative: towards the infected's left).
-func pick_death(forward: bool, headshot: bool = false, side: float = 0.0) -> String:
+## Which pool of DEATHS fits the shot: `forward` when hit from behind, `side` is where the
+## bullet was heading across the body (negative: towards the body's left), `hard` when
+## the hit was far more than it took.
+static func death_pool(forward: bool, headshot: bool, side: float, hard: bool) -> String:
+	if forward:
+		return "behind_head" if headshot else "behind"
+	if hard and randf() < 0.7:
+		return "hard"
+	if headshot and randf() < 0.7:
+		return "head"
+	if absf(side) > 0.55:
+		return "from_right" if side < 0.0 else "from_left"
+	return "front"
+
+## The falls of a pool that this build can do: some bodies end up in the floor in some.
+func _can_do(pool: String) -> Array:
+	var options: Array = DEATHS[pool]
+	if not config.has("deaths"):
+		return options
+	var allowed: Array = config.deaths
+	return options.filter(func(clip: String) -> bool: return allowed.has(clip))
+
+## The death that fits the shot (see death_pool).
+func pick_death(forward: bool, headshot: bool = false, side: float = 0.0, hard: bool = false) -> String:
 	if str(config.set) == "mutant":
 		return "mutant_death"
-	var pool := "front"
-	if forward:
-		pool = "behind"
-	elif headshot and randf() < 0.7:
-		pool = "head"
-	elif absf(side) > 0.55:
-		pool = "from_right" if side < 0.0 else "from_left"
-	var options: Array = DEATHS[pool]
-	if config.has("deaths"):
-		# Only the falls this build can do without ending up in the floor.
-		var allowed: Array = config.deaths
-		options = options.filter(func(clip: String) -> bool: return allowed.has(clip))
-		if options.is_empty():
-			options = allowed
+	var options := _can_do(death_pool(forward, headshot, side, hard))
+	# A build that can do none of them falls the plain way for that side.
+	if options.is_empty():
+		options = _can_do("behind" if forward else "front")
+	if options.is_empty():
+		options = config.deaths
 	return options.pick_random()
 
 ## Falls and stays on the ground.

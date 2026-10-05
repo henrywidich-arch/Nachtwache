@@ -69,7 +69,7 @@ const TREES := {
 ## Weapons that the second shield ability counts as heavy enough.
 const HEAVY := ["revolver", "ak"]
 ## Weapons whose bullets the sweeper's last ability sends through a body.
-const RIFLES := ["rifle", "ak", "badger"]
+const RIFLES := ["rifle", "ak", "g36", "badger"]
 
 ## Ability id -> rank the player has in it.
 var ranks: Dictionary = {}

@@ -378,11 +378,11 @@ func _finish(victory: bool, team_stats: Dictionary = {}) -> void:
 # ---------------------------------------------------------------- guest -> host
 
 ## `through`: the guest's bullet went through a shield (an ability of his).
-func report_hit(enemy: Infected, damage: float, direction: Vector3, headshot: bool, through: bool = false) -> void:
-	_hit.rpc_id(1, enemy.net_id, damage, direction, headshot, through)
+func report_hit(enemy: Infected, damage: float, direction: Vector3, headshot: bool, through: bool = false, push: float = 0.0) -> void:
+	_hit.rpc_id(1, enemy.net_id, damage, direction, headshot, through, push)
 
 @rpc("any_peer", "call_remote", "reliable")
-func _hit(id: int, damage: float, direction: Vector3, headshot: bool, through: bool = false) -> void:
+func _hit(id: int, damage: float, direction: Vector3, headshot: bool, through: bool = false, push: float = 0.0) -> void:
 	if not hosting:
 		return
 	for node in get_tree().get_nodes_in_group("infected"):
@@ -391,6 +391,9 @@ func _hit(id: int, damage: float, direction: Vector3, headshot: bool, through: b
 			game.blasting = through
 			enemy.receive_hit(damage, direction, headshot, remote)
 			game.blasting = false
+			# A blast of shot throws back whoever it did not kill.
+			if push >= Survivor.PUSH_LEAST:
+				enemy.blown(direction, minf(push, 10.0))
 			return
 
 ## What the mission director of the host knows: round kind, power, tasks and their items.

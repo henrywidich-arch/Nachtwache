@@ -202,15 +202,8 @@ func scream(_clip_name: String = "scream") -> float:
 
 ## The fall that fits the shot, picked as the infected pick theirs: `forward` when hit
 ## from behind, `side` is where the bullet was heading across the body.
-func pick_death(forward: bool, headshot: bool = false, side: float = 0.0) -> String:
-	var pool := "front"
-	if forward:
-		pool = "behind"
-	elif headshot and randf() < 0.7:
-		pool = "head"
-	elif absf(side) > 0.55:
-		pool = "from_right" if side < 0.0 else "from_left"
-	return str((InfectedVisual.DEATHS[pool] as Array).pick_random())
+func pick_death(forward: bool, headshot: bool = false, side: float = 0.0, hard: bool = false) -> String:
+	return str((InfectedVisual.DEATHS[InfectedVisual.death_pool(forward, headshot, side, hard)] as Array).pick_random())
 
 func die(clip_name: String) -> void:
 	dying = true

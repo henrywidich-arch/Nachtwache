@@ -139,7 +139,7 @@ func run(game: Node3D) -> void:
 	await frames(2)
 	expect(game.sounds.recorded["shot"] and game.sounds.recorded["badger"] and game.sounds.recorded["growl"] and game.sounds.recorded["rain"] and (game.sounds.clips["growl"] as Array).size() == 3, "Recorded sound effects are loaded, with variants")
 	var fresh := true
-	for sound in ["shotgun", "shotgun_pump", "shell_in", "dog_growl", "dog_bite", "dog_death", "gore_burst", "headpop", "bodyfall", "striker_attack", "crusher_death", "bot_hurt_male", "bot_hurt_female"]:
+	for sound in ["shotgun", "autoshotgun", "shotgun_pump", "shell_in", "dog_growl", "dog_bite", "dog_death", "gore_burst", "headpop", "bodyfall", "striker_attack", "crusher_death", "bot_hurt_male", "bot_hurt_female"]:
 		fresh = fresh and bool(game.sounds.recorded.get(sound, false))
 	expect(fresh, "The recordings for the shotgun, the hound, the squad and the gore are loaded")
 	# --- hit reactions: flinch, stumble with knock-back, falling
@@ -857,6 +857,9 @@ func run(game: Node3D) -> void:
 	var far_target: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
 	far_target.set_physics_process(false)
 	far_target.position = Vector3(0, 0.05, 27.0)
+	# Enough health to take the shot in the head and still stand.
+	far_target.max_health = 400.0
+	far_target.health = 400.0
 	await frames(20)
 	var pitch_before: float = game.player.camera.rotation.x
 	game.player.shoot()
@@ -869,7 +872,7 @@ func run(game: Node3D) -> void:
 	await frames(3)
 	game.player.shoot()
 	var far_loss: float = far_target.max_health - far_target.health
-	expect(not far_target.dead and far_loss > 0.0 and far_loss < 9 * 17.0 * 1.5 * 0.4, "At long range the shot has lost most of its force")
+	expect(not far_target.dead and far_loss > 0.0 and far_loss < 9 * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.4, "At long range the shot has lost most of its force")
 	far_target.receive_hit(9999, Vector3.BACK)
 	await wait(1.1)
 	game.player.ammo = 2
@@ -884,6 +887,38 @@ func run(game: Node3D) -> void:
 	await wait(1.0)
 	game.player.shoot()
 	expect(game.player.ammo == 2 and not game.player.loading_shells and game.player.reload_left == 0.0, "Firing breaks off a half-finished shotgun reload")
+	# --- a blast from close by throws back whoever it does not kill
+	await wait(1.1)
+	game.player.ammo = 6
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var sturdy: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	sturdy.max_health = 5000.0
+	sturdy.health = 5000.0
+	sturdy.position = Vector3(0, 0.05, 3.6)
+	sturdy.held_left = 30.0
+	await frames(12)
+	var blast_from: float = sturdy.global_position.z
+	game.player.shoot()
+	var blast_harm: float = 5000.0 - sturdy.health
+	var blast_speed: float = sturdy.knock.length()
+	await frames(45)
+	var blast_way: float = sturdy.global_position.z - blast_from
+	sturdy.receive_hit(99999.0, Vector3.BACK)
+	# From further away than a blast reaches, a body is hurt but stays where it is.
+	await wait(1.1)
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var faraway: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	faraway.max_health = 5000.0
+	faraway.health = 5000.0
+	faraway.position = Vector3(0, 0.05, 15.0)
+	faraway.held_left = 30.0
+	await frames(12)
+	game.player.shoot()
+	var blast_far: bool = faraway.health < 5000.0 and faraway.knock == Vector3.ZERO
+	faraway.receive_hit(99999.0, Vector3.BACK)
+	var pump_gun: Dictionary = Survivor.WEAPONS.shotgun
+	var auto_gun: Dictionary = Survivor.WEAPONS.autoshotgun
+	expect(blast_harm >= 9 * float(pump_gun.damage) and float(pump_gun.damage) * int(pump_gun.pellets) > 200.0 and blast_speed > 3.0 and blast_way > 0.3 and blast_far and float(pump_gun.push) > float(auto_gun.push) and str(auto_gun.sound) == "autoshotgun" and bool(game.sounds.recorded.get("autoshotgun", false)) and float(auto_gun.damage) * int(auto_gun.pellets) > 130.0, "A blast from close by does more than 200 damage and throws back whoever is still standing (%.1f m/s, %.2f m); further away it only hurts. The automatic shotgun has a shot of its own" % [blast_speed, blast_way])
 	# --- Ripper
 	game.player.health = 100
 	face(game, Vector3(0, 0.05, 1.0), PI)
@@ -1321,6 +1356,38 @@ func _latest(game: Node3D) -> void:
 	game.start_run()
 
 ## Puts every attacker of the running round down and takes the rest of it off the list.
+## The lowest point of a body's skin as it is posed now (every third vertex).
+func _mesh_low(body: InfectedVisual) -> float:
+	var skel: Skeleton3D = body.skeleton
+	var inst: MeshInstance3D = body.mesh_instance
+	if inst == null or inst.skin == null:
+		return NAN
+	var skin: Skin = inst.skin
+	var mats: Array = []
+	for bind in range(skin.get_bind_count()):
+		var bone := skin.get_bind_bone(bind)
+		if bone < 0:
+			bone = skel.find_bone(skin.get_bind_name(bind))
+		mats.append(skel.get_bone_global_pose(bone) * skin.get_bind_pose(bind))
+	var low := INF
+	var to_world: Transform3D = skel.global_transform
+	for surface in range(inst.mesh.get_surface_count()):
+		var arrays: Array = inst.mesh.surface_get_arrays(surface)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+		var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+		if verts.is_empty() or bones.is_empty():
+			return NAN
+		var per: int = bones.size() / verts.size()
+		for v in range(0, verts.size(), 3):
+			var at := Vector3.ZERO
+			for k in range(per):
+				var weight: float = weights[v * per + k]
+				if weight > 0.0:
+					at += ((mats[bones[v * per + k]] as Transform3D) * verts[v]) * weight
+			low = minf(low, (to_world * at).y)
+	return low
+
 func _wipe(game: Node3D) -> void:
 	game.spawn_queue.clear()
 	for node in get_tree().get_nodes_in_group("infected"):
@@ -1367,7 +1434,8 @@ func _arsenal(game: Node3D) -> void:
 	giant.position = stand + Vector3(34.0, 0, 6.0)
 	await frames(2)
 	giant.shove(Vector3.BACK, Survivor.MELEE_PUSH, Survivor.MELEE_DAZE, Survivor.MELEE_DAMAGE)
-	expect(giant.knock == Vector3.ZERO and giant.held_left > 0.0 and giant.held_left < 1.0 and giant.health < giant.max_health, "The Crusher is only held up for a moment by a blow, and not moved at all")
+	giant.blown(Vector3.BACK, float(Survivor.WEAPONS.shotgun.push))
+	expect(giant.knock == Vector3.ZERO and giant.held_left > 0.0 and giant.held_left < 1.0 and giant.health < giant.max_health, "The Crusher is only held up for a moment by a blow, and not moved at all: not by a blast of shot either")
 	_wipe(game)
 	game.boss = null
 	await frames(2)
@@ -1601,11 +1669,72 @@ func _arsenal(game: Node3D) -> void:
 			if low < -0.2 or hip < 0.03 or hip > 0.5 or head > 0.75:
 				odd += " %s/%s (lowest %.2f, hips %.2f, head %.2f)" % [look, clip, low, hip, head]
 			body.free()
-	expect(falls.size() == 12 and played == 72 and odd == "", "A soldier has twelve ways to go down, and every one of them ends on the ground: hips %.2f to %.2f m up, head at most %.2f m, nothing lower than %.2f m%s" % [hips.x, hips.y, highest, lowest, odd])
+	expect(falls.size() == 18 and played == 108 and odd == "", "A soldier has eighteen ways to go down, and every one of them ends on the ground: hips %.2f to %.2f m up, head at most %.2f m, nothing lower than %.2f m%s" % [hips.x, hips.y, highest, lowest, odd])
 	var picked := {}
-	for i in range(200):
-		picked[(trooper.model as CruVisual).pick_death(i % 4 == 0, i % 3 == 0, [-0.8, 0.0, 0.8][i % 3])] = true
-	expect(picked.size() >= 10, "Which fall it is depends on where the shot came from (%d of them turned up)" % picked.size())
+	var known := true
+	for i in range(300):
+		var fall: String = (trooper.model as CruVisual).pick_death(i % 4 == 0, i % 3 == 0, [-0.8, 0.0, 0.8][i % 3], i % 5 == 0)
+		picked[fall] = true
+		known = known and falls.has(fall)
+	expect(picked.size() >= 15 and known, "Which fall it is depends on where the shot came from (%d of them turned up)" % picked.size())
+	# --- the infected: every fall a build may do ends on the ground, bones and skin
+	InfectedVisual._prepare_source()
+	var recorded: Array = []
+	for table in [InfectedVisual.source.clips, InfectedVisual.more.clips]:
+		for clip in table:
+			if bool(table[clip].fall) and str(table[clip].set) == "zombie":
+				recorded.append(clip)
+	var pooled := true
+	for pool in InfectedVisual.DEATHS:
+		for clip in InfectedVisual.DEATHS[pool]:
+			pooled = pooled and recorded.has(clip)
+	var sunk := ""
+	var deepest := 0.0
+	var bodies := 0
+	var doable := true
+	var flung := 0
+	for kind in InfectedVisual.KINDS:
+		var build: Dictionary = InfectedVisual.KINDS[kind]
+		# The Charger never lies down: it bursts.
+		if str(build.set) != "zombie" or kind == "charger":
+			continue
+		var size: float = float(build.height) / 1.78
+		var asked := false
+		for clip in recorded:
+			if build.has("deaths") and not (build.deaths as Array).has(clip):
+				continue
+			var body := InfectedVisual.new()
+			body.kind = kind
+			game.add_child(body)
+			body.position = Vector3(60.0, 0.0, 80.0)
+			for step in range(6):
+				body.animate(1.0 / 30.0, 0.0)
+			body.die(str(clip))
+			var playing: bool = body.player.current_animation == str(clip)
+			for step in range(150):
+				body.animate(1.0 / 30.0, 0.0)
+			var bones: Skeleton3D = body.skeleton
+			var low := INF
+			for bone in range(bones.get_bone_count()):
+				low = minf(low, (bones.global_transform * bones.get_bone_global_pose(bone).origin).y)
+			var hip: float = (bones.global_transform * bones.get_bone_global_pose(int(body.rig.pelvis.index)).origin).y
+			var head: float = body.head_position().y
+			var skin: float = _mesh_low(body)
+			deepest = minf(deepest, skin)
+			bodies += 1
+			if not playing or low < -0.2 * size or hip < 0.03 * size or hip > 0.5 * size or head > 0.75 * size or not skin >= -0.16:
+				sunk += " %s/%s (bones %.2f, hips %.2f, head %.2f, skin %.2f)" % [kind, clip, low, hip, head, skin]
+			if not asked:
+				asked = true
+				# What it picks, it can do; a hit far harder than it took throws it back.
+				for i in range(60):
+					var fall: String = body.pick_death(i % 4 == 0, i % 3 == 0, [-0.8, 0.0, 0.8][i % 3], i % 5 == 0)
+					doable = doable and body.player.has_animation(fall) and (not build.has("deaths") or (build.deaths as Array).has(fall))
+				for i in range(20):
+					if body.pick_death(false, false, 0.0, true) == "death_fly_back":
+						flung += 1
+			body.free()
+	expect(recorded.size() == 18 and InfectedVisual.MORE.size() == 6 and pooled and bodies > 130 and sunk == "" and doable and flung >= 30, "The infected have eighteen falls, six of them recorded on another rig; every one a build may do ends on the ground (%d bodies, skin at most %.2f m deep)%s, and a hit far harder than it took often throws a body back" % [bodies, -deepest, sunk])
 	# --- the roll is played where the body is: the clip itself carries nobody away
 	var roller := SoldierVisual.new()
 	roller.look = "cru"
@@ -1777,7 +1906,7 @@ func _loadout(game: Node3D) -> void:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int(Survivor.KINDS[kind].key)
-	expect(keyed and int(kinds.primary) == 7 and int(kinds.secondary) == 2 and int(kinds.heavy) == 9 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
+	expect(keyed and int(kinds.primary) == 8 and int(kinds.secondary) == 2 and int(kinds.heavy) == 9 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
 	# --- one of each kind; a second one is traded for the first
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
@@ -1909,6 +2038,51 @@ func _loadout(game: Node3D) -> void:
 	var forced: Infected = game.spawn_enemy("cru_shield")
 	forced.set_physics_process(false)
 	expect(came == ["cru_shield", "cru_assault", "cru_assault"] and bearer.dead and next.kind == "cru_shield" and forced.kind == "cru_shield" and MissionDirector.SQUAD_ORDER.count("cru_shield") == 1 and not MissionDirector.REINFORCEMENTS.has("cru_shield") and int(game.SHIELD_LIMIT) == 1, "Only one shield bearer stands in the yard at a time: while he does, the next one comes without a shield")
+	_wipe(game)
+	# --- the G36
+	game.preparation_left = 9999.0
+	game.credits = 2000
+	player.extra_slots = 1
+	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	var got: bool = game.buy_weapon("g36") and player.current_weapon == "g36" and player.inventory.has("rifle") and game.credits == 2000 - 450 and player.ammo == 30 and player.max_reserve() == 240
+	var g36: Node3D = player.weapon
+	var g36_gun: Dictionary = WeaponView.GUNS.g36
+	var g36_view: Dictionary = WeaponView.VIEWS.g36
+	# Aimed, the line over rear and front sight goes through the middle of the picture.
+	var on_line: bool = is_equal_approx((g36_view.aim as Vector3).y, -((g36_gun.mount as Vector3).y + float(g36_gun.irons))) and (g36_view.aim as Vector3).x == 0.0 and (g36_view.muzzle as Vector3).is_equal_approx((g36_gun.mount as Vector3) + (g36_gun.muzzle as Vector3))
+	var plain_sound: String = str(player.gun().sound)
+	var heard_g36 := true
+	for kind in ["g36", "g36_sil", "g36_mag_out", "g36_mag_in", "g36_bolt"]:
+		heard_g36 = heard_g36 and bool(game.sounds.recorded.get(kind, false))
+	var sighted: bool = game.buy_part("g36", "reddot") and (g36.get_node("Mod_reddot") as Node3D).visible and game.buy_part("g36", "scope") and (g36.get_node("Mod_scope") as Node3D).visible and not (g36.get_node("Mod_reddot") as Node3D).visible and player.gun().has("scope")
+	var hushed: bool = game.buy_part("g36", "silencer") and (g36.get_node("Mod_silencer") as Node3D).visible and str(player.gun().sound) == "g36_sil" and bool(player.gun().quiet) and game.credits == 2000 - 450 - 120 - 260 - 180
+	# Every suppressed shot is known as one, also when a co-op guest fires it.
+	for id in Survivor.ATTACHMENTS:
+		for part in Survivor.ATTACHMENTS[id]:
+			var changed: Dictionary = Survivor.ATTACHMENTS[id][part].get("set", {})
+			if changed.get("quiet", false):
+				hushed = hushed and Survivor.QUIET_SOUNDS.has(str(changed.sound)) and game.sounds.clips.has(str(changed.sound))
+	# The list of parts: only for the two rifles that are carried.
+	game.hud._open_tab("mods")
+	var dots := 0
+	for node in game.hud.modal.find_children("*", "Label", true, false):
+		if (node as Label).text.begins_with("ROTPUNKTVISIER"):
+			dots += 1
+	game.resume_run()
+	# The reload: the magazine leaves the weapon and comes back, with sounds of its own.
+	player.ammo = 5
+	player.start_reload()
+	var clip := g36.get_node_or_null("Magazine") as Node3D
+	var left_well := 0.0
+	for i in range(int(float(Survivor.WEAPONS.g36.reload_time) * 60.0) + 20):
+		await get_tree().physics_frame
+		if clip != null:
+			left_well = maxf(left_well, clip.position.length())
+	var cued := true
+	for cue in Survivor.WEAPONS.g36.cues:
+		cued = cued and str(cue[1]).begins_with("g36_")
+	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 4 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 is a primary weapon with its own shot and reload, a magazine that leaves the gun, a sight line through the middle of the picture and three parts; the list of parts shows only those for what is carried")
 	_wipe(game)
 	# --- the keys
 	var bound := {}
@@ -2314,12 +2488,17 @@ func _kit(game: Node3D) -> void:
 			rows[tab] = int(rows.get(tab, 0)) + 1
 	for id in Survivor.GOODS:
 		rows[Survivor.GOODS[id].group] = int(rows.get(Survivor.GOODS[id].group, 0)) + 1
+	# The list of parts shows those for what is carried: one primary weapon, as a rule.
+	var parts := 0
+	var most := 0
 	for id in Survivor.ATTACHMENTS:
-		rows["mods"] = int(rows.get("mods", 0)) + (Survivor.ATTACHMENTS[id] as Dictionary).size()
+		parts += (Survivor.ATTACHMENTS[id] as Dictionary).size()
+		most = maxi(most, (Survivor.ATTACHMENTS[id] as Dictionary).size())
+	rows["mods"] = int(rows.get("mods", 0)) + most * Survivor.CARRY
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 6 and int(rows.heavy) == 6 and int(rows.mods) == 10 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 7 and int(rows.heavy) == 6 and int(rows.mods) == 4 and parts == 12 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")

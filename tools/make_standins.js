@@ -1,8 +1,8 @@
-// Stand-in sounds for what has no recording of its own yet: the G36's shot (with and
-// without suppressor) and the syringe. They are made from recordings the game already
-// has (pitched, cut and layered). A recorded file of the same name simply replaces one
-// of these; what got its recording since (the newer guns, the blow, the Molotov cocktail,
-// fire and the flamethrower) is built by tools/make_sounds.js.
+// Stand-in sounds for what has no recording of its own yet: the syringe. It is made from
+// recordings the game already has (pitched, cut and layered) and a little noise. A
+// recorded file of the same name simply replaces it; what got its recording since (the
+// newer guns, the blow, the Molotov cocktail, fire and the flamethrower) is built by
+// tools/make_sounds.js.
 //   node tools/make_standins.js <sounds folder>
 const fs = require('fs');
 const path = require('path');
@@ -74,18 +74,6 @@ function noise(seconds) {
   for (let i = 0; i < out.length; i++) out[i] = random() * 2 - 1;
   return out;
 }
-// The end is blended into the beginning, so that the sound can run in a loop.
-function loop(x, seconds, blend = 0.4) {
-  const n = Math.floor(seconds * RATE);
-  const f = Math.floor(blend * RATE);
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) out[i] = x[i];
-  for (let i = 0; i < f; i++) {
-    const t = i / f;
-    out[i] = x[i] * t + x[n + i] * (1 - t);
-  }
-  return out;
-}
 function save(name, x, level = 0.89) {
   const p = wav.peak(x) || 1;
   const out = new Float32Array(x.length);
@@ -94,10 +82,6 @@ function save(name, x, level = 0.89) {
   console.log(name.padEnd(8), (x.length / RATE).toFixed(2) + ' s');
 }
 
-// The G36: the carbine's crack a little lower, with the body of the UMP's shot and the
-// clack of its action under it; suppressed, the Honey Badger's cough over the UMP's.
-save('g36', cut(mix([[pitch(load('shot'), 0.92), 1.0], [pitch(load('ump'), 1.12), 0.4], [highpass(pitch(load('bolt'), 1.3), 900), 0.22, 0.03]]), 0.6, 0.22));
-save('g36_sil', cut(mix([[pitch(load('badger'), 0.9), 1.0], [pitch(load('ump_sil'), 1.08), 0.5], [highpass(pitch(load('bolt'), 1.3), 900), 0.25, 0.03]]), 0.4, 0.15), 0.6);
 // The syringe: a cap that snaps and the short hiss of the injector.
 {
   const hiss = highpass(noise(0.4), 2500);

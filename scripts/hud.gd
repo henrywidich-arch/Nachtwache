@@ -13,10 +13,10 @@ const CYAN := Color("74d8ea")
 const DANGER := Color("ff6b57")
 const INK := Color("0f1317")
 const SHOP_NOTES := {
-	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action, brutal auf kurze Distanz",
-	"pistol": "Leicht, schnell gezogen", "revolver": "Sechs Schuss, jeder ein Hammer", "autoshotgun": "Halbautomatisch, Kastenmagazin",
+	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action: brutal auf kurze Distanz, wirft Getroffene zurück",
+	"pistol": "Leicht, schnell gezogen", "revolver": "Sechs Schuss, jeder ein Hammer", "autoshotgun": "Halbautomatisch, Kastenmagazin: drei Ladungen in der Sekunde",
 	"sniper": "Zielfernrohr, durchschlägt mehrere Körper", "launcher": "40-mm-Granaten, zünden beim Aufschlag", "mg": "100 Schuss im Kasten und vier Kästen Reserve", "minigun": "Läuft an, dann mäht sie alles nieder",
-	"m14": "Ein Schuss pro Abzug: hart, genau, mit Kimme und Korn", "svd": "Halbautomatisches Scharfschützengewehr mit Zielfernrohr",
+	"g36": "750 Schuss in der Minute, genau und ruhig im Rückstoß: das beste Sturmgewehr im Regal", "m14": "Ein Schuss pro Abzug: hart, genau, mit Kimme und Korn", "svd": "Halbautomatisches Scharfschützengewehr mit Zielfernrohr",
 	"flamer": "Feuerstrahl bis zehn Meter: wen er trifft, der brennt weiter", "nitro": "Zwei Läufe, zwei Hämmer – anderthalbfach gegen Spezial-Infizierte",
 	"fifty": "Schießt durch Schilde und Panzerung und durchschlägt vier Körper"
 }
@@ -883,7 +883,7 @@ func show_menu(mode: String) -> void:
 			first = _menu_skins(column)
 		"skills":
 			first = _menu_skills(column)
-	var version := label("SOLO + KOOP   ·   v0.15", 12, MUTED, true)
+	var version := label("SOLO + KOOP   ·   v0.16", 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
 	modal.add_child(version)
@@ -1326,22 +1326,26 @@ func _menu_shop(column: VBoxContainer) -> Control:
 		var buy := _card(list, str(data.label), facts, offer, game.buy_weapon.bind(id), not owned and not locked and barred == "" and game.credits >= cost, owned)
 		if first == null and not buy.disabled:
 			first = buy
-	# Parts for the weapons: bought once, then put on or taken off for nothing.
+	# Parts for the weapons: bought once, then put on or taken off for nothing. Only those
+	# for what is carried are listed: with one weapon of each kind the list stays short.
 	if shop_tab == "mods":
+		var takers: Array = []
+		var fitting := 0
 		for id in Survivor.ATTACHMENTS:
-			var record: Dictionary = game.player.inventory.get(id, {})
+			takers.append(str(Survivor.WEAPONS[id].label))
+			if not game.player.inventory.has(id):
+				continue
+			fitting += 1
+			var record: Dictionary = game.player.inventory[id]
 			var on: Dictionary = record.get("fitted", {})
-			list.add_child(label("FÜR DIE %s%s" % [Survivor.WEAPONS[id].label, "" if not record.is_empty() else "   ·   erst die Waffe kaufen"], 14, AMBER if not record.is_empty() else MUTED, true))
+			list.add_child(label("%s   ·   AUFSÄTZE" % Survivor.WEAPONS[id].label, 14, AMBER, true))
 			for part in Survivor.ATTACHMENTS[id]:
 				var data: Dictionary = Survivor.ATTACHMENTS[id][part]
 				var fitted: bool = str(on.get(data.slot, "")) == part
 				var cost: int = game.price(int(data.price))
 				var offer := "KAUFEN   %d" % cost
 				var usable := true
-				if record.is_empty():
-					offer = "–"
-					usable = false
-				elif fitted:
+				if fitted:
 					offer = "ABNEHMEN"
 				elif game.player.owns_part(id, part):
 					offer = "ANBRINGEN"
@@ -1351,6 +1355,7 @@ func _menu_shop(column: VBoxContainer) -> Control:
 				var fit := _card(list, str(data.label) + ("   ✓" if fitted else ""), str(data.note), offer, game.buy_part.bind(id, part), usable, fitted)
 				if first == null and usable:
 					first = fit
+		list.add_child(label("%sVisiere und Schalldämpfer gibt es für: %s." % ["" if fitting > 0 else "Du trägst gerade keine Waffe, die Aufsätze nimmt.   ", ", ".join(takers)], 14, MUTED, true))
 	# The other lists: gear that stays, and things that get used up.
 	for id in Survivor.GOODS:
 		var goods: Dictionary = Survivor.GOODS[id]

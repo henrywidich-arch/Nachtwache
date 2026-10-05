@@ -20,7 +20,7 @@ const MIX := {
 	"growl": [-6.0, 0.1, 0], "growl_female": [-7.0, 0.08, 0], "pain": [-6.0, 0.1, 0], "death": [-3.0, 0.1, 1],
 	"gurgle": [-5.0, 0.1, 0], "screech": [-8.0, 0.08, 0], "roar": [2.0, 0.05, 2],
 	"thunder": [-5.0, 0.08, 2], "wind": [-10.0, 0.0, 2], "rain": [-2.0, 0.0, 2],
-	"shotgun": [1.0, 0.04, 1], "shotgun_pump": [-6.0, 0.04, 1], "shell_in": [-7.0, 0.06, 1],
+	"shotgun": [2.0, 0.04, 1], "autoshotgun": [0.0, 0.04, 1], "shotgun_pump": [-4.5, 0.04, 1], "shell_in": [-7.0, 0.06, 1],
 	"pistol": [-4.0, 0.05, 0], "revolver": [0.0, 0.04, 1], "sniper": [3.0, 0.03, 1], "launcher": [0.0, 0.05, 1], "minigun": [-6.0, 0.06, 0], "minigun_spin": [-10.0, 0.0, 1],
 	"heli": [0.0, 0.0, 2], "beep": [-8.0, 0.0, 1], "ump": [-3.0, 0.04, 0], "ump_sil": [-4.0, 0.04, 0], "ak": [-1.0, 0.04, 0], "ak_sil": [-4.0, 0.04, 0], "mg": [-1.0, 0.05, 0],
 	"bot_hurt_male": [-7.0, 0.06, 1], "bot_hurt_female": [-7.0, 0.06, 1],
@@ -30,7 +30,8 @@ const MIX := {
 	"charger_roar": [-4.0, 0.08, 0], "crusher_pain": [-1.0, 0.06, 1], "crusher_attack": [0.0, 0.06, 1], "crusher_death": [3.0, 0.04, 2],
 	"attack": [-6.0, 0.1, 0], "moan": [-9.0, 0.1, 0], "death_female": [-4.0, 0.08, 1], "pain_female": [-6.0, 0.08, 0],
 	"melee": [-2.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
-	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0]
+	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0],
+	"g36_mag_out": [-7.0, 0.04, 1], "g36_mag_in": [-7.0, 0.04, 1], "g36_bolt": [-7.0, 0.04, 1]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -46,14 +47,15 @@ const STAND_INS := {
 	"badger": "p90", "mag_out": "click", "mag_in": "click", "bolt": "click", "equip": "click",
 	"step_grass": "step_wood", "headshot": "hit", "clear": "buy", "shutter_open": "thud", "shutter_close": "thud",
 	"growl_female": "growl", "pain": "growl", "death": "growl",
-	"shotgun": "shot", "shotgun_pump": "click", "shell_in": "click", "bot_hurt_male": "hurt", "bot_hurt_female": "hurt",
+	"shotgun": "shot", "autoshotgun": "shot", "shotgun_pump": "click", "shell_in": "click", "bot_hurt_male": "hurt", "bot_hurt_female": "hurt",
 	"ump": "shot", "ump_sil": "p90", "ak": "shot", "ak_sil": "p90", "mg": "shot", "pistol": "p90", "revolver": "shot", "sniper": "shot", "launcher": "thud", "minigun": "p90", "minigun_spin": "wind", "heli": "wind", "beep": "radio",
 	"gore_burst": "squish", "splat": "squish", "gib": "squish", "headpop": "pop", "bodyfall": "thud",
 	"dog_growl": "growl", "dog_bark": "growl", "dog_bite": "squish", "dog_death": "growl", "dog_howl": "screech",
 	"striker_attack": "screech", "striker_death": "screech", "striker_idle": "screech",
 	"charger_roar": "gurgle", "crusher_pain": "roar", "crusher_attack": "roar", "crusher_death": "roar",
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
-	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90"
+	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90",
+	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click"
 }
 
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):

@@ -1060,6 +1060,19 @@ func _stagger(heavy: bool) -> void:
 	attack_clock = -1.0
 	cooldown = maxf(cooldown, held_left + 0.25)
 
+## A blast of shot from close by: whoever is still standing is thrown back at `speed`. A
+## shield takes it, the heavy ones give way half as far, and nothing moves the Crusher.
+## What a body does when it is knocked off balance decides how far it goes.
+func blown(direction: Vector3, speed: float) -> void:
+	if dead or kind in ["crusher", "stalker"] or leap != "" or blocks(direction):
+		return
+	if clung_to != null:
+		release(true)
+	var back := Vector3(direction.x, 0, direction.z).normalized()
+	var reaction := str(spec.stagger)
+	# A stumble carries the body back by itself.
+	knock = back * speed * (0.5 if reaction == "" else (0.6 if reaction == "stumble" else 0.75))
+
 ## A blow with a rifle butt: it hurts a little, throws the body back a step and leaves it
 ## reeling for `seconds`. A shield takes the blow; the heavy ones are only held up for a
 ## moment, and nothing moves the Crusher.
@@ -1176,7 +1189,7 @@ func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: boo
 			cue("dissolve")
 		_:
 			var across := direction.dot(Vector3(-facing().z, 0, facing().x))
-			cue("die", [model.pick_death(_shot_from_behind(direction), headshot, across), headshot, direction, overkill])
+			cue("die", [model.pick_death(_shot_from_behind(direction), headshot, across, overkill), headshot, direction, overkill])
 			if kind == "striker":
 				cue("shed", [3])
 

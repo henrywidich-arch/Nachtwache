@@ -382,6 +382,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_v15_check")
+	elif "--falls-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_falls_check")
 	elif "--models-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -1805,6 +1809,55 @@ func _capture_from(folder: String, file: String, from: Vector3, target: Vector3,
 	player.camera.current = true
 	observer.queue_free()
 
+## Pictures of the six falls that were recorded on Scorpion's rig (InfectedVisual.MORE): on
+## six builds of the infected and on six soldiers, half way down and on the ground.
+func _run_falls_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	hud.play_ui.hide()
+	var clips: Array = InfectedVisual.MORE.keys()
+	var builds := ["mauler_hazmat", "mauler_female", "striker", "normalzombie", "zombiehelm", "normalzombie2"]
+	var looks := ["cru", "cru2", "cru3", "cru_heavy", "cru_lead", "cruelite"]
+	for group in ["infected", "soldiers"]:
+		var line: Array = []
+		for i in range(clips.size()):
+			var body: Node3D
+			if group == "infected":
+				var one := InfectedVisual.new()
+				one.kind = builds[i]
+				body = one
+			else:
+				var one := CruVisual.new()
+				one.kind = looks[i]
+				body = one
+			add_child(body)
+			body.position = Vector3(-6.0 + i * 2.4, 0.05, 25.0)
+			line.append(body)
+		for step in range(20):
+			for body in line:
+				body.call("animate", 1.0 / 60.0, 0.0)
+		for i in range(clips.size()):
+			line[i].call("die", str(clips[i]))
+		for stage in [["early", 30], ["mid", 40], ["late", 60], ["down", 260]]:
+			for step in range(int(stage[1])):
+				for body in line:
+					body.call("animate", 1.0 / 60.0, 0.0)
+			await _capture_from(folder, "%s_%s.png" % [group, stage[0]], Vector3(0, 2.4, 17.5), Vector3(0, 0.5, 25.0), 68)
+		await _capture_from(folder, "%s_down_left.png" % group, Vector3(-3.6, 3.4, 21.2), Vector3(-3.6, 0.0, 25.0), 62)
+		await _capture_from(folder, "%s_down_right.png" % group, Vector3(3.6, 3.4, 21.2), Vector3(3.6, 0.0, 25.0), 62)
+		for body in line:
+			body.queue_free()
+		await tick.call(0.3)
+	print("FALLS_CAPTURE_COMPLETE")
+	get_tree().quit()
+
 ## Screenshots of the newer models: Mauler bodies, Leech, Stalker, and the human looks.
 func _run_models_check() -> void:
 	var folder := _capture_dir()
@@ -2714,6 +2767,15 @@ func _run_gun_check() -> void:
 		await _capture(folder, "%s_5_reload_%d.png" % [id, i + 1])
 	await get_tree().create_timer(0.9 * pace).timeout
 	print("SHOT gun=%s ammo=%d sound=%s parts=%s" % [id, player.ammo, str(player.gun().sound), str(player.inventory[id].get("fitted", {}))])
+	# What the shop says about it, and its parts in the list of parts.
+	credits = 1500
+	_place_player((cabin.points.shop as Vector3) + Vector3(0, 0.05, 0.6), 0)
+	await get_tree().create_timer(0.3).timeout
+	open_shop()
+	for tab in ["weapons", "mods"]:
+		hud._open_tab(tab)
+		await get_tree().create_timer(0.4).timeout
+		await _capture(folder, "%s_6_shop_%s.png" % [id, tab])
 	print("GUN_CAPTURE_COMPLETE")
 	get_tree().quit()
 

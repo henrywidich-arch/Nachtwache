@@ -54,6 +54,14 @@ const GUNS := {
 		"support": Vector3(0, 0.119, -0.3251), "handle": Vector3(-0.022, 0.1697, -0.0066),
 		"magazine_out": Vector3(0, -0.9724, -0.2334), "magazine_foot": Vector3(0.0016, -0.0745, -0.2086)
 	},
+	# The G36: the user's model, prepared like the M4A4 (Nachtwache-Modelle/g36).
+	# Its iron sights stand on a bridge, 12 mm above its flat top; a sight is clamped to that top and looks over them.
+	"g36": {
+		"scene": "res://assets/models/g36.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0.0001, 0.0901, -0.4811), "bore": 0.0095,
+		"rail": 0.1638, "optic": -0.108, "irons": 0.1757,
+		"support": Vector3(0, 0.0792, -0.3323), "handle": Vector3(0, 0.1249, -0.2339),
+		"magazine_out": Vector3(0, -0.9687, -0.2483), "magazine_foot": Vector3(0.0002, -0.08, -0.1577)
+	},
 	# The machine gun: fed from a box that hangs under it on the left, which comes off
 	# sideways; the cocking handle is on the right.
 	"mg": {
@@ -81,6 +89,12 @@ const VIEWS := {
 	"rifle": {
 		"hip": Vector3(0.12, -0.155, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.1305, -0.1735), "muzzle": Vector3(0, 0.05, -0.5323),
+		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The G36 (build_gun): aimed, the eye is on its sight line, 16 cm behind the rear sight.
+	"g36": {
+		"hip": Vector3(0.12, -0.155, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0, -0.0957, -0.2217), "muzzle": Vector3(0.0001, 0.0101, -0.4011),
 		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	# The machine gun (build_gun), aimed over its aperture and ringed front post.
