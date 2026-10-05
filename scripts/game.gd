@@ -2536,7 +2536,12 @@ func _run_story_check() -> void:
 	await _shot_at(folder, "story_19_nadja_close.png", spots.lab_glass + Vector3(-0.5, 0, 0), spots.nadja + Vector3(0, 1.4, 0), 0.8)
 	var drives: Dictionary = mission.task_of("drives")
 	if not drives.is_empty():
-		await _shot_at(folder, "story_20_drive.png", (drives.items[0].pos as Vector3) + Vector3(1.5, 0, 0.9), (drives.items[0].pos as Vector3) + Vector3(0, 0.6, 0), 0.6, false)
+		# The drives sit in the servers: seen from a step beside the spot in front of one,
+		# looking at its bay.
+		var spot: Vector3 = drives.items[0].pos
+		var facing := float(drives.items[0].yaw)
+		var ahead := Vector3(-sin(facing), 0, -cos(facing))
+		await _shot_at(folder, "story_20_drive.png", spot + Vector3(ahead.z, 0, -ahead.x) * 0.9 - ahead * 0.5, spot + ahead * 0.7 + Vector3(0, 1.15, 0), 0.6, false)
 		for task in mission.tasks:
 			task.state = "done"
 	# Her door.

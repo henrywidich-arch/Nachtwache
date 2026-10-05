@@ -56,6 +56,21 @@ func quad(material: Material, a: Vector3, b: Vector3, c: Vector3, d: Vector3, co
 	for offset in [0, 2, 1, 0, 3, 2]:
 		surface.indices.append(start + offset)
 
+## The same with a colour of its own for every corner, in the order of the corners. A
+## material with a programme of its own may read anything out of them, e.g. where on the
+## quad a point lies.
+func quad_tinted(material: Material, a: Vector3, b: Vector3, c: Vector3, d: Vector3, colors: Array) -> void:
+	var surface := _surface(material)
+	var normal := (b - a).cross(d - a).normalized()
+	var start := surface.vertices.size()
+	var corners := [a, b, c, d]
+	for i in range(4):
+		surface.vertices.append(corners[i])
+		surface.normals.append(normal)
+		surface.colors.append(colors[i])
+	for offset in [0, 2, 1, 0, 3, 2]:
+		surface.indices.append(start + offset)
+
 func triangle(material: Material, a: Vector3, b: Vector3, c: Vector3, color: Color = Color.WHITE) -> void:
 	var surface := _surface(material)
 	var normal := (b - a).cross(c - a).normalized()
