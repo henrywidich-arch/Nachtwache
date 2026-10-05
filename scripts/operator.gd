@@ -27,7 +27,7 @@ const TAUNT_EVERY := Vector2(24.0, 38.0)
 const STUN_AT_MOST := 1.2
 ## A hunter does not wait outside: when he has not seen his prey for CLOSE_AFTER seconds
 ## he starts to come nearer, and CLOSE_OVER seconds later he stands at CLOSE_REACH from
-## it, whatever his weapon would like.
+## it, whatever his weapon would like. The same when he is the last one left of a round.
 const CLOSE_AFTER := 5.0
 const CLOSE_OVER := 8.0
 const CLOSE_REACH := Vector2(5.0, 11.0)
@@ -159,6 +159,9 @@ func _physics_process(delta: float) -> void:
 func _reach() -> Vector2:
 	var far := super._reach()
 	var share := clampf((unseen_for - CLOSE_AFTER) / CLOSE_OVER, 0.0, 1.0)
+	# With nobody else left in the yard he does not hang back either: he comes for them.
+	if game.spawn_queue.is_empty() and game.alive_count <= game.operators.size():
+		share = 1.0
 	return Vector2(minf(far.x, lerpf(far.x, CLOSE_REACH.x, share)), minf(far.y, lerpf(far.y, CLOSE_REACH.y, share)))
 
 ## Decides whether it is time to throw a flashbang and be gone behind it.

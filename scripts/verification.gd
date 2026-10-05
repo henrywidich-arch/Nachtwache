@@ -2850,6 +2850,7 @@ func bot(game: Node3D) -> void:
 	var hunter: Operator = null
 	var harm := 0.0
 	var next_look := 2.0
+	var next_grenade := 0.0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bot-round="):
 			first_round = int(arg.trim_prefix("--bot-round="))
@@ -2948,7 +2949,7 @@ func bot(game: Node3D) -> void:
 			game.player.reserve = game.player.max_reserve()
 		blasts = maxi(blasts, game.fx.growths.size())
 		var best: Infected = null
-		var best_distance := 40.0
+		var best_distance := 2000.0
 		for node in get_tree().get_nodes_in_group("infected"):
 			var enemy := node as Infected
 			var id := enemy.get_instance_id()
@@ -2973,14 +2974,23 @@ func bot(game: Node3D) -> void:
 			var eye: Vector3 = game.player.camera.global_position
 			var aim: Vector3 = enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.62, 0)
 			var query := PhysicsRayQueryParameters3D.create(eye, aim, 1)
-			if distance < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
+			# Behind a shield that faces the bot: anybody else comes first.
+			var rank := distance + (1000.0 if enemy.blocks(enemy.global_position - game.player.global_position) else 0.0)
+			if distance < 40.0 and rank < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
 				best = enemy
-				best_distance = distance
+				best_distance = rank
 		if best != null:
 			var to: Vector3 = best.global_position + Vector3(0, float(best.spec.height) * 0.62, 0) - game.player.camera.global_position
 			game.player.rotation.y = atan2(-to.x, -to.z)
 			game.player.camera.rotation.x = atan2(to.y, Vector2(to.x, to.z).length())
-			game.player.shoot()
+			if best_distance < 1000.0:
+				game.player.shoot()
+			elif game.elapsed >= next_grenade:
+				# Only he is left, and the bot cannot walk round him: a grenade does.
+				next_grenade = game.elapsed + 3.0
+				game.player.items.grenade = 1
+				game.player.throw_cooldown = 0.0
+				game.player.throw("grenade")
 		game.player.position.x = post.x
 		game.player.position.z = post.z
 		if game.elapsed >= next_report:
@@ -4042,7 +4052,9 @@ func _operators(game: Node3D) -> void:
 			fled = true
 			break
 	expect(fled and ghost.breaks_done >= 1 and not ghost.leaving, "Hit hard, an operator breaks contact at once")
-	# A hunter does not wait outside for somebody who stays in the house.
+	# A hunter does not wait outside for somebody who stays in the house. (With others in
+	# the yard: alone he comes at once.)
+	game.alive_count += 5
 	ghost.unseen_for = 0.0
 	var far_reach: Vector2 = ghost._reach()
 	ghost.unseen_for = Operator.CLOSE_AFTER + Operator.CLOSE_OVER * 0.5
@@ -4050,7 +4062,9 @@ func _operators(game: Node3D) -> void:
 	ghost.unseen_for = Operator.CLOSE_AFTER + Operator.CLOSE_OVER
 	var close_reach: Vector2 = ghost._reach()
 	ghost.unseen_for = 0.0
-	expect(far_reach == Vector2(20.0, 34.0) and nearing.y < far_reach.y and nearing.y > close_reach.y and close_reach == Operator.CLOSE_REACH, "An operator who has lost sight of his prey comes nearer, whatever his weapon would like (%s, then %s, then %s)" % [str(far_reach), str(nearing), str(close_reach)])
+	game.alive_count -= 5
+	var last_reach: Vector2 = ghost._reach()
+	expect(far_reach == Vector2(20.0, 34.0) and nearing.y < far_reach.y and nearing.y > close_reach.y and close_reach == Operator.CLOSE_REACH and last_reach == Operator.CLOSE_REACH, "An operator who has lost sight of his prey comes nearer, whatever his weapon would like (%s, then %s, then %s) - and so does the last one left of a round" % [str(far_reach), str(nearing), str(close_reach)])
 	ghost.set_physics_process(false)
 	ghost._retire()
 	ghost.queue_free()
