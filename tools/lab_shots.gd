@@ -20,6 +20,8 @@ extends SceneTree
 ##   near=12     everything closer to the camera than this is cut away
 ##   plan        looking straight down in flat light, without fog, rain and roofs
 ##   cut=-0.7    with "plan": everything above this height is cut away
+##   pull=0,2    the drives of these servers of the laboratory stand half out of their bays
+##   gone=1      the drives of these servers have been pulled
 ## Nadja's model stands at points.nadja in every picture, so that one can judge how well
 ## she is seen through the glass.
 
@@ -36,6 +38,31 @@ const VIEWS := {
 	"lab_no_torch": [Vector3(4.5, -1.98, -14.6), Vector3(-4.0, -2.6, -22.0), 80, "notorch"],
 	"lab_tanks": [Vector3(0.5, -1.98, -19.5), Vector3(4.6, -2.3, -24.6), 70, ""],
 	"lab_tank_close": [Vector3(-4.6, -1.98, -22.2), Vector3(-5.6, -2.2, -24.1), 60, ""],
+	# The laboratory after its makeover: what one sees from the door one comes in by, the
+	# servers, the tanks and who is in them, the benches, the containment room.
+	"lab_door": [Vector3(4.5, -1.98, -13.7), Vector3(2.6, -2.5, -22.0), 84, ""],
+	"lab_door_right": [Vector3(4.5, -1.98, -14.4), Vector3(7.6, -2.3, -19.5), 80, ""],
+	"lab_door_no_torch": [Vector3(4.5, -1.98, -13.7), Vector3(2.6, -2.5, -22.0), 84, "notorch"],
+	"lab_west_no_torch": [Vector3(-7.4, -1.98, -15.0), Vector3(5.0, -2.7, -23.5), 80, "notorch"],
+	"lab_north_no_torch": [Vector3(0.0, -1.98, -24.2), Vector3(1.5, -2.6, -14.0), 80, "notorch"],
+	"lab_servers": [Vector3(5.9, -1.98, -16.3), Vector3(7.6, -2.5, -20.5), 74, ""],
+	"lab_servers_front": [Vector3(4.2, -1.98, -19.7), Vector3(7.6, -2.5, -19.7), 74, ""],
+	"lab_servers_no_torch": [Vector3(5.9, -1.98, -16.3), Vector3(7.6, -2.5, -20.5), 74, "notorch"],
+	"lab_server_bay": [Vector3(6.3, -2.1, -21.0), Vector3(7.2, -2.44, -21.3), 60, ""],
+	"lab_tanks_west": [Vector3(-5.35, -1.98, -21.3), Vector3(-5.35, -2.25, -24.2), 72, ""],
+	"lab_tanks_west_no_torch": [Vector3(-5.35, -1.98, -21.3), Vector3(-5.35, -2.25, -24.2), 72, "notorch"],
+	"lab_tanks_east": [Vector3(4.6, -1.98, -21.6), Vector3(5.5, -2.3, -24.2), 72, ""],
+	"lab_tank_striker": [Vector3(-5.2, -1.98, -22.6), Vector3(-5.35, -2.0, -24.2), 62, "notorch"],
+	"lab_tank_stalker": [Vector3(5.6, -1.98, -22.5), Vector3(6.3, -2.05, -24.2), 62, ""],
+	"lab_tank_side": [Vector3(-2.4, -1.98, -23.3), Vector3(-5.2, -2.2, -24.3), 56, ""],
+	"lab_burst_tank": [Vector3(2.6, -1.98, -22.0), Vector3(3.9, -3.0, -24.3), 70, ""],
+	"lab_tank_desk": [Vector3(-5.6, -1.98, -21.9), Vector3(-7.9, -2.3, -23.0), 66, ""],
+	"lab_benches": [Vector3(0.3, -1.98, -15.2), Vector3(-3.0, -2.75, -17.2), 70, ""],
+	"lab_bench_close": [Vector3(-3.4, -2.0, -15.4), Vector3(-3.6, -2.5, -16.8), 62, ""],
+	"lab_stores": [Vector3(-1.5, -1.98, -17.6), Vector3(-2.4, -2.3, -14.0), 78, ""],
+	"lab_cell": [Vector3(-9.0, -1.98, -17.2), Vector3(-12.6, -2.7, -20.5), 80, ""],
+	"lab_cell_desk": [Vector3(-11.0, -1.98, -19.9), Vector3(-13.2, -2.5, -18.3), 66, ""],
+	"lab_ceiling": [Vector3(-6.5, -2.6, -16.0), Vector3(4.0, -0.7, -22.0), 84, "notorch"],
 	"nadja_glass": [Vector3(-4.6, -1.98, -20.2), Vector3(-9.8, -2.55, -20.5), 66, "locked+open=cellar"],
 	"nadja_glass_far": [Vector3(3.0, -1.98, -16.2), Vector3(-9.8, -2.6, -20.5), 60, "locked+open=cellar+notorch"],
 	"nadja_door_sealed": [Vector3(-5.0, -1.98, -15.6), Vector3(-8.2, -2.5, -17.6), 66, "locked+open=cellar"],
@@ -122,8 +149,7 @@ func _darken(dark: bool) -> void:
 				energies[entry.light] = entry.energy
 			entry.energy = 0.0 if dark else float(energies[entry.light])
 			(entry.light as Light3D).light_energy = entry.energy
-	(map.mats["steady"] as StandardMaterial3D).albedo_color = Color(0.0, 0.0, 0.0) if dark else Color(2.42, 2.42, 2.42)
-	(map.mats["fluid"] as StandardMaterial3D).albedo_color = Color(0.0, 0.0, 0.0, 0.4) if dark else Color(0.16, 0.85, 0.26, 0.4)
+	map.lab_glow(0.0 if dark else 1.0)
 	if dark:
 		for part in map.lab_parts:
 			if part is OmniLight3D and not energies.has(part) and part.visible:
@@ -217,6 +243,12 @@ func _run() -> void:
 		for area in open:
 			map.unlock(area, true)
 		map.set_power(not "blackout" in words)
+		for i in range(map.servers.size()):
+			map.set_drive(i, 0.0)
+		for index in _value(words, "pull", "").split(",", false):
+			map.set_drive(int(index), 0.16)
+		for index in _value(words, "gone", "").split(",", false):
+			map.set_drive(int(index), 0.0, false)
 		map.set_gas(_value(words, "gas", ""))
 		map.set_beacon("beacon" in words)
 		map.set_process(true)

@@ -162,6 +162,10 @@ var body_props: Array = []
 func clear() -> void:
 	_drop_tasks()
 	_drop_bodies()
+	# A new night: every drive is back in its server.
+	if game != null and game.cabin != null and game.cabin.has_method("set_drive"):
+		for i in range(game.cabin.servers.size()):
+			game.cabin.set_drive(i, 0.0)
 	plan.clear()
 	pending.clear()
 	wave_kind = "classic"
@@ -390,10 +394,19 @@ func _start_task(kind: String) -> Dictionary:
 		"zone":
 			task.items.append(_item("zone", _spot(taken, 16.0, 3)))
 		"drives":
+			# The servers have stood in the lab all night: three of them are picked, and
+			# the thing to use is the spot on the floor in front of each.
+			var racks := _pick_servers(3)
 			for i in range(3):
-				var pos := _lab_spot(taken)
-				taken.append(pos)
-				task.items.append(_item("drive", pos))
+				if i < racks.size():
+					var drive := _item("drive", racks[i].pos)
+					drive.yaw = float(racks[i].yaw)
+					task.items.append(drive)
+				else:
+					# (A map without servers: somewhere in its lab.)
+					var pos := _lab_spot(taken)
+					taken.append(pos)
+					task.items.append(_item("drive", pos))
 		"module":
 			# The helicopter needs a moment to get there, then the crate comes down on its
 			# parachute; `health` counts the seconds until it lands.
@@ -477,6 +490,43 @@ func _upper_spot(taken: Array, scenery: bool = false) -> Vector3:
 		if apart and (barred or cabin.path_between(cabin.player_start, pos).size() >= 3):
 			return pos
 	return Vector3.INF
+
+## `count` of the map's servers (CabinMap.servers), no two of them side by side as long
+## as there are enough to choose from, in the order in which they stand.
+func _pick_servers(count: int) -> Array:
+	var racks: Variant = game.cabin.get("servers")
+	if not racks is Array:
+		return []
+	var order: Array = range((racks as Array).size())
+	for i in range(order.size() - 1, 0, -1):
+		var swap := random.randi_range(0, i)
+		var kept: int = order[i]
+		order[i] = order[swap]
+		order[swap] = kept
+	var picked: Array = []
+	for apart in [1.5, 0.0]:
+		for index in order:
+			var free: bool = picked.size() < count and not picked.has(index)
+			for other in picked:
+				if ((racks[index].pos as Vector3).distance_to(racks[other].pos) < float(apart)):
+					free = false
+			if free:
+				picked.append(index)
+	picked.sort()
+	var out: Array = []
+	for index in picked:
+		out.append(racks[index])
+	return out
+
+## The server whose drive an item of the kind "drive" stands for: its place in
+## CabinMap.servers, or -1 on a map without servers.
+func _server_at(pos: Vector3) -> int:
+	var racks: Variant = game.cabin.get("servers")
+	if racks is Array:
+		for i in range((racks as Array).size()):
+			if (racks[i].pos as Vector3).distance_to(pos) < 0.3:
+				return i
+	return -1
 
 ## A free place in the lab, a few steps from its middle and from `taken`.
 func _lab_spot(taken: Array) -> Vector3:
@@ -1010,7 +1060,7 @@ func dismiss_stalker() -> void:
 func _drop_tasks() -> void:
 	for key in props:
 		if is_instance_valid(props[key]):
-			props[key].queue_free()
+			_remove_prop(props[key])
 	props.clear()
 	for key in targets:
 		var target: Target = targets[key]
@@ -1296,11 +1346,17 @@ func _build_prop(item: Dictionary) -> Node3D:
 			_box(prop, Vector3(0.1, 0.02, 0.1), lid, Color("7dffb0"), 3.0).name = "Tag"
 			_lamp(prop, lid + Vector3(0, 0.28, 0), Color("7dffb0"), 0.9, 4.5)
 		"drive":
-			# A drive caddy pulled half out of its rack, on a cart.
-			_box(prop, Vector3(0.5, 0.9, 0.5), Vector3(0, 0.45, 0), Color("2b3036"), 0.0, 0.5)
-			_box(prop, Vector3(0.34, 0.1, 0.42), Vector3(0, 0.96, 0.05), Color("5b636b"), 0.0, 0.6)
-			_box(prop, Vector3(0.06, 0.03, 0.02), Vector3(0.1, 0.97, 0.27), Color("58d8ff"), 3.0).name = "Tag"
-			_lamp(prop, Vector3(0, 1.3, 0.3), Color("58d8ff"), 0.8, 4.0)
+			# The server is furniture of the map and has stood there all along, its drive
+			# in it (CabinMap.servers). What is built here only marks the bay to pull
+			# from: a light on its lip, and a lamp in front of it. The prop's own place is
+			# the spot on the floor in front of the rack, and it looks at the rack.
+			var server := _server_at(item.pos)
+			var bay := Vector3(0, 1.2, -0.7)
+			if server >= 0:
+				bay = Basis(Vector3.UP, -float(item.yaw)) * ((game.cabin.servers[server].bay as Vector3) - (item.pos as Vector3))
+			_box(prop, Vector3(0.1, 0.014, 0.014), bay + Vector3(0, -0.085, 0.012), Color("58d8ff"), 3.0).name = "Tag"
+			_lamp(prop, bay + Vector3(0, 0.12, 0.3), Color("58d8ff"), 0.8, 3.0)
+			prop.set_meta("server", server)
 		"generator":
 			_box(prop, Vector3(1.25, 0.7, 0.7), Vector3(0, 0.5, 0), Color("b98a22"), 0.0, 0.3)
 			_box(prop, Vector3(1.35, 0.12, 0.8), Vector3(0, 0.1, 0), Color("22262a"), 0.0, 0.5)
@@ -1429,8 +1485,24 @@ func _sync_props() -> void:
 			_show_state(props[key], task, item)
 	for key in props.keys():
 		if not wanted.has(key):
-			props[key].queue_free()
+			_remove_prop(props[key])
 			props.erase(key)
+
+## Takes a prop out of the world. A drive that was marked and never pulled goes back into
+## its bay; one that was pulled stays gone for the rest of the night.
+func _remove_prop(prop: Node3D) -> void:
+	if game != null and game.cabin != null and int(prop.get_meta("server", -1)) >= 0 and not bool(prop.get_meta("pulled", false)):
+		game.cabin.set_drive(int(prop.get_meta("server")), 0.0)
+	prop.queue_free()
+
+## The drive of the server a prop stands at: it stands a little out of its bay while it
+## is wanted, comes further out while somebody pulls at it, and is gone once it is done.
+func _seat_drive(prop: Node3D, item: Dictionary) -> void:
+	var server := int(prop.get_meta("server", -1))
+	if server < 0:
+		return
+	game.cabin.set_drive(server, 0.045 + 0.2 * float(item.use), not item.done)
+	prop.set_meta("pulled", bool(item.done))
 
 func _show_state(prop: Node3D, task: Dictionary, item: Dictionary) -> void:
 	var lamp := prop.get_node_or_null("Lamp") as OmniLight3D
@@ -1442,6 +1514,8 @@ func _show_state(prop: Node3D, task: Dictionary, item: Dictionary) -> void:
 		"corpse", "drive":
 			tint = Color("58d8ff")
 			energy = 0.0 if item.done else 0.6 + 0.4 * sin(clock * 5.0)
+			if str(item.kind) == "drive":
+				_seat_drive(prop, item)
 		"case":
 			tint = Color("7dffb0")
 			energy = 0.0 if item.done else 0.6 + 0.4 * sin(clock * 5.0)

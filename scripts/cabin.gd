@@ -141,6 +141,18 @@ var lab_parts: Array[Node3D] = []
 var hall_parts: Array[Node3D] = []
 ## The three lamps down there that cast shadows; they are part of the hall.
 var lab_shadow_lamps: Array[Light3D] = []
+## Materials of the laboratory that shine by themselves (see _lab_shader and lab_glow),
+## and the bodies in its specimen tanks (LabSpecimen).
+var lab_shaders: Array[ShaderMaterial] = []
+var specimens: Array[Node3D] = []
+## The server racks of the laboratory whose drives can be pulled. They are furniture: they
+## stand there from the start, whether a task asks for them or not. Each is {"pos": the
+## spot on the floor in front of it, "yaw": the way somebody looks who stands there and
+## faces it (rotation.y of a node whose front is -z), "bay": the middle of the front of
+## its drive bay, "out": the direction a drive comes out of it, "drive": the caddy that
+## sits in the bay (a node: it can be slid out along `out` and taken away), "home": where
+## that caddy sits while it is in}.
+var servers: Array[Dictionary] = []
 ## 0 above ground, 1 once the viewer's eyes are well below it.
 var below := 0.0
 var beacon_on := false
@@ -218,8 +230,9 @@ func _ready() -> void:
 	_build_barriers()
 	for id in chunks:
 		for instance in (chunks[id] as MeshBatch).commit(self, id, chunk_shadows[id]):
-			# Lamp glass must not throw a shadow of its own light.
-			if instance.mesh.surface_get_material(0) in [mats["glow"], mats["steady"]]:
+			# Lamp glass must not throw a shadow of its own light, nor does anything else
+			# that shines by itself.
+			if instance.mesh.surface_get_material(0) in [mats["glow"], mats["steady"], mats["blink"], mats["screen"]]:
 				instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			if String(id).begins_with("Cellar") or String(id).begins_with("Lab"):
 				lab_parts.append(instance)
@@ -368,11 +381,61 @@ func _build_materials() -> void:
 	glass.roughness = 0.05
 	glass.metallic_specular = 0.8
 	mats["glass"] = glass
-	var fluid := StandardMaterial3D.new()
-	fluid.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fluid.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	fluid.albedo_color = Color(0.16, 0.85, 0.26, 0.4)
-	mats["fluid"] = fluid
+	# What is left of a pane that has burst.
+	var shard := StandardMaterial3D.new()
+	shard.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shard.albedo_color = Color(0.72, 0.95, 0.88, 0.3)
+	shard.roughness = 0.08
+	shard.metallic_specular = 1.0
+	shard.cull_mode = BaseMaterial3D.CULL_DISABLED
+	shard.render_priority = 2
+	mats["shard"] = shard
+	# What shines by itself in the laboratory and moves while it does: the fluid of the
+	# tanks and the bubbles in it, status lights that blink, screens with something on
+	# them. Each is drawn by a small programme of its own (see LAB_FLUID and the others).
+	# Among see-through things the fluid is drawn first, then its bubbles, then the glass.
+	var fluid := _lab_shader("fluid", LAB_FLUID, 0)
+	fluid.set_shader_parameter("low", CELLAR + TANK_LOW)
+	fluid.set_shader_parameter("tall", TANK_TALL)
+	var wet := _lab_shader("wet", LAB_FLUID, 0)
+	wet.set_shader_parameter("low", CELLAR + TANK_LOW)
+	wet.set_shader_parameter("thin", 1.0)
+	_lab_shader("bubbles", LAB_BUBBLES, 1)
+	glass.render_priority = 2
+	_lab_shader("blink", LAB_BLINK, 0)
+	_lab_shader("screen", LAB_SCREEN, 0)
+
+## A material of the laboratory that is drawn by its own programme. All of them have a
+## value `power`: how brightly they shine (see lab_glow).
+func _lab_shader(key: String, code: String, priority: int) -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = code
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	material.render_priority = priority
+	mats[key] = material
+	lab_shaders.append(material)
+	return material
+
+## Dims everything in the basement that shines by itself, apart from its lamps: lamp
+## glass, signal lights, screens, the fluid in the tanks and what floats in it. 1 is how
+## it is built, 0 is dark. (Pictures that look for light leaking in from outside use it.)
+func lab_glow(share: float) -> void:
+	(mats["steady"] as StandardMaterial3D).albedo_color = Color(2.42 * share, 2.42 * share, 2.42 * share)
+	for material in lab_shaders:
+		material.set_shader_parameter("power", share)
+	for specimen in specimens:
+		specimen.call("set_power", share)
+
+## Slides the drive of server `index` (see `servers`) `out` metres out of its bay. With
+## `there` false it is gone altogether: somebody has pulled it.
+func set_drive(index: int, out: float, there: bool = true) -> void:
+	if index < 0 or index >= servers.size():
+		return
+	var server: Dictionary = servers[index]
+	var drive: Node3D = server.drive
+	drive.visible = there
+	drive.position = (server.home as Vector3) + (server.out as Vector3) * out
 
 ## Lets the following part of the map roll its own dice, so that adding to it never
 ## changes the looks of what is built after it; _shared_dice hands the old ones back.
@@ -2398,6 +2461,211 @@ func _build_yard() -> void:
 
 # ---------------------------------------------------------------- basement
 
+## The fluid of a specimen tank: thin where one looks straight into it, so that what
+## floats in it can be made out, and dense and bright towards its edge and towards the
+## lamp rings in foot and cap. `low` and `tall` are the column in the world; `thin` is
+## 1 for what has run out over a floor and lies there as a film.
+const LAB_FLUID := """shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_back, shadows_disabled;
+uniform vec3 tint : source_color = vec3(0.16, 0.85, 0.26);
+uniform float power = 1.0;
+uniform float low = -3.18;
+uniform float tall = 2.0;
+uniform float thin = 0.0;
+varying vec3 world;
+void vertex() {
+	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+	float edge = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 1.6);
+	float level = clamp((world.y - low) / tall, 0.0, 1.0);
+	float ends = pow(abs(level * 2.0 - 1.0), 3.0);
+	float veil = 0.5 + 0.5 * sin(world.y * 6.0 - TIME * 0.6 + 2.0 * sin(world.x * 3.1 + world.z * 2.7 + TIME * 0.23));
+	ALBEDO = tint * (0.62 + 0.75 * ends + 0.55 * edge + 0.07 * veil) * power * (1.0 - 0.4 * thin);
+	ALPHA = clamp(0.2 + 0.42 * edge + 0.14 * ends, 0.0, 1.0) * (1.0 - 0.55 * thin);
+}
+"""
+## Strings of bubbles that rise through the fluid, drawn on a tube inside it. `radius`
+## is that of the tube: with it every tank is told from its neighbours.
+const LAB_BUBBLES := """shader_type spatial;
+render_mode unshaded, blend_add, depth_draw_never, cull_disabled, shadows_disabled;
+uniform float power = 1.0;
+uniform float radius = 0.34;
+varying vec3 world;
+varying vec3 outward;
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+void vertex() {
+	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	outward = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+}
+void fragment() {
+	vec3 out_now = normalize(outward);
+	float tank = hash(floor((world.xz - out_now.xz * radius) * 2.0 + 0.5));
+	float around = (atan(out_now.x, out_now.z) / 6.2831853 + 0.5) * 12.0;
+	float column = floor(around);
+	float seed = hash(vec2(column, tank * 31.0));
+	float y = world.y * 9.0 - TIME * mix(2.2, 4.0, fract(seed * 13.0)) + seed * 10.0;
+	float cell = floor(y);
+	float size = mix(0.07, 0.19, hash(vec2(cell * 3.1, column + tank)));
+	float sway = 0.5 + 0.22 * sin(cell * 1.7 + TIME * 1.6);
+	float bubble = smoothstep(size, size * 0.4, length(vec2((fract(around) - sway) * 1.6, fract(y) - 0.5)));
+	float there = step(0.76, seed) * step(0.45, hash(vec2(cell, column + tank * 17.0)));
+	ALBEDO = vec3(0.7, 1.0, 0.78) * bubble * there * 0.4 * power;
+}
+"""
+## Signal lights. The colour of a vertex is the light's colour, and its alpha says how it
+## blinks: 1 burns steadily, above 0.5 it flickers like a busy drive, above 0.25 it blinks
+## evenly, below that it is dark and flashes now and then. (See _led.)
+const LAB_BLINK := """shader_type spatial;
+render_mode unshaded, shadows_disabled;
+uniform float power = 1.0;
+void fragment() {
+	float code = COLOR.a;
+	float seed = fract(code * 91.7);
+	float on = 1.0;
+	if (code < 0.985) {
+		if (code > 0.5) {
+			float tick = floor(TIME * mix(6.0, 20.0, seed) + seed * 40.0);
+			on = step(0.42, fract(sin(tick * 12.9898 + seed * 78.233) * 43758.5453));
+		} else if (code > 0.25) {
+			on = step(0.5, fract(TIME * mix(0.6, 1.6, seed) + seed));
+		} else {
+			on = step(0.86, fract(TIME * mix(0.25, 0.6, seed) + seed * 3.0));
+		}
+	}
+	ALBEDO = pow(COLOR.rgb, vec3(2.2)) * 2.42 * (0.05 + 0.95 * on) * power;
+}
+"""
+## What the screens show. The four corners of a screen carry, as their colour, where they
+## are on it (red and green: 0,0 is its upper left corner), which picture it shows (blue,
+## in fifteenths) and a number that makes it differ from others of its kind (alpha).
+## (See _screen.) The pictures: 0 lines of text that scroll, 1 a heartbeat (a flat line
+## from 0.5 on), 2 a bar chart, 3 a turning double helix, 4 a warning, 5 the servers being
+## wiped, 6 snow, 7 a camera without a signal, 8 a board of sectors, 9 the lanes of a
+## sequencer. (A warning whose number is below 0.2 has no lines of writing in it: its
+## words are put there as lettering.)
+const LAB_SCREEN := """shader_type spatial;
+render_mode unshaded, shadows_disabled;
+uniform float power = 1.0;
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float box(vec2 uv, vec2 low, vec2 high) {
+	vec2 inside = step(low, uv) * step(uv, high);
+	return inside.x * inside.y;
+}
+// Lines of something like writing. `fine` is 1 where a line is big enough to be made out
+// and falls to 0 where it would only flicker: there it turns into an even grey.
+float writing(vec2 at, float rows, float letters, float seed, float fine) {
+	float line = floor(at.y * rows);
+	float along = fract(at.y * rows);
+	float reach = 0.3 + 0.65 * hash(vec2(line, seed));
+	float ink = step(0.24, hash(vec2(floor(at.x * letters), line + seed * 9.0))) * step(0.14, fract(at.x * letters));
+	float sharp = step(0.3, along) * step(along, 0.74) * ink * step(at.x, reach) * step(0.0, at.x);
+	return mix(0.12, sharp, fine);
+}
+float heartbeat(float x) {
+	float p = 0.1 * exp(-pow((x - 0.18) * 28.0, 2.0));
+	p -= 0.12 * exp(-pow((x - 0.3) * 70.0, 2.0));
+	p += 0.75 * exp(-pow((x - 0.33) * 60.0, 2.0));
+	p -= 0.22 * exp(-pow((x - 0.37) * 60.0, 2.0));
+	p += 0.16 * exp(-pow((x - 0.58) * 16.0, 2.0));
+	return p;
+}
+void fragment() {
+	vec2 uv = COLOR.rg;
+	int style = int(round(COLOR.b * 15.0));
+	float seed = COLOR.a;
+	float fine = 1.0 - clamp(max(fwidth(uv.x), fwidth(uv.y)) * 45.0 - 0.25, 0.0, 1.0);
+	vec3 teal = vec3(0.3, 1.0, 0.72);
+	vec3 cold = vec3(0.6, 0.9, 1.0);
+	vec3 lit = vec3(0.0);
+	if (style == 0) {
+		float head = box(uv, vec2(0.0), vec2(1.0, 0.1));
+		float text = writing(vec2((uv.x - 0.05) / 0.9, uv.y + floor(TIME * (0.7 + seed)) / 13.0), 13.0, 42.0, seed, fine) * box(uv, vec2(0.05, 0.14), vec2(0.95, 0.9));
+		float cursor = box(uv, vec2(0.05, 0.91), vec2(0.08, 0.96)) * step(0.5, fract(TIME * 1.3));
+		lit = teal * (head * 0.2 + box(uv, vec2(0.03, 0.03), vec2(0.3, 0.07)) * 0.5 + text * 0.85 + cursor);
+	} else if (style == 1) {
+		bool dead = seed >= 0.5;
+		vec3 ink = dead ? vec3(1.0, 0.25, 0.18) : vec3(0.35, 1.0, 0.5);
+		float x = uv.x / 0.74;
+		float beat = dead ? 0.0 : heartbeat(fract(x * 2.5 + seed * 5.0));
+		// The line fades behind the point that draws it.
+		float age = mix(1.0, 0.12, fract(TIME * 0.22 + seed - x)) * step(x, 1.0);
+		float trace = smoothstep(0.024, 0.007, abs(uv.y - (0.42 - beat * 0.3))) * age;
+		float breath = smoothstep(0.02, 0.006, abs(uv.y - (0.8 - (dead ? 0.0 : 0.05 * sin(x * 9.0 + seed * 3.0))))) * age * 0.5;
+		float rule = (step(0.96, fract(uv.x * 12.0)) + step(0.96, fract(uv.y * 8.0))) * 0.06 * step(x, 1.0) * fine;
+		float digits = box(uv, vec2(0.79, 0.12), vec2(0.96, 0.4)) * step(0.3, hash(floor(uv * vec2(22.0, 9.0)) + floor(TIME * (dead ? 0.0 : 1.0)) + seed));
+		float notes = writing(vec2((uv.x - 0.79) / 0.19, (uv.y - 0.5) / 0.4), 5.0, 9.0, seed, fine) * box(uv, vec2(0.79, 0.5), vec2(0.98, 0.9));
+		float alarm = dead ? step(0.5, fract(TIME * 1.4)) : 1.0;
+		lit = ink * (rule + trace * 1.3 + breath + (digits * 0.9 + notes * 0.5) * alarm);
+	} else if (style == 2) {
+		float bar = floor(uv.x * 12.0);
+		float level = 0.15 + 0.7 * hash(vec2(bar, seed * 50.0)) * (0.75 + 0.25 * sin(TIME * (0.5 + hash(vec2(bar, 3.0))) + bar));
+		float fill = step(1.0 - level, (uv.y - 0.12) / 0.8) * step(0.18, fract(uv.x * 12.0)) * box(uv, vec2(0.02, 0.12), vec2(0.98, 0.92));
+		float rule = step(0.94, fract(uv.y * 6.0)) * 0.08 * fine;
+		lit = vec3(1.0, 0.72, 0.25) * (fill * 0.8 + rule) + teal * box(uv, vec2(0.03, 0.03), vec2(0.4, 0.07)) * 0.5;
+	} else if (style == 3) {
+		float along = uv.y * 9.0 + TIME * 0.8;
+		float a = 0.3 + 0.16 * sin(along);
+		float b = 0.3 - 0.16 * sin(along);
+		float front = 0.5 + 0.5 * cos(along);
+		float strand = smoothstep(0.034, 0.012, abs(uv.x - a)) * (0.45 + 0.55 * front) + smoothstep(0.034, 0.012, abs(uv.x - b)) * (1.0 - 0.55 * front);
+		float rung = step(min(a, b), uv.x) * step(uv.x, max(a, b)) * step(0.78, fract(along * 0.95493)) * 0.4 * fine;
+		float text = writing(vec2((uv.x - 0.56) / 0.4, uv.y), 11.0, 18.0, seed, fine) * box(uv, vec2(0.56, 0.1), vec2(0.96, 0.9));
+		lit = vec3(0.25, 0.9, 1.0) * (strand + rung + text * 0.6);
+	} else if (style == 4) {
+		float beat = 0.35 + 0.65 * step(0.5, fract(TIME * 1.1 + seed));
+		float edge = 1.0 - box(uv, vec2(0.03, 0.05), vec2(0.97, 0.95));
+		float outer = step(0.25, uv.y) * step(uv.y, 0.75) * step(abs(uv.x - 0.24), (uv.y - 0.25) * 0.36);
+		float inner = step(0.33, uv.y) * step(uv.y, 0.72) * step(abs(uv.x - 0.24), (uv.y - 0.33) * 0.36 - 0.012);
+		float mark = box(uv, vec2(0.224, 0.45), vec2(0.256, 0.6)) + box(uv, vec2(0.224, 0.635), vec2(0.256, 0.685));
+		float text = writing(vec2((uv.x - 0.46) / 0.48, uv.y), 8.0, 16.0, seed, fine) * box(uv, vec2(0.46, 0.22), vec2(0.94, 0.8)) * step(0.2, seed);
+		lit = vec3(1.0, 0.16, 0.1) * ((edge + outer - inner + mark) * beat + text * 0.8);
+	} else if (style == 5) {
+		// Six volumes one below the other: the upper ones are gone, one is being wiped,
+		// the rest are waiting for it. It creeps on over ten minutes.
+		float done = 2.2 + fract(TIME / 600.0 + seed) * 3.7;
+		float row = floor((uv.y - 0.2) / 0.11);
+		vec2 at = vec2(uv.x, fract((uv.y - 0.2) / 0.11));
+		float rows = step(0.2, uv.y) * step(uv.y, 0.86);
+		float slot = box(at, vec2(0.3, 0.25), vec2(0.95, 0.75));
+		float fill = slot * step((uv.x - 0.3) / 0.65, clamp(done - row, 0.0, 1.0));
+		float busy = step(row, done) * step(done, row + 1.0);
+		float beat = 0.55 + 0.45 * step(0.5, fract(TIME * 1.6));
+		float name = box(at, vec2(0.04, 0.3), vec2(0.14 + 0.12 * hash(vec2(row, seed)), 0.7));
+		lit = vec3(1.0, 0.2, 0.1) * rows * ((slot - box(at, vec2(0.306, 0.33), vec2(0.944, 0.67))) * 0.6 + fill * (0.45 + 0.55 * busy * beat)) + vec3(1.0, 0.75, 0.55) * (rows * name * 0.5 + box(uv, vec2(0.04, 0.05), vec2(0.62, 0.13)) * beat * 0.8);
+	} else if (style == 6) {
+		float snow = mix(0.5, hash(floor(uv * vec2(90.0, 60.0)) + floor(TIME * 24.0)), fine);
+		lit = vec3(0.6, 0.7, 0.75) * snow * (0.2 + 0.5 * step(0.82, fract(uv.y * 0.9 + TIME * 0.3)));
+	} else if (style == 7) {
+		float snow = mix(0.5, hash(floor(uv * vec2(120.0, 80.0)) + floor(TIME * 18.0)), fine);
+		float label = box(uv, vec2(0.3, 0.42), vec2(0.7, 0.58));
+		float words = writing(vec2((uv.x - 0.33) / 0.34, (uv.y - 0.44) / 0.1201), 1.0, 12.0, 0.9, fine);
+		float stamp = writing(vec2((uv.x - 0.6) / 0.36, (uv.y - 0.86) / 0.0801), 1.0, 16.0, 0.95, fine) * box(uv, vec2(0.6, 0.86), vec2(0.96, 0.94));
+		float rec = box(uv, vec2(0.05, 0.06), vec2(0.09, 0.13)) * step(0.5, fract(TIME * 0.9 + seed));
+		lit = vec3(0.35, 0.45, 0.55) * snow * 0.22 * (1.0 - label) + vec3(0.9, 0.95, 1.0) * (label * words * 0.9 + stamp * 0.6) + vec3(1.0, 0.1, 0.05) * rec;
+	} else if (style == 8) {
+		vec2 grid = vec2(uv.x * 8.0, (uv.y - 0.16) / 0.8 * 4.0);
+		float state = hash(floor(grid) + seed * 20.0);
+		float tile = box(fract(grid), vec2(0.1, 0.12), vec2(0.9, 0.88)) * step(0.16, uv.y) * step(uv.y, 0.96);
+		vec3 tone = state > 0.82 ? vec3(1.0, 0.15, 0.1) * (0.4 + 0.6 * step(0.5, fract(TIME * (0.8 + state)))) : (state > 0.62 ? vec3(1.0, 0.7, 0.2) : vec3(0.25, 0.9, 0.55) * 0.55);
+		lit = tone * tile * 0.8 * (0.7 + 0.3 * step(0.5, fract(grid.y))) + cold * box(uv, vec2(0.02, 0.04), vec2(0.5, 0.11)) * 0.6;
+	} else {
+		float lane = floor(uv.x * 16.0);
+		float y = uv.y * 26.0 + TIME * 0.6 * (0.6 + hash(vec2(lane, 1.0)));
+		float pick = hash(vec2(lane, floor(y) + seed * 13.0));
+		vec3 base = pick < 0.25 ? vec3(0.3, 1.0, 0.4) : (pick < 0.5 ? vec3(0.3, 0.6, 1.0) : (pick < 0.75 ? vec3(1.0, 0.85, 0.3) : vec3(1.0, 0.35, 0.3)));
+		float band = step(0.3, hash(vec2(floor(y), lane * 7.0 + seed))) * step(0.2, fract(y)) * step(fract(y), 0.8) * step(0.2, fract(uv.x * 16.0)) * step(fract(uv.x * 16.0), 0.8);
+		lit = base * mix(0.25, band, fine) * 0.8 * box(uv, vec2(0.02, 0.1), vec2(0.98, 0.97)) + cold * box(uv, vec2(0.03, 0.02), vec2(0.35, 0.07)) * 0.6;
+	}
+	float shade = 1.0 - 0.4 * pow(length(uv - 0.5) * 1.25, 2.0);
+	ALBEDO = (lit * shade + vec3(0.004, 0.008, 0.008)) * 1.5 * power;
+}
+"""
+
 ## A lamp of the basement. It runs on the laboratory's own supply, so a blackout of the
 ## farm does not touch it, and it is only there while a way down is open.
 func _lab_lamp(lamp: Light3D) -> Light3D:
@@ -2426,8 +2694,42 @@ func _alarm_lamp(pos: Vector3, out: Vector3) -> void:
 
 ## Pipe, strut or cable between two points.
 func _pipe(from: Vector3, to: Vector3, radius: float, color: Color, sides: int = 8, material: String = "metal") -> void:
+	# (Built from its lower end: there is no shortest turn from straight up to straight down.)
+	if to.y < from.y:
+		var upper := from
+		from = to
+		to = upper
 	var span := to - from
 	batch.cylinder(mats[material], from, radius, radius, span.length(), color, sides, Basis(Quaternion(Vector3.UP, span.normalized())), false)
+
+## A hose or a cable that hangs in a curve between two points: `sag` pulls its middle
+## down (metres), `bow` pushes it aside.
+func _hose(from: Vector3, to: Vector3, radius: float, color: Color, sag: float = 0.2, bow: Vector3 = Vector3.ZERO, pieces: int = 6, material: String = "plain") -> void:
+	var last := from
+	for i in range(1, pieces + 1):
+		var t := float(i) / pieces
+		var point := from.lerp(to, t) + (Vector3(0, -sag, 0) + bow) * (4.0 * t * (1.0 - t))
+		_pipe(last, point, radius, color, 6, material)
+		last = point
+
+## A signal light of the laboratory (see LAB_BLINK). `code` says how it blinks: 1 burns
+## steadily, between 0.5 and 1 it flickers like a busy drive, between 0.25 and 0.5 it
+## blinks evenly, below that it is dark and only flashes now and then.
+func _led(center: Vector3, size: Vector3, color: Color, strength: float, code: float = 1.0, orientation: Basis = Basis.IDENTITY) -> void:
+	var factor := pow(clampf(strength / 7.0, 0.0, 1.0), 1.0 / 2.2)
+	batch.box(mats["blink"], center, size, Color(color.r * factor, color.g * factor, color.b * factor, code), orientation)
+
+## A screen that shows something (see LAB_SCREEN for the pictures). It lies in the local
+## x/y plane of `frame` around `local` and is seen from local +z; `tilt` leans it back and
+## `turn` turns it to the side (degrees). `number` makes it differ from others that show
+## the same (0..1; left out, the dice decide).
+func _screen(frame: Transform3D, local: Vector3, size: Vector2, picture: int, number: float = -1.0, tilt: float = 0.0, turn: float = 0.0) -> void:
+	var plane := frame * Transform3D(Basis.from_euler(Vector3(deg_to_rad(-tilt), deg_to_rad(turn), 0)), local)
+	var half := size * 0.5
+	if number < 0.0:
+		number = random.randf()
+	var blue := picture / 15.0
+	batch.quad_tinted(mats["screen"], plane * Vector3(-half.x, -half.y, 0), plane * Vector3(half.x, -half.y, 0), plane * Vector3(half.x, half.y, 0), plane * Vector3(-half.x, half.y, 0), [Color(0, 1, blue, number), Color(1, 1, blue, number), Color(1, 0, blue, number), Color(0, 0, blue, number)])
 
 ## Wall of the basement over a plan rectangle. By default it stands between floor and
 ## ceiling and reaches a little into both.
@@ -2534,92 +2836,1008 @@ func _build_cellar() -> void:
 	glow_key = "glow"
 	_shared_dice()
 
-## Laboratory bench, 1.05 m high and good as cover: a steel cabinet under a pale worktop,
-## its long side along local x. `kit` picks what stands on it.
+## A board that lies flat against a wall of the laboratory, between the points `a` and `b`
+## on the floor line of the wall's face: `lift` above the floor, `tall` high and `thick`
+## proud of the wall. `out` points away from the wall, along x or along z.
+func _lab_board(a: Vector3, b: Vector3, out: Vector3, lift: float, tall: float, thick: float, material: String, color: Color) -> void:
+	var long := a.distance_to(b)
+	var size := Vector3(long, tall, thick) if absf(out.z) > 0.5 else Vector3(thick, tall, long)
+	_part(material, (a + b) * 0.5 + out * (thick * 0.5) + Vector3(0, lift + tall * 0.5, 0), size, color)
+
+## Cladding on a wall of the laboratory, from the floor up to 2.36 m: pale panels with a
+## joint every 1.2 m or so, a dark rail at the foot, the teal band of Helix at chest
+## height and a rail on top, with a strip of light under it if `strip` is set. `a` and `b`
+## are the ends of the run on the floor line of the wall's face; `out` points into the room.
+func _clad(a: Vector3, b: Vector3, out: Vector3, strip: bool = true, tone: Color = Color("a3aaa7")) -> void:
+	var long := a.distance_to(b)
+	var along := (b - a) / long
+	_lab_board(a, b, out, 0.1, 2.2, 0.012, "epoxy", tone)
+	_lab_board(a, b, out, 0.0, 0.1, 0.024, "plain", Color("1b1f21"))
+	_lab_board(a, b, out, 1.24, 0.12, 0.016, "plain", Color("2c6a70"))
+	_lab_board(a, b, out, 2.3, 0.06, 0.034, "metal", Color("2a2f33"))
+	var joints := int(long / 1.2)
+	for i in range(1, joints + 1):
+		var at := a + along * (long * i / (joints + 1.0))
+		_lab_board(at - along * 0.006, at + along * 0.006, out, 0.1, 2.2, 0.015, "plain", tone.darkened(0.42))
+	if strip:
+		var size := Vector3(long - 0.06, 0.016, 0.012) if absf(out.z) > 0.5 else Vector3(0.012, 0.016, long - 0.06)
+		_glow_box((a + b) * 0.5 + out * 0.022 + Vector3(0, 2.288, 0), size, Color("bfe8e4"), 2.0)
+
+## Turns what has been drawn since _begin_gate into a small thing of its own that can be
+## moved while the game runs, without shadows. It is returned; its place is `pivot`. (It
+## hangs in a holder that is hidden and shown with the laboratory, so that whoever moves
+## or hides the thing itself does not get in the way of that.)
+func _lab_piece(outer: MeshBatch, pivot: Vector3, title: String) -> Node3D:
+	var holder := Node3D.new()
+	holder.name = title
+	add_child(holder)
+	var piece := Node3D.new()
+	piece.position = pivot
+	holder.add_child(piece)
+	for instance in batch.commit(piece, "Part", false):
+		instance.position = -pivot
+	batch = outer
+	lab_parts.append(holder)
+	return piece
+
+## One height unit of a rack, and the height above the floor at which its units begin.
+const RACK_UNIT := 0.0445
+const RACK_LOW := 0.14
+## What the racks are filled with from the bottom up, as [kind, height in units]; each
+## adds up to 41 units. "bay" is a shelf of drives at chest height whose third drive from
+## the left can be pulled.
+const RACKS := {
+	"compute": [["ups", 4], ["blank", 1], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node1", 1], ["node1", 1], ["node1", 1], ["node1", 1], ["bay", 4], ["blank", 1], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node1", 1], ["node1", 1], ["patch", 1], ["switch", 1], ["blank", 1]],
+	"storage": [["ups", 4], ["drives", 4], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["blank", 1], ["node1", 1], ["node1", 1], ["node1", 1], ["node1", 1], ["bay", 4], ["drives", 4], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["blank", 1], ["patch", 1], ["switch", 1], ["blank", 1]],
+	"network": [["ups", 4], ["blank", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["node1", 1], ["node1", 1], ["node1", 1], ["node1", 1], ["desk", 1], ["blank", 4], ["node2", 2], ["node2", 2], ["node2", 2], ["node2", 2], ["blank", 2], ["patch", 1], ["switch", 1], ["patch", 1], ["switch", 1], ["blank", 2]]
+}
+
+## A drive in its carrier, as it sits in the shelf of a rack. `at` is its middle, in the
+## space of `frame`; its handle is on local +z.
+func _caddy(frame: Transform3D, at: Vector3, tall: float) -> void:
+	_placed(frame, "plain", at, Vector3(0.1, tall, 0.3), Color("2b3136"))
+	_placed(frame, "plain", at + Vector3(0.014, 0, 0.151), Vector3(0.058, tall * 0.74, 0.004), Color("0f1113"))
+	_placed(frame, "plain", at + Vector3(-0.034, 0, 0.155), Vector3(0.014, tall * 0.8, 0.012), Color("a1a8ac"))
+
+## One unit of a rack: `low` is where it begins above the floor, `tall` how high it is.
+## The shelf with the bay returns where its drive can be pulled: the middle of the front
+## of the empty place, in the world. Everything else returns Vector3.INF.
+func _rack_unit(frame: Transform3D, kind: String, low: float, tall: float) -> Vector3:
+	var y := low + tall * 0.5
+	var face := 0.388
+	var green := Color("5ee07a")
+	var blue := Color("58c8ff")
+	var amber := Color("ffb347")
+	var found := Vector3.INF
+	match kind:
+		"blank":
+			_placed(frame, "plain", Vector3(0, y, 0.153), Vector3(0.66, tall - 0.005, 0.466), Color("1b1f22"))
+		"node1", "node2":
+			var two := kind == "node2"
+			_placed(frame, "plain", Vector3(0, y, 0.153), Vector3(0.66, tall - 0.005, 0.466), Color("272c31") if two else Color("22272b"))
+			_placed(frame, "plain", Vector3(-0.115 if two else -0.05, y, face), Vector3(0.36 if two else 0.48, tall * 0.58, 0.004), Color("07090a"))
+			for edge in [-1.0, 1.0]:
+				_placed(frame, "plain", Vector3(edge * 0.316, y, face + 0.004), Vector3(0.012, tall * 0.7, 0.012), Color("8b9296"))
+			if two:
+				for tray in range(2):
+					_placed(frame, "plain", Vector3(0.12 + tray * 0.08, y - tall * 0.12, face), Vector3(0.068, tall * 0.46, 0.005), Color("353c42"))
+					_led(frame * Vector3(0.12 + tray * 0.08, y + tall * 0.3, face), Vector3(0.012, 0.008, 0.004), blue, 2.6, random.randf_range(0.55, 0.97), frame.basis)
+			# Most of them run; a few show a fault, a few are off.
+			var state := random.randf()
+			if state > 0.08:
+				_led(frame * Vector3(0.27, y, face), Vector3(0.012, 0.009, 0.004), amber if state > 0.88 else green, 2.6, 0.4 if state > 0.88 else 1.0, frame.basis)
+				_led(frame * Vector3(0.29, y, face), Vector3(0.012, 0.009, 0.004), blue, 2.6, random.randf_range(0.55, 0.97), frame.basis)
+		"drives", "bay":
+			for lip in [low + 0.005, low + tall - 0.007]:
+				var at: float = lip
+				_placed(frame, "plain", Vector3(0, at, 0.153), Vector3(0.66, 0.008, 0.466), Color("14171a"))
+			for slot in range(6):
+				var x := -0.275 + slot * 0.11
+				if kind == "bay" and slot == 2:
+					found = frame * Vector3(x, y, face)
+					continue
+				_caddy(frame, Vector3(x, y, face - 0.152), tall - 0.026)
+				var busy := random.randf()
+				_led(frame * Vector3(x + 0.03, y + tall * 0.5 - 0.03, face + 0.001), Vector3(0.012, 0.012, 0.004), amber if busy > 0.9 else (blue if busy > 0.45 else green), 2.6, random.randf_range(0.55, 0.97) if busy > 0.25 else 1.0, frame.basis)
+		"switch", "patch":
+			var live := kind == "switch"
+			_placed(frame, "plain", Vector3(0, y, 0.153), Vector3(0.66, tall - 0.005, 0.466), Color("1d2226") if live else Color("2c3136"))
+			var ports := 12 if live else 16
+			for i in range(ports):
+				var x := -0.29 + i * 0.5 / (ports - 1)
+				_placed(frame, "plain", Vector3(x, y - 0.004, face), Vector3(0.022, 0.016, 0.004), Color("040506"))
+				if live and random.randf() < 0.75:
+					_led(frame * Vector3(x, y + 0.013, face), Vector3(0.009, 0.005, 0.004), green if random.randf() < 0.8 else amber, 2.6, random.randf_range(0.55, 0.97), frame.basis)
+				if random.randf() < (0.5 if live else 0.6):
+					# A patch cable: out of its port and over to the side of the rack, where
+					# the bundle runs down.
+					var side := 1.0 if live else -1.0
+					var tone: Color = [Color("c9a227"), Color("2f6fb0"), Color("9aa0a3"), Color("b8452f"), Color("3f9a58")][random.randi() % 5]
+					_hose(frame * Vector3(x, y - 0.004, face + 0.003), frame * Vector3(side * 0.34, y - random.randf_range(0.03, 0.09), 0.412), 0.0055, tone, 0.02, frame.basis * Vector3(0, 0, 0.045), 4)
+			_placed(frame, "plain", Vector3(0.28, y, face), Vector3(0.07, 0.012, 0.004), Color("a9b0ad"))
+		"ups":
+			_placed(frame, "plain", Vector3(0, y, 0.153), Vector3(0.66, tall - 0.005, 0.466), Color("16191c"))
+			_placed(frame, "plain", Vector3(0.09, y, face), Vector3(0.4, tall * 0.72, 0.004), Color("060708"))
+			for i in range(4):
+				_placed(frame, "plain", Vector3(0.09, low + tall * (0.24 + i * 0.17), face + 0.003), Vector3(0.4, 0.007, 0.004), Color("2c3136"))
+			_placed(frame, "plain", Vector3(-0.22, y, face), Vector3(0.15, 0.09, 0.006), Color("040506"))
+			_screen(frame, Vector3(-0.22, y, face + 0.004), Vector2(0.13, 0.07), 2)
+			_led(frame * Vector3(-0.3, low + tall - 0.026, face), Vector3(0.014, 0.01, 0.004), green, 2.8, 1.0, frame.basis)
+		"desk":
+			# A keyboard drawer that somebody has left pulled out, its screen folded up.
+			_placed(frame, "plain", Vector3(0, y, 0.153), Vector3(0.66, tall - 0.005, 0.466), Color("1b1f22"))
+			_placed(frame, "metal", Vector3(0, y, 0.55), Vector3(0.6, 0.024, 0.32), Color("2c3136"))
+			_placed(frame, "plain", Vector3(-0.04, y + 0.018, 0.59), Vector3(0.4, 0.012, 0.15), Color("0c0e0f"))
+			_placed(frame, "plain", Vector3(-0.04, y + 0.025, 0.59), Vector3(0.37, 0.004, 0.12), Color("2a2f33"))
+			_placed(frame, "plain", Vector3(0.23, y + 0.016, 0.6), Vector3(0.09, 0.006, 0.07), Color("15181a"))
+			var lid := frame * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-12.0)), Vector3(0, y + 0.012, 0.42))
+			_placed(lid, "plain", Vector3(0, 0.17, 0), Vector3(0.56, 0.34, 0.02), Color("101214"))
+			_screen(lid, Vector3(0, 0.17, 0.011), Vector2(0.5, 0.29), 0, 0.4)
+	return found
+
+## A server rack, 0.86 m wide and 2.1 m high, its open front towards local +z, filled as
+## RACKS[`filling`] says. `title` is the number on its head. Returns where its drive can
+## be pulled (see _rack_unit), or Vector3.INF if it has no such bay.
+func _server_rack(pos: Vector3, yaw: float, filling: String, title: String) -> Vector3:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var shell := Color("1a1d20")
+	var edge := Color("282d31")
+	var bay := Vector3.INF
+	_chunk("Lab")
+	_placed(frame, "plain", Vector3(0, 0.04, 0), Vector3(0.8, 0.08, 0.8), Color("0b0d0e"))
+	# The cabinet: its back, its sides, its cap, and a frame round the open front.
+	_placed(frame, "steel", Vector3(0, 1.08, -0.25), Vector3(0.84, 2.0, 0.34), shell)
+	for side in [-1.0, 1.0]:
+		_placed(frame, "steel", Vector3(side * 0.405, 1.08, 0.0), Vector3(0.05, 2.0, 0.84), edge)
+	_placed(frame, "steel", Vector3(0, 2.09, 0.0), Vector3(0.86, 0.04, 0.86), Color("15181a"))
+	_placed(frame, "steel", Vector3(0, 2.02, 0.39), Vector3(0.76, 0.1, 0.06), edge)
+	_placed(frame, "steel", Vector3(0, 0.11, 0.39), Vector3(0.76, 0.06, 0.06), edge)
+	_chunk("LabTrim", false)
+	for side in [-1.0, 1.0]:
+		_placed(frame, "metal", Vector3(side * 0.352, 1.06, 0.4), Vector3(0.022, 1.84, 0.012), Color("596066"))
+	var low := RACK_LOW
+	for entry in RACKS[filling]:
+		var tall: float = int(entry[1]) * RACK_UNIT
+		var found := _rack_unit(frame, str(entry[0]), low, tall)
+		if found != Vector3.INF:
+			bay = found
+		low += tall
+	# On its head: its number, and three lamps for power, traffic and trouble.
+	_placed(frame, "plain", Vector3(-0.13, 2.02, 0.421), Vector3(0.34, 0.06, 0.004), Color("08090a"))
+	var plate := lettering(title, frame * Vector3(-0.13, 2.02, 0.426), 11, Color("bfd2d6"))
+	plate.rotation.y = yaw
+	lab_parts.append(plate)
+	for i in range(3):
+		_led(frame * Vector3(0.14 + i * 0.055, 2.02, 0.421), Vector3(0.024, 0.014, 0.004), [Color("5ee07a"), Color("58c8ff"), Color("ff3a2a")][i], 2.8, [1.0, 0.8, 0.1][i], frame.basis)
+	# The bundles of patch cables run down either side of the front, tied to the rails.
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.34
+		batch.cylinder(mats["plain"], frame * Vector3(x, 0.2, 0.415), 0.016, 0.016, 1.66, Color("101214"), 6, frame.basis, false)
+		for strand in range(3):
+			batch.cylinder(mats["plain"], frame * Vector3(x + (strand - 1) * 0.011, 0.5 + strand * 0.2, 0.428), 0.006, 0.006, 1.34 - strand * 0.3, [Color("c9a227"), Color("2f6fb0"), Color("b8452f")][(strand + int(side + 1.0)) % 3], 5, frame.basis, false)
+		for tie in range(5):
+			_placed(frame, "plain", Vector3(x, 0.4 + tie * 0.34, 0.42), Vector3(0.05, 0.012, 0.04), Color("d9dcd6"))
+	# Cables leave through the cap.
+	for i in range(3):
+		batch.cylinder(mats["plain"], frame * Vector3(-0.2 + i * 0.2, 2.11, -0.26), 0.03, 0.03, 0.34, [Color("0c0d0e"), Color("14202c"), Color("0c0d0e")][i], 6)
+	_chunk("Lab")
+	return bay
+
+## Laboratory bench, 1.05 m high and good as cover: cupboards and drawers under a pale
+## worktop, its long side along local x. `kit` picks what stands on it.
 func _lab_bench(pos: Vector3, length: float, yaw: float, kit: int) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "plain", Vector3(0, 0.05, 0), Vector3(length - 0.16, 0.1, 0.72), Color("17191a"))
-	_placed(frame, "steel", Vector3(0, 0.53, 0), Vector3(length - 0.08, 0.86, 0.82), Color("505a60"))
-	_placed(frame, "epoxy", Vector3(0, 1.005, 0), Vector3(length, 0.09, 0.92), Color("c3c7c0"))
-	var doors := maxi(2, roundi(length / 0.6))
+	_chunk("Lab")
+	_placed(frame, "plain", Vector3(0, 0.05, 0), Vector3(length - 0.16, 0.1, 0.74), Color("111314"))
+	_placed(frame, "steel", Vector3(0, 0.53, 0), Vector3(length - 0.06, 0.86, 0.84), Color("3f484e"))
+	_placed(frame, "epoxy", Vector3(0, 1.005, 0), Vector3(length, 0.09, 0.94), Color("c6cac3"))
+	_chunk("LabTrim", false)
+	var doors := maxi(2, roundi((length - 0.06) / 0.55))
+	var wide := (length - 0.06) / doors
+	var open := random.randi() % doors
 	for i in range(doors):
-		var x := -(length - 0.08) * 0.5 + (i + 0.5) * (length - 0.08) / doors
+		var x := -(length - 0.06) * 0.5 + (i + 0.5) * wide
 		for face in [-1.0, 1.0]:
-			var z: float = face * 0.413
-			_placed(frame, "plain", Vector3(x, 0.53, z), Vector3((length - 0.08) / doors - 0.03, 0.78, 0.006), Color("465055"))
-			_placed(frame, "metal", Vector3(x + (length - 0.08) / doors * 0.32, 0.6, z + face * 0.008), Vector3(0.02, 0.14, 0.012), Color("9a9d9a"))
+			var z: float = face * 0.423
+			_placed(frame, "plain", Vector3(x, 0.44, z), Vector3(wide - 0.03, 0.62, 0.008), Color("56626a"))
+			_placed(frame, "metal", Vector3(x + wide * 0.32 * face, 0.6, z + face * 0.014), Vector3(0.018, 0.16, 0.02), Color("a4a8a6"))
+			# One drawer of every bench was left open.
+			var pulled := 0.2 if i == open and face > 0.0 else 0.0
+			_placed(frame, "plain", Vector3(x, 0.855, z + face * pulled * 0.5), Vector3(wide - 0.03, 0.15, 0.008 + pulled), Color("5f6b73"))
+			_placed(frame, "metal", Vector3(x, 0.875, z + face * (0.014 + pulled)), Vector3(0.14, 0.018, 0.02), Color("a4a8a6"))
+			if pulled > 0.0:
+				_placed(frame, "plain", Vector3(x, 0.932, z + face * pulled * 0.5), Vector3(wide - 0.07, 0.004, pulled - 0.02), Color("101213"))
+				_placed(frame, "plain", Vector3(x + 0.04, 0.938, z + face * pulled * 0.6), Vector3(0.2, 0.004, 0.14), Color("cfccbf"), Vector3(0, 14, 0))
+	for face in [-1.0, 1.0]:
+		_placed(frame, "plain", Vector3(0, 1.005, face * 0.471), Vector3(length, 0.09, 0.004), Color("8f9590"))
+	var top := 1.05
 	match kit:
 		0:
-			# A terminal with its screen still on, a keyboard and a stack of binders.
-			_placed(frame, "plain", Vector3(-length * 0.26, 1.3, -0.12), Vector3(0.62, 0.42, 0.05), Color("15181a"), Vector3(-6, 0, 0))
-			_glow_box(frame * Vector3(-length * 0.26, 1.3, -0.092), Vector3(0.56, 0.36, 0.006), Color("5fd0c8"), 1.5, frame.basis * Basis.from_euler(Vector3(deg_to_rad(-6), 0, 0)))
-			_placed(frame, "plain", Vector3(-length * 0.26, 1.09, -0.14), Vector3(0.08, 0.1, 0.08), Color("15181a"))
-			_placed(frame, "plain", Vector3(-length * 0.26, 1.062, 0.2), Vector3(0.44, 0.02, 0.15), Color("1d2022"))
-			for i in range(3):
-				_placed(frame, "plain", Vector3(length * 0.22 + i * 0.03, 1.08 + i * 0.055, -0.1), Vector3(0.3, 0.05, 0.24), _vary(Color("35505a"), 0.05), Vector3(0, random.randf_range(-14, 14), 0))
-		1:
-			# A microscope and a rack of sample tubes.
-			_placed(frame, "metal", Vector3(-length * 0.2, 1.08, 0), Vector3(0.22, 0.05, 0.3), Color("2a2d2e"))
-			_placed(frame, "metal", Vector3(-length * 0.2, 1.26, -0.09), Vector3(0.07, 0.36, 0.08), Color("d8dad6"))
-			_placed(frame, "metal", Vector3(-length * 0.2, 1.4, 0.0), Vector3(0.06, 0.07, 0.2), Color("d8dad6"), Vector3(-30, 0, 0))
-			_placed(frame, "plain", Vector3(length * 0.18, 1.1, 0.05), Vector3(0.5, 0.1, 0.16), Color("d9d4c4"))
-			for i in range(8):
-				batch.cylinder(mats["plain"], frame * Vector3(length * 0.18 - 0.2 + i * 0.058, 1.1, 0.05), 0.014, 0.014, 0.14, Color("7fbf8a") if i % 3 != 0 else Color("b84a3a"), 5, frame.basis)
-			_placed(frame, "plain", Vector3(length * 0.38, 1.062, -0.2), Vector3(0.3, 0.02, 0.22), Color("c9c6b8"), Vector3(0, 18, 0))
-		2:
-			# A centrifuge, trays and jars.
-			_placed(frame, "metal", Vector3(-length * 0.28, 1.22, -0.05), Vector3(0.5, 0.34, 0.5), Color("b9bcb8"))
-			_placed(frame, "plain", Vector3(-length * 0.28, 1.395, -0.05), Vector3(0.38, 0.012, 0.38), Color("2a2d2e"))
-			_glow_box(frame * Vector3(-length * 0.28 + 0.14, 1.2, 0.203), Vector3(0.1, 0.04, 0.006), Color("ffb347"), 1.6, frame.basis)
+			# Two screens that are still on, a keyboard, binders, a mug, paper.
+			_monitor(frame, Vector3(-length * 0.3, top, -0.14), 0, 8.0)
+			_monitor(frame, Vector3(-length * 0.3 + 0.62, top, -0.16), 3, -10.0)
+			_keyboard(frame, Vector3(-length * 0.3 + 0.2, top, 0.2), 4.0)
+			_mug(frame, Vector3(-length * 0.3 - 0.36, top, 0.22))
 			for i in range(4):
-				batch.cylinder(mats["plain"], frame * Vector3(length * 0.1 + i * 0.2, 1.05, random.randf_range(-0.2, 0.15)), 0.06, 0.05, random.randf_range(0.14, 0.24), _vary(Color("5a7a66"), 0.08), 7, frame.basis)
+				_placed(frame, "plain", Vector3(length * 0.2 + i * 0.025, top + 0.03 + i * 0.058, -0.12), Vector3(0.31, 0.055, 0.25), _vary(Color("35505a"), 0.06), Vector3(0, random.randf_range(-12, 12), 0))
+			_papers(frame, Vector3(length * 0.02, top, 0.12), 5, 0.3)
+			_desk_lamp(frame, Vector3(length * 0.4, top, -0.24), -150.0)
+			_sample_box(frame, Vector3(length * 0.38, top, 0.18), 25.0)
+		1:
+			# Microscopes, sample tubes, glass dishes and a screen that shows the lanes of a run.
+			_microscope(frame, Vector3(-length * 0.32, top, 0.05), 180.0)
+			_microscope(frame, Vector3(-length * 0.08, top, -0.02), 160.0)
+			_tube_rack(frame, Vector3(-length * 0.2, top, -0.28), 8, 0.0)
+			_tube_rack(frame, Vector3(length * 0.09, top, 0.24), 6, 90.0)
+			for i in range(5):
+				batch.cylinder(mats["plain"], frame * Vector3(-length * 0.43, top + i * 0.016, 0.26), 0.055, 0.055, 0.014, Color("b9c4c1") if i % 2 == 0 else Color("8fa39c"), 10)
+			_monitor(frame, Vector3(length * 0.24, top, 0.12), 9, 172.0)
+			_keyboard(frame, Vector3(length * 0.24, top, -0.22), 176.0)
+			_papers(frame, Vector3(length * 0.4, top, -0.1), 4, 0.22)
+			_basin(frame, Vector3(length * 0.5 - 0.42, top, 0.0))
+		2:
+			# A centrifuge, bottles and flasks, a shelf of reagents down the middle.
+			_centrifuge(frame, Vector3(-length * 0.36, top, 0.02))
+			_placed(frame, "metal", Vector3(length * 0.14, top + 0.2, 0), Vector3(length * 0.42, 0.02, 0.26), Color("8d9391"))
+			_placed(frame, "metal", Vector3(length * 0.14, top + 0.44, 0), Vector3(length * 0.42, 0.02, 0.26), Color("8d9391"))
+			for edge in [-1.0, 1.0]:
+				_placed(frame, "metal", Vector3(length * 0.14 + edge * length * 0.21, top + 0.23, 0), Vector3(0.02, 0.46, 0.26), Color("7d8482"))
+			for shelf in range(3):
+				var count := 6 if shelf > 0 else 4
+				for i in range(count):
+					_flask(frame, Vector3(length * 0.14 - length * 0.19 + (i + random.randf_range(0.1, 0.9)) * length * 0.38 / count, top + [0.0, 0.21, 0.45][shelf], random.randf_range(-0.07, 0.07)), random.randf_range(0.03, 0.05), random.randf_range(0.12, 0.2), random.randi() % 6)
+			for i in range(3):
+				_flask(frame, Vector3(-length * 0.14 + i * 0.13, top, random.randf_range(0.1, 0.3)), 0.055, 0.2, [5, 1, 5][i])
+			_tube_rack(frame, Vector3(-length * 0.1, top, -0.26), 10, 0.0)
+			_papers(frame, Vector3(length * 0.43, top, 0.2), 3, 0.16)
 		_:
-			# A second terminal and a sealed sample case.
-			_placed(frame, "plain", Vector3(length * 0.24, 1.3, 0.1), Vector3(0.56, 0.4, 0.05), Color("15181a"), Vector3(6, 180, 0))
-			_glow_box(frame * Vector3(length * 0.24, 1.3, 0.072), Vector3(0.5, 0.34, 0.006), Color("7fd28c"), 1.3, frame.basis * Basis.from_euler(Vector3(deg_to_rad(6), PI, 0)))
-			_placed(frame, "plain", Vector3(length * 0.24, 1.09, 0.12), Vector3(0.08, 0.1, 0.08), Color("15181a"))
-			_placed(frame, "metal", Vector3(-length * 0.2, 1.16, 0), Vector3(0.52, 0.22, 0.36), Color("7b6a2a"))
-			_placed(frame, "plain", Vector3(-length * 0.2, 1.16, 0.183), Vector3(0.2, 0.12, 0.006), Color("141414"))
+			# An analyser, a sealed sample case and a screen with a warning on it.
+			_analyser(frame, Vector3(-length * 0.5 + 0.4, top, -0.1))
+			_monitor(frame, Vector3(length * 0.5 - 0.38, top, -0.08), 4, 14.0, Vector2(0.48, 0.3))
+			_keyboard(frame, Vector3(length * 0.5 - 0.4, top, 0.26), 10.0)
+			_sample_box(frame, Vector3(0.14, top, -0.18), -8.0)
+	_chunk("Lab")
 	_solid(pos + Vector3(0, 0.525, 0), Vector3(length, 1.05, 0.92), true, yaw)
 
-## Server rack whose front faces local +z.
-func _rack(pos: Vector3, yaw: float) -> void:
-	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "steel", Vector3(0, 1.05, 0), Vector3(0.84, 2.1, 0.8), Color("1d2124"))
-	for unit in range(9):
-		_placed(frame, "plain", Vector3(0, 0.22 + unit * 0.2, 0.402), Vector3(0.72, 0.16, 0.008), Color("30363a") if unit % 2 == 0 else Color("272c30"))
-		for led in range(3):
-			if random.randf() < 0.75:
-				var tint: Color = [Color("5ee07a"), Color("ffb347"), Color("58c8ff")][random.randi() % 3]
-				_glow_box(frame * Vector3(-0.28 + led * 0.07, 0.25 + unit * 0.2, 0.408), Vector3(0.024, 0.016, 0.006), tint, 2.6, frame.basis)
+## A flat screen on a stand. `at` is the middle of its foot, in the space of `frame`; it
+## looks along local +z, turned by `turn` degrees, and shows `picture` (see _screen).
+func _monitor(frame: Transform3D, at: Vector3, picture: int, turn: float = 0.0, size: Vector2 = Vector2(0.54, 0.33)) -> void:
+	var stand := frame * Transform3D(Basis(Vector3.UP, deg_to_rad(turn)), at)
+	_placed(stand, "plain", Vector3(0, 0.008, 0), Vector3(0.24, 0.016, 0.17), Color("15181a"))
+	_placed(stand, "plain", Vector3(0, 0.14, -0.045), Vector3(0.045, 0.27, 0.03), Color("15181a"))
+	_placed(stand, "plain", Vector3(0, 0.1 + size.y * 0.5, -0.012), Vector3(size.x + 0.03, size.y + 0.03, 0.03), Color("0c0e0f"), Vector3(-5, 0, 0))
+	_screen(stand, Vector3(0, 0.1 + size.y * 0.5, 0.005), size, picture, -1.0, 5.0)
 
-## Specimen tank: a column of fluid that glows a sickly green between a steel foot and cap.
-func _tank(pos: Vector3, specimen: bool, flicker: float) -> void:
+func _keyboard(frame: Transform3D, at: Vector3, turn: float = 0.0) -> void:
+	var base := frame * Transform3D(Basis(Vector3.UP, deg_to_rad(turn)), at)
+	_placed(base, "plain", Vector3(0, 0.01, 0), Vector3(0.44, 0.02, 0.15), Color("16191b"))
+	_placed(base, "plain", Vector3(-0.015, 0.022, 0), Vector3(0.38, 0.004, 0.12), Color("2c3135"))
+	_placed(base, "plain", Vector3(0.31, 0.013, 0.01), Vector3(0.06, 0.026, 0.1), Color("1d2022"))
+
+func _mug(frame: Transform3D, at: Vector3) -> void:
+	batch.cylinder(mats["plain"], frame * at, 0.04, 0.042, 0.095, _vary(Color("b9b4a6"), 0.1), 9)
+	batch.cylinder(mats["plain"], frame * (at + Vector3(0, 0.086, 0)), 0.034, 0.034, 0.01, Color("1c1410"), 9)
+	_placed(frame, "plain", at + Vector3(0.052, 0.05, 0), Vector3(0.022, 0.05, 0.012), Color("b9b4a6"))
+
+## Sheets of paper, strewn about `at`.
+func _papers(frame: Transform3D, at: Vector3, count: int, spread: float) -> void:
+	for i in range(count):
+		_placed(frame, "plain", at + Vector3(random.randf_range(-spread, spread), 0.002 + i * 0.0014, random.randf_range(-spread, spread) * 0.6), Vector3(0.21, 0.0012, 0.297), _vary(Color("bdbab0"), 0.05), Vector3(0, random.randf_range(-70, 70), 0))
+
+## A desk lamp that still burns; `turn` is where its head points (degrees).
+func _desk_lamp(frame: Transform3D, at: Vector3, turn: float) -> void:
+	var base := frame * Transform3D(Basis(Vector3.UP, deg_to_rad(turn)), at)
+	batch.cylinder(mats["plain"], base.origin, 0.075, 0.075, 0.018, Color("15181a"), 10)
+	_pipe(base * Vector3(0, 0.018, 0), base * Vector3(0, 0.3, -0.1), 0.01, Color("3a3f42"), 6)
+	_pipe(base * Vector3(0, 0.3, -0.1), base * Vector3(0, 0.36, 0.14), 0.01, Color("3a3f42"), 6)
+	_placed(base, "plain", Vector3(0, 0.36, 0.19), Vector3(0.09, 0.04, 0.16), Color("15181a"), Vector3(18, 0, 0))
+	_glow_box(base * Vector3(0, 0.338, 0.195), Vector3(0.07, 0.008, 0.13), Color("ffe2b0"), 4.5, base.basis * Basis(Vector3.RIGHT, deg_to_rad(18.0)))
+
+## A hard case for samples, yellow with a black band; `turn` in degrees.
+func _sample_box(frame: Transform3D, at: Vector3, turn: float) -> void:
+	var base := frame * Transform3D(Basis(Vector3.UP, deg_to_rad(turn)), at)
+	_placed(base, "plain", Vector3(0, 0.1, 0), Vector3(0.48, 0.2, 0.32), Color("a88c26"))
+	_placed(base, "plain", Vector3(0, 0.11, 0), Vector3(0.486, 0.022, 0.326), Color("0f1011"))
+	_placed(base, "plain", Vector3(0, 0.1, 0.162), Vector3(0.18, 0.11, 0.004), Color("111213"))
+	_placed(base, "plain", Vector3(0, 0.1, 0.165), Vector3(0.07, 0.07, 0.004), Color("c9a227"))
+	for edge in [-1.0, 1.0]:
+		_placed(base, "metal", Vector3(edge * 0.16, 0.115, 0.166), Vector3(0.04, 0.05, 0.012), Color("9aa0a3"))
+	_placed(base, "plain", Vector3(0, 0.215, 0), Vector3(0.16, 0.03, 0.03), Color("0d0e0f"))
+
+func _microscope(frame: Transform3D, at: Vector3, turn: float) -> void:
+	var base := frame * Transform3D(Basis(Vector3.UP, deg_to_rad(turn)), at)
+	_placed(base, "epoxy", Vector3(0, 0.02, 0), Vector3(0.2, 0.04, 0.28), Color("d5d8d4"))
+	_placed(base, "epoxy", Vector3(0, 0.19, -0.1), Vector3(0.06, 0.34, 0.07), Color("d5d8d4"))
+	_placed(base, "plain", Vector3(0, 0.125, 0.02), Vector3(0.15, 0.012, 0.15), Color("17191a"))
+	batch.cylinder(mats["metal"], base * Vector3(0, 0.16, 0.02), 0.02, 0.03, 0.13, Color("2a2d2e"), 8)
+	_placed(base, "epoxy", Vector3(0, 0.34, -0.03), Vector3(0.1, 0.09, 0.2), Color("d5d8d4"))
+	for side in [-1.0, 1.0]:
+		batch.cylinder(mats["plain"], base * Vector3(side * 0.03, 0.37, 0.05), 0.016, 0.016, 0.11, Color("15181a"), 6, base.basis * Basis(Vector3.RIGHT, deg_to_rad(42.0)))
+	_glow_box(base * Vector3(0, 0.05, 0.02), Vector3(0.05, 0.012, 0.05), Color("fff3c9"), 3.0, base.basis)
+
+## A rack of sample tubes; some of what is in them glows faintly.
+func _tube_rack(frame: Transform3D, at: Vector3, tubes: int, turn: float) -> void:
+	var base := frame * Transform3D(Basis(Vector3.UP, deg_to_rad(turn)), at)
+	var long := 0.06 + tubes * 0.045
+	_placed(base, "plain", Vector3(0, 0.05, 0), Vector3(long, 0.1, 0.12), Color("d9d4c4"))
+	_placed(base, "plain", Vector3(0, 0.102, 0), Vector3(long - 0.03, 0.004, 0.09), Color("a39f92"))
+	for i in range(tubes):
+		var x := -long * 0.5 + 0.052 + i * 0.045
+		var pick := random.randi() % 5
+		if pick == 0:
+			batch.cylinder(mats["steady"], base * Vector3(x, 0.06, 0), 0.012, 0.012, 0.1, Color(0.16, 0.5, 0.2), 5, base.basis)
+		else:
+			batch.cylinder(mats["plain"], base * Vector3(x, 0.06, 0), 0.012, 0.012, 0.1, [Color("7fbf8a"), Color("b84a3a"), Color("c7b56a"), Color("8fa6b3")][pick - 1], 5, base.basis)
+		batch.cylinder(mats["plain"], base * Vector3(x, 0.16, 0), 0.014, 0.014, 0.014, Color("2b4f8a"), 5, base.basis)
+
+## A bottle or a flask. `filling` picks what is in it; 5 is the green fluid of the tanks.
+func _flask(frame: Transform3D, at: Vector3, radius: float, tall: float, filling: int) -> void:
+	var tones := [Color("6f4a2a"), Color("8fa6b3"), Color("b9b08a"), Color("35505a"), Color("7a3a34"), Color(0.14, 0.46, 0.18)]
+	var body := tall * 0.62
+	batch.cylinder(mats["steady"] if filling == 5 else mats["plain"], frame * at, radius, radius, body, tones[filling], 8)
+	batch.cylinder(mats["plain"], frame * (at + Vector3(0, body, 0)), radius, radius * 0.38, tall * 0.2, (tones[filling] as Color).lightened(0.25) if filling != 5 else Color("9fb5aa"), 8)
+	batch.cylinder(mats["plain"], frame * (at + Vector3(0, body + tall * 0.2, 0)), radius * 0.38, radius * 0.38, tall * 0.12, Color("c5cfca"), 6)
+	batch.cylinder(mats["plain"], frame * (at + Vector3(0, body + tall * 0.32, 0)), radius * 0.46, radius * 0.46, tall * 0.06, Color("1d2022"), 6)
+
+func _centrifuge(frame: Transform3D, at: Vector3) -> void:
+	batch.cylinder(mats["epoxy"], frame * at, 0.23, 0.23, 0.27, Color("c4c8c3"), 14)
+	batch.cylinder(mats["plain"], frame * (at + Vector3(0, 0.27, 0)), 0.22, 0.18, 0.05, Color("25292c"), 14)
+	batch.cylinder(mats["plain"], frame * (at + Vector3(0, 0.32, 0)), 0.07, 0.07, 0.012, Color("0d0f10"), 8)
+	_placed(frame, "plain", at + Vector3(0, 0.12, 0.225), Vector3(0.2, 0.1, 0.03), Color("15181a"))
+	_screen(frame, at + Vector3(-0.035, 0.12, 0.242), Vector2(0.1, 0.06), 2)
+	_led(frame * (at + Vector3(0.065, 0.135, 0.241)), Vector3(0.018, 0.018, 0.004), Color("ffb347"), 2.8, 0.4, frame.basis)
+
+## A table-top analyser with a screen that shows the lanes of its last run.
+func _analyser(frame: Transform3D, at: Vector3) -> void:
+	_placed(frame, "epoxy", at + Vector3(0, 0.22, 0), Vector3(0.62, 0.44, 0.5), Color("c4c8c3"))
+	_placed(frame, "plain", at + Vector3(0, 0.26, 0.252), Vector3(0.56, 0.3, 0.006), Color("15181a"))
+	_screen(frame, at + Vector3(-0.1, 0.27, 0.257), Vector2(0.3, 0.22), 9)
+	_placed(frame, "plain", at + Vector3(0.17, 0.2, 0.258), Vector3(0.16, 0.035, 0.006), Color("050607"))
+	for i in range(3):
+		_led(frame * (at + Vector3(0.12 + i * 0.05, 0.32, 0.257)), Vector3(0.022, 0.022, 0.004), [Color("5ee07a"), Color("58c8ff"), Color("ffb347")][i], 2.8, [1.0, 0.7, 0.4][i], frame.basis)
+	_placed(frame, "plain", at + Vector3(0, 0.02, 0), Vector3(0.58, 0.04, 0.46), Color("1b1e20"))
+	_placed(frame, "plain", at + Vector3(0.1, 0.445, -0.05), Vector3(0.3, 0.012, 0.3), Color("9da3a0"))
+
+## A steel basin let into a worktop, with its tap.
+func _basin(frame: Transform3D, at: Vector3) -> void:
+	_placed(frame, "metal", at + Vector3(0, 0.004, 0), Vector3(0.52, 0.008, 0.46), Color("8f9593"))
+	_placed(frame, "plain", at + Vector3(0, 0.009, 0.03), Vector3(0.42, 0.004, 0.32), Color("1d2123"))
+	_pipe(frame * (at + Vector3(0, 0.0, -0.18)), frame * (at + Vector3(0, 0.28, -0.18)), 0.016, Color("b6bab8"), 6)
+	_pipe(frame * (at + Vector3(0, 0.28, -0.18)), frame * (at + Vector3(0, 0.3, -0.02)), 0.014, Color("b6bab8"), 6)
+	_placed(frame, "metal", at + Vector3(0.07, 0.03, -0.18), Vector3(0.05, 0.02, 0.02), Color("b6bab8"))
+
+## A stool with a round seat on a star of five feet. A fallen one lies on its side.
+func _stool(pos: Vector3, yaw: float, fallen: bool = false) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	if fallen:
+		frame = Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, PI * 0.5), pos + Vector3(0, 0.2, 0))
+	batch.cylinder(mats["plain"], frame * Vector3(0, 0.58, 0), 0.17, 0.17, 0.05, Color("1c1f21"), 12, frame.basis)
+	batch.cylinder(mats["metal"], frame * Vector3(0, 0.06, 0), 0.022, 0.022, 0.52, Color("9aa0a3"), 6, frame.basis, false)
+	batch.cylinder(mats["metal"], frame * Vector3(0, 0.26, 0), 0.15, 0.15, 0.014, Color("9aa0a3"), 12, frame.basis, false)
+	for spoke in range(5):
+		_placed(frame, "metal", Basis(Vector3.UP, spoke * TAU / 5.0) * Vector3(0.14, 0.05, 0), Vector3(0.28, 0.03, 0.04), Color("2a2d2e"), Vector3(0, spoke * 72.0, 0))
+
+## A specimen tank: the radius of its glass, the height above the floor at which the
+## glass begins, and how tall the glass is.
+const TANK_GLASS := 0.55
+const TANK_LOW := 0.42
+const TANK_TALL := 2.0
+
+## The steel of a specimen tank, its front towards +z: foot and cap with a lamp ring
+## each, four struts between them, hoses to the pipes under the ceiling, and on the foot
+## a control box with a screen. `tag` is the number on its cap. `picture` and `number`
+## are what the screen shows (see _screen), `tint` the colour of the lamp rings (black:
+## they are out).
+func _tank_frame(pos: Vector3, tag: String, picture: int, number: float, tint: Color) -> void:
 	_chunk("Lab")
-	batch.cylinder(mats["steel"], pos, 0.56, 0.5, 0.36, Color("2f3437"), 14)
-	batch.cylinder(mats["steel"], pos + Vector3(0, 2.2, 0), 0.5, 0.56, 0.34, Color("2f3437"), 14)
-	_part("metal", pos + Vector3(0, 0.2, 0.5), Vector3(0.3, 0.26, 0.14), Color("23272a"))
-	_glow_box(pos + Vector3(-0.08, 0.27, 0.572), Vector3(0.04, 0.03, 0.006), Color("5ee07a"), 3.0)
-	_glow_box(pos + Vector3(0.05, 0.25, 0.572), Vector3(0.1, 0.06, 0.006), Color("7fe0a4"), 1.4)
-	for side in [-0.2, 0.2]:
+	var steel := Color("2c3134")
+	var pale := Color("5b6469")
+	var top := TANK_LOW + TANK_TALL
+	batch.cylinder(mats["metal"], pos, 0.74, 0.74, 0.05, Color("17191b"), 20)
+	batch.cylinder(mats["steel"], pos + Vector3(0, 0.05, 0), 0.68, 0.63, 0.3, steel, 20)
+	batch.cylinder(mats["steel"], pos + Vector3(0, 0.35, 0), 0.6, 0.58, TANK_LOW - 0.35, pale, 20)
+	batch.cylinder(mats["steel"], pos + Vector3(0, top, 0), 0.58, 0.6, 0.07, pale, 20)
+	batch.cylinder(mats["steel"], pos + Vector3(0, top + 0.07, 0), 0.63, 0.68, 0.27, steel, 20)
+	batch.cylinder(mats["metal"], pos + Vector3(0, top + 0.34, 0), 0.36, 0.32, 0.1, Color("202427"), 14)
+	for angle in [52.0, 128.0, 232.0, 308.0]:
+		var around := Vector3(sin(deg_to_rad(angle)), 0, cos(deg_to_rad(angle)))
+		batch.cylinder(mats["metal"], pos + around * 0.615 + Vector3(0, 0.35, 0), 0.02, 0.02, top - 0.28, Color("8d9498"), 6, Basis.IDENTITY, false)
+		for clamp_y in [TANK_LOW + 0.02, top - 0.06]:
+			var y: float = clamp_y
+			_part("metal", pos + around * 0.6 + Vector3(0, y, 0), Vector3(0.07, 0.04, 0.07), Color("3a4044"), Vector3(0, angle, 0))
+	if tint != Color.BLACK:
+		for ring in [TANK_LOW - 0.04, top + 0.018]:
+			var y: float = ring
+			batch.cylinder(mats["steady"], pos + Vector3(0, y, 0), 0.606, 0.606, 0.016, tint, 20, Basis.IDENTITY, false)
+	# Hoses run from the pump head on the cap back to the pipes along the wall.
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.17
+		_hose(pos + Vector3(x, top + 0.42, -0.2), Vector3(pos.x + x * 1.6, CELLAR_TOP - 0.24, pos.z - 0.64), 0.045, Color("16181a"), 0.05, Vector3.ZERO, 5)
+		batch.cylinder(mats["metal"], pos + Vector3(x, top + 0.4, -0.2), 0.06, 0.06, 0.06, Color("6f767a"), 8)
+	_pipe(pos + Vector3(0, top + 0.44, 0.12), Vector3(pos.x, CELLAR_TOP, pos.z + 0.12), 0.03, Color("5c6a6e"), 6)
+	# The number, up on the cap where it is read from across the hall.
+	_part("plain", pos + Vector3(0, top + 0.2, 0.66), Vector3(0.5, 0.17, 0.03), Color("0d1011"))
+	lab_parts.append(lettering(tag, pos + Vector3(0, top + 0.2, 0.677), 15, Color("cfdfe2")))
+	# The control box on the foot, its face leaning back towards whoever stands before it.
+	var box := Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-24.0)), pos + Vector3(0, 0.24, 0.7))
+	_placed(box, "metal", Vector3(0, 0, -0.05), Vector3(0.5, 0.26, 0.1), Color("1b1f22"))
+	_placed(box, "plain", Vector3(-0.08, 0, 0.001), Vector3(0.3, 0.2, 0.004), Color("07090a"))
+	_screen(box, Vector3(-0.08, 0, 0.005), Vector2(0.27, 0.17), picture, number)
+	for i in range(3):
+		var lamp: Color = [Color("5ee07a"), Color("ffb347"), Color("ff3a2a")][i] if picture != 4 else Color("ff3a2a")
+		var code: float = [1.0, 0.7, 0.1][i] if picture != 4 else 0.4
+		_led(box * Vector3(0.15 + (i % 2) * 0.06, 0.05 - (0.07 if i == 2 else 0.0), 0.003), Vector3(0.028, 0.028, 0.006), lamp, 3.0, code, box.basis)
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.3
+		_pipe(pos + Vector3(x, 0.2, -0.6), Vector3(pos.x + x, pos.y + 0.2, pos.z - 0.79), 0.045, Color("5c6a6e"), 6)
+	_round_solid(pos, 0.62, top + 0.44)
+
+## Specimen tank: a column of fluid that glows a sickly green between a steel foot and
+## cap, bubbles rising in it, and adrift in it one of the infected: `kind` is its build
+## (InfectedVisual.KINDS), `pose` how it hangs there (LabSpecimen.POSES), `turn` how far it
+## is turned away from the room (degrees), `eyes` how brightly its eyes still shine and
+## `beats` whether the screen on the foot still shows a pulse.
+func _tank(pos: Vector3, tag: String, kind: String, pose: String, turn: float, eyes: float, beats: bool, flicker: float) -> void:
+	_tank_frame(pos, tag, 1, random.randf() * 0.45 + (0.0 if beats else 0.5), Color(0.5, 1.0, 0.62) * 0.9)
+	var top := TANK_LOW + TANK_TALL
+	_chunk("LabTanks" + ("West" if pos.x < 0.0 else "East"), false)
+	batch.cylinder(mats["fluid"], pos + Vector3(0, TANK_LOW, 0), TANK_GLASS - 0.035, TANK_GLASS - 0.035, TANK_TALL, Color.WHITE, 24)
+	batch.cylinder(mats["bubbles"], pos + Vector3(0, TANK_LOW, 0), 0.34, 0.34, TANK_TALL, Color.WHITE, 16, Basis.IDENTITY, false)
+	batch.cylinder(mats["glass"], pos + Vector3(0, TANK_LOW, 0), TANK_GLASS, TANK_GLASS, TANK_TALL, Color.WHITE, 24, Basis.IDENTITY, false)
+	_chunk("Lab")
+	_lab_lamp(_light(pos + Vector3(0, 1.4, 0.1), Color(0.42, 1.0, 0.5), 1.3, 2.6, false, flicker, 0.9))
+	# The models are not there for the editor: it only shows the room.
+	if Engine.is_editor_hint():
+		return
+	var body := LabSpecimen.create(kind, pose, TANK_GLASS - 0.05, TANK_TALL, eyes, pos.x * 1.7)
+	body.position = pos + Vector3(0, TANK_LOW, 0)
+	body.rotation.y = deg_to_rad(turn)
+	add_child(body)
+	lab_parts.append(body)
+	specimens.append(body)
+	# It hangs on a line from the cap, and a tube runs down its back.
+	var hook := body.position + body.basis * body.nape
+	_hose(pos + Vector3(0, top, -0.08), hook, 0.018, Color("0b0d0d"), -0.02, Vector3(0, 0, -0.08), 5)
+	_hose(pos + Vector3(0.12, top, -0.2), hook + Vector3(0.03, -0.25, -0.02), 0.012, Color("1c2a22"), 0.0, Vector3(0.1, 0, -0.1), 6)
+
+## A tank whose glass has burst from the inside. What it held is gone: jagged glass is
+## left in foot and cap, a rest of the fluid stands in the foot and has run out over the
+## floor, the lamp rings are dead and the screen on the foot shows a warning.
+func _burst_tank(pos: Vector3, tag: String) -> void:
+	_tank_frame(pos, tag, 4, 0.3, Color.BLACK)
+	var top := TANK_LOW + TANK_TALL
+	_chunk("LabTanksEast", false)
+	# The glass broke towards the room: little is left of it in front, more at the back.
+	var sides := 28
+	for edge in [0, 1]:
+		var heights: Array = []
+		for i in range(sides + 1):
+			var behind := 0.5 - 0.5 * cos(TAU * i / sides)
+			heights.append(random.randf_range(0.03, 0.16) + behind * random.randf_range(0.15, 0.75 if edge == 0 else 0.4))
+		heights[sides] = heights[0]
+		for i in range(sides):
+			var a0 := TAU * i / sides
+			var a1 := TAU * (i + 1) / sides
+			var p0 := pos + Vector3(sin(a0), 0, cos(a0)) * TANK_GLASS
+			var p1 := pos + Vector3(sin(a1), 0, cos(a1)) * TANK_GLASS
+			if edge == 0:
+				batch.quad(mats["shard"], p0 + Vector3(0, TANK_LOW, 0), p1 + Vector3(0, TANK_LOW, 0), p1 + Vector3(0, TANK_LOW + float(heights[i + 1]), 0), p0 + Vector3(0, TANK_LOW + float(heights[i]), 0))
+			else:
+				batch.quad(mats["shard"], p0 + Vector3(0, top - float(heights[i]), 0), p1 + Vector3(0, top - float(heights[i + 1]), 0), p1 + Vector3(0, top, 0), p0 + Vector3(0, top, 0))
+	# Splinters on the floor in front of it.
+	for i in range(14):
+		var angle := random.randf_range(-1.1, 1.1)
+		var at := pos + Vector3(sin(angle), 0, cos(angle)) * random.randf_range(0.8, 1.9) + Vector3(0, 0.009, 0)
+		var turn := Basis(Vector3.UP, random.randf() * TAU)
+		var size := random.randf_range(0.03, 0.09)
+		batch.triangle(mats["shard"], at + turn * Vector3(-size, 0, 0), at + turn * Vector3(size * 0.6, 0, -size * 0.5), at + turn * Vector3(size * 0.2, random.randf_range(0.0, 0.03), size))
+	# What is left of the fluid: a hand's breadth in the foot, and what ran out.
+	batch.cylinder(mats["fluid"], pos + Vector3(0, TANK_LOW, 0), TANK_GLASS - 0.035, TANK_GLASS - 0.035, 0.09, Color.WHITE, 24)
+	for pool in [[Vector3(0.05, 0, 0.9), 0.56], [Vector3(-0.38, 0, 1.28), 0.36], [Vector3(0.42, 0, 1.3), 0.3], [Vector3(-0.12, 0, 1.62), 0.24], [Vector3(-0.72, 0, 0.92), 0.2]]:
+		batch.cylinder(mats["wet"], pos + (pool[0] as Vector3) + Vector3(0, 0.004, 0), float(pool[1]), float(pool[1]), 0.003, Color.WHITE, 24)
+	_chunk("Lab")
+	# The line it hung on, and the tube from its back: torn off.
+	_hose(pos + Vector3(0, top, -0.08), pos + Vector3(0.1, top - 0.75, 0.05), 0.018, Color("0b0d0d"), 0.0, Vector3(0.06, 0, 0.05), 5)
+	_hose(pos + Vector3(0.12, top, -0.2), pos + Vector3(-0.16, top - 1.15, -0.1), 0.012, Color("1c2a22"), 0.0, Vector3(-0.12, 0, 0.1), 6)
+	_lab_lamp(_light(pos + Vector3(0, 0.6, 0.5), Color(0.42, 1.0, 0.5), 0.6, 2.2, false, 0.5, 0.9))
+
+## Wet prints of bare feet in the fluid of the tanks, from `from` to `to`: they fade as
+## they go. (They are drawn in the fluid's own material and glow like it.)
+func _wet_prints(from: Vector3, to: Vector3, steps: int, bow: float) -> void:
+	var last := from
+	for i in range(steps):
+		var t := (i + 1.0) / steps
+		var across := (to - from).cross(Vector3.UP).normalized()
+		var at := from.lerp(to, t) + across * (bow * 4.0 * t * (1.0 - t))
+		var heading := (at - last).normalized()
+		var side := heading.cross(Vector3.UP) * (0.14 if i % 2 == 0 else -0.14)
+		var turn := Basis(Vector3.UP, atan2(heading.x, heading.z))
+		var fade := 1.0 - 0.55 * t
+		var spot := at + side + Vector3(0, 0.004, 0)
+		batch.ellipsoid(mats["wet"], spot, Vector3(0.055, 0.002, 0.125) * fade, Color.WHITE, turn, 8, 3)
+		batch.ellipsoid(mats["wet"], spot + turn * Vector3(0, 0, 0.16) * fade, Vector3(0.062, 0.002, 0.055) * fade, Color.WHITE, turn, 8, 3)
+		for toe in range(4):
+			batch.ellipsoid(mats["wet"], spot + turn * Vector3(-0.055 + toe * 0.037, 0, 0.25 - absf(toe - 1.5) * 0.015) * fade, Vector3(0.015, 0.002, 0.02) * fade, Color.WHITE, turn, 6, 3)
+		last = at
+
+## The specimen tanks along the north wall and what belongs to them: the pump in the
+## corner, the desk from which they were watched, and the way the one that got out took.
+func _lab_tanks(f: float) -> void:
+	_tank(Vector3(-6.85, f, -24.2), "P-01", "leech", "curled", 24.0, 0.6, false, 0.1)
+	_tank(Vector3(-5.35, f, -24.2), "P-02", "striker", "reaching", 8.0, 1.0, true, 0.45)
+	_tank(Vector3(-3.85, f, -24.2), "P-03", "normalzombie", "adrift", -12.0, 0.45, false, 0.07)
+	_burst_tank(Vector3(4.6, f, -24.2), "P-06")
+	_tank(Vector3(6.3, f, -24.2), "P-07", "stalker", "adrift", -9.0, 0.5, false, 0.08)
+	# Paint on the floor round them: a yellow line, and inside it a darker coat.
+	_chunk("LabTrim", false)
+	for x in [-6.85, -5.35, -3.85, 4.6, 6.3]:
+		var at: float = x
+		batch.cylinder(mats["plain"], Vector3(at, f + 0.001, -24.2), 1.02, 1.02, 0.002, Color("c9a227"), 28)
+	for x in [-6.85, -5.35, -3.85, 4.6, 6.3]:
+		var at: float = x
+		batch.cylinder(mats["epoxy"], Vector3(at, f + 0.002, -24.2), 0.95, 0.95, 0.002, Color("4a514c"), 28)
+	for x in [-6.1, -4.6, 5.45]:
+		var at: float = x
+		_part("metal", Vector3(at, f + 0.006, -23.42), Vector3(0.34, 0.006, 0.18), Color("1b1e20"))
+		for i in range(5):
+			_part("plain", Vector3(at - 0.12 + i * 0.06, f + 0.01, -23.42), Vector3(0.02, 0.004, 0.14), Color("050607"))
+	# A pipe along the foot of the wall feeds them, from the pump in the corner.
+	_chunk("Lab")
+	_pipe(Vector3(-7.6, f + 0.2, -24.93), Vector3(-3.2, f + 0.2, -24.93), 0.05, Color("5c6a6e"))
+	_pipe(Vector3(3.9, f + 0.2, -24.93), Vector3(7.1, f + 0.2, -24.93), 0.05, Color("5c6a6e"))
+	_part("steel", Vector3(5.45, f + 0.5, -24.72), Vector3(0.5, 1.0, 0.56), Color("3a4146"))
+	_solid(Vector3(5.45, f + 0.5, -24.72), Vector3(0.5, 1.0, 0.56))
+	for i in range(2):
+		batch.cylinder(mats["plain"], Vector3(5.33 + i * 0.24, f + 0.72, -24.436), 0.075, 0.075, 0.02, Color("a8281c") if i == 0 else Color("2f6fb0"), 12, Basis(Vector3.RIGHT, PI / 2), false)
+		_part("plain", Vector3(5.33 + i * 0.24, f + 0.72, -24.425), Vector3(0.15, 0.018, 0.012), Color("a8281c") if i == 0 else Color("2f6fb0"), Vector3(0, 0, 40))
+		_pipe(Vector3(5.33 + i * 0.24, f + 1.0, -24.7), Vector3(5.33 + i * 0.24, CELLAR_TOP - 0.24 - i * 0.2, -24.84), 0.035, Color("5c6a6e") if i == 0 else Color("7a4a3a"), 6)
+	_part("plain", Vector3(5.45, f + 0.36, -24.437), Vector3(0.36, 0.14, 0.006), Color("c9a227"))
+	_part("steel", Vector3(-7.8, f + 0.75, -24.225), Vector3(0.4, 1.5, 1.55), Color("3a4146"))
+	_solid(Vector3(-7.8, f + 0.75, -24.225), Vector3(0.4, 1.5, 1.55))
+	_chunk("LabTrim", false)
+	_part("plain", Vector3(-7.8, f + 1.0, -23.447), Vector3(0.34, 0.8, 0.006), Color("242a2e"))
+	for i in range(2):
+		batch.cylinder(mats["plain"], Vector3(-7.88 + i * 0.16, f + 1.22, -23.444), 0.06, 0.06, 0.016, Color("d9dcd6"), 12, Basis(Vector3.RIGHT, PI / 2))
+		_part("plain", Vector3(-7.88 + i * 0.16 + 0.015, f + 1.235, -23.426), Vector3(0.006, 0.05, 0.003), Color("b02a1e"), Vector3(0, 0, -35.0 + i * 80.0))
+	batch.cylinder(mats["plain"], Vector3(-7.8, f + 0.86, -23.444), 0.1, 0.1, 0.02, Color("a8281c"), 14, Basis(Vector3.RIGHT, PI / 2), false)
+	for spoke in range(2):
+		_part("plain", Vector3(-7.8, f + 0.86, -23.43), Vector3(0.2, 0.02, 0.012), Color("a8281c"), Vector3(0, 0, spoke * 90.0))
+	_led(Vector3(-7.92, f + 1.36, -23.444), Vector3(0.03, 0.03, 0.006), Color("5ee07a"), 3.0, 0.4)
+	_part("plain", Vector3(-7.76, f + 1.36, -23.445), Vector3(0.2, 0.05, 0.004), Color("c9a227"))
+	_hose(Vector3(-7.75, f + 1.5, -24.6), Vector3(-7.4, CELLAR_TOP - 0.24, -24.84), 0.04, Color("16181a"), -0.1, Vector3.ZERO, 5)
+	_lab_tank_desk(f)
+	# --- The one from P-06 went through the air shaft: its grille lies torn off on the
+	# floor, and its wet prints lead from the tank to the hole.
+	_part("plain", Vector3(2.15, f + 0.44, -24.987), Vector3(0.86, 0.62, 0.006), Color("020303"))
+	for bar in [[Vector3(2.15, f + 0.78, -24.98), Vector3(0.98, 0.06, 0.03)], [Vector3(2.15, f + 0.1, -24.98), Vector3(0.98, 0.06, 0.03)], [Vector3(1.69, f + 0.44, -24.98), Vector3(0.06, 0.74, 0.03)], [Vector3(2.61, f + 0.44, -24.98), Vector3(0.06, 0.74, 0.03)]]:
+		_part("metal", bar[0], bar[1], Color("4a5156"))
+	var grille := Transform3D(Basis.from_euler(Vector3(deg_to_rad(-84.0), deg_to_rad(28.0), deg_to_rad(6.0))), Vector3(2.75, f + 0.05, -23.95))
+	_placed(grille, "metal", Vector3.ZERO, Vector3(0.9, 0.66, 0.02), Color("3a4045"))
+	for i in range(7):
+		_placed(grille, "plain", Vector3(0, -0.27 + i * 0.09, 0.012), Vector3(0.8, 0.04, 0.008), Color("0a0c0d"), Vector3(18, 0, 0))
+	for i in range(4):
+		_part("plain", Vector3(2.75 + i * 0.07, f + 1.05 - i * 0.04, -24.984), Vector3(0.012, 0.36, 0.004), Color("c9d2cd"), Vector3(0, 0, -24.0 - i * 3.0))
+	_chunk("LabTanksEast", false)
+	_wet_prints(Vector3(4.45, f, -23.2), Vector3(2.4, f, -24.5), 7, -0.45)
+	_chunk("Lab")
+
+## The desk from which the tanks were watched: it stands against the west wall between
+## the window of the containment room and the pump, a screen for every tank in its
+## sloping top, and over it the board that says what happened.
+func _lab_tank_desk(f: float) -> void:
+	_chunk("Lab")
+	var desk := Transform3D(Basis(Vector3.UP, PI / 2), Vector3(-7.69, f, -22.9))
+	_placed(desk, "steel", Vector3(0, 0.45, -0.04), Vector3(1.0, 0.9, 0.54), Color("353c41"))
+	_placed(desk, "plain", Vector3(0, 0.05, 0.02), Vector3(0.9, 0.1, 0.5), Color("101213"))
+	var slope := desk * Transform3D(Basis(Vector3.RIGHT, deg_to_rad(-58.0)), Vector3(0, 1.08, 0.0))
+	_placed(slope, "steel", Vector3(0, 0, -0.03), Vector3(1.0, 0.56, 0.06), Color("2b3136"))
+	_placed(desk, "epoxy", Vector3(0, 0.915, 0.22), Vector3(1.0, 0.03, 0.2), Color("b9beb8"))
+	_solid(Vector3(-7.69, f + 0.65, -22.9), Vector3(1.0, 1.3, 0.62), true, PI / 2)
+	_chunk("LabTrim", false)
+	for i in range(3):
+		_placed(slope, "plain", Vector3(-0.325 + i * 0.325, 0.03, 0.002), Vector3(0.3, 0.26, 0.004), Color("050607"))
+		_screen(slope, Vector3(-0.325 + i * 0.325, 0.03, 0.006), Vector2(0.27, 0.23), 1, [0.6, 0.16, 0.72][i])
+		for k in range(4):
+			_led(slope * Vector3(-0.42 + i * 0.325 + k * 0.045, -0.17, 0.003), Vector3(0.024, 0.022, 0.006), [Color("5ee07a"), Color("ffb347"), Color("58c8ff"), Color("ff3a2a")][k], 2.8, [1.0, 0.7, 0.85, 0.1][k], slope.basis)
+	_keyboard(desk, Vector3(-0.08, 0.93, 0.22), 3.0)
+	_papers(desk, Vector3(0.36, 0.931, 0.22), 3, 0.05)
+	# The board on the wall above: one tank is empty.
+	_part("plain", Vector3(-7.96, f + 1.92, -22.9), Vector3(0.05, 0.6, 1.0), Color("0c0e0f"))
+	_screen(Transform3D(Basis(Vector3.UP, PI / 2), Vector3(-7.932, f + 1.92, -22.9)), Vector3.ZERO, Vector2(0.94, 0.52), 4, 0.1)
+	var alert := lettering("P-06\nEINDÄMMUNG VERLOREN", Vector3(-7.925, f + 1.93, -23.08), 13, Color("ff5a44"))
+	alert.rotation.y = PI / 2
+	lab_parts.append(alert)
+	_stool(Vector3(-7.05, f, -22.55), 1.0, true)
+	_chunk("Lab")
+
+## A swivel chair, its seat towards local +z. A fallen one lies on its back.
+func _lab_chair(pos: Vector3, yaw: float, fallen: bool = false) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	if fallen:
+		frame = Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -PI * 0.5), pos + Vector3(0, 0.26, 0))
+	for spoke in range(5):
+		_placed(frame, "plain", Basis(Vector3.UP, spoke * TAU / 5.0) * Vector3(0.15, 0.05, 0), Vector3(0.3, 0.035, 0.05), Color("15181a"), Vector3(0, spoke * 72.0, 0))
+	batch.cylinder(mats["metal"], frame * Vector3(0, 0.06, 0), 0.025, 0.025, 0.36, Color("8d9498"), 6, frame.basis, false)
+	_placed(frame, "cloth", Vector3(0, 0.46, 0), Vector3(0.46, 0.08, 0.44), Color("23292d"))
+	_placed(frame, "cloth", Vector3(0, 0.8, -0.2), Vector3(0.42, 0.5, 0.07), Color("23292d"), Vector3(-6, 0, 0))
+	_placed(frame, "plain", Vector3(0, 0.52, -0.2), Vector3(0.06, 0.16, 0.04), Color("15181a"))
+
+## The servers along the east wall: six racks in a row under a cable ladder, the cooling
+## at the north end of the row and the power cabinet at its south end, with the board
+## that shows what is being done to the archive. Five of the racks have a drive that can
+## be pulled (see `servers`).
+func _lab_servers(f: float) -> void:
+	var row := ["compute", "storage", "compute", "storage", "network", "compute"]
+	var turn := Basis(Vector3.UP, -PI / 2)
+	for i in range(6):
+		var at := Vector3(7.58, f, -22.15 + i * 0.9)
+		var bay := _server_rack(at, -PI / 2, row[i], "B-%02d" % (i + 1))
+		if bay == Vector3.INF:
+			continue
+		# The drive in the bay is a thing of its own: it can be slid out and taken away.
+		var home := bay + turn * Vector3(0, 0, -0.152)
+		var outer := _begin_gate()
+		_caddy(Transform3D(turn, home), Vector3.ZERO, 4 * RACK_UNIT - 0.026)
+		var drive := _lab_piece(outer, home, "Drive%d" % servers.size())
+		servers.append({"pos": Vector3(6.5, f, at.z), "yaw": -PI / 2, "bay": bay, "out": turn * Vector3(0, 0, 1), "drive": drive, "home": home})
+	_solid(Vector3(7.58, f + 1.05, -19.9), Vector3(0.84, 2.1, 5.4))
+	# --- North of the row: the cooling unit, and in the corner the chiller that feeds
+	# it and the tanks.
+	_chunk("Lab")
+	var cooler := Transform3D(turn, Vector3(7.58, f, -23.07))
+	_placed(cooler, "steel", Vector3(0, 1.05, 0), Vector3(0.9, 2.1, 0.84), Color("2f363b"))
+	_part("steel", Vector3(7.53, f + 0.7, -24.26), Vector3(0.94, 1.4, 1.48), Color("3a4146"))
+	_solid(Vector3(7.53, f + 1.05, -23.81), Vector3(0.94, 2.1, 2.38))
+	_chunk("LabTrim", false)
+	_placed(cooler, "plain", Vector3(0, 1.3, 0.421), Vector3(0.74, 1.3, 0.006), Color("0a0c0d"))
+	for i in range(13):
+		_placed(cooler, "metal", Vector3(0, 0.72 + i * 0.097, 0.426), Vector3(0.72, 0.03, 0.01), Color("4a5257"), Vector3(24, 0, 0))
+	_placed(cooler, "plain", Vector3(0, 0.36, 0.421), Vector3(0.74, 0.4, 0.006), Color("1d2225"))
+	_screen(cooler, Vector3(-0.16, 0.42, 0.426), Vector2(0.26, 0.16), 2, 0.7)
+	for i in range(3):
+		_led(cooler * Vector3(0.1 + i * 0.07, 0.44, 0.425), Vector3(0.03, 0.02, 0.006), [Color("58c8ff"), Color("5ee07a"), Color("ffb347")][i], 2.8, [1.0, 1.0, 0.4][i], cooler.basis)
+	var cool_plate := lettering("KÜHLUNG  B", cooler * Vector3(0, 2.0, 0.425), 11, Color("bfd2d6"))
+	cool_plate.rotation.y = -PI / 2
+	lab_parts.append(cool_plate)
+	_part("plain", Vector3(7.057, f + 0.9, -24.26), Vector3(0.006, 0.7, 1.1), Color("242a2e"))
+	for i in range(3):
+		batch.cylinder(mats["plain"], Vector3(7.054, f + 1.05, -24.62 + i * 0.36), 0.08, 0.08, 0.016, Color("d9dcd6"), 12, Basis(Vector3.BACK, PI / 2))
+	_chunk("Lab")
+	for i in range(2):
+		_pipe(Vector3(7.3 + i * 0.3, f + 1.4, -24.5), Vector3(7.3 + i * 0.3, CELLAR_TOP, -24.5), 0.07, Color("5c6a6e") if i == 0 else Color("7a4a3a"))
+	# --- South of the row: the power cabinet. The board on its end is what one sees first
+	# from the door.
+	var power := Transform3D(turn, Vector3(7.58, f, -16.74))
+	_placed(power, "steel", Vector3(0, 1.05, 0), Vector3(0.88, 2.1, 0.84), Color("353c41"))
+	_solid(Vector3(7.58, f + 1.05, -16.74), Vector3(0.84, 2.1, 0.88))
+	_chunk("LabTrim", false)
+	_placed(power, "plain", Vector3(0, 1.1, 0.421), Vector3(0.74, 1.7, 0.006), Color("2a3035"))
+	_placed(power, "metal", Vector3(0.3, 1.1, 0.43), Vector3(0.03, 0.2, 0.02), Color("a4a8a6"))
+	for i in range(8):
+		_placed(power, "plain", Vector3(-0.22 + (i % 4) * 0.12, 1.55 - int(i >= 4) * 0.16, 0.426), Vector3(0.08, 0.11, 0.008), Color("0f1113"))
+		_led(power * Vector3(-0.22 + (i % 4) * 0.12, 1.59 - int(i >= 4) * 0.16, 0.432), Vector3(0.02, 0.014, 0.004), Color("5ee07a") if i != 5 else Color("ff3a2a"), 2.8, 1.0 if i != 5 else 0.4, power.basis)
+	_hazard(power * Vector3(-0.36, 0.3, 0.426), power * Vector3(0.36, 0.3, 0.426), Vector3(0.006, 0.08, 0.09), 8)
+	_part("plain", Vector3(7.58, f + 1.52, -16.29), Vector3(0.74, 0.62, 0.03), Color("0a0c0d"))
+	_screen(Transform3D(Basis.IDENTITY, Vector3(7.58, f + 1.52, -16.272)), Vector3.ZERO, Vector2(0.68, 0.56), 5, 0.12)
+	lab_parts.append(lettering("ARCHIV B\nLÖSCHUNG LÄUFT", Vector3(7.58, f + 1.98, -16.29), 12, Color("ff8c6e")))
+	_part("plain", Vector3(7.58, f + 1.02, -16.24), Vector3(0.6, 0.03, 0.16), Color("1d2022"))
+	_keyboard(Transform3D(Basis.IDENTITY, Vector3(7.56, f + 1.035, -16.23)), Vector3.ZERO, 0.0)
+	# --- The cable ladder over the racks: hung from the ceiling, cables dropping from it
+	# into every rack, and a trunk that climbs into the trays that cross the hall.
+	for side in [7.38, 7.78]:
 		var x: float = side
-		_pipe(pos + Vector3(x, 2.5, -0.12), Vector3(pos.x + x, CELLAR_TOP - 0.24, pos.z - 0.12), 0.035, Color("5c6a6e"), 6)
-	if specimen:
-		# Something that was a man once, curled up in the fluid.
-		# It is drawn unlit: a dark shape against the glow, whatever lamp stands near.
-		var flesh := Color(0.012, 0.03, 0.016)
-		batch.ellipsoid(mats["steady"], pos + Vector3(0.02, 1.22, 0), Vector3(0.17, 0.36, 0.14), flesh, Basis(Vector3.BACK, 0.22))
-		batch.ellipsoid(mats["steady"], pos + Vector3(-0.09, 1.68, 0.04), Vector3(0.11, 0.13, 0.11), flesh)
-		batch.ellipsoid(mats["steady"], pos + Vector3(0.14, 0.84, 0.08), Vector3(0.07, 0.3, 0.07), flesh, Basis(Vector3.BACK, -0.5))
-		batch.ellipsoid(mats["steady"], pos + Vector3(-0.02, 0.8, -0.06), Vector3(0.07, 0.28, 0.07), flesh, Basis(Vector3.BACK, 0.3))
-		batch.ellipsoid(mats["steady"], pos + Vector3(0.21, 1.34, 0.02), Vector3(0.05, 0.28, 0.05), flesh, Basis(Vector3.BACK, -0.25))
-		batch.ellipsoid(mats["steady"], pos + Vector3(-0.2, 1.2, 0.02), Vector3(0.05, 0.3, 0.05), flesh, Basis(Vector3.BACK, 0.5))
-	_chunk("LabTanks", false)
-	batch.cylinder(mats["fluid"], pos + Vector3(0, 0.36, 0), 0.43, 0.43, 1.84, Color.WHITE, 16)
-	batch.cylinder(mats["glass"], pos + Vector3(0, 0.36, 0), 0.47, 0.47, 1.84, Color.WHITE, 16, Basis.IDENTITY, false)
+		_part("metal", Vector3(x, f + 2.44, -19.85), Vector3(0.03, 0.05, 6.5), Color("3a4045"))
+	for i in range(14):
+		_part("metal", Vector3(7.58, f + 2.43, -22.95 + i * 0.48), Vector3(0.4, 0.02, 0.03), Color("3a4045"))
+	for i in range(4):
+		for side in [7.38, 7.78]:
+			var x: float = side
+			_part("metal", Vector3(x, f + 2.73, -22.6 + i * 1.84), Vector3(0.016, 0.54, 0.016), Color("23272a"))
+	for i in range(5):
+		_part("plain", Vector3(7.44 + i * 0.07, f + 2.465, -19.85), Vector3(0.045, 0.035, 6.4), [Color("0c0d0e"), Color("14202c"), Color("0c0d0e"), Color("8a4a1c"), Color("0c0d0e")][i])
+	for z in [-22.6, -17.4]:
+		var at: float = z
+		_hose(Vector3(7.5, f + 2.48, at + 0.25), Vector3(7.3, CELLAR_TOP - 0.3, at), 0.035, Color("0c0d0e"), -0.04, Vector3.ZERO, 4)
+	# A sign over the aisle, hung from the ceiling.
+	_part("plain", Vector3(6.45, CELLAR_TOP - 0.26, -16.95), Vector3(1.5, 0.26, 0.03), Color("0d1011"))
+	for side in [-0.6, 0.6]:
+		var x: float = side
+		_part("metal", Vector3(6.45 + x, CELLAR_TOP - 0.065, -16.95), Vector3(0.02, 0.13, 0.02), Color("23272a"))
+	lab_parts.append(lettering("SERVER  ·  ARCHIV B", Vector3(6.45, CELLAR_TOP - 0.26, -16.93), 20, Color("8fd0ff")))
 	_chunk("Lab")
-	_round_solid(pos, 0.5, 2.54)
-	_lab_lamp(_light(pos + Vector3(0, 1.3, 0.1), Color(0.42, 1.0, 0.5), 1.3, 2.4, false, flicker, 0.9))
+
+## Along the south wall of the hall: the cabinets for dangerous goods, the shower for
+## whoever has been splashed, cold stores full of samples, the status board with the
+## firm's name over it, protective suits on their hooks, a crate, gas bottles.
+func _lab_stores(f: float) -> void:
+	_chunk("Lab")
+	# --- Three cabinets in the south-west corner: one for dangerous goods, two lockers.
+	for i in range(3):
+		var x := -7.2 + i * 0.96
+		_part("steel", Vector3(x, f + 1.0, -14.27), Vector3(0.92, 2.0, 0.5), Color("a8902c") if i == 0 else Color("59626a"))
+	_solid(Vector3(-6.24, f + 1.0, -14.27), Vector3(2.88, 2.0, 0.5))
+	_chunk("LabTrim", false)
+	for i in range(3):
+		var x := -7.2 + i * 0.96
+		_part("plain", Vector3(x, f + 1.0, -14.523), Vector3(0.012, 1.86, 0.006), Color("1d2022"))
+		for side in [-1.0, 1.0]:
+			_part("metal", Vector3(x + side * 0.06, f + 1.05, -14.53), Vector3(0.02, 0.16, 0.014), Color("9a9d9a"))
+		if i == 0:
+			_part("plain", Vector3(x, f + 1.5, -14.523), Vector3(0.5, 0.36, 0.006), Color("131415"))
+			_hazard(Vector3(x - 0.4, f + 0.16, -14.523), Vector3(x + 0.4, f + 0.16, -14.523), Vector3(0.1, 0.1, 0.006), 8)
+			lab_parts.append(_wall_sign("GEFAHR\nSTOFFE", Vector3(x, f + 1.5, -14.53), 13, Color("e2b93a"), PI))
+		else:
+			for k in range(4):
+				_part("plain", Vector3(x, f + 1.72 - k * 0.05, -14.524), Vector3(0.5, 0.016, 0.006), Color("23282c"))
+	# A locker door stands open: a coat inside.
+	var locker := Transform3D(Basis(Vector3.UP, deg_to_rad(-112.0)), Vector3(-4.82, f, -14.52))
+	_placed(locker, "steel", Vector3(-0.22, 1.0, 0), Vector3(0.44, 1.86, 0.02), Color("59626a"))
+	_part("plain", Vector3(-5.04, f + 1.0, -14.526), Vector3(0.42, 1.84, 0.006), Color("0d0f10"))
+	_part("plain", Vector3(-5.04, f + 1.25, -14.54), Vector3(0.34, 0.9, 0.02), Color("b9bbb3"))
+	_part("plain", Vector3(-5.04, f + 1.3, -14.552), Vector3(0.012, 0.8, 0.004), Color("7d8082"))
+	_part("plain", Vector3(-5.04, f + 1.74, -14.54), Vector3(0.36, 0.03, 0.03), Color("6f767a"))
+	# --- The emergency shower: a yellow pipe up the wall, a head over the floor grate.
+	_pipe(Vector3(-4.3, f, -14.1), Vector3(-4.3, f + 2.25, -14.1), 0.03, Color("c9a227"))
+	_pipe(Vector3(-4.3, f + 2.25, -14.1), Vector3(-4.3, f + 2.25, -14.62), 0.03, Color("c9a227"))
+	batch.cylinder(mats["metal"], Vector3(-4.3, f + 2.15, -14.62), 0.13, 0.05, 0.1, Color("c9a227"), 12)
+	_pipe(Vector3(-4.12, f + 1.3, -14.4), Vector3(-4.12, f + 2.25, -14.4), 0.008, Color("8a8d8a"), 5)
+	_part("plain", Vector3(-4.12, f + 1.24, -14.4), Vector3(0.14, 0.12, 0.014), Color("c9a227"), Vector3(0, 0, 45))
+	batch.cylinder(mats["metal"], Vector3(-4.52, f + 1.0, -14.2), 0.11, 0.07, 0.07, Color("c9a227"), 10)
+	_pipe(Vector3(-4.3, f + 0.95, -14.1), Vector3(-4.52, f + 0.98, -14.2), 0.02, Color("c9a227"), 6)
+	_part("metal", Vector3(-4.3, f + 0.005, -14.62), Vector3(0.5, 0.008, 0.5), Color("1b1e20"))
+	for i in range(6):
+		_part("plain", Vector3(-4.5 + i * 0.08, f + 0.01, -14.62), Vector3(0.03, 0.004, 0.42), Color("050607"))
+	_part("plain", Vector3(-4.3, f + 1.9, -14.016), Vector3(0.34, 0.34, 0.006), Color("1f7a45"))
+	_part("plain", Vector3(-4.3, f + 1.93, -14.02), Vector3(0.05, 0.16, 0.006), Color("e8efe9"))
+	_part("plain", Vector3(-4.3, f + 1.93, -14.021), Vector3(0.16, 0.05, 0.006), Color("e8efe9"))
+	# --- Two cold stores with glass doors: the light in them still burns.
+	for i in range(2):
+		_cold_store(Vector3(-3.35 + i * 0.86, f, -14.35), PI, i)
+	# --- The status board, and over it the name of the firm.
+	_part("plain", Vector3(-0.75, f + 1.5, -14.04), Vector3(1.56, 0.94, 0.05), Color("0c0e0f"))
+	_screen(Transform3D(Basis(Vector3.UP, PI), Vector3(-0.75, f + 1.5, -14.068)), Vector3.ZERO, Vector2(1.46, 0.84), 8, 0.37)
+	_part("plain", Vector3(-0.75, f + 0.98, -14.05), Vector3(0.3, 0.05, 0.06), Color("15181a"))
+	lab_parts.append(_wall_sign("HELIX CORPORATION  ·  BIOLABOR 02", Vector3(-0.75, f + 2.14, -14.03), 22, Color("1c555b"), PI))
+	# --- Protective suits on their hooks, boots under them.
+	_part("metal", Vector3(1.3, f + 1.86, -14.04), Vector3(1.3, 0.05, 0.04), Color("6f767a"))
+	for i in range(3):
+		var x := 0.85 + i * 0.45
+		if i == 1:
+			# One is gone: somebody left in it.
+			_part("metal", Vector3(x, f + 1.8, -14.08), Vector3(0.02, 0.06, 0.08), Color("6f767a"))
+			continue
+		_part("metal", Vector3(x, f + 1.8, -14.08), Vector3(0.02, 0.06, 0.08), Color("6f767a"))
+		var suit := _vary(Color("b3962c"), 0.03)
+		_part("plain", Vector3(x, f + 1.4, -14.085), Vector3(0.38, 0.62, 0.1), suit)
+		_part("plain", Vector3(x, f + 1.4, -14.137), Vector3(0.012, 0.6, 0.004), Color("2a2618"))
+		_part("plain", Vector3(x, f + 1.52, -14.137), Vector3(0.38, 0.035, 0.004), Color("c9cdc6"))
+		_part("plain", Vector3(x, f + 1.82, -14.1), Vector3(0.25, 0.25, 0.15), suit.darkened(0.08))
+		_part("plain", Vector3(x, f + 1.83, -14.178), Vector3(0.18, 0.12, 0.006), Color("0e1113"))
+		for side in [-1.0, 1.0]:
+			var lean: float = side * 5.0
+			_part("plain", Vector3(x + side * 0.255, f + 1.38, -14.085), Vector3(0.11, 0.64, 0.09), suit.darkened(0.05), Vector3(0, 0, lean))
+			_part("plain", Vector3(x + side * 0.28, f + 1.04, -14.085), Vector3(0.1, 0.1, 0.08), Color("23211c"))
+			_part("plain", Vector3(x + side * 0.1, f + 0.76, -14.085), Vector3(0.165, 0.7, 0.09), suit, Vector3(0, 0, lean * 0.4))
+			_part("plain", Vector3(x + side * 0.1, f + 0.48, -14.132), Vector3(0.165, 0.035, 0.004), Color("c9cdc6"))
+			_part("plain", Vector3(x + side * 0.1, f + 0.16, -14.14), Vector3(0.13, 0.32, 0.26), Color("16181a"))
+	_chunk("Lab")
+	# --- A transport crate, the extinguisher by the door, gas bottles and a drum.
+	_prop("metal", Vector3(2.75, f + 0.4, -14.5), Vector3(1.1, 0.8, 0.8), Color("48524a"))
+	_part("plain", Vector3(2.75, f + 0.5, -14.903), Vector3(0.5, 0.2, 0.006), Color("c9a227"))
+	_part("plain", Vector3(2.75, f + 0.82, -14.5), Vector3(1.14, 0.04, 0.84), Color("3a433c"))
+	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var at: Vector2 = corner
+		_part("metal", Vector3(2.75 + at.x * 0.53, f + 0.4, -14.5 + at.y * 0.38), Vector3(0.06, 0.82, 0.06), Color("23272a"))
+	batch.cylinder(mats["plain"], Vector3(3.3, f + 0.9, -14.12), 0.075, 0.075, 0.46, Color("a8281c"), 9)
+	batch.cylinder(mats["metal"], Vector3(3.3, f + 1.36, -14.12), 0.03, 0.03, 0.08, Color("1b1e20"), 6)
+	_part("plain", Vector3(3.3, f + 1.72, -14.016), Vector3(0.22, 0.22, 0.006), Color("a8281c"))
+	for i in range(3):
+		var x := 7.0 + i * 0.36
+		batch.cylinder(mats["metal"], Vector3(x, f, -14.3), 0.13, 0.13, 1.35, _vary(Color("4d6a8a"), 0.04) if i != 2 else Color("8a5a2a"), 9)
+		batch.cylinder(mats["metal"], Vector3(x, f + 1.35, -14.3), 0.13, 0.05, 0.1, _vary(Color("4d6a8a"), 0.04) if i != 2 else Color("8a5a2a"), 9)
+		batch.cylinder(mats["metal"], Vector3(x, f + 1.45, -14.3), 0.05, 0.03, 0.12, Color("8a8d8a"), 6)
+	_part("metal", Vector3(7.36, f + 0.95, -14.14), Vector3(1.1, 0.03, 0.02), Color("8a8d8a"))
+	_part("metal", Vector3(7.36, f + 0.5, -14.14), Vector3(1.1, 0.03, 0.02), Color("8a8d8a"))
+	_solid(Vector3(7.36, f + 0.7, -14.3), Vector3(1.1, 1.4, 0.36))
+	_barrel(Vector3(6.3, f, -14.42), Color("8a7a2a"))
+
+## A cold store for samples: a tall cabinet with a glass door towards local +z. The lamp
+## inside is on, racks of tubes and jars stand on its shelves. `number` tells two apart.
+func _cold_store(pos: Vector3, yaw: float, number: int) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	_chunk("Lab")
+	_placed(frame, "steel", Vector3(0, 0.99, -0.3), Vector3(0.8, 1.98, 0.04), Color("d0d4cf"))
+	for side in [-1.0, 1.0]:
+		_placed(frame, "steel", Vector3(side * 0.38, 0.99, 0), Vector3(0.04, 1.98, 0.64), Color("d0d4cf"))
+	_placed(frame, "steel", Vector3(0, 1.94, 0), Vector3(0.8, 0.08, 0.64), Color("d0d4cf"))
+	_placed(frame, "steel", Vector3(0, 0.15, 0), Vector3(0.8, 0.3, 0.64), Color("b4b9b4"))
+	_solid(pos + Vector3(0, 0.99, 0), Vector3(0.8, 1.98, 0.64), true, yaw)
+	_chunk("LabTrim", false)
+	_placed(frame, "plain", Vector3(0, 1.1, -0.275), Vector3(0.72, 1.6, 0.006), Color("dfe8ea"))
+	_glow_box(frame * Vector3(0, 1.86, -0.05), Vector3(0.6, 0.02, 0.3), Color("d6f0ff"), 4.2, frame.basis)
+	for shelf in range(4):
+		var y := 0.34 + shelf * 0.38
+		_placed(frame, "metal", Vector3(0, y, -0.02), Vector3(0.72, 0.012, 0.5), Color("aab0ad"))
+		for item in range(3):
+			var x := -0.24 + item * 0.24 + random.randf_range(-0.03, 0.03)
+			var pick := random.randi() % 4
+			if pick == 0:
+				_tube_rack(frame, Vector3(x, y + 0.006, -0.12), 4, 90.0)
+			elif pick == 1:
+				_flask(frame, Vector3(x, y + 0.006, 0.0), 0.05, 0.2, 5)
+			elif pick == 2:
+				_placed(frame, "plain", Vector3(x, y + 0.07, -0.02), Vector3(0.18, 0.13, 0.24), _vary(Color("d9dcd3"), 0.05))
+			else:
+				for k in range(2):
+					_flask(frame, Vector3(x - 0.04 + k * 0.08, y + 0.006, -0.06 + k * 0.1), 0.03, 0.14, [1, 4, 2, 5][random.randi() % 4])
+	_placed(frame, "plain", Vector3(0, 0.2, 0.322), Vector3(0.6, 0.12, 0.006), Color("15181a"))
+	_led(frame * Vector3(-0.22, 0.2, 0.326), Vector3(0.04, 0.03, 0.004), Color("58c8ff"), 2.8, 1.0, frame.basis)
+	_screen(frame, Vector3(0.1, 0.2, 0.327), Vector2(0.24, 0.07), 2, 0.2 + number * 0.4)
+	_placed(frame, "metal", Vector3(0.31, 1.15, 0.345), Vector3(0.03, 0.5, 0.03), Color("9aa0a3"))
+	for bar in [[Vector3(0, 1.88, 0.32), Vector3(0.72, 0.05, 0.03)], [Vector3(0, 0.33, 0.32), Vector3(0.72, 0.05, 0.03)], [Vector3(-0.345, 1.1, 0.32), Vector3(0.03, 1.52, 0.03)], [Vector3(0.345, 1.1, 0.32), Vector3(0.03, 1.52, 0.03)]]:
+		_placed(frame, "metal", bar[0], bar[1], Color("c2c7c2"))
+	_chunk("LabGlass", false)
+	batch.box(mats["glass"], frame * Vector3(0, 1.1, 0.318), Vector3(0.68, 1.52, 0.012), Color.WHITE, frame.basis)
+	_chunk("Lab")
+
+## Lettering painted on a wall or a plate: it takes the light of the room like paint,
+## instead of shining. `yaw` turns it (0: it is read from +z).
+func _wall_sign(text: String, pos: Vector3, size: int, color: Color, yaw: float = 0.0) -> Label3D:
+	var label := lettering(text, pos, size, color)
+	label.rotation.y = yaw
+	label.shaded = true
+	label.outline_size = 0
+	return label
+
+## A line of paint on the floor of the laboratory, from point to point (each leg along x
+## or along z), and at its end what it leads to.
+func _floor_line(points: Array, color: Color, text: String) -> void:
+	for i in range(points.size() - 1):
+		var a: Vector3 = points[i]
+		var b: Vector3 = points[i + 1]
+		var span := (b - a).abs()
+		_part("plain", (a + b) * 0.5 + Vector3(0, 0.002, 0), Vector3(span.x + 0.06, 0.004, span.z + 0.06), color)
+	var end: Vector3 = points[points.size() - 1]
+	var label := lettering(text, end + Vector3(0, 0.006, -0.34), 20, color.lightened(0.25))
+	label.rotation.x = -PI / 2
+	label.shaded = true
+	label.outline_size = 0
+	lab_parts.append(label)
+
+## What makes the hall a room: the cladding of its walls, a dark ceiling, and the paint
+## on its floor that leads to its three parts.
+func _lab_shell(f: float) -> void:
+	_chunk("LabTrim", false)
+	_clad(Vector3(-8.0, f, -14.0), Vector3(3.5, f, -14.0), Vector3(0, 0, -1))
+	_clad(Vector3(5.5, f, -14.0), Vector3(8.0, f, -14.0), Vector3(0, 0, -1))
+	_clad(Vector3(-8.0, f, -25.0), Vector3(-1.3, f, -25.0), Vector3(0, 0, 1))
+	_clad(Vector3(1.3, f, -25.0), Vector3(8.0, f, -25.0), Vector3(0, 0, 1))
+	_clad(Vector3(8.0, f, -17.1), Vector3(8.0, f, -14.0), Vector3(-1, 0, 0))
+	_clad(Vector3(-8.0, f, -25.0), Vector3(-8.0, f, -22.3), Vector3(1, 0, 0))
+	_clad(Vector3(-8.0, f, -16.5), Vector3(-8.0, f, -14.0), Vector3(1, 0, 0))
+	_clad(Vector3(-8.0, f, -18.75), Vector3(-8.0, f, -18.4), Vector3(1, 0, 0), false)
+	_lab_board(Vector3(-8.0, f, -22.3), Vector3(-8.0, f, -18.75), Vector3(1, 0, 0), 0.0, 0.5, 0.014, "steel", Color("3b4145"))
+	# Above the cladding the walls are painted dark, like the ceiling: a plain coat over
+	# the concrete, with a grid of rails under it that carries nothing any more.
+	for run in [[Vector3(-8.0, f, -14.0), Vector3(3.5, f, -14.0), Vector3(0, 0, -1)], [Vector3(5.5, f, -14.0), Vector3(8.0, f, -14.0), Vector3(0, 0, -1)], [Vector3(-8.0, f, -25.0), Vector3(-1.24, f, -25.0), Vector3(0, 0, 1)], [Vector3(1.24, f, -25.0), Vector3(8.0, f, -25.0), Vector3(0, 0, 1)], [Vector3(8.0, f, -25.0), Vector3(8.0, f, -14.0), Vector3(-1, 0, 0)], [Vector3(-8.0, f, -25.0), Vector3(-8.0, f, -22.3), Vector3(1, 0, 0)], [Vector3(-8.0, f, -18.75), Vector3(-8.0, f, -14.0), Vector3(1, 0, 0)]]:
+		_lab_board(run[0], run[1], run[2], 2.36, 0.64, 0.006, "plain", Color("1c2022"))
+	_lab_board(Vector3(-8.0, f, -22.3), Vector3(-8.0, f, -18.75), Vector3(1, 0, 0), 2.7, 0.3, 0.006, "plain", Color("1c2022"))
+	_part("plain", Vector3(0, CELLAR_TOP - 0.012, -19.5), Vector3(15.98, 0.024, 10.98), Color("14171a"))
+	for i in range(1, 10):
+		_part("metal", Vector3(-8.0 + i * 1.6, CELLAR_TOP - 0.03, -19.5), Vector3(0.03, 0.014, 10.98), Color("2c3135"))
+	for i in range(1, 7):
+		_part("metal", Vector3(0, CELLAR_TOP - 0.03, -25.0 + i * 11.0 / 7.0), Vector3(15.98, 0.014, 0.03), Color("2c3135"))
+	# Three lines lead from the door: blue to the servers, green to the tanks and the
+	# tunnel behind them, teal to the isolation room.
+	_floor_line([Vector3(4.9, f, -14.1), Vector3(4.9, f, -15.3), Vector3(6.5, f, -15.3), Vector3(6.5, f, -16.2)], Color("2f6fb0"), "SERVER")
+	_floor_line([Vector3(4.5, f, -14.1), Vector3(4.5, f, -15.6), Vector3(0.35, f, -15.6), Vector3(0.35, f, -22.4)], Color("3f9a58"), "PROBEN  ·  T3")
+	_floor_line([Vector3(4.1, f, -14.1), Vector3(4.1, f, -15.45), Vector3(-6.6, f, -15.45), Vector3(-6.6, f, -16.3)], Color("2c8a8f"), "ISOLATION")
+	_hazard(Vector3(-1.1, f + 0.003, -24.86), Vector3(1.1, f + 0.003, -24.86), Vector3(0.22, 0.006, 0.16), 10)
+	_hazard(Vector3(-7.9, f + 0.003, -18.35), Vector3(-7.9, f + 0.003, -16.55), Vector3(0.16, 0.006, 0.18), 10)
+	_chunk("Lab")
+
+## Inside the containment room: a cell for one, watched from the hall. A cot with straps,
+## a desk whose terminal has been wired into the wall behind an opened panel, a shelf, a
+## washstand, and what somebody leaves who has been locked in for days.
+func _lab_cell(f: float) -> void:
+	var dark := Color("23272a")
+	var white := Color("b3b9b5")
+	_chunk("LabTrim", false)
+	_clad(Vector3(-13.3, f, -22.5), Vector3(-13.3, f, -16.5), Vector3(1, 0, 0), true, white)
+	_clad(Vector3(-13.3, f, -22.5), Vector3(-8.3, f, -22.5), Vector3(0, 0, 1), false, white)
+	_clad(Vector3(-13.3, f, -16.5), Vector3(-8.3, f, -16.5), Vector3(0, 0, -1), false, white)
+	_lab_board(Vector3(-8.3, f, -22.3), Vector3(-8.3, f, -18.75), Vector3(-1, 0, 0), 0.0, 0.5, 0.014, "steel", Color("3b4145"))
+	_part("plain", Vector3(-10.8, CELLAR_TOP - 0.012, -19.5), Vector3(4.98, 0.024, 5.98), Color("171a1d"))
+	_part("metal", Vector3(-10.8, f + 0.004, -19.4), Vector3(0.3, 0.008, 0.3), Color("1b1e20"))
+	for i in range(4):
+		_part("plain", Vector3(-10.9 + i * 0.07, f + 0.009, -19.4), Vector3(0.025, 0.004, 0.24), Color("050607"))
+	_part("metal", Vector3(-12.2, CELLAR_TOP - 0.03, -17.6), Vector3(0.5, 0.02, 0.5), Color("2c3135"))
+	for i in range(5):
+		_part("plain", Vector3(-12.2, CELLAR_TOP - 0.042, -17.8 + i * 0.1), Vector3(0.44, 0.006, 0.03), Color("08090a"))
+	# --- The cot, with the straps it came with.
+	_chunk("Lab")
+	var cot := Transform3D(Basis.IDENTITY, Vector3(-11.9, f, -21.97))
+	_placed(cot, "metal", Vector3(0, 0.2, 0), Vector3(2.0, 0.06, 0.9), Color("6f7578"))
+	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var at: Vector2 = corner
+		_placed(cot, "metal", Vector3(at.x * 0.96, 0.22, at.y * 0.42), Vector3(0.05, 0.44, 0.05), Color("6f7578"))
+	_placed(cot, "cloth", Vector3(0, 0.3, 0), Vector3(1.92, 0.14, 0.84), Color("a9aba3"))
+	_placed(cot, "cloth", Vector3(0.3, 0.385, 0), Vector3(1.25, 0.04, 0.86), Color("3f6a6c"), Vector3(0, 2, 0))
+	_placed(cot, "cloth", Vector3(-0.72, 0.41, 0), Vector3(0.4, 0.09, 0.56), Color("c3c5bd"), Vector3(0, -5, 0))
+	for x in [-0.25, 0.62]:
+		var at: float = x
+		_placed(cot, "plain", Vector3(at, 0.3, 0.44), Vector3(0.07, 0.3, 0.012), Color("1b1d1e"), Vector3(0, 0, 8))
+		_placed(cot, "metal", Vector3(at + 0.02, 0.14, 0.45), Vector3(0.08, 0.05, 0.016), Color("9aa0a3"))
+	_solid(Vector3(-11.9, f + 0.22, -21.97), Vector3(2.02, 0.44, 0.92))
+	# --- The desk. She has taken a panel off the wall and wired the terminal into what
+	# lies behind it: that is how she got onto the squad's radio.
+	_table(Vector3(-12.87, f, -18.7), Vector3(0.7, 0.76, 1.5), Color("8d9391"))
+	var desk := Transform3D(Basis(Vector3.UP, PI / 2), Vector3(-12.9, f + 0.76, -18.7))
+	_monitor(desk, Vector3(0, 0, -0.14), 0, 0.0, Vector2(0.5, 0.31))
+	_keyboard(desk, Vector3(0.05, 0, 0.16), -6.0)
+	_papers(desk, Vector3(-0.5, 0, 0.12), 4, 0.1)
+	_mug(desk, Vector3(0.46, 0, 0.2))
+	_chunk("LabTrim", false)
+	_part("plain", Vector3(-13.285, f + 1.5, -17.75), Vector3(0.006, 0.5, 0.62), Color("030404"))
+	for edge in [[Vector3(-13.28, f + 1.76, -17.75), Vector3(0.012, 0.03, 0.66)], [Vector3(-13.28, f + 1.24, -17.75), Vector3(0.012, 0.03, 0.66)], [Vector3(-13.28, f + 1.5, -17.43), Vector3(0.012, 0.52, 0.03)], [Vector3(-13.28, f + 1.5, -18.07), Vector3(0.012, 0.52, 0.03)]]:
+		_part("metal", edge[0], edge[1], Color("4a5156"))
+	for i in range(5):
+		_part("plain", Vector3(-13.278, f + 1.34 + i * 0.08, -17.75 + (i % 2) * 0.1 - 0.05), Vector3(0.008, 0.05, 0.3), Color("1d2a22") if i % 2 == 0 else Color("2a2018"))
+		_led(Vector3(-13.274, f + 1.34 + i * 0.08, -17.56), Vector3(0.006, 0.014, 0.014), Color("5ee07a") if i != 3 else Color("ffb347"), 2.6, [0.8, 1.0, 0.7, 0.4, 0.9][i])
+	for i in range(4):
+		_hose(Vector3(-13.27, f + 1.3 + i * 0.07, -17.9 + i * 0.07), Vector3(-13.0, f + 0.95 + i * 0.03, -18.52 - i * 0.05), 0.007, [Color("b8452f"), Color("c9a227"), Color("2f6fb0"), Color("0c0d0e")][i], 0.16, Vector3(0.1, 0, 0), 6)
+	var cover := Transform3D(Basis.from_euler(Vector3(deg_to_rad(-14.0), PI / 2, 0)), Vector3(-12.38, f + 0.262, -17.0))
+	_placed(cover, "epoxy", Vector3.ZERO, Vector3(0.62, 0.52, 0.012), white)
+	_chunk("Lab")
+	# (A locker for what the cell needs fills the corner: nobody gets stuck behind the desk.)
+	_part("steel", Vector3(-12.87, f + 0.45, -17.02), Vector3(0.84, 0.9, 0.92), Color("59626a"))
+	_solid(Vector3(-12.87, f + 0.45, -17.02), Vector3(0.84, 0.9, 0.92))
+	_part("plain", Vector3(-12.447, f + 0.45, -17.02), Vector3(0.006, 0.8, 0.012), Color("1d2022"))
+	for side in [-1.0, 1.0]:
+		_part("metal", Vector3(-12.44, f + 0.5, -17.02 + side * 0.07), Vector3(0.014, 0.16, 0.02), Color("9a9d9a"))
+	_part("plain", Vector3(-12.87, f + 0.93, -17.0), Vector3(0.5, 0.06, 0.36), Color("c3c5bd"))
+	_part("cloth", Vector3(-12.9, f + 0.99, -17.2), Vector3(0.4, 0.07, 0.3), Color("3f6a6c"), Vector3(0, 12, 0))
+	_lab_chair(Vector3(-12.05, f, -18.75), -PI / 2 + 0.3)
+	_solid(Vector3(-12.05, f + 0.5, -18.75), Vector3(0.46, 1.0, 0.46))
+	_shelf(Vector3(-11.3, f, -16.69), PI, 1.5, 0.36, 1.8, 4, Color("6d7472"), 0.55)
+	# --- The washstand, with a steel mirror over it.
+	_prop("steel", Vector3(-12.98, f + 0.42, -20.55), Vector3(0.6, 0.84, 0.5), Color("b9beba"))
+	_part("plain", Vector3(-12.98, f + 0.845, -20.55), Vector3(0.44, 0.012, 0.34), Color("2a2d2e"))
+	_pipe(Vector3(-13.2, f + 0.84, -20.55), Vector3(-13.2, f + 1.02, -20.55), 0.014, Color("b6bab8"), 6)
+	_pipe(Vector3(-13.2, f + 1.02, -20.55), Vector3(-13.05, f + 1.0, -20.55), 0.012, Color("b6bab8"), 6)
+	_part("steel", Vector3(-13.28, f + 1.5, -20.55), Vector3(0.012, 0.5, 0.4), Color("c9d0cd"))
+	_part("cloth", Vector3(-13.05, f + 0.6, -20.28), Vector3(0.3, 0.42, 0.03), Color("8fa6a3"))
+	# --- The camera in the corner still runs.
+	_part("metal", Vector3(-9.2, f + 2.75, -22.42), Vector3(0.14, 0.1, 0.16), dark)
+	_led(Vector3(-9.2, f + 2.72, -22.335), Vector3(0.02, 0.02, 0.006), Color("ff3a2a"), 3.0, 0.4)
+	# --- Days in here: marks scratched into the wall over the cot, empty bottles and tins.
+	_chunk("LabTrim", false)
+	for i in range(13):
+		var group := int(i / 5.0)
+		if i % 5 == 4:
+			_part("plain", Vector3(-11.36 + group * 0.32, f + 1.2, -22.486), Vector3(0.22, 0.007, 0.002), Color("e2e5df"), Vector3(0, 0, 24))
+		else:
+			_part("plain", Vector3(-11.45 + group * 0.32 + (i % 5) * 0.05, f + 1.2 + random.randf_range(-0.01, 0.01), -22.486), Vector3(0.007, random.randf_range(0.1, 0.13), 0.002), Color("e2e5df"), Vector3(0, 0, random.randf_range(-6, 6)))
+	for i in range(5):
+		var at := Vector3(-10.7 + random.randf_range(0, 0.6), f, -21.3 + random.randf_range(0, 0.4))
+		if i < 3:
+			batch.cylinder(mats["plain"], at + Vector3(0, 0.036 if i == 1 else 0.0, 0), 0.035, 0.035, 0.2, Color("7f9fb3"), 7, Basis(Vector3.UP, random.randf() * TAU) * Basis(Vector3.RIGHT, PI / 2 if i == 1 else 0.0))
+		else:
+			batch.cylinder(mats["metal"], at, 0.04, 0.04, 0.09, Color("7a7d74"), 8)
+	# --- The intercom: a box on either side of the wall between window and door.
+	for side in [-1.0, 1.0]:
+		var x: float = -8.15 + side * 0.165
+		_part("metal", Vector3(x, f + 1.4, -18.55), Vector3(0.04, 0.26, 0.2), dark)
+		for i in range(4):
+			_part("plain", Vector3(x + side * 0.021, f + 1.46 - i * 0.025, -18.55), Vector3(0.004, 0.012, 0.14), Color("060708"))
+		_led(Vector3(x + side * 0.021, f + 1.32, -18.5), Vector3(0.006, 0.022, 0.022), Color("5ee07a"), 3.0, 0.4)
+		_part("plain", Vector3(x + side * 0.021, f + 1.32, -18.59), Vector3(0.006, 0.03, 0.05), Color("b9beb8"))
+	_chunk("Lab")
+	_part("metal", Vector3(-10.8, CELLAR_TOP - 0.03, -19.6), Vector3(1.28, 0.06, 0.42), Color("2a2d2e"))
+	_glow_box(Vector3(-10.8, CELLAR_TOP - 0.068, -19.6), Vector3(1.16, 0.016, 0.3), Color("e4f3ff"), 6.0)
+	var lamp := _lab_lamp(_light(Vector3(-10.8, f + 2.5, -19.6), Color("def0ff"), 3.0, 7.5, true, 0.02, 0.3))
+	lamp.shadow_caster_mask = 0xFFFFF & ~LabSpecimen.NO_LAMP_SHADOW
+	lab_shadow_lamps.append(lamp)
 
 ## The laboratory: the main hall with benches, server racks and specimen tanks, and on its
 ## west side the containment room behind a front of bulletproof glass.
@@ -2642,10 +3860,6 @@ func _build_lab() -> void:
 	_cellar_wall(_span(-8.3, -22.3, -8.0, -18.75), f - 0.05, f + 0.5)
 	_cellar_wall(_span(-8.3, -22.3, -8.0, -18.75), f + 2.7)
 	_cellar_wall(_span(-8.3, -18.35, -8.0, -16.55), f + 2.4)
-	# A painted band runs round the hall at chest height.
-	var band := Color("2c6a70")
-	for strip in [[Vector3(7.996, 0, -19.5), Vector3(0.008, 0.1, 11.0)], [Vector3(-7.996, 0, -23.75), Vector3(0.008, 0.1, 2.5)], [Vector3(-7.996, 0, -15.275), Vector3(0.008, 0.1, 2.55)], [Vector3(-2.225, 0, -14.004), Vector3(11.55, 0.1, 0.008)], [Vector3(6.725, 0, -14.004), Vector3(2.55, 0.1, 0.008)], [Vector3(-4.55, 0, -24.996), Vector3(6.9, 0.1, 0.008)], [Vector3(4.55, 0, -24.996), Vector3(6.9, 0.1, 0.008)]]:
-		_part("plain", (strip[0] as Vector3) + Vector3(0, f + 1.3, 0), strip[1], band)
 	# --- The front of bulletproof glass: it stops bodies and bullets alike.
 	_chunk("LabGlass", false)
 	batch.box(mats["glass"], Vector3(-8.15, f + 1.6, -20.525), Vector3(0.05, 2.2, 3.55))
@@ -2658,100 +3872,74 @@ func _build_lab() -> void:
 		var at: float = y
 		_part("metal", Vector3(-8.15, f + at, -20.525), Vector3(0.1, 0.06, 3.55), steel)
 	_part("metal", Vector3(-7.96, f + 0.5, -20.525), Vector3(0.1, 0.03, 3.6), Color("8a8d8a"))
-	var cell_sign := lettering("ISOLATION 01", Vector3(-7.99, f + 2.86, -20.525), 26, Color("cfdfe2"))
+	_part("plain", Vector3(-7.99, f + 2.86, -20.525), Vector3(0.02, 0.24, 1.9), Color("0d1011"))
+	var cell_sign := lettering("ISOLATION 01", Vector3(-7.975, f + 2.86, -20.525), 26, Color("cfdfe2"))
 	cell_sign.rotation.y = PI / 2
 	lab_parts.append(cell_sign)
-	# Frame of the sliding door, and beside it the keypad and the plate for the hacking device.
+	# Frame of the sliding door, and beside it the keypad and the plate for the hacking
+	# device. (Both sit on the cladding, which stands 12 mm proud of the wall.)
 	for z in [-18.37, -16.53]:
 		var at: float = z
-		_part("metal", Vector3(-7.985, f + 1.2, at), Vector3(0.04, 2.4, 0.08), steel)
-	_part("metal", Vector3(-7.985, f + 2.43, -17.45), Vector3(0.04, 0.08, 1.92), steel)
+		_part("metal", Vector3(-7.975, f + 1.2, at), Vector3(0.05, 2.4, 0.08), steel)
+	_part("metal", Vector3(-7.975, f + 2.43, -17.45), Vector3(0.05, 0.08, 1.92), steel)
 	_hazard(Vector3(-7.99, f + 2.54, -18.35), Vector3(-7.99, f + 2.54, -16.55), Vector3(0.008, 0.1, 0.18), 10)
-	_part("plain", Vector3(-7.99, f + 1.15, -15.8), Vector3(0.012, 0.42, 0.56), Color("14171a"))
+	_part("plain", Vector3(-7.978, f + 1.15, -15.8), Vector3(0.012, 0.42, 0.56), Color("14171a"))
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		var at: Vector2 = corner
-		_part("metal", Vector3(-7.98, f + 1.15 + at.y * 0.17, -15.8 + at.x * 0.24), Vector3(0.012, 0.03, 0.03), Color("7d8082"))
-	_part("metal", Vector3(-7.97, f + 1.32, -16.28), Vector3(0.05, 0.36, 0.24), dark)
-	_glow_box(Vector3(-7.943, f + 1.455, -16.28), Vector3(0.006, 0.04, 0.17), Color("ff5a3c"), 2.2)
+		_part("metal", Vector3(-7.968, f + 1.15 + at.y * 0.17, -15.8 + at.x * 0.24), Vector3(0.012, 0.03, 0.03), Color("7d8082"))
+	_part("metal", Vector3(-7.958, f + 1.32, -16.28), Vector3(0.05, 0.36, 0.24), dark)
+	_glow_box(Vector3(-7.931, f + 1.455, -16.28), Vector3(0.006, 0.04, 0.17), Color("ff5a3c"), 2.2)
 	for row in range(4):
 		for column in range(3):
-			_glow_box(Vector3(-7.943, f + 1.385 - row * 0.055, -16.34 + column * 0.06), Vector3(0.006, 0.032, 0.036), Color("9fd8c8"), 0.8)
-	_gate_lamp("lab_room", Vector3(-7.97, f + 1.8, -16.28), Vector3(1, 0, 0), true)
-	# --- Inside the containment room: a cot, a desk with a terminal, a shelf, a washstand.
-	var cot := Transform3D(Basis.IDENTITY, Vector3(-11.9, f, -21.97))
-	_placed(cot, "metal", Vector3(0, 0.2, 0), Vector3(2.0, 0.06, 0.9), Color("6f7578"))
-	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		var at: Vector2 = corner
-		_placed(cot, "metal", Vector3(at.x * 0.96, 0.22, at.y * 0.42), Vector3(0.05, 0.44, 0.05), Color("6f7578"))
-	_placed(cot, "cloth", Vector3(0, 0.3, 0), Vector3(1.92, 0.14, 0.84), Color("a9aba3"))
-	_placed(cot, "cloth", Vector3(0.3, 0.385, 0), Vector3(1.25, 0.04, 0.86), Color("3f6a6c"), Vector3(0, 2, 0))
-	_placed(cot, "cloth", Vector3(-0.72, 0.41, 0), Vector3(0.4, 0.09, 0.56), Color("c3c5bd"), Vector3(0, -5, 0))
-	_solid(Vector3(-11.9, f + 0.22, -21.97), Vector3(2.02, 0.44, 0.92))
-	_table(Vector3(-12.87, f, -18.7), Vector3(0.7, 0.76, 1.5), Color("8d9391"))
-	_part("plain", Vector3(-12.98, f + 1.02, -18.7), Vector3(0.05, 0.38, 0.56), Color("15181a"), Vector3(0, 0, 6))
-	_glow_box(Vector3(-12.95, f + 1.02, -18.7), Vector3(0.006, 0.32, 0.5), Color("7fd28c"), 1.2, Basis.from_euler(Vector3(0, 0, deg_to_rad(6))))
-	_part("plain", Vector3(-12.98, f + 0.8, -18.7), Vector3(0.08, 0.08, 0.08), Color("15181a"))
-	for i in range(3):
-		_part("plain", Vector3(-12.8, f + 0.78 + i * 0.012, -18.1 - i * 0.02), Vector3(0.22, 0.012, 0.3), _vary(Color("c9c6b8"), 0.04), Vector3(0, random.randf_range(-20, 20), 0))
-	_chair(Vector3(-12.05, f, -18.75), -PI / 2 + 0.3, Color("5d6466"))
-	_shelf(Vector3(-11.3, f, -16.69), PI, 1.5, 0.36, 1.8, 4, Color("6d7472"), 0.55)
-	_prop("metal", Vector3(-12.98, f + 0.42, -20.55), Vector3(0.6, 0.84, 0.5), Color("a9aeab"))
-	_part("plain", Vector3(-12.98, f + 0.845, -20.55), Vector3(0.44, 0.012, 0.34), Color("2a2d2e"))
-	_part("metal", Vector3(-9.2, f + 2.75, -22.42), Vector3(0.14, 0.1, 0.16), dark)
-	_glow_box(Vector3(-9.2, f + 2.72, -22.335), Vector3(0.02, 0.02, 0.006), Color("ff3a2a"), 3.0)
-	_part("metal", Vector3(-10.8, CELLAR_TOP - 0.03, -19.6), Vector3(1.28, 0.06, 0.42), Color("2a2d2e"))
-	_glow_box(Vector3(-10.8, CELLAR_TOP - 0.068, -19.6), Vector3(1.16, 0.016, 0.3), Color("e4f3ff"), 6.0)
-	lab_shadow_lamps.append(_lab_lamp(_light(Vector3(-10.8, f + 2.5, -19.6), Color("def0ff"), 3.0, 7.5, true, 0.02, 0.3)))
+			_glow_box(Vector3(-7.931, f + 1.385 - row * 0.055, -16.34 + column * 0.06), Vector3(0.006, 0.032, 0.036), Color("9fd8c8"), 0.8)
+	_gate_lamp("lab_room", Vector3(-7.958, f + 1.8, -16.28), Vector3(1, 0, 0), true)
+	_lab_shell(f)
+	_lab_cell(f)
 	# --- The hall. Two big panels over the middle throw the shadows; smaller ones fill
 	# the corners. (A lamp that hangs on a rod would put the shadow of its own shade on
-	# the ceiling, so these lie flat against it.)
+	# the ceiling, so these lie flat against it.) Bodies in the tanks are left out of the
+	# shadows of all of them (see LabSpecimen.NO_LAMP_SHADOW).
+	_chunk("Lab")
 	for i in range(2):
 		var spot: Vector3 = [Vector3(-2.6, CELLAR_TOP, -19.4), Vector3(3.6, CELLAR_TOP, -19.6)][i]
 		_part("metal", spot + Vector3(0, -0.03, 0), Vector3(1.7, 0.06, 0.6), Color("2a2d2e"))
 		for tube in [-0.15, 0.15]:
 			var z: float = tube
 			_glow_box(spot + Vector3(0, -0.068, z), Vector3(1.56, 0.016, 0.16), Color("e4f3ff"), 6.2)
-		lab_shadow_lamps.append(_lab_lamp(_light(spot + Vector3(0, -0.5, 0), Color("d5e8ff"), 3.4, 11.5, true, 0.03 if i == 0 else 0.14, 0.5)))
+		var lamp := _lab_lamp(_light(spot + Vector3(0, -0.5, 0), Color("d5e8ff"), 3.4, 11.5, true, 0.03 if i == 0 else 0.14, 0.5))
+		lamp.shadow_caster_mask = 0xFFFFF & ~LabSpecimen.NO_LAMP_SHADOW
+		lab_shadow_lamps.append(lamp)
 	for spot in [Vector3(-5.6, CELLAR_TOP, -16.0), Vector3(5.6, CELLAR_TOP, -16.2), Vector3(-5.4, CELLAR_TOP, -23.2), Vector3(5.2, CELLAR_TOP, -23.0)]:
 		_panel_lamp(spot, 1.3, 6.0, 0.06)
-	# Benches stand across the hall, between the two ways in: cover from either side.
+	_lab_tanks(f)
+	_lab_servers(f)
+	_lab_stores(f)
+	# --- Benches stand across the hall, between the two ways in: cover from either side.
 	_lab_bench(Vector3(-3.0, f, -16.7), 4.4, 0.0, 0)
 	_lab_bench(Vector3(3.3, f, -18.3), 4.2, 0.0, 1)
-	_lab_bench(Vector3(-2.7, f, -21.7), 4.4, 0.0, 2)
-	_lab_bench(Vector3(5.2, f, -21.6), 2.6, PI / 2, 3)
-	# Server racks along the east wall.
-	for i in range(6):
-		_rack(Vector3(7.6, f, -22.15 + i * 0.9), -PI / 2)
-	_solid(Vector3(7.6, f + 1.05, -19.9), Vector3(0.8, 2.1, 5.4))
-	# Cabinets, a steel crate and gas bottles along the south wall; drums by the tanks.
-	for i in range(3):
-		var x := -7.2 + i * 0.96
-		_part("steel", Vector3(x, f + 1.0, -14.27), Vector3(0.92, 2.0, 0.5), Color("59626a") if i != 1 else Color("525b62"))
-		_part("plain", Vector3(x, f + 1.0, -14.523), Vector3(0.012, 1.86, 0.006), Color("1d2022"))
-		_part("metal", Vector3(x + 0.1, f + 1.05, -14.53), Vector3(0.02, 0.16, 0.014), Color("9a9d9a"))
-	_solid(Vector3(-6.24, f + 1.0, -14.27), Vector3(2.88, 2.0, 0.5))
-	_prop("metal", Vector3(2.5, f + 0.4, -14.5), Vector3(1.1, 0.8, 0.8), Color("48524a"))
-	_part("plain", Vector3(2.5, f + 0.5, -14.903), Vector3(0.5, 0.2, 0.006), Color("c9a227"))
-	for i in range(3):
-		var x := 6.6 + i * 0.36
-		batch.cylinder(mats["metal"], Vector3(x, f, -14.3), 0.13, 0.13, 1.35, _vary(Color("4d6a8a"), 0.04) if i != 2 else Color("8a5a2a"), 9)
-		batch.cylinder(mats["metal"], Vector3(x, f + 1.35, -14.3), 0.05, 0.03, 0.14, Color("8a8d8a"), 6)
-	_part("metal", Vector3(6.96, f + 0.95, -14.14), Vector3(1.1, 0.03, 0.02), Color("8a8d8a"))
-	_solid(Vector3(6.96, f + 0.7, -14.3), Vector3(1.1, 1.4, 0.36))
-	_barrel(Vector3(2.1, f, -24.45), Color("8a7a2a"))
-	_barrel(Vector3(2.85, f, -24.4), Color("3d4438"))
-	# Specimen tanks either side of the tunnel's blast door.
-	_tank(Vector3(-6.2, f, -24.1), true, 0.1)
-	_tank(Vector3(-4.4, f, -24.1), true, 0.45)
-	_tank(Vector3(4.4, f, -24.1), false, 0.12)
-	_tank(Vector3(6.2, f, -24.1), true, 0.08)
-	_hazard(Vector3(-7.1, f + 0.003, -23.2), Vector3(-3.5, f + 0.003, -23.2), Vector3(0.36, 0.006, 0.1), 10)
-	_hazard(Vector3(3.5, f + 0.003, -23.2), Vector3(7.1, f + 0.003, -23.2), Vector3(0.36, 0.006, 0.1), 10)
-	# Under the ceiling: two cable trays across the hall, pipes along the north wall and
-	# an air duct along the south wall.
+	_lab_bench(Vector3(-2.7, f, -21.3), 4.4, 0.0, 2)
+	_lab_bench(Vector3(5.2, f, -21.35), 2.2, PI / 2, 3)
+	# Whoever worked here left in a hurry: stools pushed back or knocked over, paper on
+	# the floor.
+	_chunk("LabTrim", false)
+	_stool(Vector3(-3.6, f, -16.0), 0.4)
+	_stool(Vector3(-1.9, f, -16.02), 2.1, true)
+	_stool(Vector3(2.4, f, -19.0), 1.2)
+	_stool(Vector3(4.3, f, -18.98), 0.3, true)
+	_stool(Vector3(-3.4, f, -20.62), 4.0)
+	_papers(Transform3D(Basis.IDENTITY, Vector3(-0.6, f, -17.6)), Vector3.ZERO, 7, 0.7)
+	_papers(Transform3D(Basis.IDENTITY, Vector3(1.6, f, -20.2)), Vector3.ZERO, 5, 0.5)
+	_papers(Transform3D(Basis.IDENTITY, Vector3(-5.9, f, -19.0)), Vector3.ZERO, 4, 0.4)
+	_sample_box(Transform3D(Basis.IDENTITY, Vector3(1.9, f, -17.52)), Vector3.ZERO, 62.0)
+	# --- Under the ceiling: two cable trays across the hall, pipes along the north wall
+	# and an air duct along the south wall.
+	_chunk("Lab")
 	for z in [-17.4, -22.6]:
 		var at: float = z
-		_part("metal", Vector3(0, CELLAR_TOP - 0.34, at), Vector3(15.6, 0.04, 0.36), Color("2a2d2e"))
+		_part("plain", Vector3(0, CELLAR_TOP - 0.34, at), Vector3(15.6, 0.03, 0.36), Color("1d2124"))
+		for edge in [-0.18, 0.18]:
+			var offset: float = edge
+			_part("plain", Vector3(0, CELLAR_TOP - 0.315, at + offset), Vector3(15.6, 0.07, 0.012), Color("2c3135"))
 		for k in range(3):
 			_part("plain", Vector3(0, CELLAR_TOP - 0.31, at - 0.1 + k * 0.1), Vector3(15.6, 0.03, 0.04), Color("0e0e0e") if k != 1 else Color("23406a"))
 		for k in range(8):
@@ -2759,9 +3947,16 @@ func _build_lab() -> void:
 	for i in range(2):
 		var y := CELLAR_TOP - 0.22 - i * 0.2
 		_pipe(Vector3(-7.98, y, -24.84), Vector3(7.98, y, -24.84), 0.05 + i * 0.025, Color("5c6a6e") if i == 0 else Color("7a4a3a"))
-	_part("metal", Vector3(-2.0, CELLAR_TOP - 0.2, -14.3), Vector3(11.0, 0.36, 0.5), Color("5a6064"))
+		for k in range(8):
+			_part("metal", Vector3(-7.0 + k * 2.0, y + 0.1, -24.9), Vector3(0.05, 0.3, 0.14), dark)
+	_part("steel", Vector3(-2.0, CELLAR_TOP - 0.2, -14.3), Vector3(11.0, 0.36, 0.5), Color("394045"))
 	for k in range(4):
 		_part("plain", Vector3(-6.0 + k * 2.6, CELLAR_TOP - 0.384, -14.3), Vector3(0.7, 0.008, 0.3), Color("1d2022"))
+		_part("metal", Vector3(-6.9 + k * 2.6, CELLAR_TOP - 0.2, -14.3), Vector3(0.05, 0.38, 0.52), Color("3f4549"))
+	# A sprinkler main down the middle of the hall.
+	_pipe(Vector3(-7.9, CELLAR_TOP - 0.12, -20.3), Vector3(7.9, CELLAR_TOP - 0.12, -20.3), 0.03, Color("8a2a20"), 6)
+	for i in range(5):
+		batch.cylinder(mats["metal"], Vector3(-6.4 + i * 3.2, CELLAR_TOP - 0.24, -20.3), 0.03, 0.012, 0.1, Color("b6bab8"), 6)
 	# The blast door of the service tunnel: its frame, a warning lamp and a sign above it.
 	for x in [-1.17, 1.17]:
 		var at: float = x
@@ -2774,13 +3969,10 @@ func _build_lab() -> void:
 		_part("metal", Vector3(at, CELLAR_TOP - 0.03, -24.7), Vector3(0.02, 0.06, 0.02), dark)
 	var tunnel_sign := lettering("SERVICETUNNEL  ·  T3", Vector3(0, CELLAR_TOP - 0.2, -24.68), 22, Color("cfdfe2"))
 	lab_parts.append(tunnel_sign)
-	_gate_lamp("tunnel", Vector3(1.55, f + 1.6, -24.98), Vector3(0, 0, 1), true)
+	_gate_lamp("tunnel", Vector3(1.55, f + 1.6, -24.968), Vector3(0, 0, 1), true)
 	_alarm_lamp(Vector3(-1.75, f + 2.75, -25.0), Vector3(0, 0, 1))
 	_alarm_lamp(Vector3(4.5, f + 2.75, -14.0), Vector3(0, 0, -1))
-	var hall_sign := lettering("HELIX CORPORATION\nBIOLABOR 02", Vector3(-2.0, f + 2.2, -14.01), 30, Color("9fd8c8"))
-	hall_sign.rotation.y = PI
-	lab_parts.append(hall_sign)
-	# Every lamp and sign made here belongs to the hall.
+	# Every lamp and sign made here belongs to the hall, and every body in a tank.
 	for i in range(first_part, lab_parts.size()):
 		hall_parts.append(lab_parts[i])
 	glow_key = "glow"

@@ -2582,15 +2582,27 @@ func _story(game: Node3D) -> void:
 	game.begin_wave()
 	game.spawn_queue.clear()
 	var drives: Dictionary = mission.task_of("drives")
-	expect(not drives.is_empty() and drives.items.size() == 3 and cabin.level_of(drives.items[0].pos) == 2, "Nadja asks for the drives in the lab")
+	# They are the drives of servers that stand in the lab from the start: three different
+	# racks, each with a spot in front of it that can be walked to.
+	var racks := {}
+	for item in drives.get("items", []):
+		var rack: int = mission._server_at(item.pos)
+		var way: PackedVector3Array = cabin.path_between(spots.lab, item.pos)
+		if rack >= 0 and not way.is_empty() and way[way.size() - 1].distance_to(item.pos) < 0.6 and (cabin.servers[rack].drive as Node3D).visible:
+			racks[rack] = cabin.servers[rack].drive
+	expect(not drives.is_empty() and drives.items.size() == 3 and cabin.level_of(drives.items[0].pos) == 2 and racks.size() == 3, "Nadja asks for the drives in the lab: those of three of the servers that stand there (%s of %d)" % [str(racks.keys()), cabin.servers.size()])
 	face(game, (spots.lab_glass as Vector3) + lift, 0.0)
 	mission.update(0.2)
 	mission.update(0.2)
 	expect(story.entered and story.met and cabin.is_locked("lab_room"), "Down in the lab the squad finds Nadja behind glass")
 	for item in drives.items:
-		face(game, (item.pos as Vector3) + Vector3(0.9, 0.05, 0), 0.0)
+		face(game, (item.pos as Vector3) + Vector3(0, 0.05, 0), 0.0)
 		_hold(game)
-	expect(drives.state == "done", "The drives are pulled")
+	var gone := 0
+	for rack in racks:
+		if not (racks[rack] as Node3D).visible:
+			gone += 1
+	expect(drives.state == "done" and gone == 3, "The drives are pulled, and gone from their bays")
 	game.complete_wave()
 	# Round six: her door.
 	game.begin_wave()
