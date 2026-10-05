@@ -50,6 +50,8 @@ var squad: Array = ["viper", "scorpion"]
 ## Ranks bought in the trees of abilities (see Skills); empty while those are out of
 ## service, and then it is not written to the file at all.
 var skills: Dictionary = {}
+## The tree of abilities the player has specialised in ("" for none).
+var skill_tree := ""
 
 func open() -> void:
 	if not stored or not FileAccess.file_exists(PATH):
@@ -80,6 +82,7 @@ func open() -> void:
 			squad = [str(parsed.squad[0]), str(parsed.squad[1])]
 	if parsed.get("skills") is Dictionary:
 		skills = parsed.skills
+	skill_tree = str(parsed.get("skill_tree", ""))
 
 func save() -> void:
 	if not stored:
@@ -87,6 +90,8 @@ func save() -> void:
 	var kept := {"difficulty": difficulty, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
 	if not skills.is_empty():
 		kept["skills"] = skills
+	if skill_tree != "":
+		kept["skill_tree"] = skill_tree
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
 	if file != null:
 		file.store_string(JSON.stringify(kept, "\t"))

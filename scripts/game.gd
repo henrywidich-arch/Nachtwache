@@ -21,7 +21,15 @@ const ROUNDS := [
 const RENDER_SCALES := [1.0, 0.85, 0.7, 0.6, 0.5, 0.4]
 ## Seconds between two rounds; the weapon shop is open for exactly this long.
 const BREAK_SECONDS := 20.0
-const ROUND_HEAL := 20.0
+## What the end of a round gives back: health (all of it on normal difficulty; ammunition:
+## see Survivor.ROUND_AMMO).
+const ROUND_HEAL := 100.0
+## Share of its price a weapon is worth when it is traded in for another.
+const TRADE_IN := 0.5
+## How many shield bearers stand in the yard at once; one more comes as a plain soldier.
+const SHIELD_LIMIT := 1
+## The last round of a night with an end brings this share of what its table says.
+const FINAL_SHARE := 0.7
 ## How many attackers are in the yard at once, at the most: what a late round on normal
 ## difficulty comes to, and what no difficulty and no modifier gets past.
 const MAX_ALIVE := 16
@@ -272,7 +280,11 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		profile.stored = false
 	profile.open()
-	skills.adopt(profile.skills)
+	skills.adopt(profile.skills, profile.skill_tree)
+	# A profile from before a tree had to be chosen: what adopt() made of it is kept from
+	# the next save on.
+	profile.skill_tree = skills.chosen
+	profile.skills = skills.ranks.duplicate()
 	if profile.stored:
 		# What the player chose in the menu.
 		var settings := ConfigFile.new()
@@ -366,6 +378,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_v14_check")
+	elif "--v15-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_v15_check")
 	elif "--models-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -421,13 +437,17 @@ func _warm_up() -> void:
 	fade.tween_callback(curtain.queue_free)
 
 func _configure_input() -> void:
-	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_C, "squad_free": KEY_V, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "melee": KEY_Q}
+	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_5, "squad_free": KEY_6, "crouch": KEY_C, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "melee": KEY_V, "syringe": KEY_Q}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
 		var event := InputEventKey.new()
 		event.physical_keycode = bindings[action]
 		InputMap.action_add_event(action, event)
+	# The three orders for the squad lie side by side on 4, 5 and 6; X still holds as well.
+	var also_holds := InputEventKey.new()
+	also_holds.physical_keycode = KEY_4
+	InputMap.action_add_event("squad_hold", also_holds)
 	for action in ["fire", "aim"]:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -701,6 +721,9 @@ func begin_wave() -> void:
 		# A bigger squad draws a bigger horde, a harder night more of everything and
 		# above all more of the special infected.
 		var amount: float = int(roster[kind]) * (1.0 + 0.35 * extra_guns()) * float(rules.horde) * mission.kind_factor(kind)
+		# The last round is hard enough with what else it asks for.
+		if not endless and wave >= ROUNDS.size():
+			amount *= FINAL_SHARE
 		if kind != "mauler":
 			amount *= float(rules.specials)
 		# One Medic is trouble enough early on; later there may be two or three.
@@ -762,6 +785,14 @@ func spawn_enemy(forced_kind: String = "", visual: String = "") -> Infected:
 	var kind := forced_kind
 	if kind == "":
 		kind = "mauler" if spawn_queue.is_empty() else str(spawn_queue.pop_front())
+	if kind == "cru_shield" and forced_kind == "":
+		# A wall of shields is no fight any more: while one stands, the next comes without.
+		var standing := 0
+		for node in get_tree().get_nodes_in_group("infected"):
+			if (node as Infected).kind == "cru_shield" and not (node as Infected).dead:
+				standing += 1
+		if standing >= SHIELD_LIMIT:
+			kind = "cru_assault"
 	var human: bool = Infected.TYPES[kind].get("human", false)
 	var enemy: Infected = CruSoldier.new() if human else Infected.new()
 	enemy.game = self
@@ -952,8 +983,11 @@ func present_wave_done() -> void:
 	_say("round_clear", 6.0)
 	if player.down:
 		player.get_up()
+	# A round that is survived patches everybody up and brings half the ammunition back.
 	player.health = minf(100, player.health + healing(ROUND_HEAL))
-	hud.announce("RUNDE %02d ÜBERSTANDEN" % wave, "+100 Vorrat · +%d HP · Der Waffenshop ist geöffnet." % int(healing(ROUND_HEAL)), 5)
+	player.resupply(Survivor.ROUND_AMMO)
+	var mended := "volle Heilung" if healing(ROUND_HEAL) >= 100.0 else "+%d HP" % int(healing(ROUND_HEAL))
+	hud.announce("RUNDE %02d ÜBERSTANDEN" % wave, "+100 Vorrat · %s · halbe Munition zurück · Der Waffenshop ist geöffnet." % mended, 5)
 	var speaker := squad_voice()
 	if speaker != null and randf() < 0.6:
 		bark(speaker, speaker.look, "clear")
@@ -1073,6 +1107,8 @@ func item_price(id: String) -> int:
 				return -1
 		"plates":
 			return -1 if player.plate_level >= data.prices.size() else price(int(data.prices[player.plate_level]))
+		"sling":
+			return -1 if player.extra_slots >= data.prices.size() else price(int(data.prices[player.extra_slots]))
 		"squad_armor", "squad_ammo":
 			# Only for somebody who has a squad with him.
 			var level := int(squad_levels[id])
@@ -1469,10 +1505,20 @@ func learn_skill(id: String) -> bool:
 	profile.save()
 	return true
 
-## Takes every point back, for nothing: the trees can be tried out.
+## Specialises in one of the trees and keeps that in the profile. True if it could.
+func choose_tree(tree: String) -> bool:
+	if not skills.choose(tree):
+		return false
+	profile.skill_tree = tree
+	profile.save()
+	return true
+
+## Takes every point back, and the choice of a tree with them, for nothing: each of the
+## trees can be tried out.
 func reset_skills() -> void:
 	skills.reset()
 	profile.skills = {}
+	profile.skill_tree = ""
 	profile.save()
 
 ## One member of the squad that is on its feet, picked at random; null if there is none.
@@ -1577,7 +1623,19 @@ func open_shop() -> void:
 	cabin.get_node("WeaponShopLabel").hide()
 	hud.show_menu("shop")
 
-## Buys a weapon at the open shop counter. Each weapon can be bought once per run.
+## What a weapon the survivor carries is worth when it is traded in for another one.
+func trade_in(id: String) -> int:
+	return price(int(round(int(Survivor.WEAPONS[id].price) * TRADE_IN)))
+
+## What buying a weapon costs right now: its price, less what the weapon is worth that has
+## to go because there is no place for both (see Survivor.to_replace).
+func weapon_cost(id: String) -> int:
+	var old: String = player.to_replace(id)
+	return price(int(Survivor.WEAPONS[id].price)) - (0 if old == "" else trade_in(old))
+
+## Buys a weapon at the open shop counter. A survivor carries one weapon of each kind, and
+## more with slings: without a place for it, the new one takes the place of one of its
+## kind, which is traded in.
 func buy_weapon(id: String) -> bool:
 	var station := closest_station()
 	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop": return false
@@ -1586,11 +1644,14 @@ func buy_weapon(id: String) -> bool:
 	if skills.weapon_barred(id) != "": return false
 	# The heaviest weapons only reach the shop once the night is well under way.
 	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave: return false
-	var cost := price(int(Survivor.WEAPONS[id].price))
+	var old: String = player.to_replace(id)
+	var cost := weapon_cost(id)
 	if credits < cost: return false
 	credits -= cost
 	net.spend(cost)
 	player.unlock(id)
+	if old != "":
+		player.drop_weapon(old)
 	sounds.play_menu("buy")
 	hud.show_menu("shop")
 	return true
@@ -2894,6 +2955,79 @@ func _run_v14_check() -> void:
 	await tick.call(0.5)
 	await _capture(folder, "end_endless.png")
 	print("V14_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Screenshots of what came with v0.15: the abilities page before and after one of the
+## trees is chosen, the shop with a trade and a sling, the syringe's tile, the view when
+## ducked, and the end of a round.
+func _run_v15_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(2.0)
+	profile.totals = {"missions": 6, "victories": 3, "kills": 2505, "special_kills": 915, "cru_kills": 177, "revives": 16, "objectives": 43, "seconds": 5227}
+	hud.show_menu("main")
+	await tick.call(0.3)
+	await _capture(folder, "menu_main.png")
+	hud.show_menu("skills")
+	await tick.call(0.3)
+	await _capture(folder, "skills_choose.png")
+	choose_tree("hunter")
+	for id in ["hunter_damage", "hunter_damage", "hunter_skin", "hunter_damage"]:
+		learn_skill(id)
+	hud.show_menu("skills")
+	await tick.call(0.3)
+	await _capture(folder, "skills_chosen.png")
+	hud._open_settings("main")
+	await tick.call(0.3)
+	await _capture(folder, "menu_settings.png")
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	wave = 4
+	credits = 1500
+	var counter: Vector3 = cabin.points.shop
+	_place_player(counter + Vector3(0, 0.05, 0.6), 0)
+	await tick.call(0.3)
+	open_shop()
+	for tab in ["weapons", "sidearms", "heavy", "class", "gear"]:
+		hud._open_tab(tab)
+		await tick.call(0.4)
+		await _capture(folder, "shop_%s.png" % tab)
+	buy_weapon("ak")
+	buy_weapon("pistol")
+	buy_weapon("sniper")
+	buy_item("sling")
+	hud._open_tab("weapons")
+	await tick.call(0.4)
+	await _capture(folder, "shop_weapons_after.png")
+	resume_run()
+	_place_player(Vector3(0, 0.05, 12.5), 180)
+	player.equip_weapon("ak", true)
+	await tick.call(0.7)
+	await _capture(folder, "hud_standing.png")
+	player.health = 45.0
+	player.inject()
+	await tick.call(0.3)
+	await _capture(folder, "hud_syringe.png")
+	await tick.call(0.8)
+	player.set_crouched(true)
+	await tick.call(0.6)
+	await _capture(folder, "hud_ducked.png")
+	Input.action_press("aim")
+	await tick.call(0.5)
+	await _capture(folder, "hud_ducked_aim.png")
+	Input.action_release("aim")
+	player.set_crouched(false)
+	player.health = 30.0
+	begin_wave()
+	spawn_queue.clear()
+	complete_wave()
+	await tick.call(0.5)
+	await _capture(folder, "round_done.png")
+	print("V15_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Screenshots of the C.R.U.: the roles in a row, their moves, and a fire fight.

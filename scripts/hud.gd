@@ -22,13 +22,14 @@ const SHOP_NOTES := {
 }
 ## The lists of the shop.
 const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "SCHWER"], ["class", "KLASSE"], ["mods", "AUFSÄTZE"], ["gear", "AUSRÜSTUNG"], ["use", "VERBRAUCH"], ["team", "TEAM"]]
-## What is carried in the pockets and thrown or laid with one key: item, key, short name.
-const TILES := [["grenade", "G", "FRAG"], ["flashbang", "T", "BLEND"], ["molotov", "H", "BRAND"], ["claymore", "B", "MINE"]]
+## What is carried in the pockets and used with one key: item, key, short name. The
+## syringe is not counted: its tile shows the seconds until it is ready again.
+const TILES := [["syringe", "Q", "SPRITZE"], ["grenade", "G", "FRAG"], ["flashbang", "T", "BLEND"], ["molotov", "H", "BRAND"], ["claymore", "B", "MINE"]]
 ## The keys, as the settings list them.
 const KEYS := [
 	["W A S D", "Bewegen"], ["Maus", "Umsehen"], ["Linke Maustaste", "Schießen"], ["Rechte Maustaste", "Zielen"],
-	["R", "Nachladen"], ["Shift", "Sprinten"], ["Leertaste", "Springen"], ["E", "Benutzen, aufhelfen, Shop"],
-	["F", "Taschenlampe"], ["1 – 0, Mausrad", "Waffe wählen"], ["G, T, H, B", "Granate, Blend, Molotow, Mine"], ["Q", "Nahkampf: Gegner wegstoßen"], ["X, C, V", "Team: halten, folgen, frei"],
+	["R", "Nachladen"], ["Shift", "Sprinten"], ["Leertaste, C", "Springen, ducken (an / aus)"], ["E", "Benutzen, aufhelfen, Shop"],
+	["F", "Taschenlampe"], ["1, 2, 3, Mausrad", "Primär-, Sekundär-, schwere Waffe"], ["G, T, H, B", "Granate, Blend, Molotow, Mine"], ["Q, V", "Heilspritze, Nahkampf"], ["4, 5, 6", "Team: halten, folgen, frei"],
 	["N", "Nächste Runde sofort"], ["Esc", "Pause"], ["F11, Alt+Enter", "Vollbild"]
 ]
 
@@ -605,8 +606,14 @@ func _process(delta: float) -> void:
 	loadout_box.modulate.a = minf(1.0, loadout_left * 2.0)
 	# The pockets: one tile per key, dim when it is empty, lit while it is in the hand.
 	for entry in TILES:
-		var carried := int(player.items[entry[0]])
 		var tile: Array = tiles[entry[0]]
+		if str(entry[0]) == "syringe":
+			# Always there: lit while it would help, dim while it is made ready again.
+			var ready_in: float = player.syringe_wait
+			(tile[1] as Label).text = "+" if ready_in <= 0.0 else str(ceili(ready_in))
+			(tile[0] as Control).modulate = Color(1, 1, 1, 0.32) if ready_in > 0.0 else (Color(0.55, 1.0, 0.78, 1.0) if player.health < 100.0 else Color(1, 1, 1, 0.7))
+			continue
+		var carried := int(player.items[entry[0]])
 		(tile[1] as Label).text = str(carried)
 		var ready: bool = player.throw_kind == str(entry[0])
 		(tile[0] as Control).modulate = Color(1.0, 0.82, 0.45, 1.0) if ready else Color(1, 1, 1, 1.0 if carried > 0 else 0.32)
@@ -764,6 +771,10 @@ func _toggle_modifiers() -> void:
 	game.profile.toggle_modifiers()
 	show_menu(current_menu)
 
+func _choose_tree(tree: String) -> void:
+	game.choose_tree(tree)
+	show_menu("skills")
+
 func _reset_skills() -> void:
 	game.reset_skills()
 	show_menu("skills")
@@ -872,7 +883,7 @@ func show_menu(mode: String) -> void:
 			first = _menu_skins(column)
 		"skills":
 			first = _menu_skills(column)
-	var version := label("SOLO + KOOP   ·   v0.14", 12, MUTED, true)
+	var version := label("SOLO + KOOP   ·   v0.15", 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
 	modal.add_child(version)
@@ -897,7 +908,10 @@ func _menu_main(column: VBoxContainer) -> Control:
 	# What the night is: the story or the endless mode, with or without a modifier per round.
 	column.add_child(_pair(_button(_mode_label(), _next_mode), _button(_modifiers_label(), _toggle_modifiers)))
 	var free: int = game.skills.points_left(game.profile.totals) if Skills.IN_SERVICE else 0
-	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button("FÄHIGKEITEN" if free <= 0 else "FÄHIGKEITEN  ·  %d FREI" % free, show_menu.bind("skills"))))
+	var abilities := "FÄHIGKEITEN"
+	if free > 0:
+		abilities = "FÄHIGKEITEN  ·  WEG WÄHLEN" if game.skills.chosen == "" else "FÄHIGKEITEN  ·  %d FREI" % free
+	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button(abilities, show_menu.bind("skills"))))
 	column.add_child(_pair(_button("EINSTELLUNGEN", _open_settings.bind("main")), _button("BEENDEN", game.quit_game)))
 	return start
 
@@ -1097,9 +1111,9 @@ func _learn(id: String) -> void:
 	game.learn_skill(id)
 	show_menu("skills")
 
-## The three trees of abilities side by side: a point buys a rank, and every point can be
-## taken back for nothing. While they are out of service (Skills) the page only shows what
-## is to come: nothing can be bought.
+## The three trees of abilities side by side. The player picks one of them; a point buys
+## a rank in it, and choosing anew (which takes every point back) costs nothing. While the
+## trees are out of service (Skills) the page only shows what is to come.
 func _menu_skills(column: VBoxContainer) -> Control:
 	var skills: Skills = game.skills
 	var totals: Dictionary = game.profile.totals
@@ -1120,7 +1134,10 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		head.add_child(mark)
 	column.add_child(head)
 	if Skills.IN_SERVICE:
-		_text(column, "Jede Stufe bringt einen Punkt. Ab %d Punkten in einem Weg gibt es dessen Klassenwaffe im Shop; Zurücknehmen kostet nichts." % Skills.WEAPON_NEEDS, 15)
+		if skills.chosen == "":
+			_text(column, "Wähle einen der drei Wege: Nur in ihm vergibst du deine Punkte, nur seine Klassenwaffe gibt es für dich. Neu wählen kostet nichts.", 15)
+		else:
+			_text(column, "Dein Weg: %s. Jede Stufe bringt einen Punkt; ab %d Punkten darin gibt es die Klassenwaffe im Shop. Neu wählen kostet nichts." % [Skills.TREES[skills.chosen].label, Skills.WEAPON_NEEDS], 15)
 	else:
 		_text(column, "Drei Wege mit je einem Schwerpunkt. Noch nicht in Betrieb: Hier steht, was kommt. Punkte lassen sich\nerst vergeben, wenn alles fertig ist – bis dahin ändert nichts davon einen Einsatz. Die Zahlen gelten je Rang.", 15)
 	var earned := Skills.experience(totals)
@@ -1147,8 +1164,26 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		var list := VBoxContainer.new()
 		list.add_theme_constant_override("separation", 2)
 		panel.add_child(list)
-		list.add_child(label(str(tree.label), 28, tree.color, true))
-		list.add_child(label("%s   ·   %d %s" % [tree.focus, skills.spent(tree_id), "Punkt" if skills.spent(tree_id) == 1 else "Punkte"] if Skills.IN_SERVICE else str(tree.focus), 14, MUTED))
+		# Its name, and beside it the button that chooses it or the mark that it is chosen.
+		var mine: bool = skills.chosen == tree_id
+		var name_row := HBoxContainer.new()
+		var name_label := label(str(tree.label), 28, tree.color, true)
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		name_row.add_child(name_label)
+		if Skills.IN_SERVICE and skills.chosen == "":
+			var pick := _chip("WÄHLEN", _choose_tree.bind(tree_id), true, 96)
+			pick.custom_minimum_size = Vector2(96, 28)
+			pick.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			name_row.add_child(pick)
+		elif mine:
+			var badge := label("DEIN WEG", 13, tree.color, true)
+			badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+			name_row.add_child(badge)
+		list.add_child(name_row)
+		# A tree that was not chosen stays readable, but pale.
+		if Skills.IN_SERVICE and skills.chosen != "" and not mine:
+			panel.modulate = Color(1, 1, 1, 0.42)
+		list.add_child(label("%s   ·   %d %s" % [tree.focus, skills.spent(tree_id), "Punkt" if skills.spent(tree_id) == 1 else "Punkte"] if mine else str(tree.focus), 14, MUTED))
 		# The weapon only this tree may buy.
 		for weapon in tree.weapons:
 			var open: bool = skills.weapon_barred(str(weapon)) == ""
@@ -1167,7 +1202,7 @@ func _menu_skills(column: VBoxContainer) -> Control:
 			title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			row.add_child(title)
 			row.add_child(label("●".repeat(have) + "○".repeat(int(skill.ranks) - have), 14, tree.color))
-			if Skills.IN_SERVICE:
+			if Skills.IN_SERVICE and mine:
 				var more := _chip("+", _learn.bind(str(skill.id)), false, 34)
 				more.custom_minimum_size = Vector2(34, 26)
 				more.disabled = skills.barred(str(skill.id), totals) != ""
@@ -1182,8 +1217,8 @@ func _menu_skills(column: VBoxContainer) -> Control:
 	_gap(column, 8)
 	var back := _button("ZURÜCK", show_menu.bind("main"), true)
 	if Skills.IN_SERVICE:
-		var undo := _button("PUNKTE ZURÜCKNEHMEN", _reset_skills)
-		undo.disabled = skills.spent() == 0
+		var undo := _button("NEU WÄHLEN  ·  PUNKTE ZURÜCK", _reset_skills)
+		undo.disabled = skills.chosen == ""
 		column.add_child(_pair(back, undo))
 	else:
 		column.add_child(back)
@@ -1224,7 +1259,14 @@ func _menu_shop(column: VBoxContainer) -> Control:
 	purse.size_flags_vertical = Control.SIZE_SHRINK_END
 	head.add_child(purse)
 	column.add_child(head)
-	_text(column, "Geöffnet zwischen den Runden. Jede Waffe hat eigene Munition; Nachschub gibt es im Lagerraum.", 15)
+	# What is carried: one weapon of each kind, and as many more as there are slings.
+	var carried: Array[String] = []
+	for kind in Survivor.KINDS:
+		var names: Array = []
+		for id in game.player.carried(kind):
+			names.append(str(Survivor.WEAPONS[id].label))
+		carried.append("%d  %s" % [int(Survivor.KINDS[kind].key), "–" if names.is_empty() else " + ".join(names)])
+	_text(column, "Du trägst je eine Primär-, Sekundär- und schwere Waffe%s:   %s" % ["" if game.player.extra_slots == 0 else " und %d weitere" % game.player.extra_slots, "   ·   ".join(carried)], 15)
 	_gap(column, 4)
 	var halves := HBoxContainer.new()
 	halves.add_theme_constant_override("separation", 14)
@@ -1244,16 +1286,18 @@ func _menu_shop(column: VBoxContainer) -> Control:
 	scroll.add_child(list)
 	var first: Button = null
 	if shop_tab == "class":
-		list.add_child(label("Je eine Waffe pro Fähigkeiten-Weg, für alle mit %d Punkten in diesem Weg (Hauptmenü, FÄHIGKEITEN)." % Skills.WEAPON_NEEDS, 14, AMBER, true))
+		list.add_child(label("Die Waffe deines Fähigkeiten-Wegs, sobald %d Punkte darin stecken (Hauptmenü, FÄHIGKEITEN)." % Skills.WEAPON_NEEDS, 14, AMBER, true))
 	elif shop_tab == "team":
 		list.add_child(label("Für deine beiden Begleiter, für diese Nacht." if not game.team.is_empty() else "Nur für Einsätze mit Begleitern: Im Koop sind keine dabei.", 14, AMBER, true))
 	# Weapons of this list: what each is, and the button that buys it.
 	for id in Survivor.ORDER:
 		var data: Dictionary = Survivor.WEAPONS[id]
-		if int(data.price) <= 0 or str(data.get("group", "weapons")) != shop_tab:
+		var owned: bool = game.player.inventory.has(id)
+		# What costs nothing (the carbine everybody starts with) is only on offer to
+		# somebody who has traded it in.
+		if (int(data.price) <= 0 and owned) or str(data.get("group", "weapons")) != shop_tab:
 			continue
 		var locked: bool = int(data.get("from_round", 0)) > game.wave
-		var owned: bool = game.player.inventory.has(id)
 		var harm := "%d × %d" % [int(data.pellets), int(data.damage)] if data.has("pellets") else ("Explosion" if data.has("grenade") else str(int(data.damage)))
 		var rate := "Einzelschuss" if data.get("semi", false) else "%d Schuss/min" % (int(round(60.0 / float(data.interval) / 10.0)) * 10)
 		var facts := "%s\n%d Schuss   ·   Schaden %s   ·   %s   ·   Taste %d%s" % [SHOP_NOTES.get(id, ""), int(data.magazine), harm, rate, int(data.slot), "   ·   nimmt Aufsätze" if Survivor.ATTACHMENTS.has(id) else ""]
@@ -1263,11 +1307,16 @@ func _menu_shop(column: VBoxContainer) -> Control:
 		var barred: String = game.skills.weapon_barred(id)
 		var tree := Skills.weapon_tree(id)
 		if tree != "":
-			facts += "\nKlassenwaffe  ·  %s" % (Skills.TREES[tree].label if barred == "" else "erst " + barred)
-		var cost: int = game.price(int(data.price))
-		var offer := "KAUFEN   %d" % cost
+			facts += "\nKlassenwaffe  ·  %s" % (Skills.TREES[tree].label if barred == "" else (barred if barred.begins_with("nur") else "erst " + barred))
+		# Without a place for it, the weapon it replaces is traded in.
+		var cost: int = game.weapon_cost(id)
+		var goes: String = "" if owned else game.player.to_replace(id)
+		var offer := "KAUFEN   %d" % cost if cost > 0 else "KOSTENLOS"
+		if goes != "":
+			facts += "\nErsetzt %s  ·  dafür %d Vorrat zurück" % [Survivor.WEAPONS[goes].label, game.trade_in(goes)]
+			offer = "TAUSCHEN   %d" % cost if cost >= 0 else "TAUSCHEN   +%d" % -cost
 		if owned:
-			offer = "GEKAUFT  ✓"
+			offer = "DABEI  ✓"
 		elif barred != "":
 			offer = "GESPERRT"
 		elif locked:
@@ -1319,6 +1368,8 @@ func _menu_shop(column: VBoxContainer) -> Control:
 			have = "%s: %d Schuss" % [game.player.weapon_label(), game.player.magazine_size()]
 		elif game.squad_levels.has(id):
 			have = "Stufe %d von %d" % [int(game.squad_levels[id]), (goods.prices as Array).size()]
+		elif id == "sling":
+			have = "Gurte: %d von %d   ·   Platz für %d Waffen" % [game.player.extra_slots, (goods.prices as Array).size(), Survivor.KINDS.size() * Survivor.CARRY + game.player.extra_slots]
 		else:
 			have = "du hast %d von %d" % [int(game.player.items[id]), int(goods.max)]
 		var offer := "KAUFEN   %d" % cost

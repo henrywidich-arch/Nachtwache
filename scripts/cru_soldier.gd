@@ -103,8 +103,12 @@ func _squad() -> Array:
 			out.append(node)
 	return out
 
+## How high above its feet the prey is looked for and shot at: lower when it ducks.
+func _prey_height() -> float:
+	return float(prey.chest_height()) if is_instance_valid(prey) and prey.has_method("chest_height") else 1.15
+
 func _sight(target: Vector3) -> bool:
-	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.55, 0), target + Vector3(0, 1.1, 0), 1)
+	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3(0, 1.55, 0), target + Vector3(0, _prey_height() - 0.05, 0), 1)
 	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 
 # ---------------------------------------------------------------- what others see and hear
@@ -400,7 +404,7 @@ func _fire(target: Vector3, moving: bool) -> void:
 	if rounds_left <= 0:
 		pause_wait = randf_range(role.pause[0], role.pause[1]) * (0.75 if boosted else 1.0) / _tactics()
 	var muzzle := body.muzzle_position()
-	var aim := target + Vector3(0, 1.15, 0)
+	var aim := target + Vector3(0, _prey_height(), 0)
 	var spread: float = float(role.spread) * (1.5 if moving else 1.0) * (1.6 if rattled > 0.0 else 1.0) * (0.75 if boosted else 1.0) / _tactics()
 	# Somebody on the run is hard to hit.
 	if prey is CharacterBody3D and (prey as CharacterBody3D).get_real_velocity().length() > 3.0:

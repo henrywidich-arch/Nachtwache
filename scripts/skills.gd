@@ -3,15 +3,17 @@ extends RefCounted
 ## Three trees of abilities, each with a focus of its own: against the mass of the
 ## infected, against the special ones, and against the soldiers of the C.R.U.
 ##
+## A player specialises in ONE of the trees (chosen): points go into that tree only. Taking
+## the points back (for nothing, at any time, in the menu) also frees the choice.
+##
 ## Finished nights earn experience (from the career totals in the profile), experience
 ## gives levels, every level after the first one point. A point buys one rank of an
 ## ability. The abilities of a tree come in three tiers; a tier opens once enough points
-## have gone into its tree. Not every point can be had: the last level leaves a player with
-## LEVELS - 1 points for 42 ranks, so a focus has to be chosen. Points can be taken back
-## at any time in the menu, for nothing.
+## have gone into the tree. The last level leaves a player with LEVELS - 1 points: just
+## enough for every rank of the one tree.
 ##
 ## Each tree also has a weapon of its own, which the shop only sells to somebody who has
-## WEAPON_NEEDS points in that tree.
+## chosen that tree and put WEAPON_NEEDS points into it.
 ##
 ## IN_SERVICE false puts all of it out of service again: the trees can then still be looked
 ## at, but no points can be spent and nothing here changes a night.
@@ -21,7 +23,7 @@ const IN_SERVICE := true
 const TIER_NEEDS := [0, 3, 7]
 ## Points that must be in a tree before the shop sells its weapon.
 const WEAPON_NEEDS := 3
-const LEVELS := 20
+const LEVELS := 15
 ## Experience for the career totals of the profile.
 const WORTH := {"kills": 1, "special_kills": 4, "cru_kills": 6, "objectives": 60, "revives": 30, "victories": 500}
 
@@ -71,6 +73,8 @@ const RIFLES := ["rifle", "ak", "badger"]
 
 ## Ability id -> rank the player has in it.
 var ranks: Dictionary = {}
+## The tree the player has specialised in ("" until one is chosen).
+var chosen := ""
 ## While false, nothing here has any effect. The checks switch it on for themselves.
 var active := IN_SERVICE
 
@@ -131,9 +135,13 @@ func barred(id: String, totals: Dictionary) -> String:
 		return "Unbekannt"
 	if not active:
 		return "In Wartung"
+	var tree := tree_of(id)
+	if chosen == "":
+		return "Erst einen Weg wählen"
+	if tree != chosen:
+		return "Nicht dein Weg"
 	if rank(id) >= int(skill.ranks):
 		return "Voll ausgebaut"
-	var tree := tree_of(id)
 	var need: int = TIER_NEEDS[int(skill.tier) - 1]
 	if spent(tree) < need:
 		return "Erst %d Punkte in %s" % [need, TREES[tree].label]
@@ -148,9 +156,18 @@ func learn(id: String, totals: Dictionary) -> bool:
 	ranks[id] = rank(id) + 1
 	return true
 
-## Takes back every point.
+## Specialises in a tree. Only somebody who has not chosen yet can: to change, the points
+## are taken back first (reset). True if it did.
+func choose(tree: String) -> bool:
+	if not active or chosen != "" or not TREES.has(tree):
+		return false
+	chosen = tree
+	return true
+
+## Takes back every point, and the choice of a tree with them.
 func reset() -> void:
 	ranks.clear()
+	chosen = ""
 
 ## The tree a weapon belongs to, or "" for one that anybody may buy.
 static func weapon_tree(id: String) -> String:
@@ -167,17 +184,30 @@ func weapon_barred(id: String) -> String:
 		return ""
 	if not active:
 		return "In Wartung"
+	if tree != chosen:
+		return "nur für %s" % TREES[tree].label
 	return "" if spent(tree) >= WEAPON_NEEDS else "%d Punkte in %s" % [WEAPON_NEEDS, TREES[tree].label]
 
-## What is kept in the profile; only ranks that exist and fit are taken back in.
-func adopt(stored: Variant) -> void:
+## What is kept in the profile: the ranks and the chosen tree. Only ranks that exist and
+## fit are taken back in, and only those of the chosen tree. A profile from before there
+## was a choice has ranks but no tree: the tree with the most points counts as chosen.
+func adopt(stored: Variant, tree: String = "") -> void:
 	ranks.clear()
-	if not stored is Dictionary:
-		return
-	for id in stored:
-		var skill := find(str(id))
-		if not skill.is_empty():
-			ranks[str(id)] = clampi(int(stored[id]), 0, int(skill.ranks))
+	chosen = tree if TREES.has(tree) else ""
+	if stored is Dictionary:
+		for id in stored:
+			var skill := find(str(id))
+			if not skill.is_empty() and int(stored[id]) > 0:
+				ranks[str(id)] = clampi(int(stored[id]), 0, int(skill.ranks))
+	if chosen == "":
+		var most := 0
+		for id in TREES:
+			if spent(id) > most:
+				most = spent(id)
+				chosen = id
+	for id in ranks.keys():
+		if tree_of(str(id)) != chosen:
+			ranks.erase(id)
 
 ## The note of an ability for the menu, with the amount it gives at `at_rank`.
 static func note(skill: Dictionary, at_rank: int) -> String:

@@ -20,7 +20,9 @@ const WAVES := {
 	"mixed": {"label": "INFIZIERTE + C.R.U.", "count": 0.65, "specials": 0.8, "interval": 0.9, "cue": "round_mixed", "squad": 0.5}
 }
 ## Who a C.R.U. squad is made of, in the order in which it grows.
-const SQUAD_ORDER := ["cru_assault", "cru_shield", "cru_assault", "cru_marksman", "cru_elite", "cru_commander", "cru_shotgunner", "cru_heavy", "cru_medic", "cru_assault", "cru_shield", "cru_elite", "cru_shotgunner", "cru_assault"]
+const SQUAD_ORDER := ["cru_assault", "cru_shield", "cru_assault", "cru_marksman", "cru_elite", "cru_commander", "cru_shotgunner", "cru_heavy", "cru_medic", "cru_assault", "cru_marksman", "cru_elite", "cru_shotgunner", "cru_assault"]
+## Who Helix throws in while a device of the story runs: no shield bearers among them.
+const REINFORCEMENTS := ["cru_assault", "cru_assault", "cru_marksman", "cru_shotgunner"]
 ## limit: seconds until the task is lost (0 = it runs until it is done). story: started
 ## by the story, never drawn at random.
 const TASKS := {
@@ -644,7 +646,8 @@ func update(delta: float) -> void:
 		elif task.kind == "zone":
 			_run_zone(task, delta)
 		elif task.kind == "evac":
-			pressing = true
+			# Waiting for the helicopter is no device under attack: the pressure stays as it
+			# is in any round with an open task, and does not grow on top of the last round.
 			_run_evac(task, delta)
 		elif task.kind == "module":
 			_run_drop(task, delta)
@@ -670,7 +673,7 @@ func update(delta: float) -> void:
 func _reinforcement() -> String:
 	# While Nadja's door is being hacked, Helix throws its own people in as well.
 	if not task_of("rescue").is_empty() and random.randf() < 0.3:
-		return SQUAD_ORDER[random.randi() % 4]
+		return REINFORCEMENTS[random.randi() % REINFORCEMENTS.size()]
 	var roster: Dictionary = game.ROUNDS[clampi(game.wave - 1, 0, game.ROUNDS.size() - 1)]
 	var options: Array = []
 	for kind in roster:

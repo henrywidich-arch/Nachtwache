@@ -3,50 +3,60 @@ extends CharacterBody3D
 ## Input and local weapon behaviour. Damage and rewards are resolved by Game.
 
 const BASE_FOV := 74.0
-## slot: number key. price: cost in the weapon shop. flash: size of the muzzle flash.
+## slot: number key, the one of the weapon's kind (KINDS). price: cost in the weapon shop.
+## flash: size of the muzzle flash.
 const WEAPONS := {
 	"rifle": {"label": "M4A4", "slot": 1, "price": 0, "sound": "shot", "magazine": 30, "reserve_max": 180, "reload_time": 1.75, "interval": 0.115, "damage": 28.0, "head_multiplier": 2.7, "spread": 0.011, "kick": 0.011, "flash": 1.0, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
-	# The AK-47 shares key 1 with the carbine: harder hits, more kick. Parts: see ATTACHMENTS.
+	# The AK-47: harder hits, more kick. Parts: see ATTACHMENTS.
 	"ak": {"label": "AK-47", "slot": 1, "price": 300, "sound": "ak", "magazine": 30, "reserve_max": 180, "reload_time": 2.5, "interval": 0.1, "damage": 36.0, "head_multiplier": 2.6, "spread": 0.014, "kick": 0.014, "flash": 1.1, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
-	"p90": {"label": "P90", "slot": 2, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
+	"p90": {"label": "P90", "slot": 1, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
 	# cues: when in its reload each step is heard. Parts for it: see ATTACHMENTS.
-	"ump": {"label": "UMP45", "slot": 2, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	"ump": {"label": "UMP45", "slot": 1, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	# quiet: a suppressed shot gives nobody the direction it came from.
-	"badger": {"label": "HONEY BADGER", "slot": 3, "price": 350, "quiet": true, "sound": "badger", "magazine": 30, "reserve_max": 210, "reload_time": 1.9, "interval": 0.082, "damage": 34.0, "head_multiplier": 2.6, "spread": 0.008, "kick": 0.0085, "flash": 0.4},
+	"badger": {"label": "HONEY BADGER", "slot": 1, "price": 350, "quiet": true, "sound": "badger", "magazine": 30, "reserve_max": 210, "reload_time": 1.9, "interval": 0.082, "damage": 34.0, "head_multiplier": 2.6, "spread": 0.008, "kick": 0.0085, "flash": 0.4},
 	# pellets: shots per blast, each doing `damage`. shells: loaded one at a time, `reload_time`
 	# each. punch: how hard the weapon slams back. settle: share of the muzzle climb that
 	# comes back down by itself.
-	"shotgun": {"label": "SCHROTFLINTE", "slot": 4, "price": 250, "sound": "shotgun", "magazine": 6, "reserve_max": 42, "reload_time": 0.52, "interval": 0.95, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.05, "kick": 0.062, "flash": 1.8, "pellets": 9, "shells": true, "punch": 2.7, "settle": 0.72},
+	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 6, "reserve_max": 42, "reload_time": 0.52, "interval": 0.95, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.05, "kick": 0.062, "flash": 1.8, "pellets": 9, "shells": true, "punch": 2.7, "settle": 0.72},
 	# group: the shop tab it is sold on. from_round: the round after which the shop has it.
-	"pistol": {"label": "M9 PISTOLE", "slot": 5, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
-	"revolver": {"label": ".44 MAGNUM", "slot": 6, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
-	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 7, "price": 500, "group": "heavy", "sound": "shotgun", "magazine": 8, "reserve_max": 56, "reload_time": 2.3, "interval": 0.3, "damage": 14.0, "head_multiplier": 1.5, "spread": 0.06, "kick": 0.036, "flash": 1.7, "pellets": 8, "punch": 1.9, "settle": 0.7},
+	"pistol": {"label": "M9 PISTOLE", "slot": 2, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
+	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
+	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "shotgun", "magazine": 8, "reserve_max": 56, "reload_time": 2.3, "interval": 0.3, "damage": 14.0, "head_multiplier": 1.5, "spread": 0.06, "kick": 0.036, "flash": 1.7, "pellets": 8, "punch": 1.9, "settle": 0.7},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
 	# through. bolt: the action is worked by hand after every shot.
-	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 8, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
+	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 3, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
 	# grenade: fires 40 mm shells that go off where they land.
-	"launcher": {"label": "GRANATWERFER", "slot": 9, "price": 900, "group": "heavy", "from_round": 4, "sound": "launcher", "magazine": 6, "reserve_max": 18, "reload_time": 3.4, "interval": 0.75, "damage": 0.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.05, "flash": 0.9, "punch": 2.2, "settle": 0.8, "grenade": true},
+	"launcher": {"label": "GRANATWERFER", "slot": 3, "price": 900, "group": "heavy", "from_round": 4, "sound": "launcher", "magazine": 6, "reserve_max": 18, "reload_time": 3.4, "interval": 0.75, "damage": 0.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.05, "flash": 0.9, "punch": 2.2, "settle": 0.8, "grenade": true},
 	# spin: seconds the barrels need to come up to speed before the first shot.
 	# The machine gun: a hundred rounds in the box and four boxes more. Shares its key with
 	# the minigun.
-	"mg": {"label": "MASCHINENGEWEHR", "slot": 0, "price": 800, "group": "heavy", "from_round": 3, "sound": "mg", "magazine": 100, "reserve_max": 400, "reload_time": 4.2, "interval": 0.085, "damage": 30.0, "head_multiplier": 2.2, "spread": 0.022, "kick": 0.0085, "flash": 1.2, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
-	"minigun": {"label": "MINIGUN", "slot": 0, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55},
+	"mg": {"label": "MASCHINENGEWEHR", "slot": 3, "price": 800, "group": "heavy", "from_round": 3, "sound": "mg", "magazine": 100, "reserve_max": 400, "reload_time": 4.2, "interval": 0.085, "damage": 30.0, "head_multiplier": 2.2, "spread": 0.022, "kick": 0.0085, "flash": 1.2, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
+	"minigun": {"label": "MINIGUN", "slot": 3, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55},
 	# semi: one shot for every pull of the trigger. zoom and aim_spread: see ATTACHMENTS.
-	"m14": {"label": "M14", "slot": 3, "price": 320, "sound": "m14", "semi": true, "magazine": 20, "reserve_max": 140, "reload_time": 2.3, "interval": 0.16, "damage": 64.0, "head_multiplier": 2.6, "spread": 0.006, "kick": 0.024, "flash": 1.2, "punch": 1.3, "settle": 0.6, "zoom": 38.0, "aim_spread": 0.3},
-	"svd": {"label": "SVD DRAGUNOW", "slot": 8, "price": 650, "group": "heavy", "from_round": 2, "sound": "svd", "semi": true, "magazine": 10, "reserve_max": 60, "reload_time": 2.7, "interval": 0.38, "damage": 165.0, "head_multiplier": 2.4, "spread": 0.02, "kick": 0.04, "flash": 1.4, "punch": 1.8, "settle": 0.85, "scope": 15.0, "pierce": 1},
+	"m14": {"label": "M14", "slot": 1, "price": 320, "sound": "m14", "semi": true, "magazine": 20, "reserve_max": 140, "reload_time": 2.3, "interval": 0.16, "damage": 64.0, "head_multiplier": 2.6, "spread": 0.006, "kick": 0.024, "flash": 1.2, "punch": 1.3, "settle": 0.6, "zoom": 38.0, "aim_spread": 0.3},
+	"svd": {"label": "SVD DRAGUNOW", "slot": 3, "price": 650, "group": "heavy", "from_round": 2, "sound": "svd", "semi": true, "magazine": 10, "reserve_max": 60, "reload_time": 2.7, "interval": 0.38, "damage": 165.0, "head_multiplier": 2.4, "spread": 0.02, "kick": 0.04, "flash": 1.4, "punch": 1.8, "settle": 0.85, "scope": 15.0, "pierce": 1},
 	# The three below belong to a tree of abilities each (Skills.TREES, weapons): the shop
 	# sells them only to somebody who has put points into that tree.
 	# flame: no bullets but a stream of fire (see _flame); its magazine is its tank.
-	"flamer": {"label": "FLAMMENWERFER", "slot": 7, "price": 700, "group": "class", "sound": "flamer", "magazine": 150, "reserve_max": 300, "reload_time": 3.2, "interval": 0.06, "damage": 9.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.0, "flash": 0.0, "flame": true},
+	"flamer": {"label": "FLAMMENWERFER", "slot": 3, "price": 700, "group": "class", "sound": "flamer", "magazine": 150, "reserve_max": 300, "reload_time": 3.2, "interval": 0.06, "damage": 9.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.0, "flash": 0.0, "flame": true},
 	# special: factor on what it does to special infected.
-	"nitro": {"label": "DOPPELBÜCHSE .600", "slot": 4, "price": 650, "group": "class", "sound": "nitro", "semi": true, "magazine": 2, "reserve_max": 36, "reload_time": 2.5, "interval": 0.25, "damage": 430.0, "head_multiplier": 1.8, "spread": 0.012, "kick": 0.085, "flash": 1.9, "punch": 3.0, "settle": 0.85, "zoom": 42.0, "aim_spread": 0.3, "special": 1.5, "pierce": 1},
+	"nitro": {"label": "DOPPELBÜCHSE .600", "slot": 3, "price": 650, "group": "class", "sound": "nitro", "semi": true, "magazine": 2, "reserve_max": 36, "reload_time": 2.5, "interval": 0.25, "damage": 430.0, "head_multiplier": 1.8, "spread": 0.012, "kick": 0.085, "flash": 1.9, "punch": 3.0, "settle": 0.85, "zoom": 42.0, "aim_spread": 0.3, "special": 1.5, "pierce": 1},
 	# shield: share of its damage that goes through a shield. armour: share of what a
 	# soldier's armour stops that it still stops against this weapon.
-	"fifty": {"label": "M107 KALIBER .50", "slot": 8, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
+	"fifty": {"label": "M107 KALIBER .50", "slot": 3, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
 const QUIET_SOUNDS := ["badger", "ump_sil"]
-const ORDER := ["rifle", "ak", "p90", "ump", "badger", "m14", "shotgun", "nitro", "pistol", "revolver", "autoshotgun", "flamer", "sniper", "svd", "fifty", "launcher", "mg", "minigun"]
+const ORDER := ["rifle", "ak", "p90", "ump", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "minigun", "flamer", "nitro", "fifty"]
+## The three kinds of weapon: the key that takes one in hand, what the interface calls
+## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
+## kind, and as many more of any kind as slings were bought (extra_slots).
+const KINDS := {
+	"primary": {"key": 1, "label": "PRIMÄRWAFFE", "groups": ["weapons"]},
+	"secondary": {"key": 2, "label": "SEKUNDÄRWAFFE", "groups": ["sidearms"]},
+	"heavy": {"key": 3, "label": "SCHWERE WAFFE", "groups": ["heavy", "class"]}
+}
+const CARRY := 1
 ## Parts the shop sells for a weapon. slot: only one part per slot is on the weapon at a
 ## time. set: values of the weapon's table that the part replaces (aim_spread: how much of
 ## the scatter is left when aiming; zoom: field of view when aiming; scope: field of view
@@ -81,6 +91,7 @@ const GOODS := {
 	"armor": {"label": "SCHWERE RÜSTUNG", "price": 300, "group": "gear", "note": "100 Rüstung."},
 	"plates": {"label": "BALLISTISCHE WESTE", "prices": [160, 260, 400], "group": "gear", "note": "C.R.U.-Kugeln und -Granaten: 25 / 40 / 55 % weniger Schaden"},
 	"mags": {"label": "GRÖSSERE MAGAZINE", "price": 200, "group": "mods", "note": "+50 % Magazin für die Waffe in deiner Hand."},
+	"sling": {"label": "WAFFENGURT", "prices": [250, 400, 600], "group": "gear", "note": "Platz für eine Waffe mehr, egal welcher Art. Ohne Gurt trägst du je eine Primär-, eine Sekundär- und eine schwere Waffe."},
 	"mask": {"label": "GASMASKE", "prices": [150, 250, 400, 600], "group": "gear", "note": "Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas."},
 	# For the two who come along (Game.squad_levels); nothing the survivor carries.
 	"squad_armor": {"label": "TEAM: SCHUTZPLATTEN", "prices": [180, 300, 450], "group": "team", "note": "Deine Begleiter halten mehr aus: +30 % Leben je Stufe."},
@@ -153,6 +164,20 @@ const MELEE_DAMAGE := 30.0
 const MELEE_PUSH := 6.5
 const MELEE_DAZE := 1.7
 const MELEE_GAP := 0.85
+## The syringe every survivor carries (key Q): the health it gives back, the seconds until
+## it is ready again, and how long the hands are busy with it.
+const SYRINGE_HEAL := 30.0
+const SYRINGE_WAIT := 8.0
+const SYRINGE_TIME := 0.75
+## Ducked (key C, on and off): how high the eyes and the body are then, how fast the
+## survivor moves, and the share of a weapon's scatter and kick that is left.
+const STAND_HEIGHT := 1.75
+const CROUCH_HEIGHT := 1.2
+const CROUCH_EYE := 1.12
+const CROUCH_SPEED := 2.4
+const CROUCH_STEADY := 0.7
+## Share of each weapon's full reserve that comes back when a round is over.
+const ROUND_AMMO := 0.5
 ## The stream of the flamethrower: how far it reaches and how narrow it is (the cosine of
 ## half its angle).
 const FLAME_REACH := 10.0
@@ -172,6 +197,13 @@ var trigger_held := false
 var melee_cooldown := 0.0
 ## The swing of a blow with the weapon, 1 when it starts to 0 when it is over.
 var melee_pose := 0.0
+## Seconds until the syringe is ready again, and seconds the hands are still busy with it.
+var syringe_wait := 0.0
+var syringe_left := 0.0
+## Slings bought this night: places for further weapons of any kind.
+var extra_slots := 0
+var crouched := false
+var body_shape: CollisionShape3D
 ## Seconds the flamethrower's stream keeps showing after its last tick, and the seconds
 ## until its next hit marker.
 var flame_left := 0.0
@@ -229,6 +261,7 @@ func _ready() -> void:
 	shape.shape = capsule
 	shape.position.y = 0.88
 	add_child(shape)
+	body_shape = shape
 	camera = Camera3D.new()
 	camera.name = "Eyes"
 	camera.position.y = 1.62
@@ -323,6 +356,8 @@ func take_item(id: String) -> void:
 		"mask":
 			mask_level = mini(4, mask_level + 1)
 			filter_left = filter_capacity()
+		"sling":
+			extra_slots = mini((GOODS.sling.prices as Array).size(), extra_slots + 1)
 		_:
 			items[id] = int(items[id]) + 1
 
@@ -528,6 +563,82 @@ func _show_parts() -> void:
 func weapon_label() -> String:
 	return WEAPONS[current_weapon].label
 
+## "primary", "secondary" or "heavy": the kind a weapon is of.
+static func kind_of(id: String) -> String:
+	var group := str(WEAPONS[id].get("group", "weapons"))
+	for kind in KINDS:
+		if (KINDS[kind].groups as Array).has(group):
+			return kind
+	return "primary"
+
+## The weapons of a kind the survivor carries, in the order of ORDER.
+func carried(kind: String) -> Array:
+	return ORDER.filter(func(id: String) -> bool: return inventory.has(id) and kind_of(id) == kind)
+
+## How many weapons are carried beyond one of each kind; `with`: counting this one in.
+func _beyond(with: String = "") -> int:
+	var over := 0
+	for kind in KINDS:
+		var count := carried(kind).size() + (1 if with != "" and not inventory.has(with) and kind_of(with) == kind else 0)
+		over += maxi(0, count - CARRY)
+	return over
+
+## True if another weapon can be carried beside what is carried already.
+func room_for(id: String) -> bool:
+	return _beyond(id) <= extra_slots
+
+## The weapon that has to go to make room for another one of its kind: the one in hand
+## if it is of that kind, otherwise the first of them. "" if there is room anyway.
+func to_replace(id: String) -> String:
+	if room_for(id):
+		return ""
+	var same := carried(kind_of(id))
+	return current_weapon if same.has(current_weapon) else str(same[0])
+
+## Lays a weapon down for good, with whatever was fitted to it. Not the one in hand.
+func drop_weapon(id: String) -> void:
+	if id != current_weapon:
+		inventory.erase(id)
+
+## Ammunition comes back when a round is over: for every weapon carried, `share` of what
+## its pockets hold.
+func resupply(share: float) -> void:
+	for id in inventory:
+		var cap := reserve_cap(id)
+		inventory[id].reserve = mini(cap, int(inventory[id].reserve) + int(ceil(cap * share)))
+
+## The syringe: some health back at once, then it has to be made ready again. Nothing
+## happens at full health.
+func inject() -> bool:
+	if down or health <= 0.0 or health >= 100.0 or syringe_wait > 0.0 or throw_kind != "":
+		return false
+	syringe_wait = SYRINGE_WAIT
+	syringe_left = SYRINGE_TIME
+	shot_cooldown = maxf(shot_cooldown, SYRINGE_TIME)
+	health = minf(100.0, health + game.healing(SYRINGE_HEAL))
+	hurt_amount = 0.0
+	game.sounds.play_sound("syringe")
+	game.hud.flash(Color(0.45, 1.0, 0.75), 0.1)
+	return true
+
+## Ducks or stands up again. Standing up needs room above; ducking needs ground below.
+func set_crouched(low: bool) -> void:
+	if low == crouched or (low and (down or not is_on_floor())):
+		return
+	if not low:
+		var top := global_position + Vector3(0, CROUCH_HEIGHT, 0)
+		var query := PhysicsRayQueryParameters3D.create(top, top + Vector3(0, STAND_HEIGHT - CROUCH_HEIGHT + 0.05, 0), 1)
+		if not get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+			return
+	crouched = low
+	var capsule := body_shape.shape as CapsuleShape3D
+	capsule.height = CROUCH_HEIGHT if low else STAND_HEIGHT
+	body_shape.position.y = capsule.height * 0.5
+
+## How high above the feet a shot at this survivor is aimed, and where he is looked for.
+func chest_height() -> float:
+	return 0.72 if crouched else 1.15
+
 ## Adds a bought weapon with a full load and takes it in hand.
 func unlock(id: String) -> bool:
 	if inventory.has(id) or not WEAPONS.has(id): return false
@@ -563,16 +674,17 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 			game.hud.loadout()
 	return true
 
-## Number keys: the weapon in that slot, or a hint where to get it.
-## Weapons that share a key take turns.
+## Number keys 1 to 3: the weapon of that kind, or a hint where to get one. Several
+## weapons of a kind (carried with slings) take turns.
 func _select_slot(slot: int) -> void:
-	var sharing: Array = ORDER.filter(func(id: String) -> bool: return int(WEAPONS[id].slot) == slot)
-	var owned: Array = sharing.filter(func(id: String) -> bool: return inventory.has(id))
-	if owned.is_empty():
-		var first: Dictionary = WEAPONS[sharing[0]]
-		game.hud.announce("%s IM WAFFENSHOP" % first.label, "Im Hauptraum neben dem Flur · %d Vorrat · offen zwischen den Runden" % int(first.price), 2.5)
-		return
-	equip_weapon(owned[(owned.find(current_weapon) + 1) % owned.size()])
+	for kind in KINDS:
+		if int(KINDS[kind].key) != slot:
+			continue
+		var owned := carried(kind)
+		if owned.is_empty():
+			game.hud.announce("KEINE %s" % KINDS[kind].label, "Im Waffenshop im Hauptraum neben dem Flur · offen zwischen den Runden", 2.5)
+			return
+		equip_weapon(owned[(owned.find(current_weapon) + 1) % owned.size()])
 
 ## Mouse wheel: the next weapon the survivor owns.
 func _cycle(step: int) -> void:
@@ -614,6 +726,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		ready_throw("molotov")
 	if event.is_action_pressed("melee"):
 		melee()
+	if event.is_action_pressed("syringe"):
+		inject()
+	if event.is_action_pressed("crouch"):
+		set_crouched(not crouched)
 	if event.is_action_pressed("place_claymore"):
 		place_claymore()
 	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -624,6 +740,8 @@ func _physics_process(delta: float) -> void:
 	throw_cooldown = maxf(0, throw_cooldown - delta)
 	melee_cooldown = maxf(0, melee_cooldown - delta)
 	melee_pose = move_toward(melee_pose, 0.0, delta * 3.4)
+	syringe_wait = maxf(0.0, syringe_wait - delta)
+	syringe_left = maxf(0.0, syringe_left - delta)
 	flame_left = maxf(0.0, flame_left - delta)
 	flame_mark = maxf(0.0, flame_mark - delta)
 	_show_flame(flame_left > 0.0)
@@ -705,15 +823,21 @@ func _physics_process(delta: float) -> void:
 			ammo += count
 			reserve -= count
 	var blocked := menu_open or down
-	camera.position.y = lerpf(camera.position.y, 0.42 if down else 1.62, minf(1.0, delta * 6.0))
+	camera.position.y = lerpf(camera.position.y, 0.42 if down else (CROUCH_EYE if crouched else 1.62), minf(1.0, delta * 6.0 if down else delta * 10.0))
 	weapon.visible = not down
 	var input := Vector2.ZERO if blocked else Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := transform.basis * Vector3(input.x, 0, input.y)
 	var aiming := Input.is_action_pressed("aim") and reload_left <= 0 and not blocked
 	var sprint := Input.is_action_pressed("sprint") and not aiming and input.y < -0.1 and clung_by == null
+	# Whoever starts to run stands up for it (if there is room to).
+	if sprint and crouched:
+		set_crouched(false)
+		sprint = not crouched
 	var speed := 6.6 if sprint else 4.3
 	if aiming:
 		speed = 2.6
+	if crouched:
+		speed = minf(speed, CROUCH_SPEED)
 	if WEAPONS[current_weapon].has("spin"):
 		# The rotary gun weighs as much as a small child.
 		speed *= 0.72
@@ -726,6 +850,10 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= 22 * delta
 		airborne = true
+	elif Input.is_action_just_pressed("jump") and not blocked and crouched:
+		# Out of a crouch the key only gets the survivor back on his feet.
+		set_crouched(false)
+		velocity.y = 0
 	elif Input.is_action_just_pressed("jump") and not blocked:
 		velocity.y = 5.5
 	else:
@@ -1003,6 +1131,11 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var swing := sin(melee_pose * PI)
 		target += Vector3(-0.08, 0.035, -0.2) * swing
 		angles += Vector3(-0.3, 0.75, 0.55) * swing
+	# The syringe: the weapon is let down for as long as the hands are busy with it.
+	if syringe_left > 0.0:
+		var busy := sin(clampf(syringe_left / SYRINGE_TIME, 0.0, 1.0) * PI)
+		target += Vector3(0.02, -0.15, 0.05) * busy
+		angles += Vector3(0.4, 0.3, -0.3) * busy
 	# A grenade in the other hand: the weapon dips out of the way.
 	if throw_pose > 0.0:
 		var dip := smoothstep(0.0, 1.0, throw_pose)
@@ -1096,7 +1229,7 @@ func shoot() -> void:
 	var muzzle := _visible_muzzle()
 	var pellets := int(data.get("pellets", 1))
 	# Scripted checks fire dead centre; live fire scatters from the hip.
-	var spread := 0.0 if game.check_mode else float(data.spread) * ((0.6 if pellets > 1 else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0)
+	var spread := 0.0 if game.check_mode else float(data.spread) * ((0.6 if pellets > 1 else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0) * (CROUCH_STEADY if crouched else 1.0)
 	# Everything one blast does to the same infected is added up and lands as a single hit.
 	var struck := {}
 	var endpoint := origin - camera.global_basis.z * 90
@@ -1170,7 +1303,7 @@ func shoot() -> void:
 		game.alarm(origin, -camera.global_basis.z)
 	if game.net.active:
 		game.net.send_shot(origin, endpoint, str(data.sound))
-	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0)
+	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0) * (CROUCH_STEADY if crouched else 1.0)
 	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
 	climb += kick * float(data.get("settle", 0.0))
 	rotate_y(randf_range(-kick, kick) * 0.35)
@@ -1227,6 +1360,9 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 func go_down() -> void:
 	down = true
 	reload_left = 0.0
+	crouched = false
+	(body_shape.shape as CapsuleShape3D).height = STAND_HEIGHT
+	body_shape.position.y = STAND_HEIGHT * 0.5
 	var helper: Teammate = game.rescuer()
 	if helper != null and not game.net.active:
 		game.hud.announce("DU BIST AM BODEN", "%s kommt dir zu Hilfe." % helper.label, 5.0)
@@ -1249,8 +1385,10 @@ func reset_survivor() -> void:
 	camera.rotation = Vector3.ZERO
 	velocity = Vector3.ZERO
 	health = 100
-	equip_weapon("rifle", true)
+	# The carbine first: it may have been traded in during the last night.
 	inventory = {"rifle": {"ammo": int(WEAPONS.rifle.magazine), "reserve": reserve_cap("rifle"), "level": 0}}
+	equip_weapon("rifle", true)
+	_show_parts()
 	reload_left = 0
 	loading_shells = false
 	pump_clock = -1.0
@@ -1263,6 +1401,12 @@ func reset_survivor() -> void:
 	mist_damage_left = 0
 	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0}
 	trigger_held = false
+	crouched = false
+	(body_shape.shape as CapsuleShape3D).height = STAND_HEIGHT
+	body_shape.position.y = STAND_HEIGHT * 0.5
+	syringe_wait = 0.0
+	syringe_left = 0.0
+	extra_slots = 0
 	melee_cooldown = 0.0
 	melee_pose = 0.0
 	flame_left = 0.0

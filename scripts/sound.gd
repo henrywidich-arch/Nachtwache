@@ -30,7 +30,7 @@ const MIX := {
 	"charger_roar": [-4.0, 0.08, 0], "crusher_pain": [-1.0, 0.06, 1], "crusher_attack": [0.0, 0.06, 1], "crusher_death": [3.0, 0.04, 2],
 	"attack": [-6.0, 0.1, 0], "moan": [-9.0, 0.1, 0], "death_female": [-4.0, 0.08, 1], "pain_female": [-6.0, 0.08, 0],
 	"melee": [-2.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
-	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2]
+	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -53,7 +53,7 @@ const STAND_INS := {
 	"striker_attack": "screech", "striker_death": "screech", "striker_idle": "screech",
 	"charger_roar": "gurgle", "crusher_pain": "roar", "crusher_attack": "roar", "crusher_death": "roar",
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
-	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot"
+	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90"
 }
 
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):

@@ -26,6 +26,9 @@ var flame_left := 0.0
 var flame_to := Vector3.ZERO
 var flame_stream: CPUParticles3D
 var flame_voice: AudioStreamPlayer3D
+## The partner ducks: a lower body, also for whoever shoots at it on this machine.
+var crouched := false
+var body_shape: CollisionShape3D
 
 func _ready() -> void:
 	# The infected bump into it; nothing pushes it around.
@@ -38,6 +41,7 @@ func _ready() -> void:
 	shape.shape = capsule
 	shape.position.y = 0.88
 	add_child(shape)
+	body_shape = shape
 	visual = SoldierVisual.new()
 	visual.look = look
 	add_child(visual)
@@ -113,6 +117,18 @@ func set_reloading(now: bool) -> void:
 	if now and not reloading:
 		visual.reload(1.9)
 	reloading = now
+
+func set_crouched(now: bool) -> void:
+	if now == crouched:
+		return
+	crouched = now
+	visual.crouched = now
+	var capsule := body_shape.shape as CapsuleShape3D
+	capsule.height = Survivor.CROUCH_HEIGHT if now else Survivor.STAND_HEIGHT
+	body_shape.position.y = capsule.height * 0.5
+
+func chest_height() -> float:
+	return 0.72 if crouched else 1.15
 
 func set_down(now: bool) -> void:
 	if now == down:

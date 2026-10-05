@@ -187,7 +187,7 @@ func _physics_process(delta: float) -> void:
 	if state_left <= 0.0:
 		state_left = STATE_INTERVAL
 		var player: Survivor = game.player
-		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0)
+		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0) | (8 if player.crouched else 0)
 		_state.rpc_id(partner, player.global_position, player.rotation.y, player.camera.rotation.x, player.velocity, flags, player.health)
 	if not hosting:
 		_prune(delta)
@@ -546,6 +546,7 @@ func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int
 	remote.aiming = flags & 1 != 0
 	remote.set_reloading(flags & 2 != 0)
 	remote.set_down(flags & 4 != 0)
+	remote.set_crouched(flags & 8 != 0)
 	remote.health = health
 
 func send_shot(from: Vector3, to: Vector3, sound: String) -> void:

@@ -22,13 +22,14 @@ Die Hauptszene ist `scenes/main.tscn`. Die Karte wird von `scripts/cabin.gd` erz
 | Rechte Maustaste halten | Zielen über Kimme und Korn |
 | R | Nachladen (die Schrotflinte lädt Patrone für Patrone; ein Schuss bricht das Laden ab) |
 | Shift (beim Vorwärtslaufen) | Sprinten |
-| Leertaste | Springen |
+| Leertaste | Springen (geduckt: aufstehen) |
+| C | **Ducken**, an und aus: Du bist niedriger und langsamer, die Waffe streut und tritt 30 % weniger. Hinter hüfthoher Deckung sehen dich Soldaten nicht, und was sie trotzdem schießen, geht in die Deckung. Sprinten oder die Leertaste richten dich auf |
 | E | Station / Waffenshop benutzen, Teammitglied, Mitspieler oder Nadja aufhelfen |
 | F | Taschenlampe |
-| 1 / 2 / 3 / 4 / Mausrad | M4A4 und AK-47 (die **1** wechselt zwischen beiden) / P90 und UMP45 (die **2** wechselt) / Honey Badger und M14 / Schrotflinte und Doppelbüchse. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
-| 5 / 6 / 7 / 8 / 9 / 0 | Pistole / Magnum / Auto-Schrotflinte und Flammenwerfer / Scharfschützengewehr, SVD und M107 / Granatwerfer / Maschinengewehr und Minigun – alle aus dem Shop. Teilen sich mehrere Waffen eine Taste, wechselt sie reihum |
-| Q | **Nahkampf:** ein Schlag mit der Waffe. Wer direkt vor dir steht, wird einen Schritt zurückgeworfen und taumelt knapp zwei Sekunden. Kleiner Schaden, alle 0,85 Sekunden möglich. Schwere Soldaten werden nur kurz aufgehalten, den Crusher bewegt nichts |
-| X / C / V | Befehl an das Team: Position halten / bei mir bleiben / frei bewegen |
+| 1 / 2 / 3 / Mausrad | **Primärwaffe / Sekundärwaffe / schwere Waffe** – mehr trägst du ohne Waffengurt nicht (siehe „Waffen-Plätze“). Mit Gurten wechselt die Taste zwischen den Waffen ihrer Art; das Mausrad geht alle durch. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
+| Q | **Heilspritze:** gibt sofort 30 Lebenspunkte zurück (nie über 100) und braucht dann 8 Sekunden, bis sie wieder bereit ist. Immer dabei, kostet nichts; die Kachel unten rechts zählt die Sekunden herunter |
+| V | **Nahkampf:** ein Schlag mit der Waffe. Wer direkt vor dir steht, wird einen Schritt zurückgeworfen und taumelt knapp zwei Sekunden. Kleiner Schaden, alle 0,85 Sekunden möglich. Schwere Soldaten werden nur kurz aufgehalten, den Crusher bewegt nichts |
+| 4 / 5 / 6 | Befehl an das Team: Position halten / bei mir bleiben / frei bewegen (**X** hält ebenfalls) |
 | G / T / H / B | Splittergranate / Blendgranate / **Molotowcocktail** / Claymore (aus dem Shop). Wurfkörper: **Taste halten** zeigt die Flugbahn und wo sie aufschlägt, **loslassen** wirft. Kurz antippen wirft sofort. Mit einem Wurfkörper in der Hand kannst du nicht schießen |
 | E halten | Auftragsgegenstand benutzen (Code bergen, Generator starten, Sicherung, Kiste, Hack-Modul anbringen oder neu starten) |
 | Leertaste / Enter / Mausklick | Die Ankunft per Helikopter am Anfang überspringen |
@@ -51,7 +52,7 @@ Unter dem Hof liegt ein geheimes Labor der **Helix Corporation** – des Konzern
 | **Das Hack-Modul** | In der nächsten Runde wirft der Helikopter eine Kiste mit dem Hack-Modul in den Hof. Kiste öffnen (**E halten**), zur Kellertür im Haus, Modul anbringen (**E halten**) und verteidigen, bis der Hack durch ist. Das Modul **fällt zwischendurch aus** – von selbst oder weil die Infizierten es zerschlagen – und muss dann mit **E** neu gestartet werden |
 | **Das Labor** | Der Keller ist offen. Unten steht Nadja hinter Panzerglas und gibt euch einen eigenen Auftrag (Festplatten sichern). In dieser Runde kommt oben der erste, noch nicht ausgewachsene Crusher |
 | **Nadjas Tür** | Zwei Runden nach dem Keller kommt das Modul an ihre Tür. Jetzt greifen Infizierte **und C.R.U.** gleichzeitig an, die C.R.U. sprengt den Versorgungstunnel als zweiten Weg ins Labor, und das Modul fällt zweimal aus. Währenddessen erzählt Nadja über die Lautsprecher, was Helix getan hat |
-| **Evakuierung** | Nadja ist frei – der Hauptauftrag ist erfüllt. Die nächste Runde ist die letzte: Bringt sie zum Landeplatz und haltet ihn, bis der Helikopter unten ist. Der Crusher kommt dazu. Nadja hält deutlich mehr aus als ein Bot (260 statt 100 Lebenspunkte), und die Angreifer gehen zuerst auf die los, die schießen – auf sie nur, wenn sie viel näher steht. Geht sie doch zu Boden, hilf ihr mit **E** auf; liegt sie 30 Sekunden, ist die Nacht verloren. Stehen alle am Helikopter, ist sie gewonnen |
+| **Evakuierung** | Nadja ist frei – der Hauptauftrag ist erfüllt. Die nächste Runde ist die letzte: Bringt sie zum Landeplatz und haltet ihn, bis der Helikopter unten ist. Der Crusher kommt dazu; die Infizierten sind in dieser Runde 30 % weniger als sonst in Runde 10, und während ihr auf den Helikopter wartet, drängt weniger nach. Nadja hält deutlich mehr aus als ein Bot (260 statt 100 Lebenspunkte), und die Angreifer gehen zuerst auf die los, die schießen – auf sie nur, wenn sie viel näher steht. Geht sie doch zu Boden, hilf ihr mit **E** auf; liegt sie 30 Sekunden, ist die Nacht verloren. Stehen alle am Helikopter, ist sie gewonnen |
 
 Die Nacht dauert damit acht oder neun Runden (neun, wenn ein früher Auftrag misslingt); die letzte zählt für die Bestenliste immer als Runde 10. Ohne die Geschichte (Karten ohne Labor, automatische Tests) bleibt es bei zehn Runden bis zum Helikopter.
 
@@ -170,7 +171,7 @@ Der **Waffenshop** in der Halle ist **vor der ersten und nach jeder überstanden
 - **Treffer wirken:** Jeder Treffer reißt den Körper herum, konzentriertes Feuer bringt Infizierte ins Taumeln. Tote fallen je nach Schussrichtung nach hinten, vorn oder zur Seite; es gibt mehrere Todesanimationen pro Richtung.
 - **Blut:** Kopfschüsse und schwere Treffer können Kopf oder Arm abreißen, Leichen bluten aus, Blut bleibt an Boden und Wänden.
 - Weit entfernte Infizierte **beeilen sich**, damit niemand auf Nachzügler warten muss.
-- Abschüsse bringen **Score** und **Vorrat**; Kopfschuss-Kills geben 50 Punkte extra. Jede überstandene Runde bringt 100 Vorrat und 20 HP. Gefallene lassen gelegentlich **Munition** (beige) oder ein **Verbandspäckchen** (grün) fallen.
+- Abschüsse bringen **Score** und **Vorrat**; Kopfschuss-Kills geben 50 Punkte extra. Jede überstandene Runde bringt 100 Vorrat, **heilt dich vollständig** (auf höheren Stufen weniger: Schwer 80, Albtraum 65 Lebenspunkte) und füllt bei jeder Waffe, die du trägst, **die Hälfte der Reservemunition** wieder auf. Gefallene lassen gelegentlich **Munition** (beige) oder ein **Verbandspäckchen** (grün) fallen.
 - Zum **Giftgas** siehe den nächsten Abschnitt: am Waldrand steht es immer, im Hof und im Haus kommt und geht es.
 
 ### C.R.U. – Containment Response Unit
@@ -192,40 +193,48 @@ Helix' Eliteeinheit: Sie soll Beweise vernichten, Nadja holen und alle ausschalt
 | Marksman | wenige, harte Schüsse aus großer Entfernung, kniet beim Zielen |
 | Medic | läuft zu Verwundeten und flickt sie |
 | Commander | macht alle in seiner Nähe schneller und genauer; fällt er, ist der Trupp kurz verunsichert |
-| Shield | trägt einen mannshohen Schild mit Sichtfenster vor sich her: **von vorn geht keine Kugel durch**, auch kein Kopfschuss. Er rückt langsam vor und **dreht sich nur träge** – lauf an ihm vorbei und schieß ihm in den Rücken oder in die Seite, oder nimm Granaten: eine Explosion geht um den Schild herum. In jedem Trupp ist einer |
+| Shield | trägt einen mannshohen Schild mit Sichtfenster vor sich her: **von vorn geht keine Kugel durch**, auch kein Kopfschuss. Er rückt langsam vor und **dreht sich nur träge** – lauf an ihm vorbei und schieß ihm in den Rücken oder in die Seite, oder nimm Granaten: eine Explosion geht um den Schild herum. In jedem Trupp ist einer – aber **nie stehen zwei gleichzeitig auf dem Hof**: Solange einer lebt, kommt der nächste ohne Schild, und in die Verstärkung, die Helix an Nadjas Tür nachschiebt, mischt sich keiner mehr |
 | Elite | der Soldat mit Kapuze und Gasmaske, deren Gläser orange glühen. Gut zwei Drittel mehr Leben als ein Assault, eine Panzerung, die vier von zehn Treffern schluckt, und eine **AK-47**, die deutlich härter trifft. Statt Splittergranaten wirft er **Gasgranaten**: Wo eine liegen bleibt, steht für rund 13 Sekunden eine kleine Giftwolke – auch im Haus. Ab Runde 5 gehört einer zu jedem vollen C.R.U.-Trupp, in den letzten Runden sind es zwei |
 
 Je höher die Schwierigkeit, desto schneller reagieren sie, desto besser treffen sie und desto öfter weichen sie aus, flankieren und werfen.
 
 ### Waffen
 
-| Waffe | Preis | Magazin | Besonderheit |
-|---|---|---|---|
-| M4A4 | Startwaffe | 30 | Solide auf jede Entfernung. Ein Modell mit eigenem Magazin, das beim Nachladen sichtbar gewechselt wird, und mit **Kimme und Korn**: Beim Zielen schaust du durch die Lochkimme auf den Kornstift. Nimmt **Aufsätze**; mit einem Visier klappen Kimme und Korn weg |
-| AK-47 | 300 | 30 | Kaliber 7,62: knapp ein Drittel mehr Schaden pro Kugel als das M4A4 und etwas schneller, dafür mehr Rückstoß und Streuung. Teilt sich die Taste **1** mit dem M4A4. Das Magazin wird sichtbar gewechselt, und sie nimmt **Aufsätze** |
-| P90 | 100 | 50 | Sehr schnell, streut mehr |
-| UMP45 | 220 | 25 | Schwere MP: langsamer als die P90, dafür trifft jede Kugel härter. Das Magazin wird sichtbar gewechselt. Nimmt **Aufsätze** (siehe unten) |
-| Schrotflinte | 250 | 6 | Neun Schrotkugeln pro Schuss, wuchtiger Rückstoß, Vorderschaft-Repetieren; auf kurze Distanz tödlich, ab etwa 25 m fast wirkungslos |
-| Honey Badger | 350 | 30 | Schallgedämpft, präzise, hoher Einzelschaden |
-| M14 | 320 | 20 | **Einzelschuss:** ein Schuss pro Klick, mehr als doppelt so hart wie eine M4A4-Kugel und sehr genau. Kimme und Korn. Teilt sich die Taste **3** mit dem Honey Badger |
-| Auto-Schrotflinte | 500 | 8 | Halbautomatisch mit Kastenmagazin: kein Repetieren, schnelles Nachladen |
-| M9 Pistole | 60 | 15 | Leicht und schnell, billige Zweitwaffe |
-| .44 Magnum | 220 | 6 | Sechs Schuss, jeder ein Hammer |
-| Scharfschützengewehr | 450 | 5 | Zielfernrohr (rechte Maustaste), Repetierer; die Kugel geht durch bis zu vier Körper |
-| SVD Dragunow | 650 | 10 | Das zweite Scharfschützengewehr: **halbautomatisch**, ein Schuss pro Klick ohne Repetieren, zehn Schuss. Pro Treffer schwächer als der Repetierer, dafür rund dreimal so schnell; die Kugel geht durch zwei Körper. Taste **8**. **Erst nach Runde 2** im Shop |
-| Granatwerfer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. Das Geschoss fliegt im **Bogen**: Gerade gehalten kommt es nach rund 20 m herunter, für weitere Ziele hältst du höher. Die **rechte Maustaste** zeigt Flugbahn und Einschlagpunkt; der Werfer bleibt dabei neben der Sichtlinie. **Erst nach Runde 4** im Shop |
-| Maschinengewehr | 800 | 100 | Gurtgefüttert aus einem Kasten unter der Waffe: **100 Schuss und 400 in Reserve**, 700 Schuss pro Minute, etwas mehr Schaden pro Kugel als das M4A4. Dafür streut es aus der Hüfte, und der Kastenwechsel dauert gut vier Sekunden. Teilt sich die Taste **0** mit der Minigun. **Erst nach Runde 3** im Shop |
-| Minigun | 1500 | 200 | Läuft kurz an und feuert dann 1300 Schuss pro Minute; macht langsam. **Erst nach Runde 6** im Shop |
+#### Waffen-Plätze
+
+Du trägst **eine Primärwaffe, eine Sekundärwaffe und eine schwere Waffe** – Tasten **1**, **2** und **3**.
+
+- Kaufst du eine Waffe, für deren Art kein Platz mehr frei ist, **ersetzt sie die alte**: Die geht für die **Hälfte ihres Kaufpreises** in Zahlung (der Shop zeigt „TAUSCHEN“, was ersetzt wird und was es dafür gibt). Ersetzt wird die Waffe dieser Art, die du in der Hand hältst, sonst die erste. Ihre Munition und ihre Aufsätze sind dann weg.
+- Das M4A4, mit dem jeder anfängt, bringt beim Tausch nichts ein – dafür gibt es das Gewehr im Shop jederzeit kostenlos zurück.
+- Der **Waffengurt** (Reiter Ausrüstung, 250 / 400 / 600) schafft Platz für **je eine Waffe mehr, egal welcher Art** – bis zu drei Gurte, also höchstens sechs Waffen. Gurte gelten für die Nacht.
+
+| Waffe | Art | Preis | Magazin | Besonderheit |
+|---|---|---|---|---|
+| M4A4 | Primär | Startwaffe | 30 | Solide auf jede Entfernung. Ein Modell mit eigenem Magazin, das beim Nachladen sichtbar gewechselt wird, und mit **Kimme und Korn**: Beim Zielen schaust du durch die Lochkimme auf den Kornstift. Nimmt **Aufsätze**; mit einem Visier klappen Kimme und Korn weg |
+| AK-47 | Primär | 300 | 30 | Kaliber 7,62: knapp ein Drittel mehr Schaden pro Kugel als das M4A4 und etwas schneller, dafür mehr Rückstoß und Streuung. Das Magazin wird sichtbar gewechselt, und sie nimmt **Aufsätze** |
+| P90 | Primär | 100 | 50 | Sehr schnell, streut mehr |
+| UMP45 | Primär | 220 | 25 | Schwere MP: langsamer als die P90, dafür trifft jede Kugel härter. Das Magazin wird sichtbar gewechselt. Nimmt **Aufsätze** (siehe unten) |
+| Schrotflinte | Primär | 250 | 6 | Neun Schrotkugeln pro Schuss, wuchtiger Rückstoß, Vorderschaft-Repetieren; auf kurze Distanz tödlich, ab etwa 25 m fast wirkungslos |
+| Honey Badger | Primär | 350 | 30 | Schallgedämpft, präzise, hoher Einzelschaden |
+| M14 | Primär | 320 | 20 | **Einzelschuss:** ein Schuss pro Klick, mehr als doppelt so hart wie eine M4A4-Kugel und sehr genau. Kimme und Korn. |
+| Auto-Schrotflinte | Schwer | 500 | 8 | Halbautomatisch mit Kastenmagazin: kein Repetieren, schnelles Nachladen |
+| M9 Pistole | Sekundär | 60 | 15 | Leicht und schnell, billige Zweitwaffe |
+| .44 Magnum | Sekundär | 220 | 6 | Sechs Schuss, jeder ein Hammer |
+| Scharfschützengewehr | Schwer | 450 | 5 | Zielfernrohr (rechte Maustaste), Repetierer; die Kugel geht durch bis zu vier Körper |
+| SVD Dragunow | Schwer | 650 | 10 | Das zweite Scharfschützengewehr: **halbautomatisch**, ein Schuss pro Klick ohne Repetieren, zehn Schuss. Pro Treffer schwächer als der Repetierer, dafür rund dreimal so schnell; die Kugel geht durch zwei Körper. **Erst nach Runde 2** im Shop |
+| Granatwerfer | Schwer | 900 | 6 | 40-mm-Granaten, zünden beim Aufschlag. Das Geschoss fliegt im **Bogen**: Gerade gehalten kommt es nach rund 20 m herunter, für weitere Ziele hältst du höher. Die **rechte Maustaste** zeigt Flugbahn und Einschlagpunkt; der Werfer bleibt dabei neben der Sichtlinie. **Erst nach Runde 4** im Shop |
+| Maschinengewehr | Schwer | 800 | 100 | Gurtgefüttert aus einem Kasten unter der Waffe: **100 Schuss und 400 in Reserve**, 700 Schuss pro Minute, etwas mehr Schaden pro Kugel als das M4A4. Dafür streut es aus der Hüfte, und der Kastenwechsel dauert gut vier Sekunden. **Erst nach Runde 3** im Shop |
+| Minigun | Schwer | 1500 | 200 | Läuft kurz an und feuert dann 1300 Schuss pro Minute; macht langsam. **Erst nach Runde 6** im Shop |
 
 ### Klassenwaffen
 
-Im Shop-Reiter **Klasse**: je eine Waffe pro Weg der Fähigkeiten. Kaufen kann sie nur, wer **drei Punkte in diesem Weg** hat (siehe „Fähigkeiten“); im Koop zählen die eigenen Punkte.
+Im Shop-Reiter **Klasse**: je eine Waffe pro Weg der Fähigkeiten, alle drei **schwere Waffen**. Kaufen kann sie nur, wer **diesen Weg gewählt und drei Punkte darin** hat (siehe „Fähigkeiten“); im Koop zählt der eigene Weg.
 
 | Waffe | Weg | Preis | Besonderheit |
 |---|---|---|---|
-| Flammenwerfer | Säuberer | 700 | Ein Feuerstrahl bis zehn Meter, solange du die Taste hältst (Tank für 9 Sekunden, zwei Tanks Reserve). Wen der Strahl trifft, der nimmt Schaden und **brennt zweieinhalb Sekunden weiter**. Feuer geht um Schilde herum. Taste **7** |
-| Doppelbüchse .600 | Jäger | 650 | Zwei Läufe, zwei Schuss, jeder so hart wie anderthalb Treffer des Scharfschützengewehrs – und **gegen Spezial-Infizierte noch einmal die Hälfte mehr**. Kimme und Korn, kippt zum Laden auf. Taste **4** |
-| M107 Kaliber .50 | Brecher | 900 | Halbautomatisches schweres Scharfschützengewehr: **schießt von sich aus durch Schilde, ignoriert die Panzerung der C.R.U.** und geht durch bis zu fünf Körper. Fünf Schuss, starker Rückstoß. Taste **8** |
+| Flammenwerfer | Säuberer | 700 | Ein Feuerstrahl bis zehn Meter, solange du die Taste hältst (Tank für 9 Sekunden, zwei Tanks Reserve). Wen der Strahl trifft, der nimmt Schaden und **brennt zweieinhalb Sekunden weiter**. Feuer geht um Schilde herum |
+| Doppelbüchse .600 | Jäger | 650 | Zwei Läufe, zwei Schuss, jeder so hart wie anderthalb Treffer des Scharfschützengewehrs – und **gegen Spezial-Infizierte noch einmal die Hälfte mehr**. Kimme und Korn, kippt zum Laden auf |
+| M107 Kaliber .50 | Brecher | 900 | Halbautomatisches schweres Scharfschützengewehr: **schießt von sich aus durch Schilde, ignoriert die Panzerung der C.R.U.** und geht durch bis zu fünf Körper. Fünf Schuss, starker Rückstoß |
 
 ### Aufsätze für M4A4, UMP45 und AK-47
 
@@ -251,6 +260,7 @@ Der Shop hat acht Reiter: **Waffen**, **Pistolen**, **Schwer**, **Klasse**, **Au
 | Schutzweste / Schwere Rüstung | 150 / 300 | 50 bzw. 100 Rüstung; Rüstung fängt 60 % jedes Treffers ab |
 | Ballistische Weste | 160 / 260 / 400 | Drei Stufen gegen die C.R.U.: 25, 40 und 55 % weniger Schaden durch ihre Kugeln und Granaten. Verbraucht sich nicht und wirkt zusätzlich zur Rüstung; gegen Infizierte hilft sie nicht. Die Stufe steht neben der Lebensanzeige |
 | Größere Magazine | 200 | +50 % Magazin für die Waffe in deiner Hand (im Reiter Aufsätze) |
+| Waffengurt | 250 / 400 / 600 | Drei Stufen: Platz für je eine Waffe mehr, egal welcher Art (siehe „Waffen-Plätze“) |
 | Gasmaske | 150 / 250 / 400 / 600 | Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas; erholt sich an frischer Luft. Wofür sie gut ist, steht unter „Gas und Gasmaske“ |
 | Team: Schutzplatten | 180 / 300 / 450 | Drei Stufen: **+30 % Leben je Stufe** für deine beiden Bots (bis 190). Gilt für diese Nacht; nur im Einsatz mit Bots |
 | Team: Scharfe Munition | 180 / 300 / 450 | Drei Stufen: **+20 % Schaden je Stufe** für deine beiden Bots (bis +60 %) |
@@ -261,9 +271,9 @@ Die Preise gelten für „Normal“ und steigen mit der Schwierigkeit.
 
 Im Solo-Spiel begleiten dich zwei Bots – am Anfang **Viper** (Honey Badger) und **Scorpion** (Schrotflinte). Sie halten ein paar Schritte Abstand, kommen nach, wenn du dich entfernst, schießen selbstständig, laden nach und weichen zurück, wenn ihnen etwas zu nahe kommt. Geht einer zu Boden, hilfst du ihm mit **E** auf; nach 14 Sekunden oder am Rundenende steht er von selbst wieder. **Gehst du selbst zu Boden**, kommt der nächste Bot angerannt und hilft dir auf – verloren ist die Nacht erst, wenn niemand mehr steht.
 
-Befehle für beide Bots: **X** = Position halten (an der Stelle, auf die du zielst; ein Ring markiert sie), **C** = bei mir bleiben, **V** = frei bewegen (sie suchen sich die Infizierten selbst, bleiben aber in deiner Nähe). Im Shop-Reiter **Team** kannst du sie für die Nacht verstärken: mehr Leben und mehr Schaden, je drei Stufen. Sie bestätigen jeden Befehl und rufen im Gefecht. Für fast alles haben sie mindestens drei verschiedene Sprüche, und sie melden auch: die ersten Infizierten einer Runde, Gas, das in ihrer Nähe aufquillt, eine Granate, die bei ihnen landet, den Medic, einen Schild-Soldaten, einen erlegten Spezial-Infizierten, einen Leech an dir, eigene schwere Verletzungen – und manchmal sagen sie etwas in die Stille zwischen zwei Runden. Mit Team kommen mehr Infizierte. Ohne Bots starten: `SPIELEN.cmd` um ` -- --no-team` ergänzen.
+Befehle für beide Bots: **4** (oder **X**) = Position halten (an der Stelle, auf die du zielst; ein Ring markiert sie), **5** = bei mir bleiben, **6** = frei bewegen (sie suchen sich die Infizierten selbst, bleiben aber in deiner Nähe). Im Shop-Reiter **Team** kannst du sie für die Nacht verstärken: mehr Leben und mehr Schaden, je drei Stufen. Sie bestätigen jeden Befehl und rufen im Gefecht. Für fast alles haben sie mindestens drei verschiedene Sprüche, und sie melden auch: die ersten Infizierten einer Runde, Gas, das in ihrer Nähe aufquillt, eine Granate, die bei ihnen landet, den Medic, einen Schild-Soldaten, einen erlegten Spezial-Infizierten, einen Leech an dir, eigene schwere Verletzungen – und manchmal sagen sie etwas in die Stille zwischen zwei Runden. Mit Team kommen mehr Infizierte. Ohne Bots starten: `SPIELEN.cmd` um ` -- --no-team` ergänzen.
 
-Wer steht und nichts zu bekämpfen hat, **behält seine Blickrichtung** und dreht sich nicht mit dir mit. Willst du dir die Modelle in Ruhe ansehen: **X** drücken – dann bleiben sie stehen, auch wenn du nah herangehst (bei „bei mir bleiben“ machen sie dir ab zwei Metern Platz).
+Wer steht und nichts zu bekämpfen hat, **behält seine Blickrichtung** und dreht sich nicht mit dir mit. Willst du dir die Modelle in Ruhe ansehen: **4** oder **X** drücken – dann bleiben sie stehen, auch wenn du nah herangehst (bei „bei mir bleiben“ machen sie dir ab zwei Metern Platz).
 
 **Skins & Trupp** (Hauptmenü): Hier wählst du, wie du selbst aussiehst – so sieht dich dein Koop-Mitspieler, und so seilst du dich am Anfang ab – und welche zwei Bots mitkommen.
 
@@ -279,7 +289,7 @@ Was du selbst trägst, bleibt für die Bots wählbar: Du kannst als Viper spiele
 
 ### Fähigkeiten
 
-Im Hauptmenü unter **FÄHIGKEITEN** stehen drei Wege – du entscheidest, welchen du ausbaust:
+Im Hauptmenü unter **FÄHIGKEITEN** stehen drei Wege. **Du wählst einen davon** – nur in ihm vergibst du Punkte, nur seine Klassenwaffe gibt es für dich:
 
 | Weg | Schwerpunkt | Fähigkeiten | Klassenwaffe |
 |---|---|---|---|
@@ -291,9 +301,9 @@ So funktioniert es:
 
 - Deine Laufbahn ergibt **Erfahrung**: jeder Abschuss 1, jeder Spezial-Infizierte 4, jeder C.R.U.-Soldat 6, jeder Auftrag 60, jede Wiederbelebung 30, jeder gewonnene Einsatz 500. Erfahrung ergibt **Stufen** (Stufe 2 bei 500, Stufe 5 bei 5.000, Stufe 10 bei 22.500), jede Stufe ab der zweiten **einen Punkt**. Was du bisher gespielt hast, zählt schon mit. Nach jedem Einsatz steht auf dem Schlussbild, was er gebracht hat.
 - Ein Punkt kauft einen Rang (der Knopf **+** neben der Fähigkeit). Die zweite Reihe eines Wegs öffnet sich ab **drei**, die dritte ab **sieben** Punkten in diesem Weg.
-- Ab **drei Punkten** in einem Weg verkauft der Shop dessen **Klassenwaffe**.
-- **PUNKTE ZURÜCKNEHMEN** gibt alle Punkte kostenlos zurück – du kannst jeden Weg ausprobieren.
-- Bei Stufe 20 ist Schluss: 19 Punkte für 42 Ränge. Man muss sich für einen Schwerpunkt entscheiden.
+- Ab **drei Punkten** in deinem Weg verkauft der Shop dessen **Klassenwaffe**.
+- **NEU WÄHLEN · PUNKTE ZURÜCK** nimmt alle Punkte zurück und gibt die Wahl wieder frei – kostenlos, du kannst jeden Weg ausprobieren, aber immer nur einen gleichzeitig spielen. (Hattest du in v0.14 Punkte in mehreren Wegen, gilt der mit den meisten als gewählt; die anderen Punkte sind wieder frei.)
+- Bei Stufe 15 ist Schluss: 14 Punkte, genau genug für alle Ränge eines Wegs.
 - Die Punkte stehen in deinem Profil; im Koop hat jeder seine eigenen. Der Hauptmenü-Knopf zeigt, wie viele noch frei sind.
 
 Die Zahlen stehen in `scripts/skills.gd` (`TREES`, `TIER_NEEDS`, `WEAPON_NEEDS`, `WORTH`). `IN_SERVICE := false` nimmt alles wieder außer Betrieb.
@@ -306,7 +316,7 @@ Die Zahlen stehen in `scripts/skills.gd` (`TREES`, `TIER_NEEDS`, `WEAPON_NEEDS`,
 
 Über das Internet benutzt das Spiel **UDP-Port 24565**. Beim Eröffnen versucht es, den Port per UPnP selbst im Router freizugeben; das Menü sagt, ob das geklappt hat. Wenn nicht: im Router den UDP-Port 24565 auf deinen PC weiterleiten – oder ihr installiert beide ein VPN-Tool (z. B. Radmin VPN oder ZeroTier) und er trägt deine VPN-Adresse ein. Im selben WLAN/LAN reicht die angezeigte lokale Adresse.
 
-Im Koop ersetzt dein Mitspieler die Bots. **Modus, Stufe und Modifikationen bestimmt der Host**; was eine Runde bringt, wird beiden angesagt. Schlag, Molotow und Flammenwerfer des Gasts rechnet der Host aus – sein Feuer brennt auf beiden Bildschirmen. Beide brauchen dieselbe Version. Die Geschichte läuft für beide: Der Gast sieht dieselben Sperren, Aufträge, Nadja und den Helikopter, und am Ende müssen **beide** mit Nadja am Landeplatz stehen. Vorrat und Score gehören dem Team, jeder hat eigene Waffen und Munition. Wer zu Boden geht, kann vom anderen mit **E** aufgehoben werden und steht nach der Runde wieder; liegen beide, ist die Nacht verloren. Der Host rechnet die Gegner, der Gast sieht sie mit kleiner Verzögerung.
+Im Koop ersetzt dein Mitspieler die Bots. **Modus, Stufe und Modifikationen bestimmt der Host**; was eine Runde bringt, wird beiden angesagt. Wer sich duckt, wird auch vom Mitspieler geduckt gesehen. Schlag, Molotow und Flammenwerfer des Gasts rechnet der Host aus – sein Feuer brennt auf beiden Bildschirmen. Beide brauchen dieselbe Version. Die Geschichte läuft für beide: Der Gast sieht dieselben Sperren, Aufträge, Nadja und den Helikopter, und am Ende müssen **beide** mit Nadja am Landeplatz stehen. Vorrat und Score gehören dem Team, jeder hat eigene Waffen und Munition. Wer zu Boden geht, kann vom anderen mit **E** aufgehoben werden und steht nach der Runde wieder; liegen beide, ist die Nacht verloren. Der Host rechnet die Gegner, der Gast sieht sie mit kleiner Verzögerung.
 
 ## Über GitHub
 
@@ -413,7 +423,7 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 
 ## Sounds und Stimmen (ElevenLabs)
 
-- `assets/sounds` enthält 153 WAV-Dateien (acht davon Ersatz-Sounds aus v0.14, siehe unten): Schüsse aller Waffen, Nachladen, Schritte, Treffer, Stimmen aller Infizierten in mehreren Varianten, Hund, Blut und Brocken, Explosionen, Shop-Rollladen, Runden-Stinger, Donner, Regen und Wind, Helikopter. 133 davon stammen aus dem ElevenLabs-Soundeffekt-Generator; elf (Pistole, Magnum, Scharfschützengewehr, Minigun samt Anlauf, Helikopter, Piepton, UMP und AK-47 jeweils mit und ohne Schalldämpfer) sind aus vorhandenen Aufnahmen abgeleitet. Der Schuss des **Granatwerfers** und die vier **Explosionen** sind seit v0.10 aus je zwei Aufnahmen gemischt: bei der Explosion ein tiefer Knall, von einem langen Grollen auf einen Schlag mit ausrollendem Nachhall gekürzt, und darüber der scharfe Knall eines Schusses. Damit so etwas zusammen mit Schüssen und Stimmen nicht übersteuert, sitzt auf dem Gesamtausgang ein Begrenzer.
+- `assets/sounds` enthält 156 WAV-Dateien (elf davon Ersatz-Sounds, siehe unten): Schüsse aller Waffen, Nachladen, Schritte, Treffer, Stimmen aller Infizierten in mehreren Varianten, Hund, Blut und Brocken, Explosionen, Shop-Rollladen, Runden-Stinger, Donner, Regen und Wind, Helikopter. 133 davon stammen aus dem ElevenLabs-Soundeffekt-Generator; elf (Pistole, Magnum, Scharfschützengewehr, Minigun samt Anlauf, Helikopter, Piepton, UMP und AK-47 jeweils mit und ohne Schalldämpfer) sind aus vorhandenen Aufnahmen abgeleitet. Der Schuss des **Granatwerfers** und die vier **Explosionen** sind seit v0.10 aus je zwei Aufnahmen gemischt: bei der Explosion ein tiefer Knall, von einem langen Grollen auf einen Schlag mit ausrollendem Nachhall gekürzt, und darüber der scharfe Knall eines Schusses. Damit so etwas zusammen mit Schüssen und Stimmen nicht übersteuert, sitzt auf dem Gesamtausgang ein Begrenzer.
 - Die Originaldownloads liegen neben dem Projekt in `Nachtwache-ElevenLabs`. Daraus wurden die Sounds geschnitten, auf Mono gemischt und auf gleiche Lautheit gebracht.
 - **Neu erzeugen:** `node tools/make_sounds.js "../Nachtwache-ElevenLabs;../Nachtwache-ElevenLabs/sfx_v10" assets/sounds` (mit `--only=launcher,explosion` am Ende nur diese beiden). `node tools/wav_info.js ORDNER` zeigt Pegel und Länge jeder WAV-Datei.
 - **Ersatz-Sounds (v0.14):** Für M14, SVD, M107, Doppelbüchse, Nahkampf, Molotow, Bodenfeuer und Flammenwerfer gibt es noch keine eigenen Aufnahmen. `node tools/make_standins.js assets/sounds` baut sie aus vorhandenen (höher oder tiefer gespielt, geschnitten, übereinandergelegt) und die beiden Feuer aus geformtem Rauschen. Eine echte Aufnahme desselben Namens ersetzt sie einfach.
@@ -422,6 +432,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 - **Stimme ergänzen oder tauschen:** Text in `scripts/radio.gd` eintragen, bei ElevenLabs erzeugen, die MP3s in einen Ordner legen und `node tools/make_voices.js ORDNER order.json` laufen lassen (schneidet, pegelt und legt `assets/voice/<sprecher>/<stichwort>_<nummer>.ogg` an). Eine Pause von mehr als 0,9 Sekunden mitten in einer Zeile kürzt das Werkzeug. Die Rohdateien und die Zuordnung liegen in `Nachtwache-ElevenLabs/stimmen`, `stimmen2` und `stimmen3`. Ob jede Zeile ihre Aufnahme hat und keine Aufnahme übrig ist, zeigt `-s res://tools/voice_check.gd` (nach einem `--import`). Hat ein Stichwort mehrere Texte, aber nur für einige eine Aufnahme, benutzt das Spiel nur die vertonten.
 
 ## Stand und Grenzen
+
+**v0.15** begrenzt, was du trägst: **eine Primär-, eine Sekundär- und eine schwere Waffe** (Tasten 1, 2, 3), mehr nur mit **Waffengurten**; eine weitere Waffe derselben Art wird gegen die alte **getauscht**. Im Skilltree **wählst du einen der drei Wege**. Dazu die **Heilspritze** auf Q (30 Lebenspunkte, 8 Sekunden Pause), **Ducken** auf C, der Nahkampf auf V, Team-Befehle auf 4 / 5 / 6, **volle Heilung und halbe Munition nach jeder Runde**, höchstens **ein Schild-Soldat gleichzeitig** und eine **kleinere letzte Runde**.
 
 **v0.14** schaltet die **Fähigkeiten** scharf (Punkte vergeben, zurücknehmen, im Profil gespeichert) und gibt jedem Weg eine **Klassenwaffe**: Flammenwerfer, Doppelbüchse .600, M107 Kaliber .50. Dazu das **M14** (Einzelschuss) und die **SVD** als zweites Scharfschützengewehr, ein **Nahkampfschlag** (Q), der **Molotowcocktail** (H) mit brennendem Boden und brennenden Gegnern, **Team-Upgrades** im Shop, eine **Nadja**, die mehr aushält und seltener angegriffen wird, **vier Stimmen und zwölf Stürze** für die C.R.U., Soldaten, die **nicht mehr in Wände rollen**, der **Endlosmodus** und **Modifikationen** für jede Runde.
 
@@ -452,6 +464,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 - Aufsätze gibt es für M4A4, UMP45 und AK-47. Für andere Waffen genügt ein Eintrag in `ATTACHMENTS` und ein Modell des Teils an der Waffe; der Magazinwechsel der anderen Waffen läuft weiter unterhalb des Bildes ab.
 - Wie die UMP klingt, ist aus vorhandenen Schüssen abgeleitet (`ump.wav`, `ump_sil.wav`) und nicht probegehört.
 - **Platzhalter in v0.14:** Die fünf neuen Waffen (M14, SVD, Flammenwerfer, Doppelbüchse, M107) sind per Skript gebaute Blender-Modelle ohne Texturen – sauber, aber schlicht. Eigene Modelle: Datei in `assets/models` ersetzen und die Punkte in `MODELS` und `VIEWS` in `scripts/weapon_view.gd` anpassen (Bauskripte und Maße: `Nachtwache-Modelle/phase7`). Ihre Sounds und die von Nahkampf, Molotow und Feuer sind Ersatz und **nicht probegehört**. Die drei neuen C.R.U.-Stimmen haben Texte, aber noch keine Aufnahmen.
+- **Nicht von Hand gespielt (v0.15):** Mit Heilspritze, voller Heilung und halber Munition nach jeder Runde ist die Nacht spürbar leichter als in v0.14 – ob zu leicht, zeigt erst das Spielen. Die Stellschrauben: `SYRINGE_HEAL`, `SYRINGE_WAIT` und `ROUND_AMMO` in `player.gd`, `ROUND_HEAL`, `TRADE_IN`, `SHIELD_LIMIT` und `FINAL_SHARE` in `game.gd`.
 - **Nicht von Hand gespielt (v0.14):** Schaden, Preise und Reichweiten der neuen Waffen, die Stärke der Modifikationen und das Wachstum des Endlosmodus sind Schätzwerte (`WEAPONS` in `player.gd`, `MODIFIERS` und `ENDLESS_GROWTH` in `game.gd`, `FireField` in `fire_field.gd`). Der Bot, der Nächte durchspielt, benutzt weder Nahkampf noch Molotow noch Klassenwaffen.
 - Die Flammen sind weiche, leuchtende Zungen aus Partikeln, keine gezeichneten Flammen; der Strahl des Flammenwerfers geht optisch durch Wände, trifft dahinter aber nichts.
 - Das Startgewehr ist seit v0.12 das M4A4-Modell (in der Hand der C.R.U.-Soldaten und der Bots steckt weiter das alte, aus einfachen Formen gebaute Gewehr). Die sechs neuen Waffen, der Helikopter und das Hack-Modul sind schlichte Blender-Modelle – als Platzhalter gedacht, falls du eigene hast.
@@ -460,7 +473,7 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 
 ## Prüfung
 
-424 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins, die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug – und was mit v0.14 kam (ein Block für sich: `--smoke-test --only=arsenal`): Nahkampf, Molotow und Feuer, die fünf neuen Waffen, Einzelschuss, Klassenwaffen und ihre Sperre, Team-Upgrades, Nadja, die vier Stimmen und zwölf Stürze der C.R.U. (jeder Sturz jedes Soldatentyps endet am Boden), Rollen nur mit Platz, Fähigkeitspunkte vergeben und zurücknehmen, Endlosmodus und Modifikationen.
+434 Integrationstests laufen in der echten Godot-Physik: Bewegung, Treffer und Kopfschüsse, Wände und Fenster, alle Zugänge, beide Treppen, alle Gegnerfähigkeiten, Animationen auf allen Skeletten, Stationen, Gas, Pause, alle zehn Runden, Rundenshop, alle Waffen, Blut-Effekte, Team-Bots und ihre Befehle, Rundenarten und Aufträge, Shop-Gegenstände, Giftnebel, Stalker und Leech, Schwierigkeitsstufen, Bestenliste, Stimmen und Funk-Warteschlange, die C.R.U. (schießen, ausweichen, werfen, Trupp-Zusammensetzung, Lampen), die sechs neuen Waffen, die UMP45 mit Aufsätzen und Magazinwechsel, die ballistische Weste, der Medic und seine Wolke, der Schild-Soldat, Gasfelder und Gasalarm, Aufträge im Obergeschoss, Skins, die Geschichte von der ersten Sperre über Hack-Modul, Keller, Labor, Nadjas Tür und Tunnel bis zum Abflug – und was mit v0.14 kam (ein Block für sich: `--smoke-test --only=arsenal`): Nahkampf, Molotow und Feuer, die fünf neuen Waffen, Einzelschuss, Klassenwaffen und ihre Sperre, Team-Upgrades, Nadja, die vier Stimmen und zwölf Stürze der C.R.U. (jeder Sturz jedes Soldatentyps endet am Boden), Rollen nur mit Platz, Fähigkeitspunkte vergeben und zurücknehmen, Endlosmodus und Modifikationen – und v0.15 (`--only=loadout`): Waffen-Plätze, Tausch und Gurte, Tasten nach Waffenart, Heilspritze, Ducken hinter Deckung, Heilung und Munition am Rundenende, ein Schild-Soldat gleichzeitig.
 
 ```text
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test
@@ -480,4 +493,4 @@ Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --mp-hos
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --mp-join-test
 ```
 
-Screenshots: `--v14-check` (Menüs mit Modus und Fähigkeiten, die fünf neuen Waffen an der Hüfte und im Anschlag, die aufgekippte Doppelbüchse, Nahkampf, Flammenwerfer, Molotow, die Stürze der Soldaten, die neuen Shop-Listen, eine Runde mit Modifikation, das Ende einer Endlos-Nacht), `--story-check` (alle Stationen der Geschichte), `--intro-check` (die Ankunft), `--v9-check` (Medic, Schild-Soldat, Elite, Gas, tote Forscher, Explosion), `--gun-check --gun=ak` oder `--gun=ump` (Waffe an der Hüfte, durch jedes Visier, Magazinwechsel), `--blast-check` (die Explosion in sechs Augenblicken), `--gun-check --gun=rifle` und `--gun=mg` (M4A4 und Maschinengewehr), `--scene-check` (alle fünf Leichen, die Bäume, der offene Rand des Hofs), `--gas-check` (eine Gasbank von außen, von weitem und von innen, eine Hofseite unter Gas, der Rand des Hofs, die Gasgranate, das Erdgeschoss, die Flugbahn des Granatwerfers), `--ump-check` (UMP, Aufsätze, Magazinwechsel, Shop), `--cru-check`, `--weapons-check`, `--visual-check`, `--map-tour`, `--team-check`, `--ripper-check`, `--shotgun-check`, `--mission-check`, `--gear-check`, `--models-check`, `--menu-check`, jeweils mit `--capture-dir=ORDNER`. Mit `--scale=0.5` rechnet ein Start das 3D-Bild mit halber Auflösung, mit `--squad=raven,viper` wählt er die beiden Bots – beides, ohne etwas zu speichern. Automatische Läufe (alles, was auf `-check` oder `-test` endet, und alles ohne Fenster) lesen und ändern dein gespeichertes Profil und deine Einstellungen nicht. Nach neuen Skripten mit `class_name` oder neuen Dateien in `assets` einmal den Editor öffnen (oder `--headless --import` ausführen), damit Godot sie kennt.
+Screenshots: `--v15-check` (Fähigkeiten vor und nach der Wahl eines Wegs, der Shop mit Tausch und Waffengurt, die Kachel der Heilspritze, die Sicht im Ducken, das Rundenende), `--v14-check` (Menüs mit Modus und Fähigkeiten, die fünf neuen Waffen an der Hüfte und im Anschlag, die aufgekippte Doppelbüchse, Nahkampf, Flammenwerfer, Molotow, die Stürze der Soldaten, die neuen Shop-Listen, eine Runde mit Modifikation, das Ende einer Endlos-Nacht), `--story-check` (alle Stationen der Geschichte), `--intro-check` (die Ankunft), `--v9-check` (Medic, Schild-Soldat, Elite, Gas, tote Forscher, Explosion), `--gun-check --gun=ak` oder `--gun=ump` (Waffe an der Hüfte, durch jedes Visier, Magazinwechsel), `--blast-check` (die Explosion in sechs Augenblicken), `--gun-check --gun=rifle` und `--gun=mg` (M4A4 und Maschinengewehr), `--scene-check` (alle fünf Leichen, die Bäume, der offene Rand des Hofs), `--gas-check` (eine Gasbank von außen, von weitem und von innen, eine Hofseite unter Gas, der Rand des Hofs, die Gasgranate, das Erdgeschoss, die Flugbahn des Granatwerfers), `--ump-check` (UMP, Aufsätze, Magazinwechsel, Shop), `--cru-check`, `--weapons-check`, `--visual-check`, `--map-tour`, `--team-check`, `--ripper-check`, `--shotgun-check`, `--mission-check`, `--gear-check`, `--models-check`, `--menu-check`, jeweils mit `--capture-dir=ORDNER`. Mit `--scale=0.5` rechnet ein Start das 3D-Bild mit halber Auflösung, mit `--squad=raven,viper` wählt er die beiden Bots – beides, ohne etwas zu speichern. Automatische Läufe (alles, was auf `-check` oder `-test` endet, und alles ohne Fenster) lesen und ändern dein gespeichertes Profil und deine Einstellungen nicht. Nach neuen Skripten mit `class_name` oder neuen Dateien in `assets` einmal den Editor öffnen (oder `--headless --import` ausführen), damit Godot sie kennt.

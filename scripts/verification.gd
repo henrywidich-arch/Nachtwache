@@ -395,7 +395,9 @@ func run(game: Node3D) -> void:
 		var roster: Dictionary = game.ROUNDS[round_index]
 		var planned := 0
 		for kind in roster:
-			planned += int(roster[kind])
+			# The last round brings a share of its table only; the Crusher comes whole.
+			var share := float(game.FINAL_SHARE) if round_index == game.ROUNDS.size() - 1 and kind != "crusher" else 1.0
+			planned += maxi(1, int(round(int(roster[kind]) * share)))
 		expect(count == planned, "Round %d has the specified population of %d" % [round_index + 1, planned])
 		if round_index == 4:
 			expect("striker" in game.spawn_queue, "Strikers join in round five")
@@ -421,6 +423,8 @@ func run(game: Node3D) -> void:
 	game.player.weapon_level = 2
 	game.player.position = (spots.shop as Vector3) + lift
 	game.credits = 99
+	# Three slings: what is bought below is carried beside the carbine, not instead of it.
+	game.player.extra_slots = 3
 	game.interact()
 	expect(game.state == "shop" and get_tree().paused, "E at the open weapon shop opens its menu and pauses combat")
 	expect(not game.buy_weapon("p90") and game.credits == 99, "Insufficient funds cannot buy the P90")
@@ -435,12 +439,15 @@ func run(game: Node3D) -> void:
 	game.resume_run()
 	game.player.equip_weapon("rifle")
 	expect(game.player.ammo == 7 and game.player.reserve == 17 and game.player.weapon_level == 2, "Switching restores the rifle's separate ammo and upgrade")
-	game.player._select_slot(3)
-	expect(game.player.current_weapon == "badger", "Key 3 selects the Honey Badger")
+	game.player._select_slot(1)
+	game.player._select_slot(1)
+	expect(game.player.current_weapon == "badger", "Key 1 takes the primary weapons in turn: after the P90 the Honey Badger")
 	game.player._cycle(1)
 	expect(game.player.current_weapon == "rifle", "The mouse wheel cycles through owned weapons")
 	game.player._select_slot(2)
-	expect(game.player.current_weapon == "p90" and game.player.weapon_level == 0, "P90 has its own upgrade level")
+	var no_sidearm: bool = game.player.current_weapon == "rifle"
+	game.player._select_slot(1)
+	expect(no_sidearm and game.player.current_weapon == "p90" and game.player.weapon_level == 0, "P90 has its own upgrade level")
 	face(game, Vector3(0, 0.05, 1.0), PI)
 	game.begin_wave()
 	expect(not cabin.shop_open, "The shop shutter comes down when a round begins")
@@ -833,13 +840,16 @@ func run(game: Node3D) -> void:
 	game.start_run()
 	# --- shotgun
 	game.credits = 250
+	game.player.extra_slots = 1
 	game.player.position = (spots.shop as Vector3) + lift
 	game.interact()
 	expect(game.buy_weapon("shotgun") and game.credits == 0 and game.player.current_weapon == "shotgun" and game.player.ammo == 6 and game.player.reserve == 42, "Shotgun purchase deducts 250 and equips it with six shells")
 	game.resume_run()
 	game.player._select_slot(1)
+	var other: String = game.player.current_weapon
+	game.player._select_slot(1)
 	game.player._select_slot(4)
-	expect(game.player.current_weapon == "shotgun", "Key 4 selects the shotgun")
+	expect(other == "rifle" and game.player.current_weapon == "shotgun", "Key 1 takes the carbine and the shotgun in turn; key 4 is no weapon's any more")
 	face(game, Vector3(0, 0.05, 1.0), PI)
 	var close_target: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
 	close_target.set_physics_process(false)
@@ -1032,6 +1042,7 @@ func run(game: Node3D) -> void:
 	await _later(game)
 	await _latest(game)
 	await _arsenal(game)
+	await _loadout(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -1161,22 +1172,40 @@ func _latest(game: Node3D) -> void:
 	var marked := false
 	for node in game.hud.modal.find_children("*", "Label", true, false):
 		marked = marked or (node as Label).text == "IN WARTUNG"
+	# Nothing is chosen yet: every tree offers itself, and no ability can be raised.
 	var chips := 0
+	var picks := 0
+	for node in game.hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text == "+":
+			chips += 1
+		if (node as Button).text == "WÄHLEN":
+			picks += 1
+	var unchosen: bool = skills.chosen == "" and chips == 0 and picks == 3 and skills.barred("sweeper_damage", totals) == "Erst einen Weg wählen" and not skills.learn("sweeper_damage", totals)
+	# One of them is chosen: its six abilities get their buttons, the others none.
+	var took: bool = game.choose_tree("sweeper") and not game.choose_tree("hunter") and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper"
+	game.hud.show_menu("skills")
+	chips = 0
+	picks = 0
 	var undo := false
 	for node in game.hud.modal.find_children("*", "Button", true, false):
 		if (node as Button).text == "+":
 			chips += 1
-		undo = undo or (node as Button).text == "PUNKTE ZURÜCKNEHMEN"
+		if (node as Button).text == "WÄHLEN":
+			picks += 1
+		undo = undo or (node as Button).text.begins_with("NEU WÄHLEN")
 	game.hud.hide_menu()
+	var other_way: bool = skills.barred("hunter_damage", totals) == "Nicht dein Weg" and skills.weapon_barred("nitro") == "nur für JÄGER"
 	# With an empty career there is no level, so no point to spend.
 	var career: Dictionary = game.profile.totals.duplicate()
 	for key in game.profile.totals:
 		game.profile.totals[key] = 0
 	var pointless: bool = not game.learn_skill("sweeper_damage") and skills.barred("sweeper_damage", game.profile.totals) == "Kein Punkt frei"
 	game.profile.totals = career
-	expect(Skills.IN_SERVICE and skills.active and not marked and chips == 18 and undo and pointless and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are in service: the menu has a button for every one of them and one that takes the points back; without a level nothing can be bought, and without a rank nothing has an effect")
+	game.reset_skills()
+	expect(Skills.IN_SERVICE and skills.active and not marked and unchosen and took and chips == 6 and picks == 0 and undo and other_way and pointless and skills.chosen == "" and game.profile.skill_tree == "" and skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.value("damage_common") == 0.0 and skills.harm_factor("bullet", "cru") == 1.0 and skills.shield_share("sniper") == 0.0, "The abilities are in service: one of the three trees is chosen, only its abilities can be raised, and choosing anew takes everything back; without a level nothing can be bought, and without a rank nothing has an effect")
 	# --- what they do
 	skills.active = true
+	skills.chosen = "breacher"
 	var early: String = skills.barred("breacher_shield", totals)
 	var bought := 0
 	for id in ["breacher_armour", "breacher_armour", "breacher_armour", "breacher_shield", "breacher_plates"]:
@@ -1420,17 +1449,27 @@ func _arsenal(game: Node3D) -> void:
 	# --- a weapon for each tree of abilities
 	game.credits = 9000
 	game.wave = 2
+	# Slings, so that what is bought here is carried and not traded in.
+	player.extra_slots = 3
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
 	game.interact()
-	var shut: bool = not game.buy_weapon("flamer") and not game.buy_weapon("nitro") and not game.buy_weapon("fifty") and skills.weapon_barred("fifty") == "3 Punkte in BRECHER" and skills.weapon_barred("m14") == "" and game.credits == 9000
+	var shut: bool = not game.buy_weapon("flamer") and not game.buy_weapon("nitro") and not game.buy_weapon("fifty") and skills.weapon_barred("fifty") == "nur für BRECHER" and skills.weapon_barred("m14") == "" and game.credits == 9000
+	skills.chosen = "sweeper"
+	var early: bool = not game.buy_weapon("flamer") and skills.weapon_barred("flamer") == "3 Punkte in SÄUBERER"
 	skills.ranks = {"sweeper_damage": 3}
-	var first: bool = game.buy_weapon("flamer") and not game.buy_weapon("fifty") and player.current_weapon == "flamer"
-	skills.ranks = {"breacher_armour": 2, "breacher_plates": 1, "hunter_damage": 3}
-	var others: bool = game.buy_weapon("fifty") and game.buy_weapon("nitro") and game.buy_weapon("svd")
+	var first: bool = game.buy_weapon("flamer") and not game.buy_weapon("fifty") and not game.buy_weapon("nitro") and player.current_weapon == "flamer"
+	skills.reset()
+	skills.chosen = "breacher"
+	skills.ranks = {"breacher_armour": 2, "breacher_plates": 1}
+	var others: bool = game.buy_weapon("fifty") and not game.buy_weapon("nitro") and game.buy_weapon("svd")
+	skills.reset()
+	skills.chosen = "hunter"
+	skills.ranks = {"hunter_damage": 3}
+	others = others and game.buy_weapon("nitro") and not game.buy_weapon("flamer")
 	game.resume_run()
 	game.wave = 0
 	skills.reset()
-	expect(shut and first and others and Skills.weapon_tree("flamer") == "sweeper" and Skills.weapon_tree("nitro") == "hunter" and Skills.weapon_tree("fifty") == "breacher" and Skills.weapon_tree("svd") == "", "Each tree of abilities has a weapon of its own, which the shop sells only to somebody with three points in that tree")
+	expect(shut and early and first and others and Skills.weapon_tree("flamer") == "sweeper" and Skills.weapon_tree("nitro") == "hunter" and Skills.weapon_tree("fifty") == "breacher" and Skills.weapon_tree("svd") == "", "Each tree of abilities has a weapon of its own, which the shop sells only to somebody who has chosen that tree and put three points into it")
 	# The .50 against a shield and against armour, with no ability at all.
 	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
 	bearer.set_physics_process(false)
@@ -1629,11 +1668,12 @@ func _arsenal(game: Node3D) -> void:
 	for key in game.profile.totals:
 		game.profile.totals[key] = 0
 	game.profile.totals.victories = 3
-	var learnt: bool = game.learn_skill("sweeper_damage") and game.learn_skill("sweeper_damage") and not game.learn_skill("sweeper_damage") and int(game.profile.skills.get("sweeper_damage", 0)) == 2 and skills.points_left(game.profile.totals) == 0
+	var unchosen: bool = not game.learn_skill("sweeper_damage")
+	var learnt: bool = unchosen and game.choose_tree("sweeper") and game.learn_skill("sweeper_damage") and game.learn_skill("sweeper_damage") and not game.learn_skill("sweeper_damage") and not game.learn_skill("hunter_damage") and int(game.profile.skills.get("sweeper_damage", 0)) == 2 and game.profile.skill_tree == "sweeper" and skills.points_left(game.profile.totals) == 0
 	game.reset_skills()
-	var returned: bool = skills.ranks.is_empty() and game.profile.skills.is_empty() and skills.points_left(game.profile.totals) == 2
+	var returned: bool = skills.ranks.is_empty() and skills.chosen == "" and game.profile.skills.is_empty() and game.profile.skill_tree == "" and skills.points_left(game.profile.totals) == 2
 	game.profile.totals = career
-	expect(learnt and returned, "Points are spent on abilities, kept in the profile and taken back for nothing")
+	expect(learnt and returned, "Points are spent on the abilities of the chosen tree, kept in the profile and taken back for nothing, the choice with them")
 	# --- the endless night
 	game.team_enabled = false
 	game.profile.mode = "endless"
@@ -1713,6 +1753,172 @@ func _arsenal(game: Node3D) -> void:
 	game.team_enabled = true
 	game.start_run()
 
+## What came with v0.15: one weapon of each kind (more with slings) and trading in, keys
+## by kind, the syringe, ducking, a round's end that heals and resupplies, and one shield
+## bearer at a time.
+func _loadout(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var spots: Dictionary = game.cabin.points
+	var stand := Vector3(0, 0.05, 22.0)
+	game.profile.mode = "story"
+	game.profile.modifiers = false
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	game.skills.reset()
+	# --- three kinds of weapon
+	var keyed := true
+	var kinds := {}
+	for id in Survivor.ORDER:
+		var kind := Survivor.kind_of(id)
+		kinds[kind] = int(kinds.get(kind, 0)) + 1
+		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int(Survivor.KINDS[kind].key)
+	expect(keyed and int(kinds.primary) == 7 and int(kinds.secondary) == 2 and int(kinds.heavy) == 9 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
+	# --- one of each kind; a second one is traded for the first
+	game.credits = 1000
+	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	var first_cost: int = game.weapon_cost("ak")
+	var swapped: bool = game.buy_weapon("ak") and player.inventory.has("ak") and not player.inventory.has("rifle") and player.current_weapon == "ak" and game.credits == 700
+	var beside: bool = game.buy_weapon("pistol") and game.buy_weapon("sniper") and player.inventory.size() == 3 and game.credits == 700 - 60 - 450
+	var offer: int = game.weapon_cost("p90")
+	var goes: String = player.to_replace("p90")
+	player.equip_weapon("sniper", true)
+	var traded: bool = game.buy_weapon("p90") and not player.inventory.has("ak") and player.inventory.has("sniper") and player.current_weapon == "p90" and game.credits == 190 + 50
+	# The carbine everybody starts with can be had back for nothing.
+	game.hud._open_tab("weapons")
+	var listed := false
+	for node in game.hud.modal.find_children("*", "Label", true, false):
+		listed = listed or (node as Label).text == "M4A4"
+	var back: bool = game.buy_weapon("rifle") and player.inventory.has("rifle") and not player.inventory.has("p90") and game.credits == 240 + 50
+	expect(first_cost == 300 and swapped and beside and offer == 100 - 150 and goes == "ak" and traded and listed and back and game.trade_in("sniper") == 225 and game.trade_in("rifle") == 0, "A survivor carries one weapon of each kind: a second one takes the place of the first, which is traded in for half its price")
+	# The keys.
+	player._select_slot(2)
+	var sidearm: String = player.current_weapon
+	player._select_slot(3)
+	var heavy: String = player.current_weapon
+	player._select_slot(1)
+	var primary: String = player.current_weapon
+	player._select_slot(7)
+	player._cycle(1)
+	expect(sidearm == "pistol" and heavy == "sniper" and primary == "rifle" and player.current_weapon == "pistol", "Keys 1, 2 and 3 take the primary, the secondary and the heavy weapon in hand; the wheel goes through all of them")
+	# --- slings make room
+	game.credits = 2000
+	var sling_price: int = game.item_price("sling")
+	var roomy: bool = not player.room_for("ump") and game.buy_item("sling") and player.extra_slots == 1 and player.room_for("ump") and player.to_replace("ump") == ""
+	var both: bool = game.buy_weapon("ump") and player.carried("primary") == ["rifle", "ump"] and game.credits == 2000 - 250 - 220
+	# The one place more is taken: the next sidearm is traded again.
+	var again: bool = not player.room_for("revolver") and game.weapon_cost("revolver") == 220 - 30 and game.buy_weapon("revolver") and not player.inventory.has("pistol") and player.inventory.size() == 4
+	game.buy_item("sling")
+	game.buy_item("sling")
+	var full: bool = player.extra_slots == 3 and game.item_price("sling") == -1 and not game.buy_item("sling")
+	game.resume_run()
+	expect(sling_price == 250 and roomy and both and again and full, "A sling from the shop makes room for one more weapon of any kind, up to three of them")
+	# A new night starts with the carbine alone, also after it was traded in.
+	player.unlock("ak")
+	player.drop_weapon("rifle")
+	var gone: bool = not player.inventory.has("rifle") and player.current_weapon == "ak" and player.extra_slots == 3
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	await frames(3)
+	expect(gone and player.current_weapon == "rifle" and player.inventory.size() == 1 and player.inventory.has("rifle") and player.extra_slots == 0 and player.ammo == 30, "A new night starts with the carbine alone and without slings, also after the carbine was traded in")
+	# --- the syringe
+	player.health = 40.0
+	var given: bool = player.inject() and is_equal_approx(player.health, 70.0) and player.syringe_wait > 7.0
+	game.hud._process(0.1)
+	var counting: bool = (game.hud.tiles.syringe[1] as Label).text == "8"
+	var waits: bool = not player.inject() and is_equal_approx(player.health, 70.0)
+	player.syringe_wait = 0.0
+	player.health = 90.0
+	var capped: bool = player.inject() and is_equal_approx(player.health, 100.0)
+	player.syringe_wait = 0.0
+	var needless: bool = not player.inject() and player.syringe_wait == 0.0
+	game.hud._process(0.1)
+	expect(given and counting and waits and capped and needless and (game.hud.tiles.syringe[1] as Label).text == "+" and float(Survivor.SYRINGE_HEAL) == 30.0 and float(Survivor.SYRINGE_WAIT) >= 5.0, "The syringe on Q gives 30 health back, up to full health, and has to be made ready again for some seconds")
+	# --- ducking
+	face(game, stand, PI)
+	await frames(3)
+	var wall := StaticBody3D.new()
+	var slab := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	box.size = Vector3(4.0, 1.05, 0.1)
+	slab.shape = box
+	wall.add_child(slab)
+	game.add_child(wall)
+	wall.global_position = stand + Vector3(0, 0.525, 0.45)
+	var watcher := game.spawn_enemy("cru_assault") as CruSoldier
+	watcher.set_physics_process(false)
+	watcher.position = stand + Vector3(0, 0, 8.0)
+	watcher.prey = player
+	await frames(3)
+	var seen_standing: bool = watcher._sight(player.global_position) and is_equal_approx(player.chest_height(), 1.15)
+	player.set_crouched(true)
+	await frames(30)
+	var low: bool = player.crouched and is_equal_approx((player.body_shape.shape as CapsuleShape3D).height, Survivor.CROUCH_HEIGHT) and player.camera.position.y < 1.2 and player.chest_height() < 0.8
+	var hidden: bool = not watcher._sight(player.global_position)
+	# The burst he fires anyway goes into the wall.
+	player.health = 100.0
+	watcher.ammo = 30
+	for i in range(12):
+		watcher.rounds_left = 1
+		watcher._fire(player.global_position, false)
+	var covered: bool = player.health == 100.0
+	player.set_crouched(false)
+	await frames(30)
+	var up: bool = not player.crouched and is_equal_approx((player.body_shape.shape as CapsuleShape3D).height, Survivor.STAND_HEIGHT) and player.camera.position.y > 1.5
+	wall.queue_free()
+	watcher.receive_hit(99999.0, Vector3.FORWARD)
+	expect(seen_standing and low and hidden and covered and up, "Ducked, the survivor is lower: a soldier does not see him behind a wall a metre high, and what he fires goes into it")
+	# --- a round's end heals and brings half the ammunition back
+	game.credits = 500
+	player.unlock("pistol")
+	player.equip_weapon("rifle", true)
+	player.health = 35.0
+	player.reserve = 0
+	player.inventory.pistol.reserve = 100
+	game.phase = "preparing"
+	game.begin_wave()
+	_wipe(game)
+	game.complete_wave()
+	expect(is_equal_approx(player.health, 100.0) and player.reserve == 90 and int(player.inventory.pistol.reserve) == 120 and game.hud.detail_label.text.contains("halbe Munition") and float(game.ROUND_HEAL) == 100.0, "A round that is survived heals the survivor and brings half of each weapon's ammunition back")
+	# --- one shield bearer at a time
+	game.spawn_queue.clear()
+	for i in range(3):
+		game.spawn_queue.append("cru_shield")
+	var came: Array = []
+	var bearer: Infected = null
+	for i in range(3):
+		var soldier: Infected = game.spawn_enemy()
+		soldier.set_physics_process(false)
+		came.append(soldier.kind)
+		if soldier.kind == "cru_shield":
+			bearer = soldier
+	bearer.receive_hit(99999.0, Vector3.FORWARD)
+	bearer.receive_hit(99999.0, Vector3.BACK)
+	game.blasting = true
+	bearer.receive_hit(99999.0, Vector3.FORWARD)
+	game.blasting = false
+	game.spawn_queue.append("cru_shield")
+	var next: Infected = game.spawn_enemy()
+	next.set_physics_process(false)
+	var forced: Infected = game.spawn_enemy("cru_shield")
+	forced.set_physics_process(false)
+	expect(came == ["cru_shield", "cru_assault", "cru_assault"] and bearer.dead and next.kind == "cru_shield" and forced.kind == "cru_shield" and MissionDirector.SQUAD_ORDER.count("cru_shield") == 1 and not MissionDirector.REINFORCEMENTS.has("cru_shield") and int(game.SHIELD_LIMIT) == 1, "Only one shield bearer stands in the yard at a time: while he does, the next one comes without a shield")
+	_wipe(game)
+	# --- the keys
+	var bound := {}
+	for action in ["syringe", "melee", "crouch", "flashlight", "squad_follow", "squad_free", "squad_hold"]:
+		var codes: Array = []
+		for event in InputMap.action_get_events(action):
+			if event is InputEventKey:
+				codes.append((event as InputEventKey).physical_keycode)
+		bound[action] = codes
+	expect(bound.syringe == [KEY_Q] and bound.melee == [KEY_V] and bound.crouch == [KEY_C] and bound.flashlight == [KEY_F] and bound.squad_follow == [KEY_5] and bound.squad_free == [KEY_6] and bound.squad_hold == [KEY_X, KEY_4], "Q is the syringe, V the blow, C ducks; the orders for the squad lie on 4, 5 and 6 (and X still holds)")
+	game.team_enabled = true
+	game.start_run()
+
 ## What came with v0.10: the AK-47 and its parts, the C.R.U. Elite and his gas, grenades
 ## that are readied and aimed before they fly, music that follows the night, the settings
 ## and the readouts of the new interface.
@@ -1725,6 +1931,7 @@ func _later(game: Node3D) -> void:
 	game.preparation_left = 9999.0
 	game.credits = 3000
 	# --- the AK-47, bought at the shop
+	player.extra_slots = 1
 	player.position = (game.cabin.points.shop as Vector3) + Vector3(0, 0.05, 0)
 	game.interact()
 	var bought: bool = game.buy_weapon("ak")
@@ -2018,6 +2225,7 @@ func _kit(game: Node3D) -> void:
 	game.mission.plain()
 	# --- the UMP at the shop
 	game.credits = 3000
+	player.extra_slots = 3
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
 	game.interact()
 	expect(game.buy_weapon("ump") and player.current_weapon == "ump" and player.magazine_size() == 25 and game.credits == 2780, "The shop sells the UMP")
@@ -2035,11 +2243,13 @@ func _kit(game: Node3D) -> void:
 	expect(game.sounds.clips.has("ump") and game.sounds.clips.has("ump_sil"), "The UMP has its own shot, with and without suppressor")
 	# --- two weapons on one key take turns
 	expect(game.buy_weapon("p90") and player.current_weapon == "p90", "The P90 is bought as well")
-	player._select_slot(2)
+	player._select_slot(1)
 	var second := player.current_weapon
-	player._select_slot(2)
-	expect(second == "ump" and player.current_weapon == "p90" and player.fitted("sight") == "" and player.flash.position.is_equal_approx(WeaponView.VIEWS.p90.muzzle), "Two weapons on one key take turns, each with its own muzzle")
-	player._select_slot(2)
+	player._select_slot(1)
+	var third := player.current_weapon
+	player._select_slot(1)
+	expect(second == "ump" and third == "rifle" and player.current_weapon == "p90" and player.fitted("sight") == "" and player.flash.position.is_equal_approx(WeaponView.VIEWS.p90.muzzle), "Weapons of one kind take turns on their key, each with its own muzzle")
+	player._select_slot(1)
 	game.resume_run()
 	# --- the magazine really leaves the weapon
 	var half: Dictionary = WeaponView.reload_step("ump", 0.38)
@@ -2717,6 +2927,7 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var alight := false
 	var fire_seen := false
 	var bottle_thrown := false
+	var ducked := false
 	var blows := 0
 	var modifier_seen := ""
 	while clock < seconds and game.state == "playing":
@@ -2734,6 +2945,14 @@ func coop(game: Node3D, as_host: bool) -> void:
 			partner_moved = partner_moved or game.net.remote.global_position.distance_to(Vector3.ZERO) > 0.5
 			partner_downed = partner_downed or game.net.remote.down
 		fire_seen = fire_seen or not game.fire.fires.is_empty()
+		# The guest ducks for a while early on; the host has to see its partner lower.
+		if as_host:
+			ducked = ducked or (is_instance_valid(game.net.remote) and game.net.remote.crouched)
+		elif clock > seconds * 0.1 and not ducked:
+			ducked = true
+			game.player.set_crouched(true)
+		elif clock > seconds * 0.2 and game.player.crouched:
+			game.player.set_crouched(false)
 		if game.modifier != "":
 			modifier_seen = "%s harm=%.2f" % [game.modifier, float(game.rules.harm)]
 		var within: Infected = null
@@ -2827,7 +3046,7 @@ func coop(game: Node3D, as_host: bool) -> void:
 		partner_health = game.net.remote.health
 	print("%s_RESULT state=%s wave=%d phase=%s infected_peak=%d shots=%d kills=%d credits=%d score=%d own_health=%.0f lowest=%.0f down=%s partner_at=%s partner_health=%.0f partner_seen_down=%s partner_moved=%s pickups=%d" % [tag, game.state, game.wave, game.phase, seen_peak, shots, game.kills, game.credits, game.score, game.player.health, lowest_health, str(game.player.down), str(partner_at.snapped(Vector3.ONE * 0.1)), partner_health, str(partner_downed), str(partner_moved), game.pickups.get_child_count()])
 	print("%s_CRU seen=%s fired=%s walked=%.1f team_kills=%d team_cru_kills=%d" % [tag, str(cru_seen), str(cru_fired), cru_walked, int(game.stats.kills), int(game.stats.cru_kills)])
-	print("%s_V14 %s=%s alight=%s fire=%s modifier=%s" % [tag, "shoved" if as_host else "blows", str(shoved) if as_host else str(blows), str(alight), str(fire_seen), modifier_seen])
+	print("%s_V14 %s=%s alight=%s fire=%s modifier=%s ducked=%s" % [tag, "shoved" if as_host else "blows", str(shoved) if as_host else str(blows), str(alight), str(fire_seen), modifier_seen, str(ducked)])
 	game.sounds.stop_all()
 	await wait(0.3)
 	get_tree().call_deferred("quit", 0)

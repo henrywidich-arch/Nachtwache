@@ -1,5 +1,6 @@
-// Stand-in sounds for what has no recording of its own yet: the four new guns, the blow
-// with the weapon, the Molotov cocktail, burning ground and the flamethrower. They are
+// Stand-in sounds for what has no recording of its own yet: the four new guns, the G36,
+// the blow with the weapon, the syringe, the Molotov cocktail, burning ground and the
+// flamethrower. They are
 // made from recordings the game already has (pitched, cut and layered) and, for the two
 // fires, from shaped noise. A recorded file of the same name simply replaces one of these.
 //   node tools/make_standins.js <sounds folder>
@@ -107,8 +108,22 @@ save('svd', cut(mix([[pitch(sniper, 1.1), 1.0], [pitch(ak, 0.85), 0.3]]), 1.2, 0
 save('fifty', cut(mix([[pitch(sniper, 0.74), 1.0], [lowpass(pitch(blast, 1.1), 260), 0.8], [pitch(revolver, 0.7), 0.35]]), 2.0, 0.6));
 // The double rifle: the boom of a shotgun and of a magnum together, pitched down.
 save('nitro', cut(mix([[pitch(shotgun, 0.82), 1.0], [pitch(revolver, 0.78), 0.8], [lowpass(pitch(blast, 1.3), 220), 0.45]]), 1.4, 0.4));
+// The G36: the carbine's crack a little lower, with the body of the UMP's shot and the
+// clack of its action under it; suppressed, the Honey Badger's cough over the UMP's.
+save('g36', cut(mix([[pitch(load('shot'), 0.92), 1.0], [pitch(load('ump'), 1.12), 0.4], [highpass(pitch(load('bolt'), 1.3), 900), 0.22, 0.03]]), 0.6, 0.22));
+save('g36_sil', cut(mix([[pitch(load('badger'), 0.9), 1.0], [pitch(load('ump_sil'), 1.08), 0.5], [highpass(pitch(load('bolt'), 1.3), 900), 0.25, 0.03]]), 0.4, 0.15), 0.6);
 // A blow with the weapon: a short dull thud and the rattle of gear.
 save('melee', cut(mix([[pitch(load('thud_1'), 1.35), 1.0], [pitch(load('hit'), 0.8), 0.5], [pitch(load('mag_in'), 0.9), 0.3, 0.03]]), 0.45, 0.15), 0.8);
+
+// The syringe: a cap that snaps and the short hiss of the injector.
+{
+  const hiss = highpass(noise(0.4), 2500);
+  for (let i = 0; i < hiss.length; i++) {
+    const s = i / RATE;
+    hiss[i] *= Math.min(1, s / 0.02) * Math.exp(-s * 9);
+  }
+  save('syringe', cut(mix([[pitch(load('equip'), 1.5), 0.8], [pitch(load('click'), 1.3), 0.6, 0.12], [hiss, 0.7, 0.16]]), 0.6, 0.2), 0.7);
+}
 
 // The Molotov cocktail: glass, then the petrol catches.
 {
