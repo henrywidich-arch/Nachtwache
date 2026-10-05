@@ -512,6 +512,9 @@ func play_intro() -> void:
 	intro_done.clear()
 	intro_camera = Camera3D.new()
 	intro_camera.fov = 52.0
+	# Without the weapon in the survivor's hands: he stands at the landing zone already, and
+	# what he holds is drawn over everything else.
+	intro_camera.cull_mask = 1
 	add_child(intro_camera)
 	# Two places for the camera, both on the cleared ground of the landing zone. From the
 	# side of the house it watches the helicopter come in over the trees; from the far
@@ -533,10 +536,17 @@ func play_intro() -> void:
 	intro_fill.global_position = pad + away * 4.5 + across * 1.5 + Vector3(0, 2.4, 0)
 	intro_camera.current = true
 	game.player.controlled = false
+	# The survivor's lamp is on from the start of a night: in the film it would light the
+	# landing zone before anybody has come down.
+	game.player.flashlight.hide()
 	game.hud.play_ui.hide()
 	for mate in game.team:
 		mate.hide()
 		mate.set_physics_process(false)
+	# The partner of a co-op match comes down a rope as well; the body that stands where
+	# the partner really is stays out of the picture until then.
+	if is_instance_valid(game.net.remote):
+		game.net.remote.hide()
 	# Black bars at the top and bottom, as in a film.
 	for top in [true, false]:
 		var bar := ColorRect.new()
@@ -674,6 +684,9 @@ func _end_intro(started: bool) -> void:
 	for mate in game.team:
 		mate.show()
 		mate.set_physics_process(true)
+	if is_instance_valid(game.net.remote):
+		game.net.remote.show()
+	game.player.flashlight.show()
 	game.player.camera.current = true
 	game.player.controlled = true
 	game.hud.play_ui.show()

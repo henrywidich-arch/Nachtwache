@@ -2439,6 +2439,20 @@ func _story(game: Node3D) -> void:
 	face(game, (spots.landing as Vector3) + Vector3(-1.0, 0.05, 0), 0.0)
 	mission.update(0.5)
 	expect(game.state == "win" and story.stage == "done", "With everyone at the helicopter the night is won")
+	# --- the arrival is filmed from outside, without the weapon in the survivor's hands
+	game.intro_skipped = false
+	game.start_run()
+	await frames(3)
+	var filmed: bool = story.intro_left > 0.0 and is_instance_valid(story.intro_camera) and story.intro_camera.current and not game.player.controlled and not game.player.flashlight.visible
+	var hands_hidden := true
+	var cameras := 0
+	for node in get_tree().root.find_children("*", "Camera3D", true, false):
+		if node != game.player.camera:
+			cameras += 1
+			hands_hidden = hands_hidden and ((node as Camera3D).cull_mask & 2) == 0
+	story._end_intro(true)
+	await frames(2)
+	expect(filmed and cameras >= 3 and hands_hidden and (game.player.camera.cull_mask & 2) != 0 and game.player.camera.current and game.player.controlled and game.player.flashlight.visible, "The arrival is filmed by a camera of its own; like every camera but the survivor's, it does not show the weapon in his hands, and his lamp stays dark until he is down")
 	game.story_in_checks = false
 	game.intro_skipped = false
 	game.start_run()

@@ -2316,7 +2316,7 @@ func _run_intro_check() -> void:
 		cabin.points["landing"] = Vector3(2.0, 0, 27.0)
 	story_in_checks = true
 	start_run()
-	var shots := [[3.2, "intro_1_approach"], [3.6, "intro_2_ropes"], [1.6, "intro_3_descent"], [1.6, "intro_4_second"], [1.8, "intro_5_down"], [1.6, "intro_6_leaving"]]
+	var shots := [[0.5, "intro_0_first"], [2.7, "intro_1_approach"], [3.6, "intro_2_ropes"], [1.6, "intro_3_descent"], [1.6, "intro_4_second"], [1.8, "intro_5_down"], [1.6, "intro_6_leaving"]]
 	for shot in shots:
 		await get_tree().create_timer(float(shot[0])).timeout
 		await _capture(folder, str(shot[1]) + ".png")
