@@ -1079,6 +1079,7 @@ func run(game: Node3D) -> void:
 	await _arsenal(game)
 	await _loadout(game)
 	await _squadwork(game)
+	await _overhaul(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -3428,3 +3429,94 @@ func _squadwork(game: Node3D) -> void:
 	_wipe(game)
 	game.team_enabled = false
 	game.start_run()
+
+## What came with v0.18: a Crusher that is a danger, a harder M14, a shell that can be
+## watched on its way.
+func _overhaul(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var skills: Skills = game.skills
+	game.profile.mode = "survival"
+	game.profile.modifiers = false
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	skills.reset()
+	skills.active = true
+	_wipe(game)
+	await frames(4)
+	# --- the Crusher leaps far and low, and lands next to its prey
+	face(game, Vector3(0, 0.05, 14.0), PI)
+	player.health = 100.0
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.position = Vector3(0, 0.05, 24.0)
+	giant.alert = true
+	giant.special_cooldown = 0.0
+	var took_off := Vector3.ZERO
+	var flew := false
+	var rose := 0.0
+	for i in range(60 * 7):
+		await get_tree().physics_frame
+		if giant.jump == "air" and not flew:
+			flew = true
+			took_off = giant.global_position
+		rose = maxf(rose, giant.global_position.y)
+		if flew and giant.jump == "":
+			break
+	var came_down: Vector3 = giant.global_position
+	var short := Vector2(came_down.x - player.global_position.x, came_down.z - player.global_position.z).length()
+	giant.set_physics_process(false)
+	expect(flew and took_off.distance_to(came_down) > 6.5 and short < 3.0 and rose < 0.6 and player.health < 100.0 and float(Infected.LEAP_RANGE.y) >= 11.0, "The Crusher leaps at prey ten metres away and comes down next to it (%.1f m flown, %.1f m short of it)" % [took_off.distance_to(came_down), short])
+	# --- where it lands the ground shakes
+	face(game, came_down + Vector3(2.0, 0, 0), PI)
+	player.health = 100.0
+	giant._quake(null)
+	var shaken: float = 100.0 - player.health
+	player.health = 100.0
+	giant._quake(player)
+	var spared: bool = player.health == 100.0
+	face(game, came_down + Vector3(Infected.QUAKE_REACH + 1.0, 0, 0), PI)
+	giant._quake(null)
+	var kind: Dictionary = Infected.TYPES.crusher
+	expect(shaken > 5.0 and shaken < float(Infected.QUAKE_HARM) and spared and player.health == 100.0 and float(kind.speed) >= 2.5 and float(kind.damage) >= 40.0, "Its landing hurts whoever stands near (%.0f at two metres), but not twice whom it struck, and nobody further off" % shaken)
+	giant._retire()
+	giant.queue_free()
+	game.alive_count -= 1
+	game.boss = null
+	await frames(3)
+	# --- the M14 hits hard and goes through a body
+	face(game, Vector3(0, 0.05, 14.0), PI)
+	player.health = 100.0
+	var row: Array = []
+	for i in range(2):
+		var body: Infected = game.spawn_enemy("mauler")
+		body.set_physics_process(false)
+		body.position = Vector3(0, 0.05, 19.0 + i * 1.4)
+		body.health = 1000.0
+		row.append(body)
+	await frames(3)
+	player.unlock("m14")
+	player.equip_weapon("m14", true)
+	player.camera.look_at((row[0] as Infected).global_position + Vector3(0, 1.1, 0))
+	await frames(8)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var first_loss: float = 1000.0 - (row[0] as Infected).health
+	var second_loss: float = 1000.0 - (row[1] as Infected).health
+	var rifle: Dictionary = Survivor.WEAPONS.m14
+	expect(first_loss >= 99.0 and second_loss > 20.0 and int(rifle.pierce) == 1 and float(rifle.damage) * 1.0 / float(rifle.interval) > float(Survivor.WEAPONS.rifle.damage) / float(Survivor.WEAPONS.rifle.interval), "The M14 hits hard and its bullet goes on through a body (%.0f and %.0f)" % [first_loss, second_loss])
+	for body in row:
+		(body as Infected)._retire()
+		(body as Infected).queue_free()
+		game.alive_count -= 1
+	await frames(2)
+	# --- the launcher's shell takes its time
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.unlock("launcher")
+	player.equip_weapon("launcher", true)
+	await frames(3)
+	var flight: PackedVector3Array = player.launch_path()
+	var landing: Vector3 = flight[flight.size() - 1]
+	var reach := Vector2(landing.x - flight[0].x, landing.z - flight[0].z).length()
+	var seconds := (flight.size() - 1) * 0.05
+	expect(reach > 14.0 and reach < 30.0 and seconds > 1.0 and reach / seconds < 18.5 and float(Survivor.LAUNCH_SPEED) < 20.0 and float(Survivor.LAUNCH_SHOWN) >= seconds, "The launcher's shell can be watched on its way: %.1f m in %.2f seconds when held level" % [reach, seconds])

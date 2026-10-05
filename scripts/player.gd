@@ -37,7 +37,7 @@ const WEAPONS := {
 	"mg": {"label": "MASCHINENGEWEHR", "slot": 3, "price": 800, "group": "heavy", "from_round": 3, "sound": "mg", "magazine": 100, "reserve_max": 400, "reload_time": 4.2, "interval": 0.085, "damage": 30.0, "head_multiplier": 2.2, "spread": 0.022, "kick": 0.0085, "flash": 1.2, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
 	"minigun": {"label": "MINIGUN", "slot": 3, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55},
 	# semi: one shot for every pull of the trigger. zoom and aim_spread: see ATTACHMENTS.
-	"m14": {"label": "M14", "slot": 1, "price": 320, "sound": "m14", "semi": true, "magazine": 20, "reserve_max": 140, "reload_time": 2.3, "interval": 0.16, "damage": 64.0, "head_multiplier": 2.6, "spread": 0.006, "kick": 0.024, "flash": 1.2, "punch": 1.3, "settle": 0.6, "zoom": 38.0, "aim_spread": 0.3},
+	"m14": {"label": "M14", "slot": 1, "price": 320, "sound": "m14", "semi": true, "magazine": 20, "reserve_max": 140, "reload_time": 2.3, "interval": 0.2, "damage": 100.0, "head_multiplier": 2.6, "spread": 0.006, "kick": 0.028, "flash": 1.3, "punch": 1.6, "settle": 0.6, "zoom": 38.0, "aim_spread": 0.3, "pierce": 1},
 	"svd": {"label": "SVD DRAGUNOW", "slot": 3, "price": 650, "group": "heavy", "from_round": 2, "sound": "svd", "semi": true, "magazine": 10, "reserve_max": 60, "reload_time": 2.7, "interval": 0.38, "damage": 165.0, "head_multiplier": 2.4, "spread": 0.02, "kick": 0.04, "flash": 1.4, "punch": 1.8, "settle": 0.85, "scope": 15.0, "pierce": 1},
 	# The three below belong to a tree of abilities each (Skills.TREES, weapons): the shop
 	# sells them only to somebody who has put points into that tree.
@@ -157,9 +157,12 @@ var throw_cooldown := 0.0
 ## held, the seconds left until it leaves the hand once the key is let go (-1: still
 ## held), and how far the weapon has dipped out of the way (0 to 1).
 ## A shell from the launcher: how fast it leaves, and how much it is lobbed upwards. Slow
-## enough to be seen flying, and it comes down in an arc instead of going straight.
-const LAUNCH_SPEED := 25.0
-const LAUNCH_LIFT := 2.6
+## enough to be watched on its way, and it comes down in an arc instead of going straight.
+## (Speed and lift times 0.74 and Throwable.SHELL_PULL times 0.74 squared keep the arc.)
+const LAUNCH_SPEED := 18.5
+const LAUNCH_LIFT := 1.92
+## Seconds of flight the aiming arc shows.
+const LAUNCH_SHOWN := 4.8
 const THROW_SWING := 0.16
 const THROW_AIM_AFTER := 0.2
 ## The key that readies and throws each thing.
@@ -416,7 +419,7 @@ func throw_path(kind: String) -> PackedVector3Array:
 ## Where a shell fired from the launcher now would fly: a shallow arc, a little above the
 ## line of sight at first and then falling under it.
 func launch_path() -> PackedVector3Array:
-	return _flight(camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12, -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT, 3.5, Throwable.SHELL_PULL, Throwable.SHELL_DAMP, 1 | 4 | 16)
+	return _flight(camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12, -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT, LAUNCH_SHOWN, Throwable.SHELL_PULL, Throwable.SHELL_DAMP, 1 | 4 | 16)
 
 func _hold_throw(delta: float) -> void:
 	if throw_kind == "":

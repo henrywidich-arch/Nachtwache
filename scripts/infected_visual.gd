@@ -13,7 +13,8 @@ const CLIP_FOLDER := "res://assets/models/mixamo/"
 ## Mixamo clips. speed: ground speed of the source character in m/s. strike: the moment a
 ## blow lands. start/end: the part of the file that is used. travel: movement along the
 ## facing is taken out of the clip and handed to the body as real motion. fall: the body
-## ends on the ground. drift: scales sideways travel. rooted: the clip is played on the
+## ends on the ground. drift: scales sideways travel. lift: scales how high the hips rise
+## above where they stand. rooted: the clip is played on the
 ## spot, whatever way its source travels (the body does the moving itself). mirror: a
 ## left/right flipped copy of another clip. set: only skeletons of that set get the clip.
 const CLIPS := {
@@ -52,7 +53,9 @@ const CLIPS := {
 	"mutant_run": {"file": "anim_mutant_run", "loop": true, "speed": 2.1, "set": "mutant"},
 	"mutant_swipe": {"file": "anim_mutant_swipe", "strike": 1.1, "end": 2.2, "set": "mutant"},
 	"mutant_punch": {"file": "anim_mutant_punch", "strike": 0.3, "set": "mutant"},
-	"leap": {"file": "anim_mutant_jump", "strike": 1.63, "end": 2.8, "travel": true, "set": "mutant"},
+	# The Crusher's leap. The clip jumps a metre and a half straight up; the body itself flies
+	# far and low (Infected.LEAP_FLIGHT), so most of that height is taken out.
+	"leap": {"file": "anim_mutant_jump", "strike": 1.63, "end": 2.8, "travel": true, "lift": 0.55, "set": "mutant"},
 	"roar": {"file": "anim_mutant_roar", "start": 0.4, "end": 3.3, "set": "mutant"},
 	"mutant_death": {"file": "anim_mutant_death", "fall": true, "set": "mutant"}
 }
@@ -557,6 +560,8 @@ static func sample(rig_scene: String, table: Dictionary) -> Dictionary:
 			if position_track >= 0:
 				offset = animation.position_track_interpolate(position_track, time) - pelvis_rest
 			offset.x *= float(info.get("drift", 1.0))
+			if offset.y > 0.0:
+				offset.y *= float(info.get("lift", 1.0))
 			if info.get("travel", false):
 				travel.append(offset.z)
 				offset.z = 0.0

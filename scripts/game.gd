@@ -386,6 +386,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_falls_check")
+	elif "--crusher-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_crusher_check")
 	elif "--models-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -1808,6 +1812,43 @@ func _capture_from(folder: String, file: String, from: Vector3, target: Vector3,
 	await _capture(folder, file)
 	player.camera.current = true
 	observer.queue_free()
+
+## Pictures of the Crusher's leap, seen from the side, a tenth of a second apart; then its
+## blow from the front. Prints where it took off and where it came down.
+func _run_crusher_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	hud.play_ui.hide()
+	var gap := 9.0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--gap="):
+			gap = float(arg.trim_prefix("--gap="))
+	_place_player(Vector3(0, 0.05, 14.0), 180)
+	player.health = 100000.0
+	var giant := spawn_enemy("crusher")
+	giant.position = Vector3(0, 0.05, 14.0 + gap)
+	giant.alert = true
+	giant.special_cooldown = 0.0
+	await tick.call(0.25)
+	var from: Vector3 = giant.global_position
+	var seen := false
+	for i in range(26):
+		if giant.attack_clock >= 0.0 and not seen:
+			seen = true
+			from = giant.global_position
+			print("CRUSHER leap begins at %s, %.1f m from the player" % [str(from.snapped(Vector3.ONE * 0.01)), from.distance_to(player.global_position)])
+		await _capture_from(folder, "leap_%02d.png" % i, Vector3(9.5, 1.9, 14.0 + gap * 0.5), Vector3(0, 1.4, 14.0 + gap * 0.5), 62)
+		await tick.call(0.07)
+	print("CRUSHER came down at %s, %.1f m from the player; it travelled %.1f m; player health lost %.0f" % [str(giant.global_position.snapped(Vector3.ONE * 0.01)), giant.global_position.distance_to(player.global_position), from.distance_to(giant.global_position), 100000.0 - player.health])
+	print("CRUSHER_CAPTURE_COMPLETE")
+	get_tree().quit()
 
 ## Pictures of the six falls that were recorded on Scorpion's rig (InfectedVisual.MORE): on
 ## six builds of the infected and on six soldiers, half way down and on the ground.

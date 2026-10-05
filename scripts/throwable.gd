@@ -15,8 +15,8 @@ const KINDS := {
 ## Blast of the grenade: radius, damage to survivors at the centre, damage to infected.
 const BLAST := [6.5, 45.0, 280.0]
 ## A shell from the launcher: its share of gravity and the drag of the air on it.
-const SHELL_PULL := 1.0
-const SHELL_DAMP := 0.1
+const SHELL_PULL := 0.548
+const SHELL_DAMP := 0.074
 
 var game: Node3D
 var kind := "grenade"

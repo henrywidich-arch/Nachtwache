@@ -149,8 +149,8 @@ const TYPES := {
 	"crusher": {
 		"label": "CRUSHER", "visuals": ["crusher"],
 		"voice": "roar", "idle": "roar", "strike": "crusher_attack", "pain": "crusher_pain", "death": "crusher_death",
-		"health": 2400.0, "health_per_round": 0.0, "speed": 1.55, "speed_per_round": 0.0,
-		"damage": 34.0, "reach": 2.3, "attack_time": 1.15, "attack_gap": 2.0, "strike_at": 0.5,
+		"health": 2400.0, "health_per_round": 0.0, "speed": 2.9, "speed_per_round": 0.0,
+		"damage": 44.0, "reach": 2.6, "attack_time": 1.15, "attack_gap": 1.7, "strike_at": 0.5,
 		"radius": 0.5, "height": 2.0, "head": 1.9, "head_size": 0.28, "head_factor": 0.55, "reward": 400, "score": 2000,
 		"stagger": ""
 	}
@@ -199,9 +199,21 @@ const SHAKE_FADE := 0.3
 const OVERKILL_SHARE := 0.6
 ## The Ripper leaps from this far away (metres), the Crusher from here.
 const POUNCE_RANGE := Vector2(3.2, 8.5)
-const LEAP_RANGE := Vector2(4.0, 7.5)
+const LEAP_RANGE := Vector2(5.0, 12.0)
+## The Crusher's leap: how long the whole of it takes and when it lands; the seconds of
+## it during which the body is in the air; how far in front of its prey it comes down and
+## how far ahead of a running one it aims (seconds of the prey's way); the seconds until
+## the next leap; and the quake where it lands (reach in metres, harm in its middle).
+const LEAP_SECONDS := 2.3
+const LEAP_STRIKE := 1.5
+const LEAP_FLIGHT := Vector2(0.5, 1.38)
+const LEAP_SHORT := 1.3
+const LEAP_LEAD := 0.45
+const LEAP_WAIT := 6.5
+const QUAKE_REACH := 4.5
+const QUAKE_HARM := 26.0
 const POUNCE_FLIGHT := 0.46
-const ENRAGE_PACE := 1.75
+const ENRAGE_PACE := 1.6
 const GRAVITY := 22.0
 ## The round after which nobody gets any faster (they still get tougher): past it the
 ## endless night would outrun the survivors.
@@ -286,6 +298,10 @@ var watched_for := 0.0
 var driven := 0.0
 var grabbing := 0.0
 var dash_to := Vector3.ZERO
+## The Crusher's leap: "" (none), "crouch" before it takes off, "air", "down" once landed.
+var jump := ""
+var jump_from := Vector3.ZERO
+var jump_to := Vector3.ZERO
 ## The survivor a Leech is hanging on to, and how close that survivor is to shaking it off.
 var clung_to: Node3D
 var shaken := 0.0
@@ -691,22 +707,47 @@ func _physics_process(delta: float) -> void:
 				detonate()
 				return
 	elif attack_clock >= 0.0:
+		var before := attack_clock
 		attack_clock += delta
 		pace *= 0.35 if kind == "striker" else 0.0
+		if jump != "":
+			# The clip stays on the spot; the body does the flying.
+			push = Vector3.ZERO
+			if jump == "crouch" and attack_clock >= LEAP_FLIGHT.x:
+				# It takes off for where its prey will be when it comes down, and lands just
+				# short of it.
+				jump = "air"
+				var ahead := target
+				if prey is CharacterBody3D:
+					var run: Vector3 = (prey as CharacterBody3D).velocity
+					ahead += Vector3(run.x, 0, run.z) * LEAP_LEAD
+				var way := Vector3(ahead.x - global_position.x, 0, ahead.z - global_position.z)
+				jump_from = global_position
+				jump_to = global_position + way.normalized() * clampf(way.length() - LEAP_SHORT, 1.0, LEAP_RANGE.y)
+			if jump == "air":
+				var span := jump_to - jump_from
+				push = Vector3(span.x, 0, span.z) * (smoothstep(LEAP_FLIGHT.x, LEAP_FLIGHT.y, attack_clock) - smoothstep(LEAP_FLIGHT.x, LEAP_FLIGHT.y, before)) / maxf(delta, 0.001)
+				if attack_clock >= LEAP_FLIGHT.y:
+					jump = "down"
 		if not struck and attack_clock >= strike_time:
 			struck = true
-			if distance < attack_reach * 1.25 and same_floor and _clear_line(target):
+			var hit := distance < attack_reach * 1.25 and same_floor and _clear_line(target)
+			if hit:
 				prey.receive_damage(attack_damage * float(game.rules.harm), global_position, "", Skills.kind_of(self))
 			if kind == "crusher":
-				game.sounds.play_at("thud", global_position, 4.0)
-				game.player.shake_from(global_position, 0.9, 14.0)
+				game.sounds.play_at("thud", global_position, 6.0 if jump != "" else 4.0)
+				game.player.shake_from(global_position, 1.3 if jump != "" else 0.9, 18.0 if jump != "" else 14.0)
+				if jump != "":
+					_quake(prey if hit else null)
 		if attack_clock >= attack_length:
 			attack_clock = -1.0
+			jump = ""
 			cooldown = (float(spec.attack_gap) - float(spec.attack_time)) / float(game.rules.pace)
 	elif kind == "crusher" and special_cooldown <= 0.0 and same_floor and distance > LEAP_RANGE.x and distance < LEAP_RANGE.y and _clear_line(target, true):
-		# Prey that keeps its distance gets jumped.
-		special_cooldown = 9.0
-		_begin_attack("leap", 1.95, 1.2, reach * 1.25, float(spec.damage) * 1.3)
+		# Prey that keeps its distance gets jumped: a crouch, then a long, low leap.
+		special_cooldown = LEAP_WAIT
+		jump = "crouch"
+		_begin_attack("leap", LEAP_SECONDS, LEAP_STRIKE, reach * 1.2, float(spec.damage) * 1.4)
 	elif distance < reach and same_floor:
 		pace = 0.0
 		if cooldown <= 0.0 and _clear_line(target):
@@ -931,8 +972,26 @@ func _ambient(delta: float, look: Vector3, turn: bool) -> void:
 			game.sounds.play_at("thud", global_position)
 			game.player.shake_from(global_position, 0.3, 12.0)
 
+## Where the Crusher comes down the ground shakes: everybody near is hurt, less the further
+## away, except `spared`, who took the blow itself.
+func _quake(spared: Node3D) -> void:
+	for body in game.survivors:
+		var survivor := body as Node3D
+		if not is_instance_valid(survivor) or survivor == spared or not survivor.has_method("receive_damage"):
+			continue
+		var off: Vector3 = survivor.global_position - global_position
+		var gap := Vector2(off.x, off.z).length()
+		if gap < QUAKE_REACH and absf(off.y) < 1.5:
+			survivor.call("receive_damage", QUAKE_HARM * (1.0 - gap / QUAKE_REACH) * float(game.rules.harm), global_position, "", Skills.kind_of(self))
+	for i in range(10):
+		var around := Vector3(cos(i * TAU / 10.0), 0, sin(i * TAU / 10.0))
+		game.fx.dust(global_position + around * randf_range(0.8, 2.2) + Vector3(0, 0.05, 0), Vector3.UP)
+
 func _begin_attack(clip: String, duration: float, strike_at: float, reach: float, damage: float) -> void:
 	attack_clock = 0.0
+	# A leap that was broken off is over.
+	if clip != "leap":
+		jump = ""
 	struck = false
 	attack_length = duration
 	strike_time = strike_at
