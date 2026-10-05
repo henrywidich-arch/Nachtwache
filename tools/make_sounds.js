@@ -146,6 +146,39 @@ function build(spec) {
 }
 
 const SET = [
+  // v0.15: what came with the Molotov cocktail, the flamethrower, the blow with the weapon
+  // and three of the newer guns (raw files in Nachtwache-ElevenLabs/sfx_v14).
+  // The bottle: the take with the most fire in it, and the sharpest crash of glass over it.
+  { name: 'molotov', mix: [
+    { from: 'Glass_bottle_smashin_', variant: 3, gain: 1.0 },
+    { from: 'Glass_bottle_smashin_', variant: 1, gain: 0.6, highpass: 1500 }
+  ], length: 1.7, fade: 0.35, target: -11 },
+  // Burning ground and the flamethrower run in a loop: the most even take of each.
+  { name: 'fire', from: 'Fire_burning_on_the__', variant: 2, loop: true, target: -19 },
+  { name: 'flamer', from: 'Flamethrower_firing__', variant: 4, loop: true, target: -15 },
+  { name: 'melee_1', from: 'Rifle_butt_hitting_a_', variant: 3, length: 0.42, fade: 0.1, target: -12 },
+  { name: 'melee_2', from: 'Rifle_butt_hitting_a_', variant: 1, length: 0.36, fade: 0.1, target: -12 },
+  { name: 'melee_3', from: 'Rifle_butt_hitting_a_', variant: 4, length: 0.34, fade: 0.1, target: -12 },
+  // The .50: the punchiest take, the long bright tail of another, and a third as its boom.
+  { name: 'fifty', mix: [
+    { from: 'Gunshot,_.50_caliber_', variant: 4, gain: 1.0 },
+    { from: 'Gunshot,_.50_caliber_', variant: 1, gain: 0.6 },
+    { from: 'Gunshot,_.50_caliber_', variant: 3, gain: 0.7, lowpass: 300 }
+  ], length: 1.8, fade: 0.5, drive: 1.5, target: -9 },
+  // The M14 and the SVD share the .308 takes: a crisp crack over the thump of the boomy one.
+  { name: 'm14', mix: [
+    { from: 'Gunshot,_semi-automa_', variant: 4, gain: 1.0 },
+    { from: 'Gunshot,_semi-automa_', variant: 3, gain: 0.6, lowpass: 500 }
+  ], length: 0.9, fade: 0.25, target: -10 },
+  { name: 'svd', mix: [
+    { from: 'Gunshot,_semi-automa_', variant: 1, gain: 1.0 },
+    { from: 'Gunshot,_semi-automa_', variant: 3, gain: 0.85, lowpass: 400 }
+  ], length: 1.15, fade: 0.35, target: -9.5 },
+  // The double rifle: the boomiest .50 take under a shotgun's blast.
+  { name: 'nitro', mix: [
+    { from: 'Gunshot,_.50_caliber_', variant: 3, gain: 1.0 },
+    { from: 'Shotgun_blast,_singl_', variant: 1, gain: 0.6 }
+  ], length: 1.3, fade: 0.4, target: -9 },
   // Weapons
   { name: 'shot', from: 'Gunshot,_M4_assault__', variant: 4, length: 0.5, fade: 0.08 },
   { name: 'p90', from: 'Gunshot,_MP5_submach_', variant: 4, length: 0.32, fade: 0.06 },

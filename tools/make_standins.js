@@ -1,8 +1,8 @@
-// Stand-in sounds for what has no recording of its own yet: the four new guns, the G36,
-// the blow with the weapon, the syringe, the Molotov cocktail, burning ground and the
-// flamethrower. They are
-// made from recordings the game already has (pitched, cut and layered) and, for the two
-// fires, from shaped noise. A recorded file of the same name simply replaces one of these.
+// Stand-in sounds for what has no recording of its own yet: the G36's shot (with and
+// without suppressor) and the syringe. They are made from recordings the game already
+// has (pitched, cut and layered). A recorded file of the same name simply replaces one
+// of these; what got its recording since (the newer guns, the blow, the Molotov cocktail,
+// fire and the flamethrower) is built by tools/make_sounds.js.
 //   node tools/make_standins.js <sounds folder>
 const fs = require('fs');
 const path = require('path');
@@ -94,27 +94,10 @@ function save(name, x, level = 0.89) {
   console.log(name.padEnd(8), (x.length / RATE).toFixed(2) + ' s');
 }
 
-const sniper = load('sniper');
-const shotgun = load('shotgun');
-const revolver = load('revolver');
-const ak = load('ak');
-const blast = load('explosion_1');
-
-// The M14: the crack of the sniper rifle, higher and shorter, over the body of the AK's shot.
-save('m14', cut(mix([[pitch(sniper, 1.22), 1.0], [pitch(ak, 0.92), 0.55]]), 0.95, 0.25));
-// The SVD: the same crack, a little higher than the bolt-action rifle's.
-save('svd', cut(mix([[pitch(sniper, 1.1), 1.0], [pitch(ak, 0.85), 0.3]]), 1.2, 0.3));
-// The .50: far deeper, with the thump of a blast under it and a long tail.
-save('fifty', cut(mix([[pitch(sniper, 0.74), 1.0], [lowpass(pitch(blast, 1.1), 260), 0.8], [pitch(revolver, 0.7), 0.35]]), 2.0, 0.6));
-// The double rifle: the boom of a shotgun and of a magnum together, pitched down.
-save('nitro', cut(mix([[pitch(shotgun, 0.82), 1.0], [pitch(revolver, 0.78), 0.8], [lowpass(pitch(blast, 1.3), 220), 0.45]]), 1.4, 0.4));
 // The G36: the carbine's crack a little lower, with the body of the UMP's shot and the
 // clack of its action under it; suppressed, the Honey Badger's cough over the UMP's.
 save('g36', cut(mix([[pitch(load('shot'), 0.92), 1.0], [pitch(load('ump'), 1.12), 0.4], [highpass(pitch(load('bolt'), 1.3), 900), 0.22, 0.03]]), 0.6, 0.22));
 save('g36_sil', cut(mix([[pitch(load('badger'), 0.9), 1.0], [pitch(load('ump_sil'), 1.08), 0.5], [highpass(pitch(load('bolt'), 1.3), 900), 0.25, 0.03]]), 0.4, 0.15), 0.6);
-// A blow with the weapon: a short dull thud and the rattle of gear.
-save('melee', cut(mix([[pitch(load('thud_1'), 1.35), 1.0], [pitch(load('hit'), 0.8), 0.5], [pitch(load('mag_in'), 0.9), 0.3, 0.03]]), 0.45, 0.15), 0.8);
-
 // The syringe: a cap that snaps and the short hiss of the injector.
 {
   const hiss = highpass(noise(0.4), 2500);
@@ -123,53 +106,4 @@ save('melee', cut(mix([[pitch(load('thud_1'), 1.35), 1.0], [pitch(load('hit'), 0
     hiss[i] *= Math.min(1, s / 0.02) * Math.exp(-s * 9);
   }
   save('syringe', cut(mix([[pitch(load('equip'), 1.5), 0.8], [pitch(load('click'), 1.3), 0.6, 0.12], [hiss, 0.7, 0.16]]), 0.6, 0.2), 0.7);
-}
-
-// The Molotov cocktail: glass, then the petrol catches.
-{
-  const glass = highpass(mix([[pitch(load('shell_in_1'), 2.4), 1.0], [pitch(load('shell_in_2'), 3.1), 0.8, 0.04], [pitch(load('shell_in_3'), 2.0), 0.7, 0.09], [pitch(load('click'), 1.8), 0.5]]), 1500);
-  const whoosh = lowpass(noise(1.5), 900, 2);
-  for (let i = 0; i < whoosh.length; i++) {
-    const t = i / RATE;
-    whoosh[i] *= Math.min(1, t / 0.12) * Math.exp(-t * 2.4);
-  }
-  save('molotov', cut(mix([[glass, 0.9], [pitch(load('pop_1'), 0.7), 0.8, 0.05], [whoosh, 1.0, 0.08]]), 1.6, 0.4));
-}
-
-// Fire on the ground: a low rumble that flutters, and wood that snaps.
-{
-  const seconds = 4.0;
-  const total = seconds + 0.5;
-  const rumble = lowpass(noise(total), 420, 2);
-  const hissing = highpass(lowpass(noise(total), 3800, 1), 900);
-  const out = new Float32Array(rumble.length);
-  let flutter = 0.7;
-  for (let i = 0; i < out.length; i++) {
-    if (i % 1200 === 0) flutter = 0.55 + random() * 0.45;
-    out[i] = rumble[i] * 2.4 * flutter + hissing[i] * 0.22;
-  }
-  // Snaps: a few a second, each a tiny burst of noise that dies at once.
-  for (let k = 0; k < total * 7; k++) {
-    const at = Math.floor(random() * (out.length - 2000));
-    const strength = 0.25 + random() * 0.75;
-    const length = 120 + Math.floor(random() * 500);
-    for (let i = 0; i < length; i++) out[at + i] += (random() * 2 - 1) * strength * Math.exp(-i / (length * 0.22));
-  }
-  save('fire', loop(out, seconds), 0.7);
-}
-
-// The flamethrower: gas under pressure, a roar with a fast flutter in it.
-{
-  const seconds = 3.0;
-  const total = seconds + 0.5;
-  const roar = highpass(lowpass(noise(total), 1500, 2), 140);
-  const jet = highpass(lowpass(noise(total), 5200, 1), 1800);
-  const deep = lowpass(noise(total), 160, 2);
-  const out = new Float32Array(roar.length);
-  for (let i = 0; i < out.length; i++) {
-    const t = i / RATE;
-    const flutter = 0.82 + 0.18 * Math.sin(t * 2 * Math.PI * 11) * Math.sin(t * 2 * Math.PI * 1.7 + 1);
-    out[i] = (roar[i] * 1.5 + jet[i] * 0.5 + deep[i] * 3.0) * flutter;
-  }
-  save('flamer', loop(out, seconds), 0.75);
 }

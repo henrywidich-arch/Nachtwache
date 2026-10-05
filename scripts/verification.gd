@@ -1420,7 +1420,10 @@ func _arsenal(game: Node3D) -> void:
 	for id in ["m14", "svd", "flamer", "nitro", "fifty"]:
 		arms = arms and Survivor.WEAPONS.has(id) and Survivor.ORDER.has(id) and WeaponView.MODELS.has(id) and WeaponView.VIEWS.has(id) and ResourceLoader.exists(str(WeaponView.MODELS[id].scene)) and SurvivalHUD.SHOP_NOTES.has(id) and player.weapon_models.has(id) and game.sounds.clips.has(str(Survivor.WEAPONS[id].sound))
 	var scoped: bool = Survivor.WEAPONS.svd.has("scope") and Survivor.WEAPONS.fifty.has("scope") and not Survivor.WEAPONS.m14.has("scope") and not Survivor.WEAPONS.nitro.has("scope")
-	expect(arms and scoped and Survivor.ORDER.size() == Survivor.WEAPONS.size(), "Five more weapons: each has a model, a view, a sound and a line in the shop")
+	var heard := true
+	for kind in ["m14", "svd", "fifty", "nitro", "melee", "molotov", "fire", "flamer"]:
+		heard = heard and bool(game.sounds.recorded.get(kind, false))
+	expect(arms and scoped and heard and (game.sounds.clips.melee as Array).size() == 3 and Survivor.ORDER.size() == Survivor.WEAPONS.size(), "Five more weapons: each has a model, a view, a sound and a line in the shop; their shots, the blow, the bottle and both fires are recordings")
 	# A single shot for every pull of the trigger.
 	player.unlock("m14")
 	await frames(2)
@@ -1549,7 +1552,7 @@ func _arsenal(game: Node3D) -> void:
 	var written := true
 	for cue in ["contact", "frag", "gas", "flank", "cover", "man_down", "retreat", "push", "medic"]:
 		for speaker in CruSoldier.VOICES:
-			written = written and (Radio.BARKS[cue] as Dictionary).has(speaker) and str(Radio.NAMES[speaker]) == "C.R.U."
+			written = written and (Radio.BARKS[cue] as Dictionary).has(speaker) and str(Radio.NAMES[speaker]) == "C.R.U." and str(Radio.bark(speaker, cue).sound) != ""
 	# A voice that has not recorded a line leaves it to the first voice of the unit.
 	var trooper := game.spawn_enemy("cru_assault") as CruSoldier
 	trooper.set_physics_process(false)
@@ -1565,7 +1568,7 @@ func _arsenal(game: Node3D) -> void:
 	for path in hidden:
 		Radio.known.erase(path)
 	game.bark_until.clear()
-	expect(voices.size() == 4 and CruSoldier.VOICES.size() == 4 and written and spoken and turn, "The soldiers of the C.R.U. have four voices, one for good each; a line a voice has not recorded is left to the first, and they still take turns")
+	expect(voices.size() == 4 and CruSoldier.VOICES.size() == 4 and written and spoken and turn, "The soldiers of the C.R.U. have four recorded voices, one for good each; a line a voice has not recorded is left to the first, and they still take turns")
 	# --- more ways for a soldier to go down, and each of them ends on the ground
 	var falls: Array = SoldierVisual.FALLS + SoldierVisual.DEATHS
 	var hips := Vector2(INF, -INF)

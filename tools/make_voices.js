@@ -17,7 +17,19 @@ const dry = args.includes('--dry');
 const skip = Number((args.find(a => a.startsWith('--skip=')) || '--skip=0').slice(7));
 const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
-const VOICES = { coleman: 'Colonel Coleman', nadja: 'Nadja', viper: 'Matilda', scorpion: 'Callum', raven: 'Lily', cru: 'Harry', shop: 'Laura' };
+const VOICES = { coleman: 'Colonel Coleman', nadja: 'Nadja', viper: 'Matilda', scorpion: 'Callum', raven: 'Lily', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura' };
+// The three later voices of the C.R.U. are meant to sound hard and without feeling. Each is
+// pitched down a little (semitones) and put through a helmet set: a narrow band, pressed
+// flat, the roughest of them with a little grit.
+const HELMET = 'highpass=f=210,lowpass=f=3900,acompressor=threshold=-24dB:ratio=5:attack=3:release=90:makeup=5';
+// level: grit makes a voice denser at the same peak; this many dB bring it back in line.
+const HARD = { cru2: { down: 1.5, grit: 0 }, cru3: { down: 3.0, grit: 1, level: -2.5 }, cru4: { down: 1.0, grit: 0 } };
+function hard(speaker) {
+  const how = HARD[speaker];
+  if (!how) return '';
+  const ratio = Math.pow(2, -how.down / 12);
+  return ',aresample=44100,asetrate=' + Math.round(44100 * ratio) + ',aresample=44100,atempo=' + (1 / ratio).toFixed(5) + ',' + HELMET + (how.grit ? ',volume=5dB,asoftclip=type=tanh' : '');
+}
 // Nadja speaks in person once she is out of her room.
 const IN_PERSON = ['nadja_freed', 'nadja_follow', 'nadja_pain', 'nadja_board'];
 // Coleman is slowed down a touch: calm and unhurried even when things go wrong.
@@ -73,10 +85,10 @@ for (let i = 0; i < files.length; i++) {
   }
   const radio = line.speaker === 'coleman' || (line.speaker === 'nadja' && !IN_PERSON.includes(line.cue));
   const pause = pauses(file);
-  const chain = pause.filter + TRIM + (line.speaker === 'coleman' ? ',' + RADIO : (radio ? ',' + SPEAKER : ''));
+  const chain = pause.filter + TRIM + (line.speaker === 'coleman' ? ',' + RADIO : (radio ? ',' + SPEAKER : '')) + hard(line.speaker);
   const measured = probe(file, chain);
   // Radio lines sit a little under full level; the calls of people nearby use all of it.
-  const gain = (radio ? -2.0 : -1.0) - measured.peak;
+  const gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0);
   const rate = line.text.length / measured.seconds;
   const entry = { file: line.speaker + '/' + line.cue + '_' + line.n, seconds: +measured.seconds.toFixed(2), chars: line.text.length, rate: +rate.toFixed(1), gain: +gain.toFixed(1), mean: measured.mean };
   if (pause.cut > 0) entry.pause_cut = +pause.cut.toFixed(2);
