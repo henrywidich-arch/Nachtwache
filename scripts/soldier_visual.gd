@@ -244,11 +244,9 @@ func _ready() -> void:
 	legs.seek(randf() * legs.current_animation_length, true)
 	arms.play("idle")
 
-## What the eyes of the operators glow with (see LOOKS, "eyes"): the colour of a disc laid
-## on an eye, and the colour and strength of the glass where the look has a mask of it.
-const EYE_GLOW := Color(0.45, 1.5, 3.4)
-const EYE_GLASS := Color(0.2, 0.58, 1.0)
-const EYE_POWER := 4.2
+## What the eyes of the operators glow with (see LOOKS, "eyes"): the colour of the glass
+## where the look has a mask of it, and of the disc laid on an eye where it has none.
+const EYE_GLOW := Color(0.1, 1.0, 2.6)
 
 ## The picture of this look's eye glass (see LOOKS, "eyes"), or null if it has none.
 func _eye_mask() -> Texture2D:
@@ -338,10 +336,10 @@ func _material() -> StandardMaterial3D:
 	var glass := _eye_mask()
 	if glass != null:
 		built.emission_enabled = true
-		built.emission = EYE_GLASS
+		built.emission = EYE_GLOW
 		built.emission_operator = BaseMaterial3D.EMISSION_OP_MULTIPLY
 		built.emission_texture = glass
-		built.emission_energy_multiplier = EYE_POWER
+		built.emission_energy_multiplier = 1.0
 	return built
 
 ## Puts the weapon into the right hand so that, in the firing stance, it runs through

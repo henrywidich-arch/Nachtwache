@@ -2958,10 +2958,11 @@ func bot(game: Node3D) -> void:
 				seen[enemy.kind] = int(seen.get(enemy.kind, 0)) + 1
 			var distance := enemy.global_position.distance_to(game.player.global_position)
 			# An infected that barely moves for a long while, far from its target, is stuck.
+			# (Soldiers and operators hold a post and shoot from it: they do not count.)
 			var record: Dictionary = watched.get(id, {"pos": enemy.global_position, "since": game.elapsed})
 			if record.pos.distance_to(enemy.global_position) > 0.6:
 				record = {"pos": enemy.global_position, "since": game.elapsed}
-			elif game.elapsed - float(record.since) > 7.0 and distance > 3.5 and not stuck.has(id) and enemy.kind != "stalker" and not (enemy.kind == "healer" and distance < Infected.CLOUD_KEEP + 1.0):
+			elif game.elapsed - float(record.since) > 7.0 and distance > 3.5 and not stuck.has(id) and enemy.kind != "stalker" and not enemy.spec.get("human", false) and not (enemy.kind == "healer" and distance < Infected.CLOUD_KEEP + 1.0):
 				stuck[id] = "%s at %s (player %.1f m away) state=%s alert=%s held=%.1f attack=%.1f path=%d/%d floor=%s speed=%.2f" % [enemy.kind, enemy.global_position.snapped(Vector3.ONE * 0.1), distance, enemy.model.state, str(enemy.alert), enemy.held_left, enemy.attack_clock, enemy.path_index, enemy.path.size(), str(enemy.is_on_floor()), enemy.get_real_velocity().length()]
 				for i in range(enemy.get_slide_collision_count()):
 					var other: Object = enemy.get_slide_collision(i).get_collider()
@@ -3279,6 +3280,10 @@ func coop(game: Node3D, as_host: bool) -> void:
 				if within == null or foe.global_position.distance_to(game.player.global_position) < within.global_position.distance_to(game.player.global_position):
 					within = foe
 		if op_run:
+			# This run is about what both sides see of him, not about surviving him: whoever
+			# is on his feet stays there.
+			if not game.player.down and game.player.health > 0.0:
+				game.player.health = maxf(game.player.health, 70.0)
 			if as_host:
 				# He comes in by the front door, is hurt after a while and driven off in the end.
 				if op_step == 0 and clock > 4.0:

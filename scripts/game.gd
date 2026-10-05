@@ -857,7 +857,7 @@ func plan_operators() -> void:
 ## An operator has come through the fence: both players are told, and he says hello.
 func operator_arrived(who: Operator) -> void:
 	var name_shown := str(who.spec.label)
-	notice(name_shown, "Helix-Jäger im Anmarsch. Er lässt sich vertreiben, nicht töten.", 5.0)
+	notice(name_shown, "Helix-Operator im Anmarsch. Er lässt sich vertreiben, nicht töten.", 5.0)
 	# He has the first word; command explains him afterwards, the first time one comes.
 	op_radio(who.kind, "op_arrive", 6.0, true)
 	tell_once("operator", "operator_seen", 8.0)
