@@ -81,22 +81,22 @@ const UPGRADE_SHARE := 0.15
 ## scale: values it multiplies.
 const ATTACHMENTS := {
 	"rifle": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "badger", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"g36": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt über Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring über Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "g36_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"ump": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt: freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ump_sil", "flash": 0.32, "quiet": true}, "scale": {"kick": 0.75, "spread": 0.9, "damage": 0.95}}
 	},
 	"ak": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Großes klares Glas mit Leuchtpunkt: freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	}

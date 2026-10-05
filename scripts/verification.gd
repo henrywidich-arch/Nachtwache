@@ -1343,7 +1343,7 @@ func _latest(game: Node3D) -> void:
 	var over_irons: Vector3 = WeaponView.VIEWS.rifle.aim
 	var lined: bool = is_equal_approx(over_irons.y, -((m4_gun.mount as Vector3).y + float(m4_gun.irons))) and over_irons.x == 0.0
 	player.fit("rifle", "reddot")
-	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and absf(WeaponView.sight_aim("rifle", "reddot").y - over_irons.y) < 0.006
+	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and WeaponView.sight_aim("rifle", "reddot").y < over_irons.y - 0.02
 	player.fit("rifle", "reddot")
 	expect(str(Survivor.WEAPONS.rifle.label) == "M4A4" and m4.get_node_or_null("Magazine") != null and m4.get_node_or_null("Support") != null and irons != null and irons.visible and lined and folded and (WeaponView.reload_step("rifle", 0.38).magazine as Vector3).length() > 0.2 and Survivor.ATTACHMENTS.has("rifle"), "The starting rifle is the M4A4: its magazine leaves the gun, the eye looks through its iron sights, and they fold away under a fitted sight")
 	# --- five kinds of dead bodies, and model trees at the edge of the open yard
@@ -3461,7 +3461,7 @@ func _squadwork(game: Node3D) -> void:
 ## What came with v0.18: a Crusher that is a danger, a harder M14, a shell that can be
 ## watched on its way, points for all three trees with one of them in force, fire that
 ## lets a Charger and a Striker's growths go off harmlessly, a map in the corner, a shop
-## that sells and takes back, a workbench with five lines.
+## that sells and takes back, a workbench with five lines, the holographic sight.
 func _overhaul(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var skills: Skills = game.skills
@@ -3792,3 +3792,35 @@ func _overhaul(game: Node3D) -> void:
 	var gone: bool = game.sell_weapon("ak") and game.buy_weapon("ak") and player.upgrade("ak", "damage") == 0 and player.magazine_of("ak") == 30
 	game.resume_run()
 	expect(benched and raised and worked and paid and own_lines and fitting and gone and game.state == "playing", "The workbench has five lines to choose from (damage, magazine, pockets, reload, steadiness), each for one weapon and each with its price; they go with the weapon")
+	# --- the reflex sight is the holographic sight, on every gun that takes one
+	var sights := 0
+	var seated := true
+	for id in Survivor.ATTACHMENTS:
+		var gun_view: Node3D = player.weapon_models[id]
+		var spec: Dictionary = WeaponView.GUNS[id]
+		var part := gun_view.get_node_or_null("Mod_reddot") as Node3D
+		if part == null:
+			seated = false
+			continue
+		var bodies := 0
+		var panes := 0
+		var finest := INF
+		var mark_z := 0.0
+		for node in part.find_children("*", "MeshInstance3D", true, false):
+			var mesh := node as MeshInstance3D
+			if mesh.mesh is QuadMesh:
+				panes += 1
+				if (mesh.mesh as QuadMesh).size.x < finest:
+					finest = (mesh.mesh as QuadMesh).size.x
+					mark_z = mesh.position.z
+			elif mesh.get_surface_override_material(0) == WeaponView.holo_material and mesh.layers == 2:
+				bodies += 1
+		var rail_y: float = (spec.mount as Vector3).y + float(spec.rail)
+		var face_z: float = (spec.mount as Vector3).z + float(spec.optic) + WeaponView.HOLO_BACK
+		var eye: Vector3 = WeaponView.sight_aim(id, "reddot")
+		# One body from the model and three panes (glass, ring, dot); the dot sits inside the
+		# tunnel, in the middle of the window; the eye is behind the face that looks at it.
+		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x and mark_z > face_z + WeaponView.HOLO_TUNNEL.y
+		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE) and rail_y + WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5 > (spec.mount as Vector3).y + float(spec.irons)
+		sights += 1
+	expect(sights == 4 and seated and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all four guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
