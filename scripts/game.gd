@@ -1775,7 +1775,8 @@ func resume_run() -> void:
 
 ## Co-op lobby: open a match for a partner, or join one.
 func host_match() -> void:
-	net.host(not check_mode)
+	# The checks leave the router alone, unless one is told to try it (--mp-router).
+	net.host(not check_mode or "--mp-router" in OS.get_cmdline_user_args())
 	hud.show_menu("host")
 
 func join_match(address: String) -> void:
