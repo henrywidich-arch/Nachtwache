@@ -185,9 +185,12 @@ static func weapon_tree(id: String) -> String:
 
 ## Why the shop does not sell a weapon to this player ("" if it does): a tree's own
 ## weapon wants points in that tree, and that tree in force.
+## In the test room every tree's weapon is to be had, whatever the points say.
+var open_all := false
+
 func weapon_barred(id: String) -> String:
 	var tree := weapon_tree(id)
-	if tree == "":
+	if tree == "" or open_all:
 		return ""
 	if not active:
 		return "In Wartung"

@@ -199,6 +199,8 @@ var story_in_checks := false
 var intro_skipped := false
 ## Ring on the floor where the squad was told to hold.
 var hold_marker: MeshInstance3D
+## The test room (see Sandbox): a match without rounds for trying things out.
+var sandbox: Sandbox
 
 func _ready() -> void:
 	_configure_input()
@@ -255,6 +257,10 @@ func _ready() -> void:
 	mission.name = "Mission"
 	mission.game = self
 	add_child(mission)
+	sandbox = Sandbox.new()
+	sandbox.name = "Sandbox"
+	sandbox.game = self
+	add_child(sandbox)
 	player = Survivor.new()
 	player.name = "Survivor"
 	player.game = self
@@ -418,6 +424,9 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_ops_check")
+	elif "--sandbox-check" in args:
+		check_mode = true
+		call_deferred("_run_sandbox_check")
 	elif "--shop-check" in args:
 		check_mode = true
 		team_enabled = true
@@ -477,7 +486,7 @@ func _warm_up() -> void:
 	fade.tween_callback(curtain.queue_free)
 
 func _configure_input() -> void:
-	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_5, "squad_free": KEY_6, "crouch": KEY_C, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "melee": KEY_V, "syringe": KEY_Q}
+	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_5, "squad_free": KEY_6, "crouch": KEY_C, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "melee": KEY_V, "syringe": KEY_Q, "test_menu": KEY_F1}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -504,11 +513,20 @@ func _input(event: InputEvent) -> void:
 			resume_run()
 		elif state == "playing":
 			pause_run()
+	# The test room's menu opens and closes with its own key.
+	if event.is_action_pressed("test_menu") and not event.is_echo() and sandbox.on:
+		if overlay == "test":
+			resume_run()
+		elif state == "playing" and overlay == "":
+			open_test()
 	if event.is_action_pressed("interact") and (state in ["shop", "bench"] or overlay in ["shop", "bench"]):
 		resume_run()
 		get_viewport().set_input_as_handled()
 	if event.is_action_pressed("next_wave") and state == "playing" and phase == "preparing":
-		if net.joined:
+		# In the test room: a real round of the strength chosen there.
+		if sandbox.on:
+			sandbox.start_round()
+		elif net.joined:
 			net.request_next_wave()
 		else:
 			begin_wave()
@@ -602,18 +620,22 @@ func opening_note() -> String:
 func extra_guns() -> int:
 	return team.size() + (1 if is_instance_valid(net.remote) else 0)
 
-func start_run() -> void:
+## Starts a night - or, with `test`, the test room (alone only): an endless night that
+## never begins by itself and is kept nowhere.
+func start_run(test: bool = false) -> void:
 	get_tree().paused = false
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	overlay = ""
 	if net.hosting:
 		net.start_match()
 	_clear_match_nodes()
+	sandbox.end()
+	sandbox.on = test and not net.active
 	# The host of a co-op match has already told a guest which difficulty is played.
 	if not net.joined:
 		level = profile.difficulty
-		mode = profile.mode
-		modifiers_on = profile.modifiers
+		mode = "endless" if sandbox.on else profile.mode
+		modifiers_on = profile.modifiers and not sandbox.on
 	last_modifier = ""
 	_set_modifier("")
 	for key in stats:
@@ -652,12 +674,15 @@ func start_run() -> void:
 			player.position += Basis(Vector3.UP, player.rotation.y) * Vector3(1.6, 0, 0)
 	if net.active and net.partner != 0:
 		net.spawn_remote()
-	elif team_enabled:
+	elif team_enabled and not sandbox.on:
 		_spawn_team()
 	cabin.get_node("WeaponShopLabel").show()
 	cabin.set_shop_open(true, true)
 	hud.hide_menu()
-	if arrival and not intro_skipped:
+	if sandbox.on:
+		sandbox.begin()
+		hud.announce("TESTRAUM", "F1 öffnet das Testmenü: Gegner, Waffen, Stimmen. Nichts hiervon zählt für dein Profil.", 9)
+	elif arrival and not intro_skipped:
 		# The arrival plays first; the round waits for it.
 		preparation_left = StoryDirector.INTRO_SECONDS + 24.0
 		story.play_intro()
@@ -1262,8 +1287,7 @@ func item_price(id: String) -> int:
 
 ## Buys gear or consumables at the open shop counter.
 func buy_item(id: String) -> bool:
-	var station := closest_station()
-	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop" or not Survivor.GOODS.has(id):
+	if (state != "shop" and overlay != "shop") or not _at("shop") or not Survivor.GOODS.has(id):
 		return false
 	var cost := item_price(id)
 	if cost < 0 or credits < cost:
@@ -1283,8 +1307,7 @@ func buy_item(id: String) -> bool:
 ## Buys a part for a weapon the survivor owns and fits it. A part that is owned already
 ## is put on or taken off for nothing.
 func buy_part(id: String, part: String) -> bool:
-	var station := closest_station()
-	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop":
+	if (state != "shop" and overlay != "shop") or not _at("shop"):
 		return false
 	if not Survivor.ATTACHMENTS.has(id) or not Survivor.ATTACHMENTS[id].has(part) or not player.inventory.has(id):
 		return false
@@ -1373,6 +1396,14 @@ func _on_thunder(delay: float) -> void:
 		get_tree().create_timer(delay).timeout.connect(func() -> void: sounds.play_sound("thunder", -delay * 3.0))
 
 # ---------------------------------------------------------------- stations
+
+## Whether the survivor stands at a station of this kind ("shop", "upgrade"). In the test
+## room the counter and the bench are wherever he is.
+func _at(kind: String) -> bool:
+	if sandbox.on:
+		return true
+	var station := closest_station()
+	return not station.is_empty() and station.kind == kind
 
 func closest_station() -> Dictionary:
 	var best := {}
@@ -1760,7 +1791,7 @@ func shop_position() -> Vector3:
 	return Vector3.ZERO
 
 func open_shop() -> void:
-	if not is_playing() or not cabin.shop_open: return
+	if not is_playing() or (not cabin.shop_open and not sandbox.on): return
 	if net.active:
 		# A co-op match keeps running behind the shop menu.
 		overlay = "shop"
@@ -1793,13 +1824,12 @@ func weapon_cost(id: String, instead_of: String = "") -> int:
 ## more with slings: without a place for it, the new one takes the place of another, which
 ## is traded in - `instead_of`, if the buyer named one that can make room.
 func buy_weapon(id: String, instead_of: String = "") -> bool:
-	var station := closest_station()
-	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop": return false
+	if (state != "shop" and overlay != "shop") or not _at("shop"): return false
 	if not Survivor.WEAPONS.has(id) or player.inventory.has(id): return false
 	# A tree's own weapon is for those who have put points into that tree.
 	if skills.weapon_barred(id) != "": return false
 	# The heaviest weapons only reach the shop once the night is well under way.
-	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave: return false
+	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave and not sandbox.on: return false
 	var old := outgoing(id, instead_of)
 	var cost := weapon_cost(id, instead_of)
 	if credits < cost: return false
@@ -1816,8 +1846,7 @@ func buy_weapon(id: String, instead_of: String = "") -> bool:
 ## trade-in; what was fitted to it and done to it at the workbench goes with it. The last
 ## weapon stays: nobody leaves the counter unarmed.
 func sell_weapon(id: String) -> bool:
-	var station := closest_station()
-	if (state != "shop" and overlay != "shop") or station.is_empty() or station.kind != "shop": return false
+	if (state != "shop" and overlay != "shop") or not _at("shop"): return false
 	if not player.inventory.has(id) or player.inventory.size() < 2: return false
 	var worth := trade_in(id)
 	if id == player.current_weapon:
@@ -1857,8 +1886,7 @@ func upgrade_price(id: String, line: String) -> int:
 func buy_upgrade(line: String, id: String = "") -> bool:
 	if id == "":
 		id = player.current_weapon
-	var station := closest_station()
-	if station.is_empty() or station.kind != "upgrade": return false
+	if not _at("upgrade"): return false
 	var cost := upgrade_price(id, line)
 	if cost < 0 or credits < cost: return false
 	credits -= cost
@@ -1886,8 +1914,16 @@ func pause_run() -> void:
 	get_tree().paused = true
 	hud.show_menu("pause")
 
+## The test room's menu. The room keeps running behind it.
+func open_test() -> void:
+	if not is_playing() or not sandbox.on:
+		return
+	overlay = "test"
+	player.menu_open = true
+	hud.show_menu("test")
+
 func resume_run() -> void:
-	var from_shop := state == "shop" or overlay == "shop"
+	var from_shop := (state == "shop" or overlay == "shop") and not sandbox.on
 	get_tree().paused = false
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	overlay = ""
@@ -1925,6 +1961,7 @@ func return_to_menu() -> void:
 		net.close()
 	state = "menu"
 	player.controlled = false
+	sandbox.end()
 	_clear_match_nodes()
 	preview_camera.current = true
 	menu_light.show()
@@ -1933,6 +1970,10 @@ func return_to_menu() -> void:
 	hud.show_menu("main")
 
 func finish(victory: bool) -> void:
+	# The test room has no end and leaves nothing behind.
+	if sandbox.on:
+		return_to_menu()
+		return
 	net.send_finish(victory)
 	var squad := "KOOP" if net.active else ("TEAM" if not team.is_empty() else "SOLO")
 	var before := Skills.experience(profile.totals)
@@ -2147,6 +2188,51 @@ func _run_ops_check() -> void:
 	await _capture(folder, "ops_09_skins.png")
 	print("OPS stats=%s credits=%d operators=%d" % [str(stats), credits, operators.size()])
 	print("OPS_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Pictures of the test room: the main menu with its entry, the room by daylight, enemies
+## called up and frozen, the four pages of its menu, and the night switched back on.
+func _run_sandbox_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	await _capture(folder, "test_00_main_menu.png")
+	start_run(true)
+	await tick.call(1.0)
+	await _capture(folder, "test_01_room.png")
+	hud.banner_left = 0
+	sandbox.frozen = true
+	for kind in ["crusher", "mauler", "charger", "ripper", "healer", "phantom", "havoc", "ghost", "cru_shield", "cru_elite"]:
+		sandbox.spawn(kind)
+	await tick.call(1.0)
+	hud.radio_left = 0
+	await _capture(folder, "test_02_enemies.png")
+	open_test()
+	for page in ["enemies", "player", "voices", "world"]:
+		sandbox.tab = page
+		hud.show_menu("test")
+		if page == "voices":
+			sandbox.say("phantom", "op_arrive", 0)
+		await tick.call(0.5)
+		await _capture(folder, "test_03_menu_%s.png" % page)
+	sandbox.speaker = "coleman"
+	sandbox.hijack = true
+	sandbox.tab = "voices"
+	hud.show_menu("test")
+	sandbox.say("coleman", "round_begin", 0)
+	await tick.call(0.5)
+	await _capture(folder, "test_04_menu_voices_coleman.png")
+	sandbox.hush()
+	resume_run()
+	sandbox.set_daylight(false)
+	await tick.call(1.0)
+	await _capture(folder, "test_05_night.png")
+	pause_run()
+	await tick.call(0.4)
+	await _capture(folder, "test_06_pause.png")
+	resume_run()
+	print("SANDBOX alive=%d wave=%d credits=%d daylight=%s" % [sandbox.alive(), wave, credits, str(sandbox.daylight)])
+	print("SANDBOX_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Pictures of the shop's counter and of the workbench: every list, a weapon picked, the

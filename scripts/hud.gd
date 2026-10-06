@@ -31,7 +31,7 @@ const KEYS := [
 	["W A S D", "Bewegen"], ["Maus", "Umsehen"], ["Linke Maustaste", "Schießen"], ["Rechte Maustaste", "Zielen"],
 	["R", "Nachladen"], ["Shift", "Sprinten"], ["Leertaste, C", "Springen, ducken (an / aus)"], ["E", "Benutzen, aufhelfen, Shop"],
 	["F", "Taschenlampe"], ["1, 2, 3, Mausrad", "Primär-, Sekundär-, schwere Waffe"], ["G, T, H, B", "Granate, Blend, Molotow, Mine"], ["Q, V", "Heilspritze, Nahkampf"], ["4, 5, 6", "Team: halten, folgen, frei"],
-	["N", "Nächste Runde sofort"], ["Esc", "Pause"], ["F11, Alt+Enter", "Vollbild"]
+	["N", "Nächste Runde sofort"], ["Esc", "Pause"], ["F11, Alt+Enter", "Vollbild"], ["F1", "Testmenü (nur im Testraum)"]
 ]
 
 var game: Node3D
@@ -41,6 +41,8 @@ var modal: Control
 ## Headings and numbers: bold and narrow. Everything else: the plain face.
 var display: SystemFont
 var body: SystemFont
+## The line of the test room's page of voices that says what is being played.
+var test_now: Label
 var wave_label: Label
 var enemy_label: Label
 var score_label: Label
@@ -619,6 +621,8 @@ func _process(delta: float) -> void:
 	# With the story on, nobody knows beforehand how many rounds the night will take.
 	if game.story.enabled:
 		wave_label.text = "LETZTE RUNDE" if game.story.stage in ["evac", "done"] else "RUNDE %02d" % maxi(1, game.wave)
+	elif game.sandbox.on:
+		wave_label.text = "TESTRAUM  ·  STÄRKE RUNDE %02d" % maxi(1, game.wave)
 	elif game.endless:
 		wave_label.text = "ENDLOS  ·  RUNDE %02d" % maxi(1, game.wave)
 	else:
@@ -629,7 +633,9 @@ func _process(delta: float) -> void:
 	if game.modifier != "" and game.phase == "wave":
 		lines.insert(0, "▲  MODIFIKATION  ·  %s" % game.MODIFIERS[game.modifier].label)
 	task_label.text = "\n".join(lines)
-	if game.phase == "preparing":
+	if game.sandbox.on and game.phase == "preparing":
+		enemy_label.text = "F1 Testmenü  ·  %d Gegner auf dem Feld" % game.sandbox.alive()
+	elif game.phase == "preparing":
 		enemy_label.text = "Nächste Runde in %02d s  ·  Waffenshop geöffnet" % ceili(game.preparation_left)
 	else:
 		enemy_label.text = "%02d Infizierte verbleiben" % (game.remote_remaining if game.net.joined else game.remaining_to_spawn + game.alive_count)
@@ -911,7 +917,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["shop", "bench", "settings", "skins", "board", "skills"]
+	var wide: bool = mode in ["shop", "bench", "settings", "skins", "board", "skills", "test"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -925,7 +931,7 @@ func show_menu(mode: String) -> void:
 	modal.add_child(background)
 	var column := VBoxContainer.new()
 	# The page of abilities and the counters are the tallest of all and start a little higher.
-	column.position = Vector2(84, 30 if mode in ["skills", "shop", "bench"] else 44)
+	column.position = Vector2(84, 30 if mode in ["skills", "shop", "bench", "test"] else 44)
 	column.size = Vector2(900 if wide else 660, 640)
 	column.add_theme_constant_override("separation", 6)
 	modal.add_child(column)
@@ -952,6 +958,8 @@ func show_menu(mode: String) -> void:
 			first = _menu_skins(column)
 		"skills":
 			first = _menu_skills(column)
+		"test":
+			first = _menu_test(column)
 	var version := label("SOLO + KOOP   ·   v" + NetLink.VERSION, 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
@@ -984,7 +992,9 @@ func _menu_main(column: VBoxContainer) -> Control:
 		# Which tree is in force for the night to come.
 		abilities = "FÄHIGKEITEN  ·  %s" % Skills.TREES[game.skills.chosen].label
 	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button(abilities, show_menu.bind("skills"))))
-	column.add_child(_pair(_button("EINSTELLUNGEN", _open_settings.bind("main")), _button("BEENDEN", game.quit_game)))
+	# The test room: no night, nothing kept - a place to try things out.
+	column.add_child(_pair(_button("TESTRAUM", game.start_run.bind(true)), _button("EINSTELLUNGEN", _open_settings.bind("main"))))
+	column.add_child(_button("BEENDEN", game.quit_game))
 	return start
 
 func _menu_pause(column: VBoxContainer) -> Control:
@@ -993,9 +1003,233 @@ func _menu_pause(column: VBoxContainer) -> Control:
 	_gap(column, 10)
 	var go := _button("WEITERSPIELEN", game.resume_run, true)
 	column.add_child(go)
+	if game.sandbox.on:
+		column.add_child(_button("TESTMENÜ   (F1)", _open_test_from_pause))
 	column.add_child(_button("EINSTELLUNGEN", _open_settings.bind("pause")))
 	column.add_child(_button("ZUM HAUPTMENÜ", game.return_to_menu))
 	return go
+
+## The test room's menu (F1): pages for enemies, the survivor, the voices and the world.
+## The room keeps running behind it.
+func _menu_test(column: VBoxContainer) -> Control:
+	var room: Sandbox = game.sandbox
+	_title(column, "TESTRAUM", 46)
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 6)
+	for entry in [["enemies", "GEGNER"], ["player", "DU & WAFFEN"], ["voices", "STIMMEN"], ["world", "WELT"]]:
+		tabs.add_child(_chip(str(entry[1]), _test_tab.bind(str(entry[0])), room.tab == str(entry[0]), 190))
+	column.add_child(tabs)
+	_gap(column, 4)
+	match room.tab:
+		"player":
+			_test_player(column, room)
+		"voices":
+			_test_voices(column, room)
+		"world":
+			_test_world(column, room)
+		_:
+			_test_enemies(column, room)
+	_gap(column, 6)
+	var back := _button("ZURÜCK IN DEN TESTRAUM   (F1)", game.resume_run, true)
+	column.add_child(back)
+	return back
+
+## A heading and under it small buttons side by side, as many rows as they need.
+func _test_row(column: Container, heading: String, chips: Array, width: float = 880.0) -> void:
+	if heading != "":
+		_section(column, heading)
+	var row := HFlowContainer.new()
+	row.add_theme_constant_override("h_separation", 6)
+	row.add_theme_constant_override("v_separation", 6)
+	row.custom_minimum_size.x = width
+	for chip in chips:
+		row.add_child(chip)
+	column.add_child(row)
+
+func _test_enemies(column: VBoxContainer, room: Sandbox) -> void:
+	_text(column, "Ein Klick stellt den Gegner vor dich – dorthin, wo du hinsiehst. Der Testraum läuft dahinter weiter.", 15)
+	for group in [["INFIZIERTE", Sandbox.INFECTED], ["C.R.U.", Sandbox.SOLDIERS], ["OPERATOREN", Sandbox.OPERATORS]]:
+		var chips: Array = []
+		for entry in group[1]:
+			chips.append(_chip(str(entry[1]), _test_spawn.bind(str(entry[0])), false, 132))
+		if str(group[0]) == "C.R.U.":
+			chips.append(_chip("GANZER TRUPP", _test_spawn.bind("squad"), false, 160))
+		_test_row(column, str(group[0]), chips)
+	# How many a click brings and how strong they are, side by side.
+	var settings := HBoxContainer.new()
+	settings.add_theme_constant_override("separation", 36)
+	var how_many := VBoxContainer.new()
+	var how_strong := VBoxContainer.new()
+	for side in [how_many, how_strong]:
+		(side as VBoxContainer).add_theme_constant_override("separation", 6)
+		settings.add_child(side)
+	var counts: Array = []
+	for number in Sandbox.COUNTS:
+		counts.append(_chip("%d ×" % number, _test_set.bind("count", number), room.count == number, 74))
+	_test_row(how_many, "ANZAHL JE KLICK", counts, 320.0)
+	var rounds: Array = []
+	for number in Sandbox.STRENGTHS:
+		rounds.append(_chip("RUNDE %d" % number, _test_set.bind("strength", number), room.strength == number, 96))
+	_test_row(how_strong, "SO STARK WIE IN", rounds, 510.0)
+	column.add_child(settings)
+	_test_row(column, "", [
+		_chip("EINGEFROREN  ·  %s" % ("AN" if room.frozen else "AUS"), _test_set.bind("frozen", not room.frozen), room.frozen, 230),
+		_chip("ALLE ENTFERNEN  (%d)" % room.alive(), _test_do.bind("clear"), false, 230),
+		_chip("ECHTE RUNDE %d STARTEN" % room.strength, _test_do.bind("round"), false, 250)])
+
+func _test_player(column: VBoxContainer, room: Sandbox) -> void:
+	var with_squad: bool = not game.team.is_empty()
+	_test_row(column, "DU", [
+		_chip("UNENDLICH LEBEN  ·  %s" % ("AN" if room.god else "AUS"), _test_set.bind("god", not room.god), room.god, 250),
+		_chip("HEILEN", _test_do.bind("heal"), false, 120),
+		_chip("TRUPP  ·  %s" % ("DABEI" if with_squad else "ALLEIN"), _test_set.bind("squad", not with_squad), with_squad, 200)])
+	var ammo: Array = []
+	for key in Sandbox.AMMO:
+		ammo.append(_chip(str(Sandbox.AMMO[key]), _test_set.bind("ammo", key), room.ammo == key, 200))
+	_test_row(column, "MUNITION UND WURFZEUG", ammo)
+	_test_row(column, "WAFFEN UND AUSRÜSTUNG", [
+		_chip("ALLE WAFFEN", _test_do.bind("arsenal"), false, 170),
+		_chip("VOLLE AUSRÜSTUNG", _test_do.bind("kit"), false, 210),
+		_chip("WAFFENSHOP", _test_do.bind("shop"), false, 170),
+		_chip("WERKBANK", _test_do.bind("bench"), false, 150)])
+	_gap(column, 4)
+	_text(column, "Im Testraum kostet nichts etwas: Shop und Werkbank öffnen sich von überall, und jede\nKlassenwaffe ist frei. „Alle Waffen“: Mit 1, 2 und 3 gehst du durch alle Primär-,\nSekundär- und schweren Waffen. Mit unendlichem Leben siehst und hörst du Treffer\nweiterhin, verlierst aber nichts. Ohne: Fällst du, stehst du sofort wieder.", 15)
+
+func _test_voices(column: VBoxContainer, room: Sandbox) -> void:
+	var chips: Array = []
+	for entry in Sandbox.SPEAKERS:
+		chips.append(_chip(str(entry[1]), _test_set.bind("speaker", str(entry[0])), room.speaker == str(entry[0]), 120))
+	_test_row(column, "", chips)
+	var lines: Array = room.lines_of(room.speaker)
+	var tools: Array = [_chip("ALLE NACHEINANDER  (%d)" % lines.size(), _test_do.bind("all"), false, 250), _chip("STOPP", _test_do.bind("hush"), false, 110)]
+	if room.speaker == "coleman":
+		tools.append(_chip("KANAL  ·  %s" % ("GEKAPERT" if room.hijack else "ECHT"), _test_set.bind("hijack", not room.hijack), room.hijack, 220))
+	_test_row(column, "", tools)
+	test_now = label("", 15, MINT, true)
+	test_now.custom_minimum_size = Vector2(880, 22)
+	test_now.clip_text = true
+	column.add_child(test_now)
+	test_line()
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(890, 300)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 3)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for line in lines:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		var play := _chip("▶  %s  %d" % [str(line.cue).to_upper(), int(line.index) + 1], room.say.bind(room.speaker, str(line.cue), int(line.index)), false, 250)
+		play.custom_minimum_size.y = 30
+		play.add_theme_font_size_override("font_size", 13)
+		play.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		play.disabled = str(line.sound) == ""
+		row.add_child(play)
+		var words := label(str(line.text), 14, IVORY if str(line.sound) != "" else MUTED)
+		words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		words.custom_minimum_size.x = 600
+		row.add_child(words)
+		list.add_child(row)
+	scroll.add_child(list)
+	column.add_child(scroll)
+
+func _test_world(column: VBoxContainer, room: Sandbox) -> void:
+	var light: Array = [_chip("TAGESLICHT  ·  %s" % ("AN" if room.daylight else "AUS"), _test_set.bind("daylight", not room.daylight), room.daylight, 230)]
+	for pace in Sandbox.SLOW:
+		light.append(_chip("TEMPO  %d %%" % int(round(float(pace) * 100.0)), _test_set.bind("slow", pace), is_equal_approx(room.slow, float(pace)), 150))
+	_test_row(column, "LICHT UND ZEIT", light)
+	var places: Array = []
+	for entry in Sandbox.PLACES:
+		places.append(_chip(str(entry[0]), _test_do.bind("jump", str(entry[1])), false, 150))
+	_test_row(column, "HINSPRINGEN", places)
+	_test_row(column, "AUSPROBIEREN", [
+		_chip("BLENDGRANATE AUF MICH", _test_do.bind("flash"), false, 260),
+		_chip("ECHTE RUNDE %d STARTEN" % room.strength, _test_do.bind("round"), false, 250)])
+	_gap(column, 4)
+	_text(column, "Tageslicht nimmt Nebel, Regen und Gewitter weg – aus ist es die Nacht wie im Einsatz.\nEine echte Runde läuft wie im Endlosmodus, mit Aufträgen; danach wartet der Testraum\nwieder. „Alle entfernen“ auf der Seite GEGNER beendet sie sofort.", 15)
+
+func _test_tab(tab: String) -> void:
+	game.sandbox.tab = tab
+	show_menu("test")
+
+func _test_spawn(kind: String) -> void:
+	game.sandbox.spawn(kind)
+	show_menu("test")
+
+func _test_set(what: String, value: Variant) -> void:
+	var room: Sandbox = game.sandbox
+	match what:
+		"count":
+			room.count = int(value)
+		"strength":
+			room.strength = int(value)
+			if game.phase == "preparing":
+				game.wave = room.strength
+		"frozen":
+			room.frozen = bool(value)
+		"god":
+			room.god = bool(value)
+		"ammo":
+			room.ammo = str(value)
+		"daylight":
+			room.set_daylight(bool(value))
+		"slow":
+			room.set_slow(float(value))
+		"hijack":
+			room.hijack = bool(value)
+		"speaker":
+			room.speaker = str(value)
+		"squad":
+			room.set_squad(bool(value))
+	show_menu("test")
+
+## What the test room's buttons do. Some close the menu: what they do is to be seen.
+func _test_do(what: String, arg: String = "") -> void:
+	var room: Sandbox = game.sandbox
+	match what:
+		"clear":
+			room.clear()
+		"kit":
+			room.kit()
+		"arsenal":
+			room.arsenal()
+		"heal":
+			room.heal()
+		"all":
+			room.say_all(room.speaker)
+		"hush":
+			room.hush()
+		"round":
+			game.resume_run()
+			room.start_round()
+			return
+		"shop":
+			game.resume_run()
+			game.open_shop()
+			return
+		"bench":
+			game.resume_run()
+			game.open_bench()
+			return
+		"jump":
+			room.jump(arg)
+			game.resume_run()
+			return
+		"flash":
+			game.resume_run()
+			room.flash()
+			return
+	show_menu("test")
+
+## What the test room is playing right now, on its page of voices.
+func test_line() -> void:
+	if is_instance_valid(test_now):
+		var playing: String = game.sandbox.now_playing
+		test_now.text = ("▶  " + playing) if playing != "" else "Wähle eine Zeile – oder lass alle nacheinander laufen."
+
+func _open_test_from_pause() -> void:
+	game.resume_run()
+	game.open_test()
 
 func _menu_end(column: VBoxContainer, mode: String) -> Control:
 	var rounds: int = game.ROUNDS.size()

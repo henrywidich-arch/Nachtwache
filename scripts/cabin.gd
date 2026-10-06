@@ -4808,15 +4808,42 @@ func level_of(pos: Vector3) -> int:
 ## the surface, 1 from 1.4 m down): the rain stops, the night's haze thins out, the pale
 ## blue light of the night sky gives way to a dim grey, and the hall of the laboratory
 ## is drawn.
+## The light of day, for the test room: no fog, no rain, no storm, an even brightness and
+## a sun - to look at things. Switched off, the night is back as it was.
+const DAY_AMBIENT := Color(0.8, 0.84, 0.9)
+const DAY_SKY := 1.0
+const DAY_SKY_COLOUR := Color(0.3, 0.4, 0.55)
+var daylight := false
+var sun: DirectionalLight3D
+
+func set_daylight(bright: bool) -> void:
+	daylight = bright
+	environment.fog_enabled = not bright
+	environment.volumetric_fog_enabled = not bright
+	# A plain pale sky instead of the night's.
+	environment.background_mode = Environment.BG_COLOR if bright else Environment.BG_SKY
+	environment.background_color = DAY_SKY_COLOUR
+	if bright and sun == null:
+		sun = DirectionalLight3D.new()
+		sun.name = "Sun"
+		sun.light_color = Color(1.0, 0.97, 0.9)
+		sun.light_energy = 1.15
+		sun.rotation_degrees = Vector3(-56, 34, 0)
+		sun.shadow_enabled = true
+		add_child(sun)
+	if sun != null:
+		sun.visible = bright
+	_sink(below)
+
 func _sink(depth: float) -> void:
 	var surfaced := below <= 0.0 or depth <= 0.0
 	below = depth
-	rain.visible = below <= 0.0
+	rain.visible = below <= 0.0 and not daylight
 	environment.fog_density = lerpf(0.024, 0.007, below)
 	environment.volumetric_fog_density = lerpf(0.03, 0.012, below)
 	environment.volumetric_fog_emission_energy = lerpf(1.0, 0.15, below)
-	environment.ambient_light_color = NIGHT_AMBIENT.lerp(CELLAR_AMBIENT, below)
-	environment.ambient_light_energy = lerpf(0.3, 0.16, below)
+	environment.ambient_light_color = DAY_AMBIENT if daylight else NIGHT_AMBIENT.lerp(CELLAR_AMBIENT, below)
+	environment.ambient_light_energy = lerpf(0.95, 0.7, below) if daylight else lerpf(0.3, 0.16, below)
 	if surfaced:
 		_show_hall()
 
@@ -4855,6 +4882,8 @@ func _process(delta: float) -> void:
 		(beacon_lamp.material_override as StandardMaterial3D).emission_energy_multiplier = 0.6 + 7.0 * flash
 	# Distant lightning.
 	storm_left -= delta
+	if storm_left <= 0 and daylight:
+		storm_left = 5.0
 	if storm_left <= 0:
 		storm_left = random.randf_range(16, 42)
 		flash_left = random.randf_range(0.35, 0.7)
@@ -4867,7 +4896,7 @@ func _process(delta: float) -> void:
 		environment.background_energy_multiplier = 1.0 + 9.0 * strike
 	else:
 		moon.light_energy = MOONLIGHT
-		environment.background_energy_multiplier = 1.0
+		environment.background_energy_multiplier = DAY_SKY if daylight else 1.0
 	if viewer != null:
 		rain.position = Vector3(viewer.global_position.x, 13, viewer.global_position.z)
 

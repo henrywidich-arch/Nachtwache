@@ -1438,11 +1438,13 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 	if hostile:
 		amount *= 1.0 - float(PLATE_SHARES[plate_level])
 		kind = ""
-	if armor > 0.0 and kind == "":
+	# In the test room, with endless health: a hit shows and sounds as ever, but takes nothing.
+	var spared: bool = game.sandbox.on and game.sandbox.god
+	if armor > 0.0 and kind == "" and not spared:
 		var absorbed := minf(armor, amount * ARMOR_SHARE)
 		armor -= absorbed
 		amount -= absorbed
-	health = maxf(0, health - amount)
+	health = maxf(0, health - (0.0 if spared else amount))
 	hurt_amount = minf(1.0, hurt_amount + 0.45 + amount * 0.02)
 	if kind == "acid":
 		acid_amount = 1.0
@@ -1451,7 +1453,12 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 	game.sounds.play_sound("hurt")
 	if from != Vector3.INF and kind == "":
 		game.hud.damage_from(from)
-	if health <= 0:
+	if health <= 0 and game.sandbox.on:
+		# Nobody stays down in the test room.
+		health = 100.0
+		hurt_amount = 0.3
+		game.hud.announce("GEFALLEN", "Im Einsatz wärst du jetzt am Boden. Im Testraum stehst du sofort wieder.", 3.0)
+	elif health <= 0:
 		if int(items.revive) > 0:
 			# The adrenaline shot keeps the survivor standing, once.
 			items.revive = int(items.revive) - 1

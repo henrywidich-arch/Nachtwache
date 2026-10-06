@@ -75,6 +75,8 @@ var spatial: Array[AudioStreamPlayer3D] = []
 var menu_voice: AudioStreamPlayer
 var ambience: AudioStreamPlayer
 var rain: AudioStreamPlayer
+## No rain is heard (the test room by daylight).
+var dry := false
 var weather_filter: AudioEffectLowPassFilter
 var room: AudioEffectReverb
 var sheltered := false
@@ -420,7 +422,7 @@ func _process(delta: float) -> void:
 		return
 	var blend := minf(1.0, delta * 3.0)
 	weather_filter.cutoff_hz = lerpf(weather_filter.cutoff_hz, 1300.0 if sheltered else 9500.0, blend)
-	rain.volume_db = lerpf(rain.volume_db, float(MIX.rain[0]) + (-7.0 if sheltered else 0.0), blend)
+	rain.volume_db = lerpf(rain.volume_db, -80.0 if dry else float(MIX.rain[0]) + (-7.0 if sheltered else 0.0), blend)
 	ambience.volume_db = lerpf(ambience.volume_db, float(MIX.wind[0]) + (-6.0 if sheltered else 0.0), blend)
 	# A small boxy room inside, a wide open echo in the yard.
 	room.room_size = lerpf(room.room_size, 0.3 if sheltered else 0.8, blend)

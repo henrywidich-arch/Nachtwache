@@ -44,10 +44,13 @@ func run(game: Node3D) -> void:
 	game.set_process(false)
 	# The rule checks below count exact kills and damage, so they run without the squad.
 	game.team_enabled = false
-	# --only=threats runs one of the later blocks on its own (handy while working on it).
+	# --only=threats runs one of the later blocks on its own (handy while working on it);
+	# --only=operators,sandbox runs several, one after the other.
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--only="):
-			await call("_" + arg.trim_prefix("--only="), game)
+			for block in arg.trim_prefix("--only=").split(","):
+				print("BLOCK " + block)
+				await call("_" + block, game)
 			game.sounds.stop_all()
 			await wait(0.2)
 			print("INTEGRATION_RESULT: %d checks, %d failures (only %s)" % [checks, failures, arg.trim_prefix("--only=")])
@@ -274,7 +277,8 @@ func run(game: Node3D) -> void:
 	striker.receive_hit(9999, Vector3.BACK)
 	expect(game.fx.growths.size() == 4, "A killed Striker drops three more growths")
 	game.player.health = 100
-	await wait(3.6)
+	# (Counted in steps of the game, as the fuses are: a busy machine must not decide this.)
+	await frames(216)
 	expect(game.fx.growths.is_empty() and game.player.health < 100, "The growths burst after a short fuse and injure a player who stays close")
 	# --- Crusher
 	game.player.health = 100
@@ -1092,6 +1096,7 @@ func run(game: Node3D) -> void:
 	await _squadwork(game)
 	await _overhaul(game)
 	await _operators(game)
+	await _sandbox(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -4218,3 +4223,193 @@ func _operators(game: Node3D) -> void:
 		stamp += (node as Label).text + " "
 	expect(same and other and silent and written.contains("VERSIONEN PASSEN NICHT") and written.contains("v0.18") and stamp.contains("v" + NetLink.VERSION) and net.hello != null and net.hello.name == "Hello", "Two players with different versions of the game are told so in the lobby instead of getting into a match that cannot work; one that never says its version counts as an older one")
 	hud.hide_menu()
+
+## What came with v0.20: the test room - the farm without a night, where every enemy can
+## be called, nothing can kill, every weapon is to be had and every recorded line can be
+## played, and of which nothing is kept.
+func _sandbox(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hud: SurvivalHUD = game.hud
+	var room: Sandbox = game.sandbox
+	var cabin: CabinMap = game.cabin
+	var runs_before: int = game.profile.best(Profile.board(game.profile.difficulty, "endless")).size()
+	var kept_mode: String = game.profile.mode
+	# As it is reached in play: from the main menu.
+	game.return_to_menu()
+	await frames(2)
+	game.team_enabled = true
+	game.start_run(true)
+	await frames(3)
+	var yard: Vector3 = cabin.points.yard_south
+	expect(room.on and game.mode == "endless" and not game.story.enabled and game.team.is_empty() and game.state == "playing" and game.phase == "preparing" and game.credits == Sandbox.SUPPLY and game.wave == 5 and player.global_position.distance_to(yard) < 1.0 and game.profile.mode == kept_mode, "The test room is a match of its own: no story, no squad, no bill, the survivor in the yard - and the mode chosen for the next night is left alone")
+	expect(cabin.daylight and not cabin.environment.fog_enabled and not cabin.environment.volumetric_fog_enabled and not cabin.rain.visible and cabin.sun != null and cabin.sun.visible and game.sounds.dry, "It begins by daylight: no fog, no rain, a sun")
+	# No round comes by itself.
+	game.set_process(true)
+	game.preparation_left = 0.4
+	await wait(1.2)
+	game.set_process(false)
+	expect(game.phase == "preparing" and game.wave == 5 and game.alive_count == 0 and game.preparation_left > 1000.0, "No round begins by itself in the test room")
+	# --- every kind of enemy, where he looks
+	var kinds: Array = []
+	for group in [Sandbox.INFECTED, Sandbox.SOLDIERS, Sandbox.OPERATORS]:
+		for entry in group:
+			kinds.append(str(entry[0]))
+	var all_there := kinds.size() == Infected.TYPES.size()
+	for kind in Infected.TYPES:
+		all_there = all_there and kinds.has(str(kind))
+	room.frozen = true
+	var placed := true
+	var told := ""
+	for kind in kinds:
+		var made: Array = room.spawn(kind)
+		var good: bool = made.size() == 1
+		if good:
+			var one: Infected = made[0]
+			var gap: float = Vector2(one.global_position.x - player.global_position.x, one.global_position.z - player.global_position.z).length()
+			# In front of him (he looks north, towards the house), at about the distance asked for.
+			good = one.kind == kind and one.wave == 5 and gap > 3.0 and gap < Sandbox.GAP + 6.0 and one.global_position.z < player.global_position.z - 2.0 and not one.is_physics_processing()
+		if not good:
+			placed = false
+			told += kind + " "
+		room.clear()
+		await frames(2)
+	expect(all_there and placed and room.alive() == 0 and game.alive_count == 0 and game.operators.is_empty(), "Every kind of enemy the game has - %d of them - can be put in front of the survivor and taken away again %s" % [kinds.size(), told])
+	# Several at once, and a whole C.R.U. squad.
+	room.count = 5
+	var pack: Array = room.spawn("mauler")
+	var apart := pack.size() == 5
+	for i in range(pack.size()):
+		for j in range(i):
+			apart = apart and (pack[i] as Infected).global_position.distance_to((pack[j] as Infected).global_position) > 1.0
+	room.clear()
+	await frames(2)
+	room.count = 1
+	var squad: Array = room.spawn("squad")
+	var squad_kinds := {}
+	for soldier in squad:
+		squad_kinds[(soldier as Infected).kind] = true
+	expect(apart and squad.size() == Sandbox.SQUAD.size() and squad_kinds.has("cru_shield") and squad_kinds.has("cru_elite") and squad_kinds.has("cru_commander"), "Five at a click stand side by side, and a whole C.R.U. squad comes at one")
+	room.clear()
+	await frames(2)
+	# Frozen, they stand; set free, they come.
+	room.frozen = true
+	var walker: Infected = room.spawn("mauler")[0]
+	var stood: Vector3 = walker.global_position
+	await frames(50)
+	var still: bool = walker.global_position.distance_to(stood) < 0.05 and not walker.is_physics_processing()
+	room.frozen = false
+	await frames(150)
+	expect(still and is_instance_valid(walker) and walker.is_physics_processing() and walker.global_position.distance_to(stood) > 0.5, "Frozen enemies stand where they were put; set free, they come for him")
+	room.clear()
+	await frames(2)
+	# --- nothing kills
+	player.health = 100.0
+	player.armor = 50.0
+	player.receive_damage(500.0)
+	var unhurt: bool = player.health == 100.0 and player.armor == 50.0 and not player.down and game.state == "playing"
+	room.god = false
+	player.receive_damage(60.0)
+	var hurt: bool = player.health < 100.0
+	player.receive_damage(5000.0)
+	expect(unhurt and hurt and player.health == 100.0 and not player.down and game.state == "playing" and hud.banner_label.text == "GEFALLEN", "With endless health nothing takes anything; without it he can be hurt, and stands again at once when he falls")
+	room.god = true
+	player.armor = 0.0
+	# --- ammunition
+	player.inventory[player.current_weapon].reserve = 0
+	player.inventory[player.current_weapon].ammo = 3
+	player.items.grenade = 0
+	await frames(3)
+	var pockets: bool = player.reserve == player.max_reserve() and player.ammo == 3 and int(player.items.grenade) == int(Survivor.GOODS.grenade.max)
+	room.ammo = "magazine"
+	await frames(3)
+	var magazine: bool = player.ammo == player.magazine_size()
+	room.ammo = "off"
+	player.inventory[player.current_weapon].reserve = 7
+	player.inventory[player.current_weapon].ammo = 2
+	await frames(3)
+	expect(pockets and magazine and player.reserve == 7 and player.ammo == 2, "Ammunition as he likes it: pockets that never empty, a magazine that never empties, or as in a mission")
+	room.ammo = "reserve"
+	# --- every weapon, and the counter wherever he stands
+	room.arsenal()
+	room.kit()
+	var armed: bool = player.inventory.size() == player.weapon_models.size() and player.inventory.has("minigun") and player.inventory.has("nitro") and player.armor == 100.0 and player.mask_level == 4 and int(player.items.claymore) == 4
+	player.inventory = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
+	player.equip_weapon("rifle", true)
+	game.open_shop()
+	var counter: bool = game.state == "shop" and game.closest_station().is_empty()
+	# One that only comes late in a night, and one of a tree of abilities he may not have.
+	var late: bool = game.buy_weapon("minigun")
+	var classy: bool = game.buy_weapon("nitro") and player.inventory.has("nitro")
+	player.items.grenade = 0
+	var sold: bool = game.buy_item("grenade") and int(player.items.grenade) == 1
+	game.resume_run()
+	game.open_bench()
+	var benched: bool = game.state == "bench" and game.buy_upgrade("damage") and player.upgrade(player.current_weapon, "damage") == 1
+	game.resume_run()
+	expect(armed and counter and late and classy and sold and benched and game.credits > 900000, "Every weapon at a click, and shop and workbench wherever he stands, with everything on offer and nothing to pay")
+	# --- the voices
+	var spoken := 0
+	var recorded := 0
+	for entry in Sandbox.SPEAKERS:
+		for line in room.lines_of(str(entry[0])):
+			spoken += 1
+			if str(line.sound) != "":
+				recorded += 1
+	var written := 0
+	for cue in Radio.LINES:
+		written += (Radio.LINES[cue][1] as Array).size()
+	for cue in Radio.BARKS:
+		for who in Radio.BARKS[cue]:
+			written += (Radio.BARKS[cue][who] as Array).size()
+	room.say("phantom", "op_taunt", 1)
+	var taunt: bool = room.now_playing.begins_with("PHANTOM:") and room.voice_left > 0.5 and hud.radio_label.text.begins_with("PHANTOM:") and game.sounds.radio_voice.playing
+	room.say("ghost", "contact", 0)
+	var call_heard: bool = room.now_playing.begins_with("GHOST:") and not hud.radio_label.text.begins_with("GHOST:")
+	room.hijack = true
+	room.say("coleman", "round_clear", 0)
+	var taken: bool = hud.radio_label.text.begins_with("COLEMAN:") and hud.radio_label.text.contains("#") and is_equal_approx(game.sounds.radio_voice.pitch_scale, game.sounds.FAKE_PITCH)
+	room.hijack = false
+	room.say("coleman", "round_clear", 0)
+	var honest: bool = not hud.radio_label.text.contains("#") and is_equal_approx(game.sounds.radio_voice.pitch_scale, 1.0)
+	# All of one speaker, one after the other.
+	room.say_all("shop")
+	var queued: int = room.queue.size()
+	await wait(0.3)
+	var first_of_all: bool = room.now_playing.begins_with("HÄNDLERIN:") and room.queue.size() == queued - 1
+	room.hush()
+	expect(spoken == written and recorded == spoken and room.lines_of("phantom").size() == 16 and taunt and call_heard and taken and honest and queued == 6 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, all recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of a speaker in a row" % spoken)
+	# --- the menu
+	game.open_test()
+	var pages := {}
+	for page in ["enemies", "player", "voices", "world"]:
+		room.tab = page
+		hud.show_menu("test")
+		var words := ""
+		for node in hud.modal.find_children("*", "Button", true, false):
+			words += (node as Button).text + " | "
+		pages[page] = words
+	var opened: bool = game.overlay == "test" and hud.current_menu == "test" and player.menu_open and not get_tree().paused
+	# A click on a page: the Crusher from the first, the light from the last.
+	hud._test_spawn("crusher")
+	var called: bool = room.alive() == 1 and is_instance_valid(game.boss)
+	hud._test_do("clear")
+	hud._test_set("daylight", false)
+	var dark: bool = not cabin.daylight and cabin.environment.fog_enabled and cabin.rain.visible and not cabin.sun.visible
+	hud._test_set("daylight", true)
+	hud._test_do("jump", "lab")
+	var jumped: bool = game.overlay == "" and player.global_position.y < CabinMap.CELLAR + 0.5 and absf(player.global_position.z - (cabin.points.lab as Vector3).z) < 1.0
+	room.jump("yard_south")
+	expect(opened and str(pages.enemies).contains("CRUSHER") and str(pages.enemies).contains("PHANTOM") and str(pages.enemies).contains("GANZER TRUPP") and str(pages.player).contains("UNENDLICH LEBEN") and str(pages.player).contains("ALLE WAFFEN") and str(pages.voices).contains("ALLE NACHEINANDER") and str(pages.voices).contains("HAVOC") and str(pages.world).contains("TAGESLICHT") and called and room.alive() == 0 and dark and cabin.daylight and jumped, "The test room's menu has a page for enemies, one for the survivor, one for the voices and one for the world, and the room goes on behind it")
+	# --- a real round on request, and none of it is kept
+	room.strength = 3
+	room.start_round()
+	await frames(5)
+	var began: bool = game.phase == "wave" and game.wave == 3 and game.spawn_queue.size() + game.alive_count > 0
+	room.clear()
+	await frames(3)
+	var over: bool = game.phase == "preparing" and game.alive_count == 0 and game.state == "playing"
+	game.finish(false)
+	expect(began and over and game.state == "menu" and not room.on and not cabin.daylight and cabin.environment.fog_enabled and not game.sounds.dry and not game.skills.open_all and is_equal_approx(Engine.time_scale, 1.0) and game.profile.best(Profile.board(game.profile.difficulty, "endless")).size() == runs_before, "A real round can be started and ended from the test room, and leaving it brings the night back as it was - with nothing on the leaderboard")
+	game.team_enabled = false
+	game.start_run()
+	expect(not room.on and game.mode == kept_mode and game.credits == 120 and cabin.environment.fog_enabled and not game.skills.open_all and game.team.is_empty(), "The next night is an ordinary one again")

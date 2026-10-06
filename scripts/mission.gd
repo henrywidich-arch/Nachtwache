@@ -551,7 +551,8 @@ func _lab_spot(taken: Array) -> Vector3:
 # ---------------------------------------------------------------- the Stalker
 
 func _haunting(delta: float) -> void:
-	if stalker_dead or is_instance_valid(stalker) or game.wave < 2:
+	# (Not in the test room: there he comes when he is called.)
+	if stalker_dead or is_instance_valid(stalker) or game.wave < 2 or game.sandbox.on:
 		return
 	sighting_left -= delta
 	if sighting_left <= 0.0:
