@@ -416,7 +416,11 @@ static func figures(id: String) -> Dictionary:
 		harm = float(Throwable.BLAST[2])
 	elif data.has("flame"):
 		harm = float(data.damage) / float(data.interval)
-	return {"harm": harm, "rate": 60.0 / float(data.interval), "magazine": int(data.magazine), "reserve": int(data.reserve_max), "reload": float(data.reload_time), "tight": clampf(1.0 - float(data.spread) / 0.07, 0.0, 1.0)}
+	var reload := float(data.reload_time)
+	if data.has("drum"):
+		# A drum is reloaded whole: opened, filled shell by shell and closed again.
+		reload = float(Survivor.DRUM.open[0]) + float(Survivor.DRUM.load[0]) * int(data.magazine) + float(Survivor.DRUM.close[0])
+	return {"harm": harm, "rate": 60.0 / float(data.interval), "magazine": int(data.magazine), "reserve": int(data.reserve_max), "reload": reload, "tight": clampf(1.0 - float(data.spread) / 0.07, 0.0, 1.0)}
 
 ## One line of the comparison: a name, a bar, the number, and how it differs from what is
 ## carried (`better` > 0: green, < 0: red).
@@ -605,6 +609,8 @@ func line_effect(id: String, line: String) -> String:
 			return "Reserve  %d" % player.reserve_cap(id) + ("" if full else "   →   %d" % int(round(base + int(data.reserve_max) * step * (have + 1))))
 		"drill":
 			var quick: float = float(data.reload_time) * (1.0 - minf(0.6, float(game.skills.value("reload")) + step * (have + 1)))
+			if data.has("drum"):
+				return "Pro Granate  %s s" % _plain(player.reload_of(id)) + ("" if full else "   →   %s s" % _plain(quick))
 			return "Nachladen  %s s" % _plain(player.reload_of(id)) + ("" if full else "   →   %s s" % _plain(quick))
 		"brace":
 			return "Rückstoß  %d %%" % int(round((1.0 - step * have) * 100.0)) + ("" if full else "   →   %d %%" % int(round((1.0 - step * (have + 1)) * 100.0)))

@@ -2401,6 +2401,7 @@ func _threats(game: Node3D) -> void:
 	player.health = 100.0
 	player.unlock("launcher")
 	await wait(0.4)
+	player.shot_cooldown = 0.0
 	player.shoot()
 	await frames(2)
 	var shell: Throwable = null
@@ -3707,6 +3708,42 @@ func _overhaul(game: Node3D) -> void:
 	var reach := Vector2(landing.x - flight[0].x, landing.z - flight[0].z).length()
 	var seconds := (flight.size() - 1) * 0.05
 	expect(reach > 14.0 and reach < 30.0 and seconds > 1.0 and reach / seconds < 18.5 and float(Survivor.LAUNCH_SPEED) < 20.0 and float(Survivor.LAUNCH_SHOWN) >= seconds, "The launcher's shell can be watched on its way: %.1f m in %.2f seconds when held level" % [reach, seconds])
+	# --- the launcher is an M32: one shell a second from a drum that is loaded shell by shell
+	player.ammo = 6
+	await frames(3)
+	var m32_view: Node3D = player.weapon_models["launcher"]
+	var m32_full_drum: int = m32_view.find_children("Round*", "", true, false).filter(func(node: Node) -> bool: return (node as Node3D).visible).size()
+	player.shot_cooldown = 0.0
+	var m32_turned := player.drum_turn
+	player.shoot()
+	var m32_once: bool = player.ammo == 5 and is_equal_approx(player.shot_cooldown, 1.0) and player.drum_shot >= 0.0
+	await wait(0.3)
+	m32_once = m32_once and player.drum_turn == m32_turned + 1
+	player.shot_cooldown = 0.0
+	player.trigger_held = false
+	player.start_reload()
+	var m32_opened: bool = player.drum_phase == "open" and player.loading_shells and player.reload_left > 1.0
+	player._work_drum(player.drum_time("open"))
+	var m32_filling: bool = player.drum_phase == "load" and player.ammo == 5
+	WeaponView.pose_drum(m32_view, player.drum_turn, player.ammo, "load", 0.3, 1.0)
+	var m32_swung: float = absf((m32_view.find_child("Front", true, false) as Node3D).rotation.z)
+	var m32_carried: bool = (m32_view.get_node("Held") as Node3D).visible
+	var m32_stock := player.reserve
+	player._work_drum(player.drum_time("load"))
+	var m32_loaded: bool = player.ammo == 6 and player.reserve == m32_stock - 1 and player.drum_phase == "close"
+	player._work_drum(player.drum_time("close"))
+	var m32_shut: bool = player.drum_phase == "" and not player.loading_shells and player.reload_left == 0.0
+	# One more shot, then the trigger breaks the reload off: the drum is closed first.
+	player.shot_cooldown = 0.0
+	player.shoot()
+	player.trigger_held = false
+	player.start_reload()
+	player._work_drum(player.drum_time("open"))
+	player.trigger_held = false
+	player.shoot()
+	var m32_broken: bool = player.drum_phase == "close" and player.ammo == 5
+	player._work_drum(player.drum_time("close"))
+	expect(str(Survivor.WEAPONS.launcher.label) == "M32 GRANATWERFER" and not Survivor.WEAPONS.has("m32") and str(WeaponView.MODELS.launcher.scene).ends_with("m32.glb") and m32_full_drum == 6 and m32_once and m32_opened and m32_filling and m32_swung > 0.8 and m32_carried and m32_loaded and m32_shut and m32_broken and not Survivor.upgrade_fits("launcher", "mags"), "The launcher is the M32: it fires a shell a second and turns its drum on; its drum swings open, is filled shell by shell and closed, and the trigger closes it early")
 	# --- points are spread over the trees, and one tree is in force
 	player.inventory.erase("launcher")
 	player.equip_weapon("rifle", true)

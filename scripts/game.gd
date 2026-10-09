@@ -2413,6 +2413,14 @@ func _run_shop_check() -> void:
 	hud.counter.pick("weapon", "g36")
 	await tick.call(0.9)
 	await _capture(folder, "shop_02_g36.png")
+	# The grenade launcher (the M32) among the heavy weapons.
+	hud._open_tab("heavy")
+	await get_tree().create_timer(0.3).timeout
+	hud.counter.pick("weapon", "launcher")
+	await get_tree().create_timer(0.5).timeout
+	await _capture(folder, "shop_02b_launcher.png")
+	hud._open_tab("weapons")
+	await get_tree().create_timer(0.3).timeout
 	buy_weapon("g36")
 	await tick.call(0.3)
 	hud.counter.pick("weapon", "ak")
@@ -3484,6 +3492,10 @@ func _run_gun_check() -> void:
 	var waits := [0.2, 0.25, 0.28, 0.38, 0.33, 0.24, 0.16, 0.16]
 	# The moments are those of a reload of two and a half seconds.
 	var pace: float = float(Survivor.WEAPONS[id].reload_time) / 2.5
+	if Survivor.WEAPONS[id].has("drum"):
+		# A drum: swung open (2.1 s), three shells of a second each, shut again.
+		waits = [0.5, 0.7, 0.8, 0.5, 0.35, 0.5, 2.6, 0.5]
+		pace = 1.0
 	for i in range(waits.size()):
 		await get_tree().create_timer(float(waits[i]) * pace).timeout
 		await _capture(folder, "%s_5_reload_%d.png" % [id, i + 1])

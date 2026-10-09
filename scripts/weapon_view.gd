@@ -152,11 +152,17 @@ const VIEWS := {
 		"hip": Vector3(0.13, -0.17, -0.36), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.046, -0.115), "muzzle": Vector3(0, -0.01, -0.687)
 	},
-	# The launcher is not aimed over its sight: it stays beside the line of sight, so that
-	# the arc of its shell can be seen (see Survivor.launch_path).
+	# The launcher (an M32, see build_m32) is not aimed over its sight: it stays beside the
+	# line of sight, so that the arc of its shell can be seen (see Survivor.launch_path).
+	# While its drum is loaded it is held lower and rolled over to the left, muzzle down a
+	# little, so that the open front of the drum shows and the empty cases slide out.
 	"launcher": {
-		"hip": Vector3(0.14, -0.2, -0.36), "hip_angles": Vector3(1.0, 6.5, -2.5),
-		"aim": Vector3(0.115, -0.185, -0.4), "aim_angles": Vector3(0.5, 5.0, -2.0), "muzzle": Vector3(0, 0.06, -0.348)
+		"hip": Vector3(0.125, -0.195, -0.39), "hip_angles": Vector3(1.0, 6.5, -2.5),
+		"aim": Vector3(0.11, -0.185, -0.42), "aim_angles": Vector3(0.5, 5.0, -2.0), "muzzle": Vector3(0, 0.092, -0.456),
+		# The M32 is lowered while its front swings open, then stood on its butt, muzzle up,
+		# for the shells to be pushed into the drum one by one (load_low, load_turn).
+		"reload_low": Vector3(-0.03, -0.03, 0.0), "reload_turn": Vector3(-0.3, 0.3, 0.3),
+		"load_low": Vector3(-0.12, 0.0, -0.03), "load_turn": Vector3(1.1, 0.2, 0.35)
 	},
 	"minigun": {
 		"hip": Vector3(0.2, -0.3, -0.46), "hip_angles": Vector3(2.0, 8.0, -3.0),
@@ -215,7 +221,8 @@ const MODELS := {
 	"revolver": {"scene": "res://assets/models/revolver.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.04, 0.0), "hands": "cup"},
 	"autoshotgun": {"scene": "res://assets/models/autoshotgun.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.056, -0.273), "hands": "cradle"},
 	"sniper": {"scene": "res://assets/models/sniper.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.034, -0.355), "hands": "cradle"},
-	"launcher": {"scene": "res://assets/models/launcher.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, -0.026, -0.2045), "hands": "grip"},
+	# The launcher is the M32 (tools/blender_make_m32.py), with a view of its own: see build_m32.
+	"launcher": {"scene": "res://assets/models/m32.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.078, -0.322), "hands": "grip", "drum": true},
 	"minigun": {"scene": "res://assets/models/minigun.glb", "mount": Vector3(0, -0.12, 0.05), "support": Vector3(0, 0.251, -0.142), "hands": "grip"},
 	"m14": {"scene": "res://assets/models/m14.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0811, -0.341), "hands": "cradle"},
 	"svd": {"scene": "res://assets/models/svd.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0928, -0.438), "hands": "cradle"},
@@ -224,6 +231,16 @@ const MODELS := {
 	# (the node "Barrels") by this many degrees.
 	"nitro": {"scene": "res://assets/models/double_rifle.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0829, -0.308), "hands": "cradle", "open": -28.0},
 	"fifty": {"scene": "res://assets/models/heavy_sniper.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0895, -0.378), "hands": "cradle"}
+}
+
+## The M32's moving parts, measured on its model (from the middle of the pistol grip): the
+## mouth of the chamber a shell is pushed into (upper left of the drum, the drum then winds
+## it up to the top), the latch of the front frame, how far that frame swings out (degrees
+## about its hinge), and where the left hand is while it fetches the next shell (from
+## where it holds the foregrip).
+const M32 := {
+	"mouth": Vector3(-0.0433, 0.157, -0.196), "latch": Vector3(-0.035, 0.197, -0.214), "open": -58.0,
+	"away": Vector3(-0.05, -0.17, 0.17), "shell": 0.105
 }
 
 static var materials: Dictionary = {}
@@ -447,6 +464,8 @@ static func model_scene(id: String, view: bool) -> Node3D:
 ## The first-person view of a weapon from MODELS: the model and the hands that hold it.
 static func build_model(id: String) -> Node3D:
 	var info: Dictionary = MODELS[id]
+	if info.has("drum"):
+		return build_m32()
 	var view := Node3D.new()
 	view.name = id
 	var mount: Vector3 = info.mount
@@ -465,6 +484,107 @@ static func build_model(id: String) -> Node3D:
 			_grip_hand(batch, hold, -1.0, false, Vector3(-0.15, -0.24, 0.2))
 	_finish(view, batch)
 	return view
+
+## The M32: model, the right hand on the pistol grip and the left one on the foregrip. The
+## left hand hangs under a node of its own ("Support") that the player moves while the
+## drum is loaded, and with it comes a shell ("Held") that it pushes into the drum.
+static func build_m32() -> Node3D:
+	var info: Dictionary = MODELS["launcher"]
+	var mount: Vector3 = info.mount
+	var view := Node3D.new()
+	view.name = "launcher"
+	var model := model_scene("launcher", true)
+	model.position = mount
+	view.add_child(model)
+	var hand := Node3D.new()
+	hand.name = "Support"
+	view.add_child(hand)
+	var support := MeshBatch.new()
+	_grip_hand(support, mount + (info.support as Vector3), -1.0, false, Vector3(-0.15, -0.24, 0.2))
+	for mesh in support.commit(hand, "Hand", false):
+		mesh.layers = 2
+	var held := Node3D.new()
+	held.name = "Held"
+	held.visible = false
+	view.add_child(held)
+	var shell := MeshBatch.new()
+	var forward := Basis(Vector3.RIGHT, -PI / 2)
+	var length: float = M32.shell
+	shell.cylinder(shared("steel"), Vector3.ZERO, 0.0205, 0.0205, 0.045, Color("8c8f93"), 16, forward)
+	shell.cylinder(shared("polymer"), Vector3(0, 0, -0.045), 0.0195, 0.0195, 0.03, Color("4e563a"), 16, forward)
+	shell.cylinder(shared("steel"), Vector3(0, 0, -0.06), 0.0198, 0.0198, 0.008, Color("d8b24a"), 16, forward)
+	shell.cylinder(shared("polymer"), Vector3(0, 0, -0.075), 0.0195, 0.006, length - 0.075, Color("4e563a"), 16, forward)
+	for mesh in shell.commit(held, "Shell", false):
+		mesh.layers = 2
+	var batch := MeshBatch.new()
+	_grip_hand(batch, mount, 1.0, true, Vector3(0.1, -0.24, 0.22))
+	_finish(view, batch)
+	return view
+
+## Where, in the M32's view, the shell goes into the drum.
+static func drum_mouth() -> Vector3:
+	return (MODELS["launcher"].mount as Vector3) + (M32.mouth as Vector3)
+
+## Moves the M32's parts: the drum `turn` chambers on (60 degrees each), the grenades in the
+## `loaded` chambers from there on shown, the front frame swung out and the left hand at
+## work while the drum is loaded (`phase`, see Survivor.DRUM, `done` 0 to 1 of it).
+static func pose_drum(view: Node3D, turn: float, loaded: int, phase: String, done: float, delta: float) -> void:
+	var drum := view.find_child("Drum", true, false) as Node3D
+	var front := view.find_child("Front", true, false) as Node3D
+	if drum == null or front == null:
+		return
+	var aim := deg_to_rad(60.0 * turn)
+	drum.rotation.z = move_toward(drum.rotation.z, aim, delta * 16.0) if absf(drum.rotation.z - aim) < 2.2 else aim
+	var top := int(floor(turn + 0.5))
+	for i in range(6):
+		var grenade := drum.get_node_or_null("Round%d" % i) as Node3D
+		if grenade != null:
+			grenade.visible = posmod(i - top, 6) < loaded
+	var opened := 0.0
+	match phase:
+		"open":
+			opened = smoothstep(0.1, 0.34, done)
+		"load":
+			opened = 1.0
+		"close":
+			opened = 1.0 - smoothstep(0.06, 0.3, done)
+	front.rotation.z = deg_to_rad(float(M32.open)) * opened
+	var info: Dictionary = MODELS["launcher"]
+	var rest: Vector3 = info.support
+	var latch: Vector3 = (M32.latch as Vector3) - rest + Vector3(-0.012, -0.02, 0.0)
+	var away: Vector3 = M32.away
+	var mouth: Vector3 = (M32.mouth as Vector3) - rest
+	var length: float = M32.shell
+	var hand := Vector3.ZERO
+	var carrying := false
+	match phase:
+		"open":
+			# To the latch, push the frame out, then down to the pouch for a shell.
+			var reach := smoothstep(0.0, 0.1, done)
+			var swing := smoothstep(0.1, 0.34, done)
+			var fetch := smoothstep(0.4, 0.8, done)
+			hand = (latch * reach + Vector3(0.06, -0.03, -0.02) * swing).lerp(away, fetch)
+		"load":
+			# Up with a shell in front of the drum, push it home by its nose, back for the
+			# next. The shell counts (and turns up in the drum) when it is home.
+			var lift := smoothstep(0.0, 0.24, done)
+			var push := smoothstep(0.25, 0.4, done)
+			var back := smoothstep(0.45, 0.95, done)
+			var depth := lerpf(-0.02, length, push)
+			var at := mouth + Vector3(0.0, -0.025, depth - length - 0.01)
+			hand = away.lerp(at, lift).lerp(away, back)
+			carrying = done < 0.4
+		"close":
+			# Swing the frame shut and take the foregrip again.
+			var reach := smoothstep(0.0, 0.08, done)
+			var shut := smoothstep(0.06, 0.3, done)
+			var home := smoothstep(0.32, 0.8, done)
+			hand = away.lerp(Vector3(0.09, -0.06, -0.06), reach).lerp(latch, shut).lerp(Vector3.ZERO, home)
+	(view.get_node("Support") as Node3D).position = hand
+	var held := view.get_node_or_null("Held") as Node3D
+	if held != null:
+		held.visible = carrying
+		held.position = (info.mount as Vector3) + rest + hand + Vector3(0.0, 0.025, length + 0.01)
 
 ## A gun from GUNS. Its magazine really leaves the weapon: the magazine and the hand that
 ## changes it hang under nodes of their own ("Magazine", "Support"), which the player moves

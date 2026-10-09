@@ -29,8 +29,11 @@ const WEAPONS := {
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
 	# through. bolt: the action is worked by hand after every shot.
 	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 3, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
-	# grenade: fires 40 mm shells that go off where they land.
-	"launcher": {"label": "GRANATWERFER", "slot": 3, "price": 900, "group": "heavy", "from_round": 4, "sound": "launcher", "magazine": 6, "reserve_max": 18, "reload_time": 3.4, "interval": 0.75, "damage": 0.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.05, "flash": 0.9, "punch": 2.2, "settle": 0.8, "grenade": true},
+	# grenade: fires 40 mm shells that go off where they land. The launcher is the M32 of
+	# Combat Arms: one shell a second (its shot takes as long), six in a revolving drum
+	# that is loaded shell by shell (drum: see DRUM; reload_time is one shell). draw:
+	# seconds after it is taken in hand before it can fire.
+	"launcher": {"label": "M32 GRANATWERFER", "slot": 3, "price": 900, "group": "heavy", "from_round": 4, "sound": "launcher", "magazine": 6, "reserve_max": 18, "reload_time": 1.0, "interval": 1.0, "damage": 0.0, "head_multiplier": 1.0, "spread": 0.0, "kick": 0.05, "flash": 0.9, "punch": 2.2, "settle": 0.8, "grenade": true, "drum": true, "draw": 1.2},
 	# spin: seconds the barrels need to come up to speed before the first shot.
 	# The machine gun: a hundred rounds in the box and four boxes more. Shares its key with
 	# the minigun.
@@ -130,6 +133,14 @@ const PUMP_DONE := 0.56
 const PUMP_TRAVEL := 0.09
 ## Moments of a reload, as a share of its duration, and the sound each one makes.
 const RELOAD_CUES := [[0.07, "mag_out"], [0.56, "mag_in"], [0.84, "bolt"]]
+## The steps of loading a drum (the launcher, an M32), with the times of its first-person animations in
+## Combat Arms: [seconds, the moment its sound is heard, the sound]. "open" swings the front
+## frame out and tips the empty cases out, "load" pushes one shell home and winds the drum
+## on (the shell counts from its sound on), "close" shuts the frame again. The workbench
+## and the abilities make all of it quicker, like any reload.
+const DRUM := {"open": [2.1, 0.134, "m32_open"], "load": [1.0, 0.4, "m32_shell"], "close": [1.034, 0.067, "m32_close"]}
+## Seconds after a shot until the drum has turned on to the next chamber.
+const DRUM_TURN := 0.16
 var current_weapon := "rifle"
 var inventory: Dictionary = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
 var weapon_models: Dictionary = {}
@@ -257,6 +268,16 @@ var spin := 1.0
 var spin_voice: AudioStreamPlayer
 ## Shell-by-shell reload: the chamber was empty, so the reload ends with a pump stroke.
 var chamber_empty := false
+## The drum of the launcher while it is loaded: the step it is in ("" for none, see DRUM), the
+## seconds since that step began and whether its sound was heard. drum_turn counts the
+## chambers the drum has turned on (one per shot, one back per shell loaded): the loaded
+## chambers are the `ammo` ones from that one on. drum_clock_shot: seconds since the last
+## shot while the drum still has to turn (negative when it has).
+var drum_phase := ""
+var drum_clock := 0.0
+var drum_cued := false
+var drum_turn := 0
+var drum_shot := -1.0
 var loading_shells := false
 var jolt := 0.0
 var reload_pose := 0.0
@@ -385,7 +406,8 @@ static func upgrade_fits(id: String, line: String) -> bool:
 		"brace":
 			return float(WEAPONS[id].kick) > 0.0
 		"mags":
-			return int(WEAPONS[id].magazine) >= 4
+			# A drum has six chambers and no more.
+			return int(WEAPONS[id].magazine) >= 4 and not WEAPONS[id].has("drum")
 	return UPGRADES.has(line)
 
 ## Raises a line of the workbench on a weapon by one level. What is bigger is filled at
@@ -410,7 +432,15 @@ func damage_of(id: String) -> float:
 
 ## Seconds a reload of a weapon takes: quicker with the sweeper's hands and the workbench.
 func reload_of(id: String) -> float:
-	return float(WEAPONS[id].reload_time) * (1.0 - minf(0.6, game.skills.value("reload") + float(UPGRADES.drill.step) * upgrade(id, "drill")))
+	return float(WEAPONS[id].reload_time) * _quicker(id)
+
+## Share of its time a reload of a weapon still takes.
+func _quicker(id: String) -> float:
+	return 1.0 - minf(0.6, game.skills.value("reload") + float(UPGRADES.drill.step) * upgrade(id, "drill"))
+
+## Seconds one step of loading the drum takes (see DRUM).
+func drum_time(step: String) -> float:
+	return float(DRUM[step][0]) * _quicker(current_weapon)
 
 func filter_capacity() -> float:
 	return MASK_SECONDS[mask_level] * (1.0 + game.skills.value("filter"))
@@ -752,12 +782,15 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 	# Cancelling a reload never transfers rounds; each weapon owns its ammo.
 	reload_left = 0
 	loading_shells = false
+	drum_phase = ""
+	drum_shot = -1.0
 	pump_clock = -1.0
 	bolt_clock = -1.0
 	spin = 0.0
 	flash_left = 0
 	recoil = 0
-	shot_cooldown = 0.25
+	# A heavy weapon takes a moment longer to bring up.
+	shot_cooldown = float(WEAPONS[id].get("draw", 0.25))
 	weapon.hide()
 	current_weapon = id
 	weapon = weapon_models[id]
@@ -893,7 +926,16 @@ func _physics_process(delta: float) -> void:
 			bolt_clock = -1.0
 			jolt = 1.0
 			game.sounds.play_sound("bolt")
-	if reload_left > 0 and loading_shells:
+	if drum_shot >= 0.0:
+		drum_shot += delta
+		if drum_shot >= DRUM_TURN:
+			# The spring turns the drum on to the next chamber.
+			drum_shot = -1.0
+			drum_turn += 1
+			game.sounds.play_sound("m32_turn")
+	if drum_phase != "":
+		_work_drum(delta)
+	elif reload_left > 0 and loading_shells:
 		reload_left = maxf(0, reload_left - delta)
 		if reload_left == 0:
 			# One shell slides into the tube; carry on until it is full.
@@ -1192,7 +1234,10 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 	angles += Vector3(sway.y * 1.4, -sway.x * 1.8, -sway.x * 1.4) * loose
 	target += Vector3(0, -velocity.y * 0.0035 - landing * 0.018, recoil * (0.018 if aiming else 0.03))
 	angles.x += recoil * (0.018 if aiming else 0.045)
-	if loading_shells:
+	if drum_phase != "":
+		# Turned over while the drum is open, and back again as it is closed.
+		reload_pose = 1.0 - smoothstep(0.25, 0.95, drum_done()) if drum_phase == "close" else move_toward(reload_pose, 1.0, delta * 3.2)
+	elif loading_shells:
 		# Held low and tilted while the shells go in, one nudge per shell.
 		reload_pose = move_toward(reload_pose, 1.0, delta * 5.0)
 	elif reload_left > 0:
@@ -1202,8 +1247,15 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 	if reload_pose > 0.0:
 		var low := Vector3(0.02, -0.075, 0.02) if loading_shells or WEAPONS[current_weapon].has("shells") else Vector3(0.025, -0.12, 0.03)
 		var turn := Vector3(0.3, 0.2, -0.75) if loading_shells or WEAPONS[current_weapon].has("shells") else Vector3(0.55, 0.25, -0.6)
-		target += (view.get("reload_low", low) as Vector3) * reload_pose
-		angles += (view.get("reload_turn", turn) as Vector3) * reload_pose
+		var lift: Vector3 = view.get("reload_low", low)
+		var roll: Vector3 = view.get("reload_turn", turn)
+		if drum_phase != "" and view.has("load_low"):
+			# A drum is tipped muzzle down to let the cases out, then raised to be filled.
+			var filling := smoothstep(0.5, 0.95, drum_done()) if drum_phase == "open" else 1.0
+			lift = lift.lerp(view.load_low, filling)
+			roll = roll.lerp(view.load_turn, filling)
+		target += lift * reload_pose
+		angles += roll * reload_pose
 	# A magazine that really leaves the weapon, and the hand that changes it.
 	var clip := weapon.get_node_or_null("Magazine") as Node3D
 	if clip != null:
@@ -1213,6 +1265,10 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var step: Dictionary = WeaponView.reload_step(current_weapon, done)
 		clip.position = step.magazine
 		(weapon.get_node("Support") as Node3D).position = step.hand
+	# The launcher: the drum turns on after each shot (and back for each shell loaded), the front
+	# frame swings out while it is loaded, and the left hand brings the shells.
+	if WEAPONS[current_weapon].has("drum"):
+		WeaponView.pose_drum(weapon, drum_turn + (smoothstep(0.0, DRUM_TURN, drum_shot) if drum_shot >= 0.0 else 0.0), ammo, drum_phase, drum_done(), delta)
 	# A double rifle breaks open while it is loaded: the barrels drop and come up again.
 	if WeaponView.MODELS.has(current_weapon) and WeaponView.MODELS[current_weapon].has("open"):
 		var barrels := weapon.find_child("Barrels", true, false) as Node3D
@@ -1281,6 +1337,12 @@ func _visible_muzzle() -> Vector3:
 
 func shoot() -> void:
 	var data: Dictionary = gun()
+	if drum_phase != "":
+		# The drum cannot fire while it is open: the trigger has it closed first.
+		if drum_phase != "close" and ammo > 0 and not trigger_held:
+			_drum_step("close")
+		trigger_held = true
+		return
 	if loading_shells and ammo > 0 and shot_cooldown <= 0:
 		# A half-loaded shotgun can fire at once: the reload is simply broken off.
 		loading_shells = false
@@ -1326,6 +1388,8 @@ func shoot() -> void:
 		bolt_clock = 0.0
 	if data.has("grenade"):
 		_launch(data)
+		if data.has("drum"):
+			drum_shot = 0.0
 		return
 	var origin := camera.global_position
 	var muzzle := _visible_muzzle()
@@ -1418,6 +1482,10 @@ func shoot() -> void:
 	rotate_y(randf_range(-kick, kick) * 0.35)
 
 func start_reload() -> void:
+	if reload_left <= 0 and ammo < magazine_size() and reserve > 0 and WEAPONS[current_weapon].has("drum"):
+		loading_shells = true
+		_drum_step("open")
+		return
 	if reload_left <= 0 and ammo < magazine_size() and reserve > 0:
 		reload_left = reload_of(current_weapon)
 		reload_cue = 0
@@ -1426,6 +1494,51 @@ func start_reload() -> void:
 		if loading_shells:
 			# The first shell takes a moment longer: the weapon has to be turned over.
 			reload_left += 0.25
+
+func _drum_step(step: String) -> void:
+	drum_phase = step
+	drum_clock = 0.0
+	drum_cued = false
+	reload_left = drum_time(step)
+
+## Loading the drum, step by step: open it, a shell at a time until it is full, the
+## reserve is empty or the trigger is pulled, then close it.
+func _work_drum(delta: float) -> void:
+	drum_clock += delta
+	var length := drum_time(drum_phase)
+	var cue: float = float(DRUM[drum_phase][1]) * _quicker(current_weapon)
+	if not drum_cued and drum_clock >= cue:
+		drum_cued = true
+		jolt = 1.0
+		game.sounds.play_sound(str(DRUM[drum_phase][2]))
+		match drum_phase:
+			"open":
+				# The spent cases slide out of the open drum.
+				var at: Vector3 = weapon.global_transform * WeaponView.drum_mouth()
+				for i in range(magazine_size() - ammo):
+					get_tree().create_timer(0.45 + i * 0.07).timeout.connect(func() -> void:
+						if is_instance_valid(game) and is_instance_valid(weapon):
+							game.fx.spent_shell(at + Vector3(randf_range(-0.03, 0.03), -0.04, randf_range(-0.03, 0.03)), Vector3(randf_range(-0.4, 0.4), -0.6, randf_range(-0.4, 0.4)) - global_basis.z * 0.6 + velocity, true))
+			"load":
+				ammo += 1
+				reserve -= 1
+				drum_turn -= 1
+	# Kept above zero while the drum is worked, so that nothing else takes the hands.
+	reload_left = maxf(0.001, length - drum_clock)
+	if drum_clock < length:
+		return
+	match drum_phase:
+		"open", "load":
+			_drum_step("load" if ammo < magazine_size() and reserve > 0 else "close")
+		_:
+			drum_phase = ""
+			reload_left = 0.0
+			loading_shells = false
+			shot_cooldown = 0.1
+
+## How far the drum's step has come, 0 to 1 (1 when it is not being loaded).
+func drum_done() -> float:
+	return clampf(drum_clock / maxf(0.001, drum_time(drum_phase)), 0.0, 1.0) if drum_phase != "" else 1.0
 
 ## `kind`: "bullet" and "frag" (the C.R.U.'s), "gas", "acid", or "" for a blow. `by`: what
 ## kind of enemy dealt it ("common", "special", "cru"), where that is known.
@@ -1476,6 +1589,9 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 func go_down() -> void:
 	down = true
 	reload_left = 0.0
+	if drum_phase != "":
+		drum_phase = ""
+		loading_shells = false
 	crouched = false
 	(body_shape.shape as CapsuleShape3D).height = STAND_HEIGHT
 	body_shape.position.y = STAND_HEIGHT * 0.5
@@ -1507,6 +1623,9 @@ func reset_survivor() -> void:
 	_show_parts()
 	reload_left = 0
 	loading_shells = false
+	drum_phase = ""
+	drum_turn = 0
+	drum_shot = -1.0
 	pump_clock = -1.0
 	climb = 0.0
 	shot_cooldown = 0

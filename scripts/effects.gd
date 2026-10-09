@@ -419,19 +419,24 @@ func _spurt(stump: Node3D) -> void:
 	life.tween_callback(jet.queue_free)
 	decal(floor_below(stump.global_position), random.randf_range(0.7, 1.1), BLOOD)
 
-## A spent shotgun shell flips out of the ejection port and rolls away.
-func spent_shell(at: Vector3, velocity: Vector3) -> void:
+## A spent shotgun shell flips out of the ejection port and rolls away. `big`: an empty
+## 40 mm case from the drum of the M32 instead.
+func spent_shell(at: Vector3, velocity: Vector3, big: bool = false) -> void:
 	var shell := RigidBody3D.new()
 	shell.collision_layer = 0
 	shell.collision_mask = 1
 	shell.mass = 0.05
 	var shape := CollisionShape3D.new()
 	var tube := CylinderShape3D.new()
-	tube.radius = 0.011
-	tube.height = 0.065
+	tube.radius = 0.021 if big else 0.011
+	tube.height = 0.05 if big else 0.065
 	shape.shape = tube
 	shell.add_child(shape)
-	for part in [[0.011, 0.05, Color("9e1614"), 0.008], [0.0115, 0.015, Color("c9a04e"), -0.025]]:
+	var parts := [[0.011, 0.05, Color("9e1614"), 0.008], [0.0115, 0.015, Color("c9a04e"), -0.025]]
+	if big:
+		# An aluminium case with its brass-coloured base, open at the top.
+		parts = [[0.0205, 0.042, Color("8c8f93"), 0.004], [0.021, 0.008, Color("b08a3c"), -0.021]]
+	for part in parts:
 		var piece := MeshInstance3D.new()
 		var mesh := CylinderMesh.new()
 		mesh.top_radius = part[0]

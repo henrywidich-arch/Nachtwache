@@ -187,6 +187,8 @@ func _build_shell(spark: OmniLight3D) -> void:
 	trail.color_ramp = thin
 	trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(trail)
+	# The rush of air it makes on its way.
+	game.sounds.play_on("shell_flight", self)
 
 func _physics_process(delta: float) -> void:
 	if shell != null and linear_velocity.length() > 1.0:

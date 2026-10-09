@@ -32,7 +32,10 @@ const MIX := {
 	"melee": [-2.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
 	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0],
 	"g36_mag_out": [-7.0, 0.04, 1], "g36_mag_in": [-7.0, 0.04, 1], "g36_bolt": [-7.0, 0.04, 1],
-	"ring": [-4.0, 0.0, 2], "glitch": [-6.0, 0.06, 1]
+	"ring": [-4.0, 0.0, 2], "glitch": [-6.0, 0.06, 1],
+	# The M32: its drum swung open, a shell pushed home, the frame shut, the turn of the drum
+	# after a shot, and its shell in flight (heard from the shell itself, see play_on).
+	"m32_open": [-6.0, 0.03, 1], "m32_shell": [-6.0, 0.05, 1], "m32_close": [-5.0, 0.04, 1], "m32_turn": [-9.0, 0.06, 1], "shell_flight": [-6.0, 0.06, 1]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -58,7 +61,8 @@ const STAND_INS := {
 	"charger_roar": "gurgle", "crusher_pain": "roar", "crusher_attack": "roar", "crusher_death": "roar",
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
 	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90",
-	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click"
+	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click",
+	"m32_open": "click", "m32_shell": "click", "m32_close": "click", "m32_turn": "click", "shell_flight": "wind"
 }
 
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):
@@ -333,6 +337,21 @@ func play_at(kind: String, where: Vector3, volume: float = 0.0, pitch: float = 1
 	if voice != null:
 		voice.position = where
 		_start(voice, kind, volume, pitch)
+
+## Plays a sound that travels with something in flight (a shell from the launcher).
+func play_on(kind: String, target: Node3D, volume: float = 0.0) -> void:
+	if hush:
+		return
+	var voice := AudioStreamPlayer3D.new()
+	voice.unit_size = 4.0
+	voice.max_distance = 50.0
+	voice.attenuation_filter_cutoff_hz = 9000
+	voice.bus = "Field"
+	voice.stream = _pick(kind)
+	voice.volume_db = float(MIX[kind][0]) + volume
+	voice.pitch_scale = 1.0 + rng.randf_range(-1.0, 1.0) * float(MIX[kind][1])
+	target.add_child(voice)
+	voice.play()
 
 func _speech(path: String) -> AudioStream:
 	if not speech.has(path):
