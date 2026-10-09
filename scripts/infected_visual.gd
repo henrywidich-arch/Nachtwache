@@ -137,6 +137,68 @@ const KINDS := {
 		"metallic": 1.0,
 		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "headbutt"], "pace": [0.6, 1.5]}
 	},
+	# [hive] The Hive's staff, turned: ordinary infected in the clothes of the people who worked there, rigged like the
+	# [hive] normalzombie (same bones, same clips). boomer2 is the second model of the exploding infected.
+	"hive_nurse": {
+		"scene": preload("res://assets/models/hive_nurse.glb"), "source_height": 1.8, "height": 1.8, "set": "zombie",
+		"maps": "res://assets/models/hive_nurse_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.667, "eye_gap": 0.0345, "eye_center": 0.0025, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]},
+		"deaths": ["death_back", "death_from_front", "death_side", "death_side_left", "death_dying_back", "death_fall_back", "death_headshot", "death_forward", "death_from_back", "death_fall_forward", "death_bow_forward", "death_from_right", "death_drop_left", "death_from_left", "death_drop_right", "death_fly_back"]
+	},
+	"hive_worker": {
+		"scene": preload("res://assets/models/hive_worker.glb"), "source_height": 1.72, "height": 1.72, "set": "zombie",
+		"maps": "res://assets/models/hive_worker_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.581, "eye_gap": 0.0338, "eye_center": -0.0023, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
+	"hive_lab": {
+		"scene": preload("res://assets/models/hive_lab.glb"), "source_height": 1.74, "height": 1.74, "set": "zombie",
+		"maps": "res://assets/models/hive_lab_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.595, "eye_gap": 0.033, "eye_center": -0.003, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
+	"hive_security": {
+		"scene": preload("res://assets/models/hive_security.glb"), "source_height": 1.8, "height": 1.8, "set": "zombie",
+		"maps": "res://assets/models/hive_security_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.657, "eye_gap": 0.0325, "eye_center": 0.009, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
+	"hive_scientist": {
+		"scene": preload("res://assets/models/hive_scientist.glb"), "source_height": 1.8, "height": 1.8, "set": "zombie",
+		"maps": "res://assets/models/hive_scientist_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.617, "eye_gap": 0.0385, "eye_center": 0.0, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
+	"hive_scientist2": {
+		"scene": preload("res://assets/models/hive_scientist2.glb"), "source_height": 1.78, "height": 1.78, "set": "zombie",
+		"maps": "res://assets/models/hive_scientist2_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.638, "eye_gap": 0.0337, "eye_center": -0.0043, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]},
+		"deaths": ["death_back", "death_drop_back", "death_from_front", "death_side", "death_side_left", "death_dying_back", "death_fall_back", "death_headshot", "death_forward", "death_from_back", "death_fall_forward", "death_bow_forward", "death_back_headshot", "death_drop_left", "death_drop_right", "death_fly_back"]
+	},
+	"hive_civilian": {
+		"scene": preload("res://assets/models/hive_civilian.glb"), "source_height": 1.78, "height": 1.78, "set": "zombie",
+		"maps": "res://assets/models/hive_civilian_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.655, "eye_gap": 0.036, "eye_center": -0.001, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
+	"boomer2": {
+		"scene": preload("res://assets/models/boomer2.glb"), "source_height": 1.85, "height": 1.85, "set": "zombie",
+		"maps": "res://assets/models/boomer2_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.688, "eye_gap": 0.0445, "eye_center": -0.0015, "eye_size": 0.012,
+		"metallic": 1.0,
+		"moves": {"run": ["run"], "walk": ["shamble"], "attacks": ["punch"], "pace": [0.6, 1.5]},
+		# It never lies down: it bursts, like the charger. No fall is allowed (the check of every fall in _arsenal skips such a kind).
+		"deaths": []
+	},
 	"stalker": {
 		"scene": preload("res://assets/models/stalker.glb"), "source_height": 2.0, "height": 2.0, "set": "zombie",
 		"maps": "res://assets/models/stalker_",
