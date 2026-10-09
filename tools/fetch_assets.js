@@ -104,6 +104,7 @@ async function main() {
   for (const entry of sources.textures) lines.push('- `' + entry.id + '` – https://polyhaven.com/a/' + entry.id + (entry.use ? ' – ' + entry.use : ''));
   lines.push('', '## Modelle', '');
   for (const entry of sources.models) lines.push('- `' + entry.id + '` – https://polyhaven.com/a/' + entry.id + (entry.use ? ' – ' + entry.use : ''));
+  lines.push("", "## Eigene Modelle", "", "Im Ordner `user/` liegen fünf eigene Modelle des Projekts (mit Meshy erzeugt, für das Spiel vereinfacht und neu texturiert): `lab_table_a`, `lab_table_b`, `microscope_a`, `microscope_b` und `door`. Sie stammen nicht von Poly Haven.");
   fs.writeFileSync(path.join(root, 'CREDITS.md'), lines.join('\n') + '\n');
   console.log('fetched ' + done + ' files; CREDITS.md written');
 }

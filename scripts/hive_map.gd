@@ -214,6 +214,17 @@ func _fireplace(room_id: String, side: int, a: float) -> void:
 	_solid(_face_centre(room, side, a - 1.4, a + 1.4, 0.0, 1.72, -0.5, 0.0), _face_size(side, a - 1.4, a + 1.4, 0.0, 1.72, -0.5, 0.0))
 	_model("mantel_clock_01", _face_point(room, side, a, 1.72, -0.25), _model_yaw(side), {"height": 0.3, "solid": false, "far": 30.0})
 
+## A door of the facility that stays shut (the user's model: two wings in a frame), with
+## its back against a side of a room, and a red lamp over it. False if the model is not
+## there.
+func _sealed_door(room_id: String, side: int, a: float) -> bool:
+	if not ResourceLoader.exists("res://assets/hive/user/door.glb"):
+		return false
+	var room: Dictionary = room_of[room_id]
+	_against(room_id, side, a, "hive/user/door.glb", {"far": 60.0}, 0.0)
+	_face_glow(room, side, a - 0.2, a + 0.2, 2.34, 2.4, -0.33, -0.3, Color("ff3a2a"), 3.0)
+	return true
+
 ## A hedge over a rectangle of the park.
 func _hedge(plan: Rect2, tall: float = 1.25) -> void:
 	var centre := Vector3(plan.get_center().x, tall * 0.5, plan.get_center().y)
@@ -1027,8 +1038,9 @@ func _lay_station() -> void:
 	_table(Vector3(-46.0, UNDER, -37.0), Vector3(2.6, 0.9, 0.9), Color("3c4246"))
 	_stores(Vector3(-50.5, UNDER, -42.5), 3)
 	var airlock: Dictionary = room_of["airlock"]
-	_face_box(airlock, WEST, "cladding", -50.5, -48.5, 0.0, 2.3, -0.06, 0.0, Color(0.5, 0.53, 0.55))
-	_face_glow(airlock, WEST, -49.7, -49.3, 2.36, 2.42, -0.03, 0.0, Color("ff3a2a"), 3.0)
+	if not _sealed_door("airlock", WEST, -49.5):
+		_face_box(airlock, WEST, "cladding", -50.5, -48.5, 0.0, 2.3, -0.06, 0.0, Color(0.5, 0.53, 0.55))
+		_face_glow(airlock, WEST, -49.7, -49.3, 2.36, 2.42, -0.03, 0.0, Color("ff3a2a"), 3.0)
 	_shared_dice()
 	_end_zone()
 
@@ -1164,6 +1176,8 @@ func _lay_admin() -> void:
 	_wall_sign("KANTINE  ·  ZENTRALRAUM  B2", _face_point(ring, NORTH, 0.0, 3.3, -0.05), 22, Color("c9a227"))
 	_stripe(Vector3(-43.0, UNDER, -367.8), Vector3(43.0, UNDER, -367.8), 0.12, Color("2f6fb0"))
 	_stripe(Vector3(-43.0, UNDER, -366.2), Vector3(43.0, UNDER, -366.2), 0.12, Color("b8452f"))
+	_sealed_door("ring_s", WEST, -367.0)
+	_sealed_door("ring_s", EAST, -367.0)
 	_model("wheelchair_01", Vector3(-28.0, UNDER, -366.4), 2.2, {"far": 40.0})
 	_model("metal_trash_can", Vector3(27.0, UNDER, -365.9), 0.0, {"height": 0.9, "far": 40.0})
 	_model("potted_plant_04", Vector3(-3.0, UNDER, -365.8), 0.0, {"height": 1.2, "far": 40.0})
@@ -1367,6 +1381,7 @@ func _lay_atrium() -> void:
 	_chunk("Kit", false)
 	var maint: Dictionary = room_of["maint"]
 	_wall_sign("GENERATOR  ▼      PUMPEN  ▲", _face_point(maint, NORTH, 44.0, 2.7, -0.05), 20, Color("c9a227"))
+	_sealed_door("maint", EAST, -469.0)
 	_stores(Vector3(33.0, UNDER, -470.2), 2)
 	_shared_dice()
 	_end_zone()
@@ -1410,11 +1425,18 @@ func _lay_research() -> void:
 	# --- the laboratories: benches in rows, the tables and microscopes of the house
 	for lab in [["lab_a", -17.0, -510.0], ["lab_b", -17.0, -528.0], ["lab_c", 15.0, -510.0]]:
 		var mid := Vector3(float(lab[1]), UNDER, float(lab[2]))
+		# The house's own furniture (the user's models): two benches with a canopy stand free
+		# in the middle of each laboratory, back to back, and two long work places along the
+		# wall opposite the corridor.
+		var own := ResourceLoader.exists("res://assets/hive/user/lab_table_a.glb") and ResourceLoader.exists("res://assets/hive/user/lab_table_b.glb")
+		if own:
+			for offset in [-4.6, 4.6]:
+				_against(str(lab[0]), WEST if mid.x < 0.0 else EAST, mid.z + float(offset), "hive/user/lab_table_b.glb", {"far": 45.0})
 		for row in range(3):
 			var at := mid + Vector3(0, 0, -5.0 + row * 5.0)
-			if ResourceLoader.exists("res://assets/hive/user/lab_table_a.glb") and row == 1:
-				_model("hive/user/lab_table_" + ("a" if str(lab[0]) != "lab_b" else "b") + ".glb", at + Vector3(-4.0, 0, 0), 0.0, {"far": 45.0})
-				_model("hive/user/lab_table_" + ("b" if str(lab[0]) != "lab_b" else "a") + ".glb", at + Vector3(4.0, 0, 0), PI, {"far": 45.0})
+			if own and row == 1:
+				_model("hive/user/lab_table_a.glb", at + Vector3(-3.2, 0, 0), 0.0, {"far": 45.0})
+				_model("hive/user/lab_table_a.glb", at + Vector3(3.2, 0, 0), PI, {"far": 45.0})
 			else:
 				_lab_bench(at + Vector3(-4.0, 0, 0), 5.0, 0.0, row)
 				_lab_bench(at + Vector3(4.0, 0, 0), 5.0, 0.0, row + 2)
@@ -1458,6 +1480,8 @@ func _lay_research() -> void:
 	var cross: Dictionary = room_of["cross"]
 	_wall_sign("EINDÄMMUNG  ·  NUR  MIT  SCHUTZAUSRÜSTUNG", _face_point(cross, NORTH, 0.0, 3.4, -0.05), 24, Color("b8452f"))
 	_hazard(Vector3(-4.0, UNDER + 0.005, -572.4), Vector3(4.0, UNDER + 0.005, -572.4), Vector3(0.5, 0.01, 0.4), 16)
+	_sealed_door("cross", WEST, -571.0)
+	_sealed_door("cross", EAST, -571.0)
 	_stores(Vector3(-22.0, UNDER, -571.0), 3)
 	_stores(Vector3(22.0, UNDER, -571.2), 3)
 	_shared_dice()
@@ -1561,7 +1585,11 @@ func tour() -> Array:
 		["71_cross", Vector3(0, UNDER, -570.0), Vector3(0, UNDER + 1.8, -573.0)],
 		["72_hall_in", Vector3(0, UNDER, -575.0), Vector3(0, UNDER + 5.0, -612.0)],
 		["73_hall_side", Vector3(-27, UNDER, -598.0), Vector3(14, UNDER + 4.0, -600.0)],
-		["74_lift", Vector3(0, UNDER, -604.0), Vector3(0, UNDER + 2.5, -616.0)]
+		["74_lift", Vector3(0, UNDER, -604.0), Vector3(0, UNDER + 2.5, -616.0)],
+		["75_lab_tables", Vector3(-9.0, UNDER, -514.5), Vector3(-22.0, UNDER + 1.0, -508.5)],
+		["76_work_place", Vector3(-21.0, UNDER, -511.5), Vector3(-27.4, UNDER + 1.1, -514.6)],
+		["77_microscope", Vector3(-20.7, UNDER, -513.5), Vector3(-21.6, UNDER + 1.2, -515.0)],
+		["78_sealed_door", Vector3(37.5, UNDER, -367.0), Vector3(44.0, UNDER + 1.2, -367.0)]
 	]
 
 ## Starts or ends what is seen from the car while the train runs: the terminal is not

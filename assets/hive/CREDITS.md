@@ -73,3 +73,7 @@ Alle Texturen und Modelle in diesem Ordner stammen von **Poly Haven** (https://p
 - `modern_arm_chair_01` – https://polyhaven.com/a/modern_arm_chair_01 – Sessel im Wartebereich
 - `desk_lamp_arm_01` – https://polyhaven.com/a/desk_lamp_arm_01 – Schreibtischlampe
 - `modern_ceiling_lamp_01` – https://polyhaven.com/a/modern_ceiling_lamp_01 – Deckenlampe
+
+## Eigene Modelle
+
+Im Ordner `user/` liegen fünf eigene Modelle des Projekts (mit Meshy erzeugt, für das Spiel vereinfacht und neu texturiert): `lab_table_a`, `lab_table_b`, `microscope_a`, `microscope_b` und `door`. Sie stammen nicht von Poly Haven.
