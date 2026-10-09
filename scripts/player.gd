@@ -965,7 +965,7 @@ func _physics_process(delta: float) -> void:
 			_footstep(4.0)
 	move_and_slide()
 	_update_mist(delta)
-	if position.y < -10:
+	if position.y < game.cabin.abyss():
 		position = game.cabin.player_start
 	var firing: bool = Input.is_action_pressed("fire") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not blocked and not (sprint and input.length() > 0.1)
 	# A weapon that fires single shots wants the trigger let go before the next one.

@@ -90,6 +90,13 @@ func _process(delta: float) -> void:
 ## anew only when a lock has changed, which is what closes and opens cells.
 func _draw_plans() -> void:
 	var cabin: CabinMap = game.cabin
+	# A map that keeps pictures of its own levels hands them over.
+	if cabin.has_method("plans"):
+		var own := "%d %d" % [cabin.get_instance_id(), int(cabin.get("plan_stamp"))]
+		if own != plan_key:
+			plan_key = own
+			plans = cabin.call("plans")
+		return
 	var key := str(cabin.locked)
 	if key == plan_key and plans.size() == cabin.navigation.size():
 		return
@@ -132,7 +139,7 @@ func marks() -> Array:
 	var here: Vector3 = player.global_position
 	var yaw: float = player.rotation.y
 	var level: int = cabin.level_of(here)
-	for marker in game.mission.markers():
+	for marker in game.markers():
 		out.append(_mark(marker.pos, here, yaw, TASK, 4.2, "diamond", cabin.level_of(marker.pos) == level))
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
@@ -225,6 +232,9 @@ func _draw_face() -> void:
 	# --- the survivor himself: an arrow in the middle, pointing ahead
 	face.draw_colored_polygon(PackedVector2Array([middle + Vector2(0, -6.5), middle + Vector2(4.6, 5.0), middle + Vector2(0, 2.4), middle + Vector2(-4.6, 5.0)]), Color(0.97, 0.98, 0.99))
 	# --- the floor he is on, when it is not the yard
-	if font != null and level > 0:
-		face.draw_string(font, Vector2(7, SIZE - 7), "OBERGESCHOSS" if level == 1 else "KELLER", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.8, 0.84, 0.8))
+	var storey := "" if level == 0 else ("OBERGESCHOSS" if level == 1 else "KELLER")
+	if cabin.has_method("level_label"):
+		storey = str(cabin.call("level_label", level))
+	if font != null and storey != "":
+		face.draw_string(font, Vector2(7, SIZE - 7), storey, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.8, 0.84, 0.8))
 	face.draw_rect(Rect2(Vector2(0.5, 0.5), Vector2(SIZE - 1.0, SIZE - 1.0)), EDGE, false, 1.0)

@@ -258,6 +258,10 @@ func level_height(level: int) -> float:
 			return CELLAR
 	return 0.0
 
+## Below this height a body has fallen out of the world.
+func abyss() -> float:
+	return -10.0
+
 func _build_points() -> void:
 	points = {
 		"menu_camera": Vector3(9.0, 2.2, 25.0), "menu_target": Vector3(-1.0, 3.8, 9.0),

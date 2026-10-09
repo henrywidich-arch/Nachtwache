@@ -80,6 +80,9 @@ func _stream(path: String) -> AudioStream:
 func current_phase() -> String:
 	if game.state not in ["playing", "paused", "shop"]:
 		return "anfang"
+	# The second mission has no rounds: its director says what fits.
+	if game.hive.on:
+		return game.hive.music_phase()
 	var rounds: int = game.ROUNDS.size()
 	var final: bool = (not game.endless and game.wave >= rounds) or (game.story.enabled and str(game.story.stage) in ["evac", "done"])
 	if game.phase != "wave":

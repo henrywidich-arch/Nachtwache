@@ -462,7 +462,7 @@ func _draw_reticle() -> void:
 	# otherwise at the edge of the screen in its direction.
 	var view := get_viewport().get_camera_3d()
 	if view != null:
-		for marker in game.mission.markers():
+		for marker in game.markers():
 			var spot: Vector3 = marker.pos
 			# A place exactly beside, above or below the eye has no spot on the screen.
 			if absf(view.global_basis.z.dot(spot - view.global_position)) < 0.02:
@@ -621,6 +621,8 @@ func _process(delta: float) -> void:
 	# With the story on, nobody knows beforehand how many rounds the night will take.
 	if game.story.enabled:
 		wave_label.text = "LETZTE RUNDE" if game.story.stage in ["evac", "done"] else "RUNDE %02d" % maxi(1, game.wave)
+	elif game.hive.on:
+		wave_label.text = "MISSION 2  ·  %s" % game.hive.title()
 	elif game.sandbox.on:
 		wave_label.text = "TESTRAUM  ·  STÄRKE RUNDE %02d" % maxi(1, game.wave)
 	elif game.endless:
@@ -628,12 +630,14 @@ func _process(delta: float) -> void:
 	else:
 		wave_label.text = "RUNDE %02d / %02d" % [maxi(1, game.wave), game.ROUNDS.size()]
 	difficulty_label.text = "FIRETEAM  ·  %s" % str(game.rules.label)
-	var lines: Array[String] = game.mission.summary()
+	var lines: Array[String] = game.hive.summary() if game.hive.on else game.mission.summary()
 	# What the round's modifier is stays in view for as long as the round lasts.
 	if game.modifier != "" and game.phase == "wave":
 		lines.insert(0, "▲  MODIFIKATION  ·  %s" % game.MODIFIERS[game.modifier].label)
 	task_label.text = "\n".join(lines)
-	if game.sandbox.on and game.phase == "preparing":
+	if game.hive.on:
+		enemy_label.text = ("%d Gegner in der Nähe" % game.alive_count) if game.alive_count > 0 else "Kein Kontakt"
+	elif game.sandbox.on and game.phase == "preparing":
 		enemy_label.text = "F1 Testmenü  ·  %d Gegner auf dem Feld" % game.sandbox.alive()
 	elif game.phase == "preparing":
 		enemy_label.text = "Nächste Runde in %02d s  ·  Waffenshop geöffnet" % ceili(game.preparation_left)
@@ -856,6 +860,60 @@ func _reset_skills() -> void:
 func _mode_label() -> String:
 	return "MODUS  ·  %s" % ("ENDLOS" if game.profile.mode == "endless" else "GESCHICHTE")
 
+func _choose_mission(number: int) -> void:
+	game.profile.choose_mission(number)
+	show_menu(current_menu)
+
+## A button for one of the missions; the one that is chosen stands out.
+func _mission_button(number: int, text: String) -> Button:
+	var button := _button(text, _choose_mission.bind(number))
+	if game.profile.mission == number:
+		button.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.13), AMBER))
+		button.add_theme_color_override("font_color", AMBER)
+		button.add_theme_color_override("font_focus_color", AMBER)
+	return button
+
+## The list of the best that is shown: story, endless night, second mission, and round again.
+func _next_board() -> void:
+	var profile: Profile = game.profile
+	if profile.mission == 2:
+		profile.mission = 1
+		profile.mode = "story"
+	elif profile.mode == "story":
+		profile.mode = "endless"
+	else:
+		profile.mission = 2
+	profile.save()
+	show_menu(current_menu)
+
+func _board_label() -> String:
+	return "LISTE  ·  %s" % str({"endless": "ENDLOS", "villa": "MISSION 2"}.get(game.profile.play(), "GESCHICHTE"))
+
+## Three buttons in a row, each a third as wide as a full one.
+func _triple(buttons: Array) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	for button in buttons:
+		(button as Button).custom_minimum_size = Vector2(138, 46)
+		(button as Button).add_theme_font_size_override("font_size", 15)
+		(button as Button).alignment = HORIZONTAL_ALIGNMENT_CENTER
+		row.add_child(button)
+	return row
+
+## Starts the night that is chosen. The map of the second mission is built when it is
+## first asked for, which takes a moment: a note stands there meanwhile.
+func _start_night() -> void:
+	if game.profile.mission == 2 and not game.net.active and not is_instance_valid(game.hive_map):
+		show_menu("loading")
+		await get_tree().process_frame
+		await get_tree().process_frame
+	game.start_run()
+
+func _menu_loading(column: VBoxContainer) -> Control:
+	_title(column, "MISSION 2")
+	_text(column, "Die Villa, der Bahnhof und die Anlage werden aufgebaut …")
+	return null
+
 func _modifiers_label() -> String:
 	return "MODIFIKATIONEN  ·  %s" % ("AN" if game.profile.modifiers else "AUS")
 
@@ -960,6 +1018,8 @@ func show_menu(mode: String) -> void:
 			first = _menu_skills(column)
 		"test":
 			first = _menu_test(column)
+		"loading":
+			first = _menu_loading(column)
 	var version := label("SOLO + KOOP   ·   v" + NetLink.VERSION, 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
@@ -971,19 +1031,30 @@ func show_menu(mode: String) -> void:
 
 func _menu_main(column: VBoxContainer) -> Control:
 	_title(column, "NACHT\nWACHE")
-	if game.profile.mode == "endless":
+	var second: bool = game.profile.mission == 2
+	if second:
+		_text(column, "Eine Villa im Park. Darunter ein Bahnhof.\nFolge Nadja hinunter in die Anlage.")
+	elif game.profile.mode == "endless":
 		_text(column, "Ein Farmhaus. Darunter ein Labor.\nEndlos: Halte den Hof, solange du kannst.")
 	else:
 		_text(column, "Ein Farmhaus. Darunter ein Labor.\nFinde Nadja und flieg sie aus.")
-	_gap(column, 8)
+	_gap(column, 4)
+	# Which mission: the farm or the villa. The one that is chosen is the one that starts.
+	column.add_child(_pair(_mission_button(1, "MISSION 1  ·  HOF 19"), _mission_button(2, "MISSION 2  ·  DIE VILLA")))
 	var squad: Array = game.profile.squad
-	var start := _button("EINSATZ STARTEN", game.start_run, true)
+	var start := _button("EINSATZ STARTEN", _start_night, true)
 	column.add_child(start)
-	column.add_child(label("     mit %s und %s   ·   Stufe %s%s" % [Profile.SKINS[squad[0]].label, Profile.SKINS[squad[1]].label, game.profile.rules().label, "   ·   mit Modifikationen" if game.profile.modifiers else ""], 15, MUTED))
+	var note := "   ·   Koop spielt vorerst Mission 1" if second else ("   ·   mit Modifikationen" if game.profile.modifiers else "")
+	column.add_child(label("     mit %s und %s   ·   Stufe %s%s" % [Profile.SKINS[squad[0]].label, Profile.SKINS[squad[1]].label, game.profile.rules().label, note], 15, MUTED))
 	column.add_child(_pair(_button("KOOP HOSTEN", game.host_match), _button("KOOP BEITRETEN", show_menu.bind("join"))))
 	column.add_child(_pair(_button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty), _button("TRUPP & SKINS", show_menu.bind("skins"))))
 	# What the night is: the story or the endless mode, with or without a modifier per round.
-	column.add_child(_pair(_button(_mode_label(), _next_mode), _button(_modifiers_label(), _toggle_modifiers)))
+	var mode_button := _button(_mode_label(), _next_mode)
+	var modifier_button := _button(_modifiers_label(), _toggle_modifiers)
+	# The second mission has no rounds, so neither an endless night nor modifiers.
+	mode_button.disabled = second
+	modifier_button.disabled = second
+	column.add_child(_pair(mode_button, modifier_button))
 	var free: int = game.skills.points_left(game.profile.totals) if Skills.IN_SERVICE else 0
 	var abilities := "FÄHIGKEITEN"
 	if free > 0:
@@ -993,8 +1064,7 @@ func _menu_main(column: VBoxContainer) -> Control:
 		abilities = "FÄHIGKEITEN  ·  %s" % Skills.TREES[game.skills.chosen].label
 	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button(abilities, show_menu.bind("skills"))))
 	# The test room: no night, nothing kept - a place to try things out.
-	column.add_child(_pair(_button("TESTRAUM", game.start_run.bind(true)), _button("EINSTELLUNGEN", _open_settings.bind("main"))))
-	column.add_child(_button("BEENDEN", game.quit_game))
+	column.add_child(_triple([_button("TESTRAUM", game.start_run.bind(true)), _button("EINSTELLUNGEN", _open_settings.bind("main")), _button("BEENDEN", game.quit_game)]))
 	return start
 
 func _menu_pause(column: VBoxContainer) -> Control:
@@ -1231,7 +1301,37 @@ func _open_test_from_pause() -> void:
 	game.resume_run()
 	game.open_test()
 
+## The end of a night of the second mission: how far it went, and where to take it up.
+func _menu_end_villa(column: VBoxContainer, mode: String) -> Control:
+	var place := "   ·   Platz %d der Bestenliste" % game.last_place if game.last_place > 0 else ""
+	if mode == "win":
+		_title(column, "ABSCHNITT\nGESICHERT")
+		_text(column, "Der Frachtaufzug fährt weiter nach unten. Fortsetzung folgt.\nScore %06d   ·   %d Abschüsse   ·   %s\nStufe %s%s" % [game.score, game.kills, game.time_string(), game.rules.label, place])
+	else:
+		_title(column, "EINSATZ\nGESCHEITERT")
+		_text(column, "%s   ·   Score %06d   ·   %d Abschüsse\nStufe %s%s" % [game.hive.title(), game.score, game.kills, game.rules.label, place])
+	var gain: Dictionary = game.last_gain
+	if Skills.IN_SERVICE and not gain.is_empty():
+		var earned := "+%d Erfahrung   ·   Stufe %d" % [int(gain.xp), int(gain.level)]
+		if int(gain.raised) > 0:
+			earned += "   ·   %s: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
+		column.add_child(label(earned, 16, MINT, true))
+	_gap(column, 10)
+	var again: Button
+	if mode == "lose" and game.hive.checkpoint != "landing":
+		again = _button("AB KONTROLLPUNKT  ·  %s" % HiveDirector.STAGES[game.hive.checkpoint][0], game.retry_checkpoint, true)
+		column.add_child(again)
+		column.add_child(_button("VON VORN", game.start_run))
+	else:
+		again = _button("NOCH EINMAL" if mode == "win" else "ERNEUT VERSUCHEN", game.start_run, true)
+		column.add_child(again)
+	column.add_child(_button("ZUM HAUPTMENÜ", game.return_to_menu))
+	column.add_child(_button("BEENDEN", game.quit_game))
+	return again
+
 func _menu_end(column: VBoxContainer, mode: String) -> Control:
+	if game.hive.on:
+		return _menu_end_villa(column, mode)
 	var rounds: int = game.ROUNDS.size()
 	var told: bool = game.story.enabled
 	var place := "   ·   Platz %d der Bestenliste" % game.last_place if game.last_place > 0 else ""
@@ -1373,17 +1473,18 @@ func _menu_join(column: VBoxContainer) -> Control:
 
 func _menu_board(column: VBoxContainer) -> Control:
 	var lasting: bool = game.profile.mode == "endless"
-	_title(column, "BESTENLISTE  ·  ENDLOS" if lasting else "BESTENLISTE", 46)
+	var second: bool = game.profile.mission == 2
+	_title(column, "BESTENLISTE  ·  MISSION 2" if second else ("BESTENLISTE  ·  ENDLOS" if lasting else "BESTENLISTE"), 46)
 	_text(column, "Die zehn besten Einsätze je Modus und Schwierigkeitsstufe. Höhere Stufen vervielfachen den Score.", 16)
 	_gap(column, 6)
 	var table := GridContainer.new()
 	table.columns = 7
 	table.add_theme_constant_override("h_separation", 26)
 	table.add_theme_constant_override("v_separation", 3)
-	for head in ["#", "SCORE", "RUNDE", "ZEIT", "ABSCHÜSSE", "TRUPP", "DATUM"]:
+	for head in ["#", "SCORE", "ETAPPE" if second else "RUNDE", "ZEIT", "ABSCHÜSSE", "TRUPP", "DATUM"]:
 		table.add_child(label(head, 13, AMBER, true))
 	var place := 1
-	for run in game.profile.best(Profile.board(game.profile.difficulty, game.profile.mode)):
+	for run in game.profile.best(Profile.board(game.profile.difficulty, game.profile.play())):
 		var seconds := int(run.seconds)
 		var cells := [str(place), "%06d" % int(run.score), "%d%s" % [int(run.round), "  ✓" if run.victory else ""], "%02d:%02d" % [seconds / 60, seconds % 60], str(int(run.kills)), str(run.get("team", "")), str(run.get("date", ""))]
 		for cell in cells:
@@ -1395,7 +1496,7 @@ func _menu_board(column: VBoxContainer) -> Control:
 		column.add_child(table)
 	_gap(column, 8)
 	var level := _button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty, true)
-	column.add_child(_pair(level, _button(_mode_label(), _next_mode)))
+	column.add_child(_pair(level, _button(_board_label(), _next_board)))
 	column.add_child(_button("ZURÜCK", show_menu.bind("main")))
 	return level
 

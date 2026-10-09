@@ -40,8 +40,10 @@ const SKINS := {
 ## Off during automatic checks: nothing is read from or written to the player's file.
 var stored := true
 var difficulty := "normal"
-## What the next night is: "story" or "endless", and whether its rounds bring modifiers
-## (see Game.MODIFIERS).
+## Which mission the next night is: 1 the farm, 2 the villa and what lies under it.
+var mission := 1
+## What a night on the farm is: "story" or "endless", and whether its rounds bring
+## modifiers (see Game.MODIFIERS). The second mission has neither.
 var mode := "story"
 var modifiers := false
 ## Difficulty -> finished runs, best first.
@@ -67,10 +69,12 @@ func open() -> void:
 		difficulty = str(parsed.difficulty)
 	if str(parsed.get("mode", "")) in ["story", "endless"]:
 		mode = str(parsed.mode)
+	if int(parsed.get("mission", 1)) in [1, 2]:
+		mission = int(parsed.mission)
 	modifiers = bool(parsed.get("modifiers", false))
 	if parsed.get("runs") is Dictionary:
 		for level in ORDER:
-			for list in [level, board(level, "endless")]:
+			for list in [level, board(level, "endless"), board(level, "villa")]:
 				if parsed.runs.get(list) is Array:
 					runs[list] = parsed.runs[list]
 	if parsed.get("totals") is Dictionary:
@@ -91,7 +95,7 @@ func open() -> void:
 func save() -> void:
 	if not stored:
 		return
-	var kept := {"difficulty": difficulty, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
+	var kept := {"difficulty": difficulty, "mission": mission, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
 	if not skills.is_empty():
 		kept["skills"] = skills
 	if skill_tree != "":
@@ -133,13 +137,25 @@ func next_mode() -> void:
 	mode = "endless" if mode == "story" else "story"
 	save()
 
+func choose_mission(number: int) -> void:
+	if number in [1, 2]:
+		mission = number
+		save()
+
+## What a night is filed under and called for the list of the best: "story" or "endless"
+## on the farm, "villa" for the second mission.
+func play() -> String:
+	return "villa" if mission == 2 else mode
+
 func toggle_modifiers() -> void:
 	modifiers = not modifiers
 	save()
 
-## The list a night is filed under: one per difficulty for the story, and one more per
-## difficulty for the endless mode.
+## The list a night is filed under: one per difficulty for the story, one more per
+## difficulty for the endless mode, and one for the second mission.
 static func board(level: String, play: String) -> String:
+	if play == "villa":
+		return "villa_" + level
 	return "endless_" + level if play == "endless" else level
 
 ## The best nights of a list (see board).

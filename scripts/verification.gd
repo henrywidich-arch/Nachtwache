@@ -1097,6 +1097,7 @@ func run(game: Node3D) -> void:
 	await _overhaul(game)
 	await _operators(game)
 	await _sandbox(game)
+	await _hive(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -2871,11 +2872,19 @@ func bot(game: Node3D) -> void:
 			duel = arg.trim_prefix("--bot-duel=")
 		if arg.begins_with("--bot-mode="):
 			game.profile.mode = arg.trim_prefix("--bot-mode=")
+			# --bot-mode=villa: the second mission.
+			if game.profile.mode == "villa":
+				game.profile.mode = "story"
+				game.profile.mission = 2
 		if arg.begins_with("--bot-level="):
 			game.profile.difficulty = arg.trim_prefix("--bot-level=")
 	Engine.time_scale = pace
 	await wait(1.0)
 	game.start_run()
+	# On the map of the second mission the bot walks instead (--bot-mode=villa).
+	if game.hive.on:
+		await _hive_bot(game, limit)
+		return
 	# The bot holds one spot and cannot do tasks: plain rounds, unless asked otherwise.
 	if not "--bot-tasks" in OS.get_cmdline_user_args():
 		game.mission.plain()
@@ -4413,3 +4422,372 @@ func _sandbox(game: Node3D) -> void:
 	game.team_enabled = false
 	game.start_run()
 	expect(not room.on and game.mode == kept_mode and game.credits == 120 and cabin.environment.fog_enabled and not game.skills.open_all and game.team.is_empty(), "The next night is an ordinary one again")
+
+## Takes every enemy off the field, also those a shot from the front would not (a shield).
+func _wipe_all(game: Node3D) -> void:
+	_wipe(game)
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if not enemy.dead:
+			enemy._die(Vector3.FORWARD, false)
+
+## The second mission (v0.21): its own map beside the farm, a night without rounds that
+## goes from stage to stage, doors that open with the mission, checkpoints.
+func _hive(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var profile: Profile = game.profile
+	var kept_mode: String = profile.mode
+	var farm: CabinMap = game.farm
+	# --- the mission is chosen in the main menu, and what a night is filed under
+	var kept_mission: int = profile.mission
+	var hud: SurvivalHUD = game.hud
+	profile.mode = "story"
+	profile.mission = 1
+	game.return_to_menu()
+	await frames(2)
+	var words := ""
+	var mode_button: Button = null
+	for node in hud.modal.find_children("*", "Button", true, false):
+		words += (node as Button).text + " | "
+	var first_play: String = profile.play()
+	hud._choose_mission(2)
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("MODUS"):
+			mode_button = node as Button
+	expect(words.contains("MISSION 1") and words.contains("MISSION 2") and words.contains("EINSATZ STARTEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and mode_button != null and mode_button.disabled and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen in the main menu; the second has leaderboards of its own and neither an endless night nor modifiers")
+	profile.mode = "endless"
+	hud._next_board()
+	var after_villa: String = profile.play()
+	hud._next_board()
+	var after_story: String = profile.play()
+	hud._next_board()
+	expect(after_villa == "story" and after_story == "endless" and profile.play() == "villa" and profile.mission == 2, "The list of the best goes from the story to the endless night to the second mission and round again")
+	profile.mode = "story"
+	# --- a night on the other map
+	game.return_to_menu()
+	await frames(2)
+	game.team_enabled = true
+	game.start_run()
+	await frames(3)
+	var map := game.cabin as HiveMap
+	if map == null:
+		expect(false, "The second mission has a map of its own")
+		profile.mode = kept_mode
+		profile.mission = kept_mission
+		return
+	var landing: Vector3 = map.points.landing_out
+	expect(hive.on and game.mode == "villa" and not game.story.enabled and game.cabin != farm and not farm.is_inside_tree() and map.is_inside_tree() and game.state == "playing" and game.phase == "preparing" and hive.stage == "landing" and player.global_position.distance_to(landing) < 1.5 and game.team.size() == 2 and is_instance_valid(hive.nadja) and game.credits == 120, "The second mission is a night on its own map: the farm is out of the world, the squad and Nadja stand on the landing ground, no story of the farm runs")
+	var shops := 0
+	var benches := 0
+	for station in map.stations:
+		shops += 1 if str(station.kind) == "shop" else 0
+		benches += 1 if str(station.kind) == "upgrade" else 0
+	expect(map.floors.size() == 5 and map.navigation.size() == 5 and map.rooms.size() >= 50 and shops == 4 and benches == 4 and map.plans().size() == 5 and map.level_label(map.under) == "BAHNHOF" and map.abyss() < HiveMap.UNDER - 5.0, "The map has five floors, more than fifty rooms and four supply points, each with ammunition, first aid, a workbench and a weapon locker (%d rooms, %d doors)" % [map.rooms.size(), map.doors.size()])
+	# --- no round comes by itself; the guards of the house come out when the squad nears it
+	var quiet: bool = game.alive_count == 0
+	player.global_position = Vector3(0, 0.05, 50)
+	game.set_process(true)
+	game.preparation_left = 0.3
+	await wait(0.8)
+	game.set_process(false)
+	expect(quiet and game.phase == "preparing" and game.preparation_left > 1000.0 and game.alive_count >= 4 and game.wave == 2, "No round ever begins here: the mission posts its own enemies (%d at the villa)" % game.alive_count)
+	_wipe_all(game)
+	hive.set_process(false)
+	await frames(3)
+	# --- every area is shut at the start, and every way is there once it is open
+	var shut: bool = map.is_locked("descent") and map.is_locked("station") and map.is_locked("admin") and map.is_locked("hall") and map.path_between(map.points.dining, map.points.vestibule).is_empty() and not map.door_open("car_a")
+	for id in map.areas:
+		map.unlock(str(id), true)
+	var legs := [
+		["landing", "front_door"], ["front_door", "hall"], ["hall", "gallery"], ["hall", "salon"], ["hall", "galerie"], ["hall", "library"], ["hall", "kitchen"], ["hall", "dining"],
+		["dining", "vestibule"], ["vestibule", "lobby"], ["lobby", "platform"], ["platform", "booth"], ["platform", "depot"], ["platform", "supply_station"],
+		["terminal", "control"], ["terminal", "gate_admin"], ["gate_admin", "checkpoint"], ["checkpoint", "supply_checkpoint"], ["checkpoint", "junction"], ["junction", "office"],
+		["junction", "security"], ["junction", "server"], ["junction", "spine"], ["spine", "cafeteria"], ["cafeteria", "atrium"], ["atrium", "supply_atrium"], ["atrium", "maint"],
+		["maint", "pump"], ["maint", "generator"], ["atrium", "decon"], ["decon", "labs"], ["labs", "cross"], ["cross", "hall_end"], ["hall_end", "lift"]
+	]
+	var broken: Array[String] = []
+	var longest := 0.0
+	for leg in legs:
+		var route: PackedVector3Array = map.path_between(map.points[leg[0]], map.points[leg[1]])
+		if route.is_empty() or route[route.size() - 1].distance_to(map.points[leg[1]]) > 2.5:
+			broken.append("%s > %s" % [leg[0], leg[1]])
+		longest = maxf(longest, map._length(route))
+	expect(shut and broken.is_empty(), "Every way of the mission can be walked once its door is open, and none before%s" % ("" if broken.is_empty() else " - broken: " + ", ".join(PackedStringArray(broken))))
+	# Every room can be reached from where its part of the map is entered.
+	var cut_off: Array[String] = []
+	for id in ["car_a", "car_b", "nadja"]:
+		map.set_door(id, true, true)
+	for room in map.rooms:
+		if room.get("nav", true) == false or bool(room.outdoor):
+			continue
+		var level: int = room.level
+		var from: Vector3 = map.points.landing if level in [map.ground, map.upper] else (map.points.platform if level == map.under else map.points.terminal)
+		var middle: Rect2 = room.outer
+		var cell: Vector2i = map._free_near(level, middle.get_center(), 12)
+		if room.has("walk"):
+			cell = map._free_near(level, (room.walk[0] as Rect2).get_center(), 12)
+		if cell.x > 99999 or map.path_between(from, Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL)).is_empty():
+			cut_off.append(str(room.id))
+	expect(cut_off.is_empty(), "No room is cut off from the rest%s" % ("" if cut_off.is_empty() else ": " + ", ".join(PackedStringArray(cut_off))))
+	map.reset()
+	map.lock_all()
+	# --- the stages, one after the other (the survivor is set down where each one ends)
+	hive.set_process(true)
+	var reached: Array[String] = []
+	var step := func(place: String, wanted: String) -> void:
+		player.global_position = (map.points[place] as Vector3) + Vector3(0, 0.05, 0)
+		for mate in game.team:
+			mate.global_position = player.global_position + Vector3(1.2, 0, 0.8)
+		await frames(8)
+		reached.append(hive.stage)
+		if hive.stage != wanted:
+			print("HIVE_STEP %s: stage is %s, wanted %s" % [place, hive.stage, wanted])
+	await step.call("front_door", "villa")
+	_wipe_all(game)
+	await step.call("dining", "mirror")
+	hive.nadja.global_position = (map.points.keypad as Vector3) + Vector3(0, 0.05, 0.4)
+	await frames(10)
+	var working: bool = hive.progress >= 0.0 and hive.stage == "mirror" and map.is_locked("descent")
+	hive.progress = 0.995
+	await frames(30)
+	var opened: bool = hive.stage == "descent" and not map.is_locked("descent") and hive.checkpoint == "descent" and not map.path_between(map.points.dining, map.points.vestibule).is_empty()
+	expect(reached == ["villa", "mirror"] and working and opened, "Reaching the villa and its dining room moves the mission on; Nadja works the lock by the mirror, and when she is done the way down is open and a checkpoint is set (%s)" % str(reached))
+	_wipe_all(game)
+	reached.clear()
+	await step.call("lobby", "station")
+	var guarded: int = hive._guards_left()
+	_wipe_all(game)
+	await frames(4)
+	hive.stage_time = 5.0
+	await frames(6)
+	var leaving: bool = hive.stage == "nadja" and map.door_open("nadja") and not game.survivors.has(hive.nadja)
+	hive.stage_time = 12.5
+	await frames(12)
+	var locked_in: bool = not map.door_open("nadja")
+	hive.stage_time = 31.0
+	await frames(6)
+	var dealt: bool = hive.stage == "deal" and hive.nadja_gone and not is_instance_valid(hive.nadja) and hive.puppets.size() == 3
+	hive.stage_time = 32.0
+	await frames(6)
+	expect(reached == ["station"] and guarded >= 6 and leaving and locked_in and dealt and hive.stage == "power" and hive.puppets.is_empty(), "At the station the guards have to fall; then Nadja leaves through a door that shuts behind her, the three operators come and go, and the train can be started (%d guards)" % guarded)
+	player.global_position = (map.points.booth as Vector3) + Vector3(0, 0.05, 0)
+	await frames(4)
+	var asked: bool = hive.prompt() != "" and game.interaction_prompt() == hive.prompt()
+	game.interact()
+	await frames(4)
+	var holding: bool = hive.stage == "hold" and hive.progress >= 0.0
+	hive.progress = 0.999
+	await frames(20)
+	var boarding: bool = hive.stage == "board" and map.door_open("car_a")
+	_wipe_all(game)
+	player.global_position = (map.points.car_a as Vector3) + Vector3(0, 0.05, 0)
+	await frames(110)
+	var rolling: bool = hive.stage == "ride" and not map.door_open("car_a")
+	hive.stage_time = 1.7
+	await frames(6)
+	var moved: bool = player.global_position.distance_to(map.points.car_b) < 2.0 and map.riding and map.room_at(game.team[0].global_position).get("id", "") == "car_b"
+	hive.stage_time = HiveDirector.RIDE_SECONDS + 0.1
+	await frames(6)
+	expect(asked and holding and boarding and rolling and moved and hive.stage == "terminal" and not map.riding and map.door_open("car_b") and hive.checkpoint == "terminal", "The train is brought up from the control room while the platform is held; then the squad boards, the doors close, and the car is the one at the terminal")
+	_wipe_all(game)
+	reached.clear()
+	player.global_position = (map.points.control as Vector3) + Vector3(0, 0.05, 0)
+	await frames(4)
+	game.interact()
+	await frames(4)
+	reached.append(hive.stage)
+	var gate_up: bool = not map.is_locked("admin")
+	_wipe_all(game)
+	await step.call("junction", "security")
+	player.global_position = (map.points.security as Vector3) + Vector3(0, 0.05, 0)
+	await frames(4)
+	game.interact()
+	await frames(4)
+	reached.append(hive.stage)
+	_wipe_all(game)
+	await step.call("cafeteria", "lockdown")
+	var sealed: bool = map.is_locked("cafe") and map.path_between(map.points.cafeteria, map.points.junction).is_empty() and not map.path_between(map.points.cafeteria, (map.points.cafeteria as Vector3) + Vector3(6, 0, 4)).is_empty()
+	hive.progress = 0.999
+	await frames(20)
+	reached.append(hive.stage)
+	expect(reached == ["admin", "security", "cafe", "lockdown", "atrium"] and gate_up and sealed and not map.is_locked("cafe") and not map.is_locked("atrium") and hive.checkpoint == "atrium", "The gate of the terminal opens from the control room, the way north from the security centre; the canteen shuts the squad in for a while and then lets it on (%s)" % str(reached))
+	_wipe_all(game)
+	reached.clear()
+	await step.call("atrium", "generator")
+	player.global_position = (map.points.generator as Vector3) + Vector3(0, 0.05, 0)
+	await frames(4)
+	game.interact()
+	await frames(4)
+	reached.append(hive.stage)
+	_wipe_all(game)
+	player.global_position = (map.points.decon as Vector3) + Vector3(0, 0.05, 0)
+	await frames(6)
+	hive.progress = 0.999
+	await frames(20)
+	reached.append(hive.stage)
+	_wipe_all(game)
+	await step.call("cross", "hall")
+	_wipe_all(game)
+	player.global_position = (map.points.hall_end as Vector3) + Vector3(0, 0.05, 0)
+	await frames(6)
+	hive.progress = 0.999
+	await frames(20)
+	reached.append(hive.stage)
+	_wipe_all(game)
+	player.global_position = (map.points.lift as Vector3) + Vector3(0, 0.05, 0)
+	await frames(8)
+	expect(reached == ["generator", "decon", "labs", "hall", "exit"] and game.state == "win" and hive.on and hive.checkpoint == "labs", "Power for the sluice, the sluice, the laboratories, the containment hall and the freight lift end the mission (%s, state %s)" % [str(reached), game.state])
+	# --- taking it up again at a checkpoint
+	hive.resume_at = "terminal"
+	game.start_run()
+	await frames(4)
+	expect(hive.on and hive.stage == "terminal" and hive.checkpoint == "terminal" and player.global_position.distance_to(map.points.car_b) < 1.5 and not is_instance_valid(hive.nadja) and not map.is_locked("station") and map.is_locked("admin") and map.door_open("car_b") and game.credits >= 900 and game.cabin == map, "A defeat can be taken up at the last checkpoint: the squad stands in the car at the terminal, what lies behind it is open, what lies ahead is shut")
+	# --- and back to the farm
+	game.return_to_menu()
+	await frames(3)
+	profile.mode = "story"
+	profile.mission = 1
+	var home: bool = game.cabin == farm and farm.is_inside_tree() and not map.is_inside_tree() and not hive.on and game.state == "menu" and not game.sounds.dry
+	game.team_enabled = false
+	game.start_run()
+	await frames(3)
+	expect(home and game.cabin == farm and game.mode == "story" and not hive.on and game.phase == "preparing" and game.credits == 120 and player.global_position.y > -1.0 and not farm.path_between(farm.points.yard_south, farm.points.hall).is_empty(), "Back in the menu the farm is in the world again, and the next night there is an ordinary one")
+	profile.mode = kept_mode
+	profile.mission = kept_mission
+
+## The bot of --bot-check on the map of the second mission (--bot-mode=villa): it follows
+## the marker along the map's paths, shoots what it sees, uses what the mission wants
+## used, and reports how long every stage took, where it could not go on and what the
+## path finding cost.
+func _hive_bot(game: Node3D, limit: float) -> void:
+	var hive: HiveDirector = game.hive
+	var map := game.cabin as HiveMap
+	var player: Survivor = game.player
+	var last_stage := hive.stage
+	var stage_began := 0.0
+	var stages: Array[String] = []
+	var heals := 0
+	var route := PackedVector3Array()
+	var route_at := 0
+	var repath := 0.0
+	var waited := 0.0
+	var lost: Array[String] = []
+	var seen := {}
+	var counted := {}
+	var next_report := 20.0
+	var most_alive := 0
+	var next_grenade := 0.0
+	# (A physics step lasts longer in game time while the bot runs faster than real time.)
+	var step := Engine.time_scale / float(Engine.physics_ticks_per_second)
+	while game.state == "playing" and game.elapsed < limit:
+		await get_tree().physics_frame
+		if hive.stage != last_stage:
+			stages.append("%s:%ds" % [last_stage, int(game.elapsed - stage_began)])
+			print("BOT_STAGE %s after %ds at t=%d kills=%d alive=%d" % [last_stage, int(game.elapsed - stage_began), int(game.elapsed), game.kills, game.alive_count])
+			last_stage = hive.stage
+			stage_began = game.elapsed
+			waited = 0.0
+			repath = 0.0
+		if player.health < BOT_FLOOR:
+			player.health = 100
+			heals += 1
+		if player.reserve == 0:
+			player.reserve = player.max_reserve()
+		most_alive = maxi(most_alive, game.alive_count)
+		# --- shoot the nearest enemy in sight
+		var best: Infected = null
+		var best_distance := 2000.0
+		var nearest_any: Infected = null
+		var nearest_gap := INF
+		for node in get_tree().get_nodes_in_group("infected"):
+			var enemy := node as Infected
+			if enemy.dead:
+				continue
+			var id := enemy.get_instance_id()
+			if not counted.has(id):
+				counted[id] = true
+				seen[enemy.kind] = int(seen.get(enemy.kind, 0)) + 1
+			var distance := enemy.global_position.distance_to(player.global_position)
+			if distance < nearest_gap:
+				nearest_gap = distance
+				nearest_any = enemy
+			var aim: Vector3 = enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.62, 0)
+			var query := PhysicsRayQueryParameters3D.create(player.camera.global_position, aim, 1)
+			# Behind a shield that faces the bot: anybody else comes first.
+			var rank := distance + (1000.0 if enemy.blocks(enemy.global_position - player.global_position) else 0.0)
+			if distance < 45.0 and rank < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
+				best = enemy
+				best_distance = rank
+		if best != null:
+			var to: Vector3 = best.global_position + Vector3(0, float(best.spec.height) * 0.62, 0) - player.camera.global_position
+			player.rotation.y = atan2(-to.x, -to.z)
+			player.camera.rotation.x = atan2(to.y, Vector2(to.x, to.z).length())
+			if best_distance < 1000.0:
+				player.shoot()
+			elif game.elapsed >= next_grenade:
+				# Only he is left in sight: a grenade goes round his shield.
+				next_grenade = game.elapsed + 3.0
+				player.items.grenade = 1
+				player.throw_cooldown = 0.0
+				player.throw("grenade")
+			best_distance = fmod(best_distance, 1000.0)
+		# --- use what is to be used
+		if hive.prompt() != "":
+			game.interact()
+		# --- where to: the marker; guards that hide are looked for
+		var goal := Vector3.INF
+		var marks: Array = hive.markers()
+		if not marks.is_empty():
+			goal = (marks[0].pos as Vector3) - Vector3(0, 1.4, 0)
+		if hive.stage == "station" and hive._guards_left() > 0 and best == null:
+			for guard in hive.guards:
+				if is_instance_valid(guard) and not (guard as Infected).dead:
+					goal = (guard as Infected).global_position
+					break
+		# Standing and shooting while somebody is close; otherwise on towards the goal.
+		var fighting := best != null and best_distance < 9.0
+		if goal != Vector3.INF and not fighting and hive.intro_left <= 0.0:
+			repath -= step
+			if repath <= 0.0:
+				repath = 0.8
+				route = map.path_between(player.global_position, goal)
+				route_at = 0
+			var here := player.global_position
+			var budget := 5.2 * step
+			while budget > 0.0 and route_at < route.size():
+				var to_point := route[route_at] + Vector3(0, 0.05, 0) - here
+				var gap := to_point.length()
+				if gap <= budget:
+					here = route[route_at] + Vector3(0, 0.05, 0)
+					route_at += 1
+					budget -= gap
+				else:
+					here += to_point / gap * budget
+					budget = 0.0
+			if best == null and here.distance_to(player.global_position) > 0.001:
+				var ahead := here - player.global_position
+				player.rotation.y = atan2(-ahead.x, -ahead.z)
+			player.global_position = here
+			player.velocity = Vector3.ZERO
+			# No way to a goal that is not reached yet: something is wrong with the map.
+			if route.is_empty() and player.global_position.distance_to(goal) > 3.0:
+				waited += step
+				if waited > 12.0 and lost.size() < 12:
+					waited = 0.0
+					lost.append("%s: no way from %s to %s" % [hive.stage, str(player.global_position.snapped(Vector3.ONE * 0.1)), str(goal.snapped(Vector3.ONE * 0.1))])
+		if game.elapsed >= next_report:
+			next_report += 20.0
+			print("BOT t=%04d stage=%s alive=%d kills=%d hp=%d heals=%d at=%s progress=%.2f nearest=%s" % [int(game.elapsed), hive.stage, game.alive_count, game.kills, int(player.health), heals, str(player.global_position.snapped(Vector3.ONE * 0.1)), hive.progress, ("%s %.0fm" % [nearest_any.kind, nearest_gap]) if nearest_any != null else "-"])
+	stages.append("%s:%ds" % [last_stage, int(game.elapsed - stage_began)])
+	var squad_kills := 0
+	for mate in game.team:
+		squad_kills += mate.kills
+	print("BOT_RESULT state=%s stage=%s t=%d kills=%d squad_kills=%d score=%d heals=%d most_alive=%d seen=%s lost=%d paths=%d path_ms_each=%.3f" % [game.state, hive.stage, int(game.elapsed), game.kills, squad_kills, game.score, heals, most_alive, str(seen), lost.size(), map.path_calls, (map.path_usec / 1000.0) / maxf(1.0, float(map.path_calls))])
+	print("BOT_STAGES ", " ".join(PackedStringArray(stages)))
+	for entry in lost:
+		print("BOT_LOST ", entry)
+	game.sounds.stop_all()
+	Engine.time_scale = 1.0
+	await wait(0.2)
+	get_tree().call_deferred("quit", 0)

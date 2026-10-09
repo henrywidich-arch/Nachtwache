@@ -201,10 +201,17 @@ var intro_skipped := false
 var hold_marker: MeshInstance3D
 ## The test room (see Sandbox): a match without rounds for trying things out.
 var sandbox: Sandbox
+## The second mission (see HiveDirector), and the two maps: the farm, and the villa with
+## what lies under it (built when it is first asked for, kept from then on). Only the one
+## that is played on is in the world.
+var hive: HiveDirector
+var farm: CabinMap
+var hive_map: HiveMap
 
 func _ready() -> void:
 	_configure_input()
 	cabin = $Waldposten
+	farm = cabin
 	enemies = Node3D.new()
 	enemies.name = "Infected"
 	add_child(enemies)
@@ -261,6 +268,10 @@ func _ready() -> void:
 	sandbox.name = "Sandbox"
 	sandbox.game = self
 	add_child(sandbox)
+	hive = HiveDirector.new()
+	hive.name = "Hive"
+	hive.game = self
+	add_child(hive)
 	player = Survivor.new()
 	player.name = "Survivor"
 	player.game = self
@@ -427,6 +438,9 @@ func _ready() -> void:
 	elif "--sandbox-check" in args:
 		check_mode = true
 		call_deferred("_run_sandbox_check")
+	elif "--hive-check" in args:
+		check_mode = true
+		call_deferred("_run_hive_check")
 	elif "--shop-check" in args:
 		check_mode = true
 		team_enabled = true
@@ -522,7 +536,7 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") and (state in ["shop", "bench"] or overlay in ["shop", "bench"]):
 		resume_run()
 		get_viewport().set_input_as_handled()
-	if event.is_action_pressed("next_wave") and state == "playing" and phase == "preparing":
+	if event.is_action_pressed("next_wave") and state == "playing" and phase == "preparing" and not hive.on:
 		# In the test room: a real round of the strength chosen there.
 		if sandbox.on:
 			sandbox.start_round()
@@ -533,7 +547,7 @@ func _input(event: InputEvent) -> void:
 	for order in ORDERS:
 		if event.is_action_pressed("squad_" + order) and not event.is_echo() and overlay == "":
 			command_squad(order)
-	if event.is_action_pressed("skip_round") and state == "playing" and not net.joined:
+	if event.is_action_pressed("skip_round") and state == "playing" and not net.joined and not hive.on:
 		skip_round()
 	if event.is_action_pressed("fullscreen") and not event.is_echo():
 		toggle_fullscreen()
@@ -630,19 +644,23 @@ func start_run(test: bool = false) -> void:
 		net.start_match()
 	_clear_match_nodes()
 	sandbox.end()
+	hive.end()
 	sandbox.on = test and not net.active
+	# The second mission is played alone with the squad for now: a co-op night is the farm.
+	var second: bool = profile.mission == 2 and not test and not net.active
+	use_map(second)
 	# The host of a co-op match has already told a guest which difficulty is played.
 	if not net.joined:
 		level = profile.difficulty
-		mode = "endless" if sandbox.on else profile.mode
-		modifiers_on = profile.modifiers and not sandbox.on
+		mode = "endless" if sandbox.on else ("villa" if second else profile.mode)
+		modifiers_on = profile.modifiers and not sandbox.on and not second
 	last_modifier = ""
 	_set_modifier("")
 	for key in stats:
 		stats[key] = 0
 	last_place = 0
 	operators.clear()
-	if not net.joined:
+	if not net.joined and not second:
 		story.begin()
 		mission.prepare()
 		plan_operators()
@@ -664,7 +682,7 @@ func start_run(test: bool = false) -> void:
 	player.controlled = true
 	player.camera.current = true
 	# On a map with a landing zone the squad arrives there by helicopter.
-	var arrival: bool = cabin.points.has("landing") and (not check_mode or story_in_checks) and not endless
+	var arrival: bool = cabin.points.has("landing") and (not check_mode or story_in_checks) and not endless and not second
 	if arrival:
 		var pad: Vector3 = story.start_point()
 		player.position = pad + Vector3(0, 0.05, 0)
@@ -682,6 +700,8 @@ func start_run(test: bool = false) -> void:
 	if sandbox.on:
 		sandbox.begin()
 		hud.announce("TESTRAUM", "F1 öffnet das Testmenü: Gegner, Waffen, Stimmen. Nichts hiervon zählt für dein Profil.", 9)
+	elif second:
+		hive.begin()
 	elif arrival and not intro_skipped:
 		# The arrival plays first; the round waits for it.
 		preparation_left = StoryDirector.INTRO_SECONDS + 24.0
@@ -691,6 +711,45 @@ func start_run(test: bool = false) -> void:
 		_say("mission_start", 11.0)
 	if not check_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+## Puts the map of a mission into the world: the farm, or the villa with what lies under
+## it. The other one waits outside the world, as it is.
+func use_map(second: bool) -> void:
+	var wanted: CabinMap = farm
+	if second:
+		if not is_instance_valid(hive_map):
+			hive_map = HiveMap.new()
+			hive_map.name = "Villa"
+		wanted = hive_map
+	if cabin != wanted or not wanted.is_inside_tree():
+		if cabin.is_inside_tree():
+			remove_child(cabin)
+		cabin = wanted
+		add_child(cabin)
+		move_child(cabin, 0)
+	if second:
+		hive_map.reset()
+	shopkeeper.visible = not second
+	_aim_shop_camera(cabin.shop_view)
+
+func _aim_shop_camera(view: Dictionary) -> void:
+	shop_camera.position = view.position
+	shop_camera.look_at(view.target)
+
+## The places the HUD and the map in the corner point at.
+func markers() -> Array:
+	return hive.markers() if hive.on else mission.markers()
+
+## The second mission again, from the last checkpoint that was reached.
+func retry_checkpoint() -> void:
+	hive.resume_at = hive.checkpoint
+	start_run()
+
+func _exit_tree() -> void:
+	# The map that is not in the world goes with the game.
+	for map in [farm, hive_map]:
+		if is_instance_valid(map) and not map.is_inside_tree():
+			map.free()
 
 ## Who attacks in a plain round. Past the end of the table (the endless mode) the last
 ## round grows a little with every further one; every second of those brings a Crusher,
@@ -1522,13 +1581,17 @@ func interaction_prompt() -> String:
 		return "[E] %s aufhelfen" % fallen.label
 	if partner_needs_help():
 		return "[E] Mitspieler aufhelfen"
+	if hive.on:
+		var hint := hive.prompt()
+		if hint != "":
+			return hint
 	var task_prompt := mission.prompt()
 	if task_prompt != "":
 		return task_prompt
 	var station := closest_station()
 	if station.is_empty():
 		if player.ammo == 0 and player.reserve == 0:
-			return "Keine Munition · Lagerraum im Haus oder Scheune [E]"
+			return "Keine Munition · Nächster Versorgungspunkt [E]" if hive.on else "Keine Munition · Lagerraum im Haus oder Scheune [E]"
 		return ""
 	match station.kind:
 		"ammo": return "[E] %s-Munition auffüllen · %d Vorrat" % [player.weapon_label(), price(60)]
@@ -1564,6 +1627,8 @@ func interact() -> void:
 	if partner_needs_help():
 		net.send_revive()
 		stats.revives += 1
+		return
+	if hive.on and hive.use():
 		return
 	var station := closest_station()
 	if station.is_empty(): return
@@ -1799,6 +1864,8 @@ func open_shop() -> void:
 	else:
 		pause_run()
 		state = "shop"
+	if cabin.has_method("shop_view_at"):
+		_aim_shop_camera(cabin.shop_view_at(player.global_position))
 	shop_camera.current = true
 	cabin.get_node("WeaponShopLabel").hide()
 	hud.show_menu("shop")
@@ -1935,7 +2002,7 @@ func resume_run() -> void:
 	hud.hide_menu()
 	if not check_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
-		if from_shop:
+		if from_shop and not hive.on:
 			mission.shop_scare()
 
 ## Co-op lobby: open a match for a partner, or join one.
@@ -1962,7 +2029,9 @@ func return_to_menu() -> void:
 	state = "menu"
 	player.controlled = false
 	sandbox.end()
+	hive.end()
 	_clear_match_nodes()
+	use_map(false)
 	preview_camera.current = true
 	menu_light.show()
 	cabin.get_node("WeaponShopLabel").show()
@@ -1978,7 +2047,7 @@ func finish(victory: bool) -> void:
 	var squad := "KOOP" if net.active else ("TEAM" if not team.is_empty() else "SOLO")
 	var before := Skills.experience(profile.totals)
 	last_place = profile.record(Profile.board(level, mode), {
-		"score": score, "round": wave, "seconds": int(elapsed), "victory": victory, "kills": stats.kills,
+		"score": score, "round": (HiveDirector.ORDER.find(hive.stage) + 1) if hive.on else wave, "seconds": int(elapsed), "victory": victory, "kills": stats.kills,
 		"special_kills": stats.special_kills, "cru_kills": stats.cru_kills, "revives": stats.revives,
 		"phantom": stats.phantom, "havoc": stats.havoc, "ghost": stats.ghost,
 		"objectives": stats.objectives, "team": squad, "date": Time.get_date_string_from_system()
@@ -2192,6 +2261,86 @@ func _run_ops_check() -> void:
 
 ## Pictures of the test room: the main menu with its entry, the room by daylight, enemies
 ## called up and frozen, the four pages of its menu, and the night switched back on.
+## Pictures of the second mission's map: --hive-check --capture-dir=<folder>, with
+## --hive-part=<name> only the views whose names begin with that.
+func _run_hive_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	var part := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hive-part="):
+			part = arg.trim_prefix("--hive-part=")
+	await tick.call(1.0)
+	profile.mission = 2
+	intro_skipped = true
+	# --hive-intro: the arrival instead, a picture every second and a half.
+	if "--hive-intro" in OS.get_cmdline_user_args():
+		intro_skipped = false
+		story_in_checks = true
+		start_run()
+		for shot in range(8):
+			await tick.call(1.5)
+			await _capture(folder, "hive_intro_%d.png" % shot)
+		get_tree().quit()
+		return
+	var started := Time.get_ticks_msec()
+	start_run()
+	print("HIVE start_ms=%d rooms=%d doors=%d lamps=%d times=%s" % [Time.get_ticks_msec() - started, hive_map.rooms.size(), hive_map.doors.size(), hive_map.flickers.size(), str(hive_map.build_times)])
+	# Nobody attacks while the pictures are taken, and every door stands open.
+	hive.set_process(false)
+	for node in enemies.get_children():
+		node.queue_free()
+	alive_count = 0
+	for id in hive_map.areas:
+		hive_map.unlock(str(id), true)
+	for mate in team:
+		mate.hide()
+		mate.set_physics_process(false)
+	if is_instance_valid(hive.nadja):
+		hive.nadja.hide()
+		hive.nadja.set_physics_process(false)
+	if is_instance_valid(hive.heli):
+		hive.heli.hide()
+	await tick.call(1.5)
+	# --hive-env=ssr,fog,ssao,glow switches those parts of the picture off, to see what each costs.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hive-env="):
+			var off := arg.trim_prefix("--hive-env=").split(",")
+			hive_map.environment.ssr_enabled = not off.has("ssr")
+			hive_map.environment.volumetric_fog_enabled = not off.has("fog")
+			hive_map.environment.ssao_enabled = not off.has("ssao")
+			hive_map.environment.glow_enabled = not off.has("glow")
+			if off.has("lamps"):
+				for entry in hive_map.flickers:
+					if entry.light is OmniLight3D and (entry.light as OmniLight3D).omni_range > 12.0:
+						(entry.light as Light3D).visible = false
+	if part == "":
+		await _capture(folder, "hive_00_start.png")
+	hud.play_ui.hide()
+	# --hive-fps: no pictures, only how fast each view is drawn (with the screen's rhythm off).
+	var timing := "--hive-fps" in OS.get_cmdline_user_args()
+	if timing:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	for view in hive_map.tour():
+		if part != "" and not str(view[0]).begins_with(part):
+			continue
+		if timing:
+			if view.size() > 3:
+				continue
+			var line: Vector3 = (view[2] as Vector3) - ((view[1] as Vector3) + Vector3(0, 1.62, 0))
+			_place_player((view[1] as Vector3) + Vector3(0, 0.05, 0), rad_to_deg(atan2(-line.x, -line.z)), rad_to_deg(atan2(line.y, Vector2(line.x, line.z).length())))
+			await tick.call(1.7)
+			print("HIVE_FPS %s fps=%d draws=%d tris=%d" % [view[0], int(Engine.get_frames_per_second()), int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))])
+			continue
+		if view.size() > 3 and bool(view[3]):
+			player.position = (view[2] as Vector3) + Vector3(0, 0.05, 0)
+			await tick.call(0.3)
+			await _capture_from(folder, "hive_%s.png" % view[0], view[1], view[2], 62.0)
+		else:
+			await _shot_at(folder, "hive_%s.png" % view[0], view[1], view[2], 0.6)
+		print("HIVE_VIEW %s draws=%d tris=%d fps=%d" % [view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), int(Engine.get_frames_per_second())])
+	get_tree().quit()
+
 func _run_sandbox_check() -> void:
 	var folder := _capture_dir()
 	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
@@ -2590,6 +2739,15 @@ func _run_menu_check() -> void:
 	var folder := _capture_dir()
 	await get_tree().create_timer(2.0).timeout
 	await _capture(folder, "menu_main.png")
+	profile.mission = 2
+	hud.show_menu("main")
+	await get_tree().create_timer(0.3).timeout
+	await _capture(folder, "menu_main_villa.png")
+	hud.show_menu("board")
+	await get_tree().create_timer(0.3).timeout
+	await _capture(folder, "menu_board_villa.png")
+	profile.mission = 1
+	hud.show_menu("main")
 	# Two made-up runs, so that the leaderboard has something to show.
 	profile.record("normal", {"score": 58400, "round": 10, "seconds": 1265, "victory": true, "kills": 369, "team": "TEAM", "date": "2026-10-04"})
 	profile.record("normal", {"score": 21350, "round": 6, "seconds": 640, "victory": false, "kills": 142, "team": "KOOP", "date": "2026-10-04"})

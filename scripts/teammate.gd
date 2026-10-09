@@ -386,7 +386,7 @@ func _physics_process(delta: float) -> void:
 	visual.animate(delta, get_real_velocity(), target != null, firing)
 	# Lost or left far behind: catch up with the player in one go. Somebody who was sent
 	# off to see to something is neither.
-	if (job.is_empty() and global_position.distance_to(player.global_position) > 38.0) or global_position.y < -8.0:
+	if (job.is_empty() and global_position.distance_to(player.global_position) > 38.0) or global_position.y < game.cabin.abyss() + 2.0:
 		global_position = player.global_position + Basis(Vector3.UP, player.rotation.y) * (slot * 0.6)
 		velocity = Vector3.ZERO
 
