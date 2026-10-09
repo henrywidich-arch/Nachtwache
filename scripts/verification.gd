@@ -4505,6 +4505,10 @@ func _hive(game: Node3D) -> void:
 	game.return_to_menu()
 	await frames(2)
 	game.team_enabled = true
+	# (As after a night on the farm whose last C.R.U. squad came through its last gap: the
+	# other map has fewer places to come in by.)
+	game.cru_gate = farm.spawn_points.size() - 1
+	game.cru_gate_uses = 1
 	game.start_run()
 	await frames(3)
 	var map := game.cabin as HiveMap

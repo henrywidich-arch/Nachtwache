@@ -673,6 +673,11 @@ func start_run(test: bool = false) -> void:
 	kills = 0
 	elapsed = 0
 	alive_count = 0
+	# Where the last squad of the night before came in means nothing tonight (and on the
+	# other map there may be no such place at all).
+	cru_gate = -1
+	cru_gate_uses = 0
+	last_spawn = -1
 	spawn_queue.clear()
 	phase = "preparing"
 	preparation_left = 12
@@ -1014,7 +1019,7 @@ func spawn_enemy(forced_kind: String = "", visual: String = "") -> Infected:
 	var index := _pick_spawn()
 	if human:
 		# A squad comes through the fence together, four at a time by the same gap.
-		if cru_gate < 0 or cru_gate_uses >= 4:
+		if cru_gate < 0 or cru_gate_uses >= 4 or cru_gate >= cabin.spawn_points.size():
 			cru_gate = index
 			cru_gate_uses = 0
 		index = cru_gate
