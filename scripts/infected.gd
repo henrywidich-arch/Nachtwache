@@ -271,6 +271,11 @@ var path_index := 0
 var repath_left := 0.0
 ## The survivor this infected is after right now.
 var prey: Node3D
+## Somebody who is not of the squad and is gone for first, as long as he stands (mission
+## two: the last guards of the villa and what overruns them). Set by whoever stages it.
+var quarry: Node3D = null
+## Set while another enemy hurts this one: nobody is paid for such a death.
+var uncredited := false
 var cooldown := 0.5
 var attack_clock := -1.0
 var attack_length := 0.7
@@ -678,7 +683,9 @@ func _physics_process(delta: float) -> void:
 	burst_left -= delta
 	if burst_left <= 0.0:
 		burst = 0.0
-	if repath_left <= 0 or not is_instance_valid(prey) or not prey.is_targetable():
+	if is_instance_valid(quarry) and quarry.is_targetable():
+		prey = quarry
+	elif repath_left <= 0 or not is_instance_valid(prey) or not prey.is_targetable():
 		prey = game.nearest_survivor(global_position, prey)
 	var target: Vector3 = prey.global_position
 	var offset := Vector2(target.x - global_position.x, target.z - global_position.z)
@@ -1094,6 +1101,20 @@ func _notice(distance: float) -> void:
 		held_left = model.busy_left
 
 ## `source` is the teammate who fired; leave it empty for the player.
+## Enemies can be the quarry of other enemies: these two make one look like a survivor to
+## whoever hunts it.
+func is_targetable() -> bool:
+	return not dead
+
+func receive_damage(amount: float, from: Vector3, _cause: String = "", _by: String = "") -> void:
+	if dead:
+		return
+	var way := Vector3(global_position.x - from.x, 0, global_position.z - from.z).normalized()
+	uncredited = true
+	receive_hit(amount, way, false, self)
+	if not dead:
+		uncredited = false
+
 func receive_hit(amount: float, direction: Vector3, headshot: bool = false, source: Node = null) -> void:
 	if dead:
 		return
@@ -1272,7 +1293,7 @@ func _retire() -> void:
 
 func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: bool = false) -> void:
 	_retire()
-	game.enemy_defeated(self, true, headshot, source)
+	game.enemy_defeated(self, not uncredited, headshot, source)
 	match kind:
 		"charger":
 			# Shooting a Charger sets it off; the short delay lets chain reactions ripple.

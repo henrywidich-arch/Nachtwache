@@ -43,7 +43,7 @@ func _ready() -> void:
 	under = _floor("station", "BAHNHOF", UNDER, Rect2(-66, -76, 132, 52))
 	deep = _floor("facility", "ANLAGE", UNDER, Rect2(-60, -626, 132, 322))
 	deck = _floor("deck", "GALERIE", DECK, Rect2(-60, -626, 132, 322))
-	areas = ["descent", "station", "nadja", "admin", "cafe", "atrium", "research", "hall"]
+	areas = ["descent", "station", "nadja", "admin", "cafe", "atrium", "decon", "research", "hall"]
 	var shop_sign := Label3D.new()
 	shop_sign.name = "WeaponShopLabel"
 	add_child(shop_sign)
@@ -148,7 +148,7 @@ func _painting(room_id: String, side: int, a: float, wide: float = 1.3, high: fl
 func _plinth(pos: Vector3, tall: float, id: String, model_tall: float, yaw: float = 0.0, wide: float = 0.5) -> void:
 	_part("marble", pos + Vector3(0, tall * 0.5, 0), Vector3(wide, tall, wide), Color(0.8, 0.79, 0.76))
 	_part("marble", pos + Vector3(0, 0.04, 0), Vector3(wide + 0.12, 0.08, wide + 0.12), Color(0.7, 0.69, 0.66))
-	_part("marble", pos + Vector3(0, tall - 0.03, 0), Vector3(wide + 0.08, 0.06, wide + 0.08), Color(0.74, 0.73, 0.7))
+	_part("marble", pos + Vector3(0, tall - 0.025, 0), Vector3(wide + 0.08, 0.07, wide + 0.08), Color(0.74, 0.73, 0.7))
 	_solid(pos + Vector3(0, tall * 0.5, 0), Vector3(wide, tall, wide))
 	if id != "":
 		_model(id, pos + Vector3(0, tall, 0), yaw, {"height": model_tall, "solid": false})
@@ -324,7 +324,9 @@ func _lay_grounds() -> void:
 		for piece in _split(tile, 15.0):
 			_solid(Vector3(piece.get_center().x, -0.25, piece.get_center().y), Vector3(piece.size.x, 0.5, piece.size.y), false)
 	# The dark land beyond, and limits nobody sees.
-	_part("ground", Vector3(0, -0.34, 30), Vector3(560, 0.5, 560), Color("12160f"))
+	# (Open over the stairs too: seen from the park it used to lie across the way down.)
+	for tile in _tiles(Rect2(-280, -250, 560, 560), [Rect2(-2.5, -9, 5, 5), Rect2(-1.6, -15.2, 3.2, 6.2)]):
+		_part("ground", Vector3(tile.get_center().x, -0.34, tile.get_center().y), Vector3(tile.size.x, 0.5, tile.size.y), Color("12160f"))
 	for edge in [[Vector3(-70.3, 3, 31), Vector3(0.6, 8, 127)], [Vector3(70.3, 3, 31), Vector3(0.6, 8, 127)], [Vector3(0, 3, -32.3), Vector3(141, 8, 0.6)], [Vector3(0, 3, 94.3), Vector3(141, 8, 0.6)]]:
 		_add_shape(body, edge[0], edge[1])
 	# --- gravel: the drive from the gate, the landing ground, the round before the house
@@ -345,7 +347,7 @@ func _lay_grounds() -> void:
 	_light(basin + Vector3(0, 1.2, 2.2), Color("9fd0e8"), 1.0, 7.0, false, 0.1, 0.8, 80.0)
 	# --- the wall around the park, the gate, and where the wall has come down
 	_park_wall(Vector2(-62, -26), Vector2(62, -26))
-	_park_wall(Vector2(-62, 88), Vector2(62, 88), [[-38.0, -33.0], [-4.4, 4.4, false], [28.0, 33.0]])
+	_park_wall(Vector2(-62, 88), Vector2(62, 88), [[-38.0, -33.0], [-4.9, 4.9, false], [28.0, 33.0]])
 	_park_wall(Vector2(-62, -26), Vector2(-62, 88), [[-2.0, 3.0], [38.0, 43.0]])
 	_park_wall(Vector2(62, -26), Vector2(62, 88), [[2.0, 7.0], [50.0, 55.0]])
 	for side in [-1.0, 1.0]:
@@ -501,7 +503,7 @@ func _villa_outside() -> void:
 	for x in [-21.0, -15.0, -9.0, 9.0, 15.0, 21.0]:
 		_spot(Vector3(x, 0.3, 27.4), Vector3(0, 1.0, -0.62), Color("ffd9a8"), 9.0, 18.0, 50.0, 0.0, 0.3, 140.0)
 	# --- the pergola along the east end of the terrace
-	_part("cobble", Vector3(41, -0.032, 25), Vector3(30, 0.1, 5.2), Color(0.66, 0.64, 0.6))
+	_part("cobble", Vector3(41.25, -0.032, 25), Vector3(29.5, 0.1, 5.2), Color(0.66, 0.64, 0.6))
 	for i in range(8):
 		for z in [23.1, 26.9]:
 			_column(Vector3(28.5 + i * 3.7, 0, z), 0.24, 3.7, "plaster", TRIM)
@@ -927,8 +929,8 @@ func _lay_descent() -> void:
 	_part("betonfloor", Vector3(0, UNDER * 0.5 - 0.3, -19.0), Vector3(2.4, 0.6, 2.6), grey)
 	_solid(Vector3(0, UNDER * 0.5 - 0.3, -19.0), Vector3(2.4, 0.6, 2.6), false)
 	# The floors of the two rooms reach the first and the last step.
-	for sill in [Vector3(0, -0.15, -9.2), Vector3(0, UNDER - 0.15, -28.7)]:
-		_part("betonfloor", sill, Vector3(2.4, 0.3, 0.5), grey)
+	for sill in [Vector3(0, -0.15, -9.225), Vector3(0, UNDER - 0.15, -28.625)]:
+		_part("betonfloor", sill, Vector3(2.4, 0.3, 0.45 if sill.y > -1.0 else 0.35), grey)
 		_solid(sill, Vector3(2.4, 0.3, 0.5), false)
 	for side in [-1.0, 1.0]:
 		# Above the ground the annex behind the house; below it the shaft.
@@ -952,7 +954,7 @@ func _lay_descent() -> void:
 		batch.box(mats["beton"], (low + high) * 0.5 + Vector3(0, 2.75, 0), Vector3(3.2, 0.3, low.distance_to(high) + 0.7), Color(0.5, 0.5, 0.5), slope)
 		_add_shape(body, (low + high) * 0.5 + Vector3(0, 2.75, 0), Vector3(3.2, 0.3, low.distance_to(high) + 0.7), slope)
 	_part("beton", Vector3(0, UNDER * 0.5 + 2.75, -19.0), Vector3(3.2, 0.3, 3.4), Color(0.5, 0.5, 0.5))
-	for spot in [[Vector3(1.16, 1.9, -11.2), 0.0], [Vector3(-1.16, -2.6, -16.6), 0.0], [Vector3(1.16, -2.8, -19.0), 0.25], [Vector3(-1.16, -5.6, -23.0), 0.0], [Vector3(1.16, -7.6, -27.0), 0.0]]:
+	for spot in [[Vector3(1.16, 0.55, -11.6), 0.0], [Vector3(-1.16, -1.3, -14.2), 0.0], [Vector3(-1.16, -2.6, -16.6), 0.0], [Vector3(1.16, -2.8, -19.0), 0.25], [Vector3(-1.16, -5.6, -23.0), 0.0], [Vector3(1.16, -7.6, -27.0), 0.0]]:
 		var at: Vector3 = spot[0]
 		_part("plate", at, Vector3(0.1, 0.24, 0.2), Color("1b1c1b"))
 		_glow_box(at - Vector3(signf(at.x) * 0.07, 0, 0), Vector3(0.06, 0.16, 0.12), Color("ffe2b0"), 4.5)
@@ -1060,7 +1062,7 @@ func _lay_terminal() -> void:
 	for side in [WEST, EAST]:
 		_opening("track_b", side, -317.0, 5.4, {"kind": "join", "height": 4.6, "nav": false})
 	_room("term_deck", deck, Rect2(-40, -345, 62, 4), 4.0, "bighall", {"walls": false, "floor": false, "ceiling": false, "lamps": "none"})
-	_room("control", deck, Rect2(22, -345, 18, 6), 3.0, "panel")
+	_room("control", deck, Rect2(22, -345, 18, 6), 3.0, "panel", {"bare": [NORTH, EAST]})
 	_door("term_deck", "control", -343.0, 1.6, {"kind": "slide"})
 	_pane("control", SOUTH, 31.0, 15.0, 0.9, 2.5, "glass")
 	_chunk("Kit", false)
@@ -1540,6 +1542,8 @@ func tour() -> Array:
 		["15_rear", Vector3(-12, 0, -16), Vector3(0, 3, -4)],
 		["16_supply", Vector3(-7, 0, 66), Vector3(-13.5, 1.2, 70)],
 		["20_vestibule", Vector3(0, 0, -5.0), Vector3(0, -3.0, -18.0)],
+		["20b_stairs_top", Vector3(0, -1.2, -11.5), Vector3(0, -4.4, -17.6)],
+		["20c_stairs_upper", Vector3(0, -3.3, -15.1), Vector3(0, -4.2, -19.5)],
 		["21_stairs_down", Vector3(0, UNDER * 0.5, -19.0), Vector3(0, UNDER + 1.2, -34.0)],
 		["22_stairs_up", Vector3(0, UNDER, -31.5), Vector3(0, -3.0, -17.0)],
 		["23_platform_in", Vector3(0, UNDER, -37.5), Vector3(4, UNDER + 2.0, -57.0)],

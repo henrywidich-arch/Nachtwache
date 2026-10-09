@@ -299,6 +299,8 @@ func _physics_process(delta: float) -> void:
 	if think_left <= 0.0 or not is_instance_valid(prey) or not prey.is_targetable():
 		think_left = 0.4
 		prey = game.nearest_survivor(global_position, prey)
+		if is_instance_valid(quarry) and quarry.is_targetable():
+			prey = quarry
 		boosted = _near_commander()
 		if str(spec.role) == "medic":
 			_find_patient()
@@ -424,7 +426,8 @@ func _fire(target: Vector3, moving: bool) -> void:
 		if not hit.is_empty():
 			endpoint = hit.position
 			var struck: Object = hit.collider
-			if struck.has_method("receive_damage") and struck.has_method("is_targetable"):
+			# (Of the infected only the one he means to hit: the others soak up nothing, as ever.)
+			if struck.has_method("receive_damage") and struck.has_method("is_targetable") and (not struck is Infected or struck == quarry):
 				struck.receive_damage(harm, global_position, "bullet")
 			elif pellet == 0 and randf() < 0.3:
 				game.fx.dust(endpoint, hit.normal)

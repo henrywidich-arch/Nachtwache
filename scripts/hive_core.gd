@@ -24,6 +24,9 @@ const WEST := 3
 const OUT := [Vector2(0, -1), Vector2(1, 0), Vector2(0, 1), Vector2(-1, 0)]
 ## Distance at which the lamps of the rooms begin to fade for the viewer.
 const LAMP_FADE := 36.0
+## Rooms of other zones are drawn from this far away, so that nothing appears or goes at
+## the door one is walking through.
+const ZONE_SIGHT := 64.0
 ## The light that is everywhere, the haze and the sky, by where the viewer is: in the
 ## park, in the villa, or under the ground.
 const MOODS := {
@@ -46,14 +49,17 @@ var areas: Array[String] = []
 ## What is being declared or built right now belongs to this zone and this area.
 var zone := ""
 var area := ""
-## Zone -> {node, sees, mood, flickers, shadows}. A zone is drawn while the viewer is in
-## it or in one that sees it.
+## Zone -> {node, sees, mood, flickers, shadows, box}. A zone is drawn while the viewer is
+## in it, in one that sees it, or nearer to its rooms than ZONE_SIGHT.
 var zones: Dictionary = {}
 var zone_child := 0
 var zone_flicker := 0
 ## Zone -> shown or hidden whatever the viewer sees (the train during its ride).
 var forced: Dictionary = {}
 var here_zone := ""
+## Where the viewer is, and where the zones were last chosen from.
+var here_at := Vector3.ZERO
+var shown_at := Vector3(INF, INF, INF)
 var styles: Dictionary = {}
 var model_cache: Dictionary = {}
 var tinted: Dictionary = {}
@@ -127,6 +133,7 @@ func _chunk(id: String, shadows: bool = true) -> void:
 	var key := zone + "|" + id
 	if not chunks.has(key):
 		chunks[key] = MeshBatch.new()
+		(chunks[key] as MeshBatch).label = key
 		chunk_shadows[key] = shadows and bool(zones[zone].shadows) if zones.has(zone) else shadows
 	batch = chunks[key]
 
@@ -269,7 +276,7 @@ func _link(route: PackedVector3Array, width: float, low: int, high: int, area_id
 	stairs.append({
 		"foot": foot, "head": head, "rect": box.grow(width * 0.5 + 0.3), "width": width,
 		"bottom": Vector2i(roundi(foot.x / CELL), roundi(foot.z / CELL)), "top": Vector2i(roundi(head.x / CELL), roundi(head.z / CELL)),
-		"points": samples, "length": total * 1.15, "low": low, "high": high, "area": area_id, "gate": "both", "pit": false
+		"points": samples, "length": total * 1.15, "low": low, "high": high, "area": area_id, "gate": "both", "pit": false, "zone": zone
 	})
 
 # ---------------------------------------------------------------- surfaces and models
@@ -767,14 +774,16 @@ func _build_door(door: Dictionary) -> void:
 	if family == "villa":
 		var wood := Color(0.34, 0.27, 0.21)
 		for edge in [-1.0, 1.0]:
-			_placed(frame, "panelwood", Vector3(edge * (wide * 0.5 + 0.07), tall * 0.5, 0), Vector3(0.14, tall, deep), wood)
-		_placed(frame, "panelwood", Vector3(0, tall + 0.09, 0), Vector3(wide + 0.36, 0.18, deep + 0.04), wood)
+		# (Jambs and lintel reach two centimetres into the opening: flush with the cut faces of
+		# the wall they would lie in one plane with them, and that flickers.)
+			_placed(frame, "panelwood", Vector3(edge * (wide * 0.5 + 0.06), tall * 0.5, 0), Vector3(0.16, tall, deep), wood)
+		_placed(frame, "panelwood", Vector3(0, tall + 0.08, 0), Vector3(wide + 0.36, 0.2, deep + 0.04), wood)
 		_placed(frame, "panelwood", Vector3(0, 0.012, 0), Vector3(wide, 0.024, WALL), wood.darkened(0.35))
 	else:
 		var steel := Color("1c2023") if family == "tech" else Color("2c3033")
 		for edge in [-1.0, 1.0]:
-			_placed(frame, "plate", Vector3(edge * (wide * 0.5 + 0.08), tall * 0.5, 0), Vector3(0.16, tall, deep), steel)
-		_placed(frame, "plate", Vector3(0, tall + 0.1, 0), Vector3(wide + 0.32, 0.2, deep), steel)
+			_placed(frame, "plate", Vector3(edge * (wide * 0.5 + 0.07), tall * 0.5, 0), Vector3(0.18, tall, deep), steel)
+		_placed(frame, "plate", Vector3(0, tall + 0.09, 0), Vector3(wide + 0.32, 0.22, deep), steel)
 		_placed(frame, "tread", Vector3(0, 0.012, 0), Vector3(wide, 0.024, WALL + 0.3), Color("3a3d3f"))
 		if kind in ["gate", "script"] or wide >= 3.0:
 			# Warning stripes on both faces of the lintel.
@@ -857,10 +866,11 @@ func _build_pane(pane: Dictionary) -> void:
 	var trim := Color(0.34, 0.27, 0.21) if family == "villa" else Color("1c2023")
 	var trim_mat := "panelwood" if family == "villa" else "plate"
 	# The reveal: a frame as deep as the wall.
-	_face_box(room, side, trim_mat, a, b, sill - 0.05, sill, -0.03, depth + 0.03, trim)
-	_face_box(room, side, trim_mat, a, b, head, head + 0.05, -0.03, depth + 0.03, trim)
-	_face_box(room, side, trim_mat, a - 0.05, a, sill - 0.05, head + 0.05, -0.03, depth + 0.03, trim)
-	_face_box(room, side, trim_mat, b, b + 0.05, sill - 0.05, head + 0.05, -0.03, depth + 0.03, trim)
+	# (It reaches a good centimetre into the opening, see the door frames.)
+	_face_box(room, side, trim_mat, a, b, sill - 0.05, sill + 0.014, -0.044, depth + 0.044, trim)
+	_face_box(room, side, trim_mat, a, b, head - 0.014, head + 0.05, -0.044, depth + 0.044, trim)
+	_face_box(room, side, trim_mat, a - 0.05, a + 0.014, sill - 0.05, head + 0.05, -0.044, depth + 0.044, trim)
+	_face_box(room, side, trim_mat, b - 0.014, b + 0.05, sill - 0.05, head + 0.05, -0.044, depth + 0.044, trim)
 	var middle := depth * 0.5
 	match kind:
 		"glass":
@@ -1140,6 +1150,15 @@ func _close_pockets(room: Dictionary) -> void:
 
 ## Turns the collected geometry into meshes, each in the node of its zone.
 func _commit() -> void:
+	# What the rooms of every zone take up, for choosing the zones to draw.
+	for room in rooms:
+		if not zones.has(room.zone):
+			continue
+		var outer: Rect2 = room.outer
+		var tall := maxf(float(room.height), 12.0 if bool(room.outdoor) else 3.0)
+		var box := AABB(Vector3(outer.position.x, float(room.y) - 0.5, outer.position.y), Vector3(outer.size.x, tall + 1.0, outer.size.y))
+		var entry: Dictionary = zones[room.zone]
+		entry["box"] = (entry.box as AABB).merge(box) if entry.has("box") else box
 	for key in chunks:
 		var zone_id := str(key).get_slice("|", 0)
 		var parent: Node3D = zones[zone_id].node if zones.has(zone_id) else self
@@ -1277,13 +1296,35 @@ func room_at(pos: Vector3) -> Dictionary:
 			open_ground = room
 	return open_ground
 
+## The zone a position is in. On a flight between two floors that is the zone the flight
+## was built in, whatever lies above it (the way down behind the mirror runs under the
+## lawn of the park, and no room reaches around it).
 func zone_at(pos: Vector3) -> String:
+	var flat := Vector2(pos.x, pos.z)
+	for stair in stairs:
+		if not stair.has("zone") or not (stair.rect as Rect2).has_point(flat):
+			continue
+		var samples: PackedVector3Array = stair.points
+		var nearest := INF
+		var tread := 0.0
+		for sample in samples:
+			var gap := Vector2(sample.x - pos.x, sample.z - pos.z).length_squared()
+			if gap < nearest:
+				nearest = gap
+				tread = sample.y
+		# (From the feet of somebody lying on the steps to the eyes of somebody jumping.)
+		if nearest < INF and pos.y > tread - 0.9 and pos.y < tread + 3.0:
+			return str(stair.zone)
 	var room := room_at(pos)
 	return "" if room.is_empty() else str(room.zone)
 
 func is_indoors(pos: Vector3) -> bool:
 	var room := room_at(pos)
-	return not room.is_empty() and not bool(room.outdoor)
+	if room.is_empty():
+		# Between rooms: a stairwell under the ground is indoors too.
+		var id := zone_at(pos)
+		return id != "" and str(zones[id].mood) == "under"
+	return not bool(room.outdoor)
 
 func is_toxic(_pos: Vector3) -> bool:
 	return false
@@ -1374,6 +1415,7 @@ func _shut_door(door: Dictionary, shut: bool, instant: bool = false) -> void:
 func reset() -> void:
 	forced.clear()
 	here_zone = ""
+	shown_at = Vector3(INF, INF, INF)
 	powered = true
 	for id in areas:
 		locked[id] = false
@@ -1432,22 +1474,34 @@ func _run_doors(delta: float) -> void:
 ## Draws the zone the viewer is in and those that can be seen from it, hides the others,
 ## and sets the light of the place.
 func _look_from(pos: Vector3) -> void:
+	here_at = pos
 	var id := zone_at(pos)
-	if id == "" or id == here_zone:
-		return
-	here_zone = id
-	_show_zones()
-	mood = str(zones[id].mood)
+	if id != "" and id != here_zone:
+		here_zone = id
+		mood = str(zones[id].mood)
+		_show_zones()
+	elif pos.distance_squared_to(shown_at) > 4.0:
+		_show_zones()
 
 func _show_zones() -> void:
 	if not zones.has(here_zone):
 		return
+	shown_at = here_at
 	var seen: Array = zones[here_zone].sees
+	var flat := Vector2(here_at.x, here_at.z)
 	for id in zones:
+		var entry: Dictionary = zones[id]
 		var shown: bool = id == here_zone or seen.has(id)
+		if not shown and entry.has("box"):
+			# Near enough, and not a storey above or below (lamps shine through floors).
+			var box: AABB = entry.box
+			if here_at.y > box.position.y - 3.0 and here_at.y < box.end.y + 3.0:
+				var plan := Rect2(box.position.x, box.position.z, box.size.x, box.size.z)
+				var gap := Vector2(maxf(0.0, maxf(plan.position.x - flat.x, flat.x - plan.end.x)), maxf(0.0, maxf(plan.position.y - flat.y, flat.y - plan.end.y)))
+				shown = gap.length() < ZONE_SIGHT
 		if forced.has(id):
 			shown = bool(forced[id])
-		(zones[id].node as Node3D).visible = shown
+		(entry.node as Node3D).visible = shown
 
 ## Shows or hides a zone whatever the viewer sees; "" as `how` hands it back.
 func force_zone(id: String, how: String) -> void:
