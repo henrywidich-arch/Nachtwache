@@ -474,7 +474,15 @@ func _update(delta: float) -> void:
 			if room_id == "stair_lobby":
 				_enter("station")
 		"station":
-			if _guards_left() == 0 and stage_time > 4.0:
+			var left := _guards_left()
+			# The last of the guards are pointed out; and should one of them be out of reach
+			# for minutes, the two that are left give the platform up.
+			if left > 0 and left <= 3 and stage_time > 20.0:
+				marker = _nearest_guard()
+			if left > 0 and left <= 2 and stage_time > 150.0:
+				_dismiss_guards()
+				left = 0
+			if left == 0 and stage_time > 4.0:
 				_enter("nadja" if is_instance_valid(nadja) and not nadja_gone else "deal")
 		"nadja":
 			_run_nadja_leaving(delta)
@@ -744,6 +752,28 @@ func _post(kinds: Array, places: Array, keep: bool) -> void:
 		if keep and enemy != null:
 			guards.append(enemy)
 
+## Where the guard nearest to the survivor stands (the platform if none is left).
+func _nearest_guard() -> Vector3:
+	var here: Vector3 = game.player.global_position
+	var best := _point("platform")
+	var best_gap := INF
+	for enemy in guards:
+		if is_instance_valid(enemy) and not (enemy as Infected).dead:
+			var gap := (enemy as Infected).global_position.distance_squared_to(here)
+			if gap < best_gap:
+				best_gap = gap
+				best = (enemy as Infected).global_position
+	return best
+
+## Takes the guards that are left off the field without a kill being counted.
+func _dismiss_guards() -> void:
+	for enemy in guards:
+		if is_instance_valid(enemy) and not (enemy as Infected).dead:
+			(enemy as Infected)._retire()
+			(enemy as Infected).queue_free()
+			game.alive_count = maxi(0, game.alive_count - 1)
+	guards.clear()
+
 func _guards_left() -> int:
 	var left := 0
 	for enemy in guards:
@@ -811,8 +841,15 @@ func _run_lines(delta: float) -> void:
 		return
 	var line: Array = lines.pop_front()
 	line_left = float(line[2]) + 0.4
-	game.sounds.play_sound("radio")
-	game.hud.radio("%s:  %s" % [line[0], line[1]], float(line[2]), SPEAKER_TINT.get(str(line[0]), Color(0, 0, 0, 0)))
+	var words := str(line[1])
+	# Until the channel is cleared at the station, command's voice is not Coleman's: a
+	# letter is lost here and there, as in the last hours of the first mission.
+	if str(line[0]) == "COLEMAN" and not done.has("radio_clear") and ORDER.find(stage) <= ORDER.find("deal"):
+		words = Radio.garbled(words)
+		game.sounds.play_sound("glitch", -12.0)
+	else:
+		game.sounds.play_sound("radio")
+	game.hud.radio("%s:  %s" % [line[0], words], float(line[2]), SPEAKER_TINT.get(str(line[0]), Color(0, 0, 0, 0)))
 
 # ---------------------------------------------------------------- the HUD
 
@@ -825,6 +862,8 @@ func summary() -> Array[String]:
 		out.append("▸  " + goal)
 	if progress >= 0.0:
 		out.append("%s   %d %%" % [progress_text, int(progress * 100.0)])
+	if stage == "station" and _guards_left() > 0:
+		out.append("Wachen auf dem Bahnsteig:  %d" % _guards_left())
 	return out
 
 func markers() -> Array:

@@ -390,9 +390,9 @@ func _lay_villa() -> void:
 	var shell := {"skin_top": EAVES, "skin_tint": OCHRE, "skin_depth": 0.25}
 	_room("hall", ground, Rect2(-7, 8, 14, 14), 8.6, "hall", _with(shell, {"skin": [SOUTH]}))
 	_room("salon", ground, Rect2(-24, 8, 17, 14), STOREY_VILLA, "wood", _with(shell, {"skin": [SOUTH, WEST]}))
-	_room("galerie", ground, Rect2(7, 8, 17, 14), STOREY_VILLA, "wood", _with(shell, {"skin": [SOUTH, EAST], "look": {"core": ["wallpaper", Color(0.3, 0.46, 0.37)]}}))
+	_room("galerie", ground, Rect2(7, 8, 17, 14), STOREY_VILLA, "wood", _with(shell, {"skin": [SOUTH, EAST], "look": {"core": ["plaster", Color(0.34, 0.5, 0.42)]}}))
 	_room("dining", ground, Rect2(-10, -4, 20, 12), STOREY_VILLA, "wood", _with(shell, {"skin": [NORTH], "skin_skip": [[-2.5, 2.5]], "look": {"core": ["wallpaper", Color(0.56, 0.2, 0.18)], "wood": Color(0.7, 0.62, 0.56)}}))
-	_room("library", ground, Rect2(-24, -4, 14, 12), STOREY_VILLA, "wood", _with(shell, {"skin": [NORTH, WEST], "look": {"core": ["wallpaper", Color(0.36, 0.34, 0.5)]}}))
+	_room("library", ground, Rect2(-24, -4, 14, 12), STOREY_VILLA, "wood", _with(shell, {"skin": [NORTH, WEST], "look": {"core": ["plaster", Color(0.4, 0.42, 0.6)]}}))
 	_room("kitchen", ground, Rect2(10, -4, 14, 12), STOREY_VILLA, "scullery", _with(shell, {"skin": [NORTH, EAST]}))
 	# The gallery over the north end of the hall.
 	_room("gallery", upper, Rect2(-7, 8, 14, 3.8), 4.0, "hall", {"walls": false, "floor": false, "ceiling": false, "lamps": "none"})
@@ -915,6 +915,10 @@ func _lay_descent() -> void:
 	_steps(bottom, rest_b, 2.4, "betonfloor", grey)
 	_part("betonfloor", Vector3(0, UNDER * 0.5 - 0.3, -19.0), Vector3(2.4, 0.6, 2.6), grey)
 	_solid(Vector3(0, UNDER * 0.5 - 0.3, -19.0), Vector3(2.4, 0.6, 2.6), false)
+	# The floors of the two rooms reach the first and the last step.
+	for sill in [Vector3(0, -0.15, -9.2), Vector3(0, UNDER - 0.15, -28.7)]:
+		_part("betonfloor", sill, Vector3(2.4, 0.3, 0.5), grey)
+		_solid(sill, Vector3(2.4, 0.3, 0.5), false)
 	for side in [-1.0, 1.0]:
 		# Above the ground the annex behind the house; below it the shaft.
 		_part("formwork", Vector3(side * 1.4, 0.05, -12.1), Vector3(0.4, 6.5, 6.2), wall)

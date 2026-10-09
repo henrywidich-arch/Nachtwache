@@ -4530,6 +4530,27 @@ func _hive(game: Node3D) -> void:
 		if cell.x > 99999 or map.path_between(from, Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL)).is_empty():
 			cut_off.append(str(room.id))
 	expect(cut_off.is_empty(), "No room is cut off from the rest%s" % ("" if cut_off.is_empty() else ": " + ", ".join(PackedStringArray(cut_off))))
+	# --- on foot, with real steps: down the stairwell, and up to two galleries
+	var climbs: Array[String] = []
+	for walk in [["down the stairwell", Vector3(0, 0.05, -7.4), 9.0, HiveMap.UNDER, -28.0], ["up to the gallery of the hall", Vector3(5.5, 0.05, 20.4), 3.2, HiveMap.STOREY_VILLA, 11.8], ["up to the gallery of the terminal", Vector3(-26, HiveMap.UNDER + 0.05, -332.8), 3.2, HiveMap.DECK, -340.6]]:
+		face(game, walk[1], 0.0)
+		await frames(4)
+		Input.action_press("move_forward")
+		await frames(int(float(walk[2]) * 60.0))
+		Input.action_release("move_forward")
+		await frames(6)
+		if absf(player.global_position.y - float(walk[3])) > 0.35 or player.global_position.z > float(walk[4]):
+			climbs.append("%s: at %s" % [walk[0], str(player.global_position.snapped(Vector3.ONE * 0.1))])
+	# Through a door that slides open for whoever comes: from the platform into the control room.
+	face(game, Vector3(26.5, HiveMap.UNDER + 0.05, -38.4), PI)
+	await frames(10)
+	Input.action_press("move_forward")
+	await frames(100)
+	Input.action_release("move_forward")
+	await frames(6)
+	if str(map.room_at(player.global_position).get("id", "")) != "booth":
+		climbs.append("through the sliding door of the control room: at %s" % str(player.global_position.snapped(Vector3.ONE * 0.1)))
+	expect(climbs.is_empty(), "The stairs can be walked on foot: down the stairwell behind the mirror, up to the gallery of the hall and up to the gallery of the terminal%s" % ("" if climbs.is_empty() else " - not: " + ", ".join(PackedStringArray(climbs))))
 	map.reset()
 	map.lock_all()
 	# --- the stages, one after the other (the survivor is set down where each one ends)
