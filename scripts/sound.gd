@@ -85,6 +85,9 @@ const FAKE_PITCH := 0.955
 ## blast of shot that fells three is one kill to the ear. KILL_WINDOW: how long after a
 ## hit of his a guest's kill still counts as that bullet's. KILL_DUCK: how far the tick
 ## steps back (dB) under the answer to a kill.
+## DRY: sounds that are played without the reverb of the world (straight on the bus the
+## settings call "SFX"): the answers to a hit are the shooter's, not the yard's.
+const DRY := ["hit_body", "hit_head", "hit_kill"]
 const HIT_FLOOR := 0.055
 const KILL_FLOOR := 0.09
 const KILL_WINDOW := 0.7
@@ -336,9 +339,10 @@ func set_volume(title: String, value: float) -> void:
 	AudioServer.set_bus_volume_db(bus, linear_to_db(clampf(value, 0.004, 1.0)))
 
 func _start(voice: Node, kind: String, volume: float, pitch: float) -> void:
-	# A voice of the world may have spoken a recorded line last.
+	# A voice of the world may have spoken a recorded line last. (What is no sound of the
+	# world skips its reverb, which would hang an echo on every tick.)
 	if voice != menu_voice:
-		voice.bus = "Field"
+		voice.bus = "SFX" if DRY.has(kind) else "Field"
 	var mix: Array = MIX[kind]
 	voice.stream = _pick(kind)
 	voice.volume_db = float(mix[0]) + volume

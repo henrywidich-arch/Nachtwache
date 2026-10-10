@@ -2648,7 +2648,7 @@ func _hit_answer(game: Node3D) -> void:
 	var in_flesh: bool = target.health < 5000.0 and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) and int(sounds.answers.hit_kill) == int(heard.hit_kill)
 	var playing := false
 	for voice in sounds.voices:
-		playing = playing or (voice.playing and (sounds.clips.hit_body as Array).has(voice.stream) and voice.bus == "Field")
+		playing = playing or (voice.playing and (sounds.clips.hit_body as Array).has(voice.stream) and voice.bus == "SFX")
 	player.shot_cooldown = 0.0
 	player.shoot()
 	var floored: bool = int(sounds.answers.hit_body) == int(heard.hit_body) + 1
