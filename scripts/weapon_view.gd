@@ -30,7 +30,8 @@ const AK_MOUNT := Vector3(0, -0.07, 0.08)
 ## Places are in metres from the middle of the pistol grip (the model's SPEC.json): the
 ## muzzle and half the barrel's width; rail: the top of what a sight is clamped to, optic:
 ## how far forward a sight sits there, irons: how high the iron sights stand; where the
-## second hand holds; the cocking handle; the way the magazine comes out and where its
+## second hand holds (hands: "grip" if it closes round a foregrip there instead of lying
+## under a handguard); the cocking handle; the way the magazine comes out and where its
 ## foot is.
 const GUNS := {
 	"ump": {
@@ -63,6 +64,16 @@ const GUNS := {
 		"rail": 0.1638, "optic": -0.108, "irons": 0.1757, "holo": 0.8,
 		"support": Vector3(0, 0.0792, -0.3323), "handle": Vector3(0, 0.1249, -0.2339),
 		"magazine_out": Vector3(0, -0.9687, -0.2483), "magazine_foot": Vector3(0.0002, -0.08, -0.1577)
+	},
+	# The MP7 (tools/blender_make_mp7.py): its magazine sits in the pistol grip and comes out
+	# of its foot; the left hand holds the foregrip (hands: "grip"). No iron sights: irons is
+	# the top of the rail, which a sight clamps to. magazine_out is shorter than on the
+	# others: the short magazine needs only 16 cm to clear the grip, and stays in the picture.
+	"mp7": {
+		"scene": "res://assets/models/mp7.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.1238, -0.315), "bore": 0.0115,
+		"rail": 0.1814, "optic": -0.045, "irons": 0.1814, "hands": "grip",
+		"support": Vector3(0, 0.035, -0.2142), "handle": Vector3(0, 0.1694, 0.1022),
+		"magazine_out": Vector3(0, -0.6477, 0.0545), "magazine_foot": Vector3(0, -0.0448, 0.0014)
 	},
 	# The machine gun: fed from a box that hangs under it on the left, which comes off
 	# sideways; the cocking handle is on the right.
@@ -228,6 +239,14 @@ const VIEWS := {
 		"hip": Vector3(0.115, -0.148, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.0612, -0.19), "aim_angles": Vector3(-0.73, 0.0, 0.0), "muzzle": Vector3(0, 0.0064, -0.5453),
 		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The MP7 (build_gun): no iron sights, so aimed along the top of its rail, 2.5 cm above it
+	# and 16 cm behind its end. For a reload it is raised high and rolled far over to the
+	# left, so that the foot of the grip and the magazine that comes out of it can be seen.
+	"mp7": {
+		"hip": Vector3(0.12, -0.16, -0.42), "hip_angles": Vector3(0.5, 6.5, -2.5),
+		"aim": Vector3(0.0, -0.1264, -0.3254), "muzzle": Vector3(0, 0.0438, -0.235),
+		"reload_low": Vector3(-0.1, 0.17, -0.02), "reload_turn": Vector3(0.25, 0.25, -1.1)
 	}
 }
 ## Weapons that come as finished models. mount: where the model's origin (the middle of
@@ -650,7 +669,11 @@ static func build_gun(id: String) -> Node3D:
 	hand.name = "Support"
 	view.add_child(hand)
 	var support := MeshBatch.new()
-	_cradle_hand(support, mount + (gun.support as Vector3), Vector3(-0.13, -0.27, 0.17))
+	# hands: "grip" closes the hand round a foregrip instead of laying it under the handguard.
+	if str(gun.get("hands", "")) == "grip":
+		_grip_hand(support, mount + (gun.support as Vector3), -1.0, false, Vector3(-0.15, -0.24, 0.2))
+	else:
+		_cradle_hand(support, mount + (gun.support as Vector3), Vector3(-0.13, -0.27, 0.17))
 	for mesh in support.commit(hand, "Hand", false):
 		mesh.layers = 2
 	_gun_mods(view, id)

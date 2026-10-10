@@ -15,6 +15,9 @@ const WEAPONS := {
 	"p90": {"label": "P90", "slot": 1, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
 	# cues: when in its reload each step is heard. Parts for it: see ATTACHMENTS.
 	"ump": {"label": "UMP45", "slot": 1, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	# The MP7: small and very quick, its magazine in the pistol grip. It has no iron sights,
+	# only the rail on top: it is aimed along that, or through a sight (see ATTACHMENTS).
+	"mp7": {"label": "MP7", "slot": 1, "price": 280, "sound": "mp7", "magazine": 30, "reserve_max": 240, "reload_time": 2.0, "interval": 0.063, "damage": 24.0, "head_multiplier": 2.9, "spread": 0.012, "kick": 0.0068, "flash": 0.75, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	# quiet: a suppressed shot gives nobody the direction it came from.
 	"badger": {"label": "HONEY BADGER", "slot": 1, "price": 350, "quiet": true, "sound": "badger", "magazine": 30, "reserve_max": 210, "reload_time": 1.9, "interval": 0.082, "damage": 34.0, "head_multiplier": 2.6, "spread": 0.008, "kick": 0.0085, "flash": 0.4},
 	# pellets: shots per blast, each doing `damage`. shells: loaded one at a time, `reload_time`
@@ -57,8 +60,8 @@ const WEAPONS := {
 	"fifty": {"label": "M107 KALIBER .50", "slot": 3, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
-const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil"]
-const ORDER := ["rifle", "ak", "g36", "p90", "ump", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
+const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil"]
+const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
 ## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
 ## kind, and as many more of any kind as slings were bought (extra_slots).
@@ -106,6 +109,11 @@ const ATTACHMENTS := {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	},
+	"mp7": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "mp7_sil", "flash": 0.3, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	}
 }
 ## What the shop sells besides weapons. group: its tab in the shop. max: how many fit in
@@ -359,6 +367,7 @@ func _build_weapon() -> void:
 	weapon_models["shotgun"] = WeaponView.build_shotgun()
 	weapon_models["ump"] = WeaponView.build_gun("ump")
 	weapon_models["ak"] = WeaponView.build_gun("ak")
+	weapon_models["mp7"] = WeaponView.build_gun("mp7")
 	for id in WeaponView.MODELS:
 		weapon_models[id] = WeaponView.build_model(id)
 	for id in weapon_models:
