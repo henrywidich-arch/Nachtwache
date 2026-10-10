@@ -446,6 +446,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_v15_check")
+	elif "--trees-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_trees_check")
 	elif "--falls-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -1852,19 +1856,30 @@ func learn_skill(id: String) -> bool:
 	profile.save()
 	return true
 
-## Puts one of the trees in force and keeps that in the profile. True if it could.
+## Whether the tree in force may be changed right now: before and after a night, at the
+## open shop counter during one, and anywhere in the test room - not in the middle of a
+## fight.
+func may_switch_tree() -> bool:
+	return state in ["menu", "win", "lose", "shop"] or overlay == "shop" or sandbox.on
+
+## Puts one of the trees in force, at once and for nothing, and keeps that in the profile.
+## True if it could. Each tree keeps its own points, so nothing is given up; what the
+## survivor carries stays his. (A co-op partner is told nothing of a tree: what reaches
+## him is worked out from the tree in force at the moment it happens - what a hit does,
+## whether a fire is tame.)
 func choose_tree(tree: String) -> bool:
-	if not skills.choose(tree):
+	if not may_switch_tree() or not skills.choose(tree):
 		return false
 	profile.skill_tree = tree
 	profile.save()
 	return true
 
-## Takes every point back, for nothing: they can be spread anew.
-func reset_skills() -> void:
-	skills.reset()
-	profile.skills = {}
-	profile.skill_tree = ""
+## Takes the points of one tree back, for nothing: they can be spent in it anew. Without a
+## tree, those of all three, and none is in force any more.
+func reset_skills(tree: String = "") -> void:
+	skills.reset(tree)
+	profile.skills = skills.ranks.duplicate()
+	profile.skill_tree = skills.chosen
 	profile.save()
 
 ## One member of the squad that is on its feet, picked at random; null if there is none.
@@ -4063,6 +4078,59 @@ func _run_v15_check() -> void:
 	await tick.call(0.5)
 	await _capture(folder, "round_done.png")
 	print("V15_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Screenshots of the trees of abilities (--trees-check): the page with points in all
+## three, each tree in force in turn, and the shop's page on which the tree is changed.
+func _run_trees_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(2.0)
+	# A long career: the last level, so every tree has all its points.
+	profile.totals = {"missions": 40, "victories": 22, "kills": 21000, "special_kills": 6100, "cru_kills": 900, "revives": 60, "objectives": 240, "seconds": 90000}
+	# One point less in the hunter's tree, so that the main menu has one to announce.
+	for tree in Skills.TREES:
+		var left := Skills.points(profile.totals) - (1 if tree == "hunter" else 0)
+		for skill in Skills.TREES[tree].skills:
+			for i in range(int(skill.ranks)):
+				if left > 0 and learn_skill(str(skill.id)):
+					left -= 1
+	choose_tree("hunter")
+	hud.show_menu("main")
+	await tick.call(0.3)
+	await _capture(folder, "trees_main.png")
+	for tree in Skills.TREES:
+		choose_tree(tree)
+		hud.show_menu("skills")
+		await tick.call(0.3)
+		await _capture(folder, "trees_%s.png" % tree)
+	# The points of one tree taken back: the other two keep theirs.
+	reset_skills("hunter")
+	hud.show_menu("skills")
+	await tick.call(0.3)
+	await _capture(folder, "trees_reset.png")
+	# In a night, at the counter: the tree in force is changed on the spot.
+	choose_tree("sweeper")
+	start_run()
+	set_process(false)
+	mission.plain()
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	wave = 7
+	credits = 6000
+	_place_player((cabin.points.shop as Vector3) + Vector3(0, 0.05, 0.6), 0)
+	await tick.call(0.3)
+	open_shop()
+	hud._open_tab("class")
+	await tick.call(0.4)
+	await _capture(folder, "trees_shop_sweeper.png")
+	buy_weapon("flamer")
+	choose_tree("breacher")
+	hud.refresh_counter()
+	await tick.call(0.4)
+	await _capture(folder, "trees_shop_breacher.png")
+	print("TREES_CAPTURE_COMPLETE")
 	get_tree().quit()
 
 ## Screenshots of the C.R.U.: the roles in a row, their moves, and a fire fight.

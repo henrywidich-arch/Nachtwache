@@ -878,8 +878,8 @@ func _choose_tree(tree: String) -> void:
 	game.choose_tree(tree)
 	show_menu("skills")
 
-func _reset_skills() -> void:
-	game.reset_skills()
+func _reset_skills(tree: String) -> void:
+	game.reset_skills(tree)
 	show_menu("skills")
 
 func _mode_label() -> String:
@@ -1092,7 +1092,10 @@ func _menu_main(column: VBoxContainer) -> Control:
 		column.add_child(company_button)
 	else:
 		column.add_child(_pair(_button(_mode_label(), _next_mode), _button(_modifiers_label(), _toggle_modifiers)))
-	var free: int = game.skills.points_left(game.profile.totals) if Skills.IN_SERVICE else 0
+	# Points that wait to be spent: in the tree in force, or in every tree while none is.
+	var free := 0
+	if Skills.IN_SERVICE:
+		free = game.skills.points_left(game.profile.totals, game.skills.chosen) if Skills.TREES.has(game.skills.chosen) else Skills.points(game.profile.totals)
 	var abilities := "FÄHIGKEITEN"
 	if free > 0:
 		abilities = "FÄHIGKEITEN  ·  %d FREI" % free
@@ -1359,7 +1362,7 @@ func _menu_end_villa(column: VBoxContainer, mode: String) -> Control:
 	if Skills.IN_SERVICE and not gain.is_empty():
 		var earned := "+%d Erfahrung   ·   Stufe %d" % [int(gain.xp), int(gain.level)]
 		if int(gain.raised) > 0:
-			earned += "   ·   %s: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
+			earned += "   ·   %s je Weg: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
 		column.add_child(label(earned, 16, MINT, true))
 	_gap(column, 10)
 	var again: Button
@@ -1395,7 +1398,7 @@ func _menu_end(column: VBoxContainer, mode: String) -> Control:
 	if Skills.IN_SERVICE and not gain.is_empty():
 		var earned := "+%d Erfahrung   ·   Stufe %d" % [int(gain.xp), int(gain.level)]
 		if int(gain.raised) > 0:
-			earned += "   ·   %s: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
+			earned += "   ·   %s je Weg: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
 		column.add_child(label(earned, 16, MINT, true))
 	_gap(column, 10)
 	var waiting: bool = game.net.joined
@@ -1577,10 +1580,10 @@ func _learn(id: String) -> void:
 	game.learn_skill(id)
 	show_menu("skills")
 
-## The three trees of abilities side by side. A point buys a rank in any of them; one tree
-## is in force (the others rest), and which one can be changed here at any time. Taking the
-## points back costs nothing either. While the trees are out of service (Skills) the page
-## only shows what is to come.
+## The three trees of abilities side by side. A point counts in all three: each tree has
+## the full number to itself. One tree is in force (the others rest), and which one can be
+## changed here at once. Taking a tree's points back costs nothing either. While the trees
+## are out of service (Skills) the page only shows what is to come.
 func _menu_skills(column: VBoxContainer) -> Control:
 	var skills: Skills = game.skills
 	var totals: Dictionary = game.profile.totals
@@ -1600,23 +1603,24 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		mark.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 		head.add_child(mark)
 	column.add_child(head)
-	if Skills.IN_SERVICE:
-		if skills.chosen == "":
-			_text(column, "Verteile deine Punkte frei auf die drei Wege. Im Einsatz wirkt immer nur einer davon: der aktive, mit seinen Fähigkeiten und seiner Klassenwaffe.", 15)
-		else:
-			_text(column, "Aktiv: %s. Punkte kannst du auf alle drei Wege verteilen; im Einsatz wirkt nur der aktive, mit seiner Klassenwaffe ab %d Punkten darin. Wechseln kostet nichts." % [Skills.TREES[skills.chosen].label, Skills.WEAPON_NEEDS], 15)
-	else:
-		_text(column, "Drei Wege mit je einem Schwerpunkt. Noch nicht in Betrieb: Hier steht, was kommt. Punkte lassen sich\nerst vergeben, wenn alles fertig ist – bis dahin ändert nichts davon einen Einsatz. Die Zahlen gelten je Rang.", 15)
+	# Level and points, beside the heading: the trees below need the height.
 	var earned := Skills.experience(totals)
 	var level := Skills.level_of(earned)
 	var status := "STUFE %d   ·   %d Erfahrung" % [level, earned]
 	if level < Skills.LEVELS:
 		status += "   ·   nächste Stufe bei %d" % Skills.needed(level + 1)
-	status += "   ·   %d %s" % [level - 1, "Punkt" if level == 2 else "Punkte"]
+	status += "   ·   %d %s je Weg" % [level - 1, "Punkt" if level == 2 else "Punkte"]
+	var standing := label(status, 17, MINT, true)
+	standing.size_flags_vertical = Control.SIZE_SHRINK_END
+	head.add_child(standing)
 	if Skills.IN_SERVICE:
-		status += ", davon %d frei" % skills.points_left(totals)
-	column.add_child(label(status, 17, MINT, true))
-	_gap(column, 4)
+		if skills.chosen == "":
+			_text(column, "Jeder Punkt zählt in allen drei Wegen: Du vergibst ihn in jedem einmal. Im Einsatz wirkt nur einer – der aktive, mit seiner Klassenwaffe.", 15)
+		else:
+			_text(column, "Aktiv: %s. Jeder Punkt zählt in allen drei Wegen, im Einsatz wirkt nur der aktive. Wechseln geht sofort und kostet nichts – hier und am Waffenshop." % Skills.TREES[skills.chosen].label, 15)
+	else:
+		_text(column, "Drei Wege mit je einem Schwerpunkt. Noch nicht in Betrieb: Hier steht, was kommt. Punkte lassen sich\nerst vergeben, wenn alles fertig ist – bis dahin ändert nichts davon einen Einsatz. Die Zahlen gelten je Rang.", 15)
+	_gap(column, 2)
 	var trees := HBoxContainer.new()
 	trees.add_theme_constant_override("separation", 12)
 	column.add_child(trees)
@@ -1665,7 +1669,7 @@ func _menu_skills(column: VBoxContainer) -> Control:
 			back_plate.bg_color = back_plate.bg_color.lightened(0.045)
 		elif Skills.IN_SERVICE and skills.chosen != "":
 			panel.modulate = Color(1, 1, 1, 0.74)
-		list.add_child(label("%s   ·   %d %s" % [tree.focus, inside, "Punkt" if inside == 1 else "Punkte"], 14, MUTED))
+		list.add_child(label("%s   ·   %d von %d" % [tree.focus, inside, level - 1], 14, MUTED))
 		# The weapon only this tree may buy, and only while it is in force.
 		for weapon in tree.weapons:
 			var open: bool = skills.weapon_barred(str(weapon)) == ""
@@ -1699,12 +1703,19 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		trees.add_child(panel)
 	_gap(column, 2)
 	var back := _button("ZURÜCK", show_menu.bind("main"), true)
+	back.custom_minimum_size = Vector2(372, 46)
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", 12)
+	foot.add_child(back)
 	if Skills.IN_SERVICE:
-		var undo := _button("PUNKTE ZURÜCK  ·  NEU VERTEILEN", _reset_skills)
-		undo.disabled = skills.spent() == 0
-		column.add_child(_pair(back, undo))
-	else:
-		column.add_child(back)
+		# The points of one tree back, for nothing: the other two keep theirs.
+		for tree_id in Skills.TREES:
+			var undo := _chip("PUNKTE ZURÜCK  ·  %s" % Skills.TREES[tree_id].label, _reset_skills.bind(tree_id), false, 244)
+			undo.custom_minimum_size = Vector2(244, 46)
+			undo.tooltip_text = "Nimmt die Punkte dieses Wegs zurück: Du kannst sie neu vergeben. Die anderen Wege behalten ihre."
+			undo.disabled = skills.spent(tree_id) == 0
+			foot.add_child(undo)
+	column.add_child(foot)
 	return back
 
 ## The counter of the weapon shop or the workbench: a screen of its own (ShopScreen) that is

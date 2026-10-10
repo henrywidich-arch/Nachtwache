@@ -140,7 +140,15 @@ func _list() -> Array:
 		return out
 	var tab: String = hud.shop_tab
 	if tab == "class":
-		out.append({"head": "Die Waffe des aktiven Fähigkeiten-Wegs, ab %d Punkten darin." % Skills.WEAPON_NEEDS})
+		# The tree in force can be changed here, at the counter, at once (see _tree_row).
+		out.append({"head": "Dein Fähigkeiten-Weg: hier wechselst du ihn sofort und kostenlos."})
+		out.append({"trees": true})
+		var mine: String = game.skills.chosen
+		if Skills.TREES.has(mine):
+			out.append({"head": "%s   ·   %d von %d Punkten vergeben
+Seine Waffe gibt es ab %d Punkten darin." % [Skills.TREES[mine].focus, game.skills.spent(mine), Skills.points(game.profile.totals), Skills.WEAPON_NEEDS]})
+		else:
+			out.append({"head": "Noch kein Weg aktiv. Die Waffe eines Wegs gibt es ab %d Punkten darin." % Skills.WEAPON_NEEDS})
 	elif tab == "team":
 		out.append({"head": "Für deine beiden Begleiter, für diese Nacht." if not game.team.is_empty() else "Nur für Einsätze mit Begleitern: Im Koop sind keine dabei."})
 	for id in Survivor.ORDER:
@@ -215,12 +223,34 @@ func refresh() -> void:
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			note.custom_minimum_size.x = LIST_WIDTH
 			rows.add_child(note)
+		elif entry.has("trees"):
+			rows.add_child(_tree_row())
 		else:
 			rows.add_child(_row(entry))
 	_fill_detail()
 	scroll.set_deferred("scroll_vertical", keep)
 	if had_action and is_instance_valid(action) and not action.disabled:
 		action.grab_focus.call_deferred()
+
+## The three trees of abilities as chips: the one in force is marked, and a click puts
+## another in force at once (Game.choose_tree) - its abilities count from then on, and its
+## weapon is the one on sale. What is carried stays.
+func _tree_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	for tree in Skills.TREES:
+		var chip := hud._chip(str(Skills.TREES[tree].label), _switch_tree.bind(tree), game.skills.chosen == tree, 126)
+		chip.custom_minimum_size = Vector2(126, 34)
+		chip.focus_mode = Control.FOCUS_NONE
+		chip.disabled = not Skills.IN_SERVICE or not game.may_switch_tree()
+		chip.tooltip_text = "%s  ·  %d von %d Punkten vergeben" % [Skills.TREES[tree].focus, game.skills.spent(tree), Skills.points(game.profile.totals)]
+		row.add_child(chip)
+	return row
+
+func _switch_tree(tree: String) -> void:
+	if tree != game.skills.chosen and game.choose_tree(tree):
+		game.sounds.play_menu("equip")
+		refresh()
 
 ## A line of the list: its name on the left, its price or its state on the right. It is
 ## picked by a click and by the keys that move through the list.

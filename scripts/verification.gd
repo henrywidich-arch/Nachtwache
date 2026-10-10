@@ -1242,7 +1242,10 @@ func _latest(game: Node3D) -> void:
 			picks += 1
 	var unchosen: bool = skills.chosen == "" and chips == abilities and picks == 3 and skills.barred("sweeper_damage", totals) == "" and skills.value("damage_common") == 0.0
 	# One of them is put in force, then another, then the first again: nothing is lost.
-	var took: bool = game.choose_tree("sweeper") and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper" and game.choose_tree("hunter") and game.profile.skill_tree == "hunter" and not game.choose_tree("nonsense") and game.choose_tree("sweeper") and skills.chosen == "sweeper"
+	# (In the menu before a night; in the middle of one the tree stays as it is.)
+	var midway: bool = game.state == "playing" and not game.may_switch_tree() and not game.choose_tree("sweeper") and skills.chosen == ""
+	game.state = "menu"
+	var took: bool = midway and game.choose_tree("sweeper") and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper" and game.choose_tree("hunter") and game.profile.skill_tree == "hunter" and not game.choose_tree("nonsense") and game.choose_tree("sweeper") and skills.chosen == "sweeper"
 	game.hud.show_menu("skills")
 	chips = 0
 	picks = 0
@@ -1254,6 +1257,7 @@ func _latest(game: Node3D) -> void:
 			picks += 1
 		undo = undo or (node as Button).text.begins_with("PUNKTE ZURÜCK")
 	game.hud.hide_menu()
+	game.state = "playing"
 	var other_way: bool = skills.barred("hunter_damage", totals) == "" and skills.weapon_barred("nitro") == "3 Punkte in JÄGER"
 	# With an empty career there is no level, so no point to spend.
 	var career: Dictionary = game.profile.totals.duplicate()
@@ -1272,7 +1276,7 @@ func _latest(game: Node3D) -> void:
 		if skills.learn(id, totals):
 			bought += 1
 	var poor: bool = not skills.learn("breacher_plates", totals) and skills.barred("breacher_plates", totals) == "Kein Punkt frei"
-	expect(early.begins_with("Erst 3 Punkte") and bought == 5 and poor and skills.spent("breacher") == 5 and skills.spent("sweeper") == 0 and skills.points_left(totals) == 0 and skills.rank("breacher_armour") == 3 and not skills.learn("breacher_armour", {"kills": 999999}), "Points open an ability rank by rank; the higher rows need points in their tree first")
+	expect(early.begins_with("Erst 3 Punkte") and bought == 5 and poor and skills.spent("breacher") == 5 and skills.spent("sweeper") == 0 and skills.points_left(totals, "breacher") == 0 and skills.points_left(totals, "sweeper") == 5 and skills.points_left(totals, "hunter") == 5 and Skills.points(totals) == 5 and skills.rank("breacher_armour") == 3 and not skills.learn("breacher_armour", {"kills": 999999}), "Points open an ability rank by rank; the higher rows need points in their tree first, and what is spent in one tree leaves the other two their full number")
 	# A shield and the sniper rifle.
 	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
 	bearer.set_physics_process(false)
@@ -1603,9 +1607,28 @@ func _arsenal(game: Node3D) -> void:
 	skills.chosen = "hunter"
 	skills.ranks = {"hunter_damage": 3}
 	others = others and game.buy_weapon("nitro") and not game.buy_weapon("flamer")
+	# The tree in force is changed at the counter, at once: its page has the three of them.
+	skills.ranks = {"hunter_damage": 3, "sweeper_damage": 3}
+	game.hud._open_tab("class")
+	await frames(2)
+	var tree_chips: Array = []
+	for node in game.hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text in ["SÄUBERER", "JÄGER", "BRECHER"]:
+			tree_chips.append(node)
+	var carried_then: Array = player.inventory.keys()
+	var offered: bool = tree_chips.size() == 3 and game.may_switch_tree() and skills.chosen == "hunter" and skills.weapon_barred("flamer") == "SÄUBERER nicht aktiv"
+	if tree_chips.size() == 3:
+		(tree_chips[0] as Button).pressed.emit()
+	await frames(2)
+	var swapped: bool = offered and skills.chosen == "sweeper" and game.profile.skill_tree == "sweeper" and skills.rank("hunter_damage") == 3 and skills.rank("sweeper_damage") == 3 and player.inventory.keys() == carried_then and player.inventory.has("nitro") and skills.weapon_barred("flamer") == "" and skills.weapon_barred("nitro") == "JÄGER nicht aktiv" and is_equal_approx(skills.value("damage_common"), 0.24) and skills.value("damage_special") == 0.0
+	game.hud._open_tab("weapons")
 	game.resume_run()
+	# Away from the counter, in the middle of the night, it stays as it is.
+	var stayed: bool = not game.may_switch_tree() and not game.choose_tree("hunter") and skills.chosen == "sweeper"
 	game.wave = 0
 	skills.reset()
+	game.profile.skill_tree = ""
+	expect(swapped and stayed, "At the open shop counter the tree in force is changed at once: the abilities of the other tree count from then on and its weapon is the one on sale, every tree keeps its points and the survivor what he carries; in the middle of the night it cannot be changed")
 	expect(shut and early and first and others and Skills.weapon_tree("flamer") == "sweeper" and Skills.weapon_tree("nitro") == "hunter" and Skills.weapon_tree("fifty") == "breacher" and Skills.weapon_tree("svd") == "", "Each tree of abilities has a weapon of its own, which the shop sells only while that tree is in force and three points are in it")
 	# The .50 against a shield and against armour, with no ability at all.
 	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
@@ -1866,11 +1889,22 @@ func _arsenal(game: Node3D) -> void:
 	for key in game.profile.totals:
 		game.profile.totals[key] = 0
 	game.profile.totals.victories = 3
-	var learnt: bool = game.learn_skill("sweeper_damage") and game.profile.skill_tree == "sweeper" and game.learn_skill("hunter_damage") and not game.learn_skill("sweeper_damage") and int(game.profile.skills.get("sweeper_damage", 0)) == 1 and int(game.profile.skills.get("hunter_damage", 0)) == 1 and skills.chosen == "sweeper" and skills.points_left(game.profile.totals) == 0 and game.choose_tree("hunter") and game.profile.skill_tree == "hunter" and skills.spent() == 2
+	# (Two points at this level: two for each tree.)
+	game.state = "menu"
+	var learnt: bool = game.learn_skill("sweeper_damage") and game.profile.skill_tree == "sweeper" and game.learn_skill("hunter_damage") and game.learn_skill("sweeper_damage") and not game.learn_skill("sweeper_damage") and int(game.profile.skills.get("sweeper_damage", 0)) == 2 and int(game.profile.skills.get("hunter_damage", 0)) == 1 and skills.chosen == "sweeper" and skills.points_left(game.profile.totals, "sweeper") == 0 and skills.points_left(game.profile.totals, "hunter") == 1 and skills.points_left(game.profile.totals, "breacher") == 2 and game.choose_tree("hunter") and game.profile.skill_tree == "hunter" and skills.spent() == 3
+	# The points of one tree back: the other keeps its own, and the tree in force stays so.
+	game.reset_skills("sweeper")
+	var one_back: bool = skills.spent("sweeper") == 0 and skills.rank("hunter_damage") == 1 and skills.chosen == "hunter" and game.profile.skill_tree == "hunter" and not game.profile.skills.has("sweeper_damage") and int(game.profile.skills.get("hunter_damage", 0)) == 1 and skills.points_left(game.profile.totals, "sweeper") == 2
 	game.reset_skills()
-	var returned: bool = skills.ranks.is_empty() and skills.chosen == "" and game.profile.skills.is_empty() and game.profile.skill_tree == "" and skills.points_left(game.profile.totals) == 2
+	var returned: bool = skills.ranks.is_empty() and skills.chosen == "" and game.profile.skills.is_empty() and game.profile.skill_tree == "" and skills.points_left(game.profile.totals, "sweeper") == 2
+	# A profile saved while the trees shared one pool: its points stay where they were put,
+	# and the other two trees have as many free as the level gives.
+	var old := Skills.new()
+	old.adopt({"sweeper_damage": 1, "hunter_damage": 1}, "")
+	var carried_over: bool = old.rank("sweeper_damage") == 1 and old.rank("hunter_damage") == 1 and old.chosen == "sweeper" and old.points_left(game.profile.totals, "sweeper") == 1 and old.points_left(game.profile.totals, "hunter") == 1 and old.points_left(game.profile.totals, "breacher") == 2 and old.barred("breacher_armour", game.profile.totals) == "" and old.barred("sweeper_reload", game.profile.totals) == ""
+	game.state = "playing"
 	game.profile.totals = career
-	expect(learnt and returned, "Points are spent on the abilities of any tree (the first puts its tree in force), kept in the profile and taken back for nothing")
+	expect(learnt and one_back and returned and carried_over, "A point counts in all three trees: each has the full number to itself (the first spent puts its tree in force); they are kept in the profile, the points of one tree are taken back for nothing, and an old profile keeps its points and has the rest free")
 	# --- the endless night
 	game.team_enabled = false
 	game.profile.mode = "endless"
@@ -4293,7 +4327,8 @@ func _near(game: Node3D, reach: float) -> String:
 ## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]
 ## [--bot-company=phantom_havoc|phantom_ghost|havoc_ghost] [--bot-weapon=mp7 or
 ## mp7:silencer,reddot: the weapon the bot fights the night with, and what is fitted to
-## it]. With a window (no --headless)
+## it] [--bot-tree=sweeper|hunter|breacher: every rank of that tree, and it in force]
+## [--bot-vest: heavy armour, new with every round]. With a window (no --headless)
 ## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
 ## position while the real spawner runs, which exercises navigation, special infected and
@@ -4316,9 +4351,15 @@ func bot(game: Node3D) -> void:
 	var next_grenade := 0.0
 	# --bot-weapon=mg2 or --bot-weapon=mp7:silencer,reddot: what the bot shoots with.
 	var arm := ""
+	# --bot-tree=breacher: the bot has every rank of that tree, and that tree is in force.
+	# --bot-vest: it wears heavy armour, bought anew in every break.
+	var tree := ""
+	var vest := "--bot-vest" in OS.get_cmdline_user_args()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bot-weapon="):
 			arm = arg.trim_prefix("--bot-weapon=")
+		if arg.begins_with("--bot-tree="):
+			tree = arg.trim_prefix("--bot-tree=")
 		if arg.begins_with("--bot-round="):
 			first_round = int(arg.trim_prefix("--bot-round="))
 		if arg.begins_with("--bot-seconds="):
@@ -4345,6 +4386,13 @@ func bot(game: Node3D) -> void:
 			game.profile.company = arg.trim_prefix("--bot-company=")
 	Engine.time_scale = pace
 	await wait(1.0)
+	if Skills.TREES.has(tree):
+		game.skills.active = true
+		game.skills.ranks.clear()
+		for skill in Skills.TREES[tree].skills:
+			game.skills.ranks[str(skill.id)] = int(skill.ranks)
+		game.skills.chosen = tree
+		print("BOT_TREE %s ranks=%d" % [tree, game.skills.spent(tree)])
 	game.start_run()
 	# On the map of the second mission the bot walks instead (--bot-mode=villa).
 	if game.hive.on:
@@ -4424,6 +4472,8 @@ func bot(game: Node3D) -> void:
 		if game.phase != last_phase:
 			if game.phase == "wave":
 				wave_began = game.elapsed
+				if vest:
+					game.player.take_item("armor")
 			else:
 				durations.append("%d:%ds" % [game.wave, int(game.elapsed - wave_began)])
 			last_phase = game.phase
@@ -4491,6 +4541,7 @@ func bot(game: Node3D) -> void:
 		squad_kills += mate.kills
 	print("BOT_RESULT state=%s round=%d kills=%d squad_kills=%d score=%d heals=%d seen=%s stuck=%d weather_loops=%s" % [game.state, game.wave, game.kills, squad_kills, game.score, heals, str(seen), stuck.size(), str(game.sounds.rain.playing and game.sounds.ambience.playing)])
 	print("BOT_ROUNDS ", " ".join(PackedStringArray(durations)))
+	print("BOT_TIME %.0f s  harm=%.0f  tree=%s  vest=%s" % [game.elapsed, harm, tree if tree != "" else "-", str(vest)])
 	if frames_seen > 0 and DisplayServer.get_name() != "headless":
 		print("BOT_FRAMES speed=%.1f average=%.1f ms (%.0f fps) slowest=%.0f ms frames=%d draw_calls=%d" % [pace, frame_time / frames_seen, 1000.0 * frames_seen / frame_time, slowest, frames_seen, int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
 	for id in stuck:
@@ -5413,12 +5464,17 @@ func _overhaul(game: Node3D) -> void:
 	var spread := true
 	for id in ["sweeper_damage", "sweeper_damage", "sweeper_damage", "sweeper_fire", "hunter_damage", "hunter_damage", "hunter_damage", "hunter_squad"]:
 		spread = spread and game.learn_skill(id)
-	var all_in: bool = Skills.level_of(Skills.experience(game.profile.totals)) == 9 and skills.points_left(game.profile.totals) == 0 and skills.spent("sweeper") == 4 and skills.spent("hunter") == 4 and not game.learn_skill("breacher_armour")
+	# (Eight points at this level, for each tree: the sweeper has all of them spent below.)
+	for id in ["sweeper_reload", "sweeper_reload", "sweeper_reload", "sweeper_skin"]:
+		spread = spread and game.learn_skill(id)
+	var all_in: bool = Skills.level_of(Skills.experience(game.profile.totals)) == 9 and skills.points_left(game.profile.totals, "sweeper") == 0 and skills.points_left(game.profile.totals, "hunter") == 4 and skills.points_left(game.profile.totals, "breacher") == 8 and skills.spent("sweeper") == 8 and skills.spent("hunter") == 4 and not game.learn_skill("sweeper_skin") and skills.barred("sweeper_skin", game.profile.totals) == "Kein Punkt frei" and skills.barred("breacher_armour", game.profile.totals) == ""
 	var sweeping: bool = skills.chosen == "sweeper" and is_equal_approx(skills.value("damage_common"), 0.24) and skills.value("fire_tame") == 1.0 and skills.value("damage_special") == 0.0 and skills.value("squad_switch") == 0.0
+	game.state = "menu"
 	var switched: bool = game.choose_tree("hunter")
-	var hunting: bool = skills.chosen == "hunter" and is_equal_approx(skills.value("damage_special"), 0.24) and skills.value("squad_switch") == 1.0 and skills.value("damage_common") == 0.0 and skills.value("fire_tame") == 0.0 and skills.spent() == 8
+	game.state = "playing"
+	var hunting: bool = skills.chosen == "hunter" and is_equal_approx(skills.value("damage_special"), 0.24) and skills.value("squad_switch") == 1.0 and skills.value("damage_common") == 0.0 and skills.value("fire_tame") == 0.0 and skills.spent() == 12
 	# A row of a tree opens by the points in that tree, however many are in the others.
-	var rows: bool = skills.barred("breacher_shield", {"victories": 9999}).begins_with("Erst 3 Punkte") and skills.barred("sweeper_pierce", {"victories": 9999}).begins_with("Erst 7 Punkte")
+	var rows: bool = skills.barred("breacher_shield", {"victories": 9999}).begins_with("Erst 3 Punkte") and skills.barred("hunter_trophy", {"victories": 9999}).begins_with("Erst 7 Punkte") and skills.barred("sweeper_pierce", {"victories": 9999}) == ""
 	game.hud.show_menu("main")
 	var named := ""
 	for node in game.hud.modal.find_children("*", "Button", true, false):
@@ -5433,10 +5489,10 @@ func _overhaul(game: Node3D) -> void:
 	# The profile keeps the ranks of every tree and the tree in force.
 	var kept := Skills.new()
 	kept.adopt(game.profile.skills, game.profile.skill_tree)
-	var stored: bool = game.profile.skill_tree == "hunter" and kept.chosen == "hunter" and kept.spent("sweeper") == 4 and kept.spent("hunter") == 4 and kept.rank("sweeper_fire") == 1
+	var stored: bool = game.profile.skill_tree == "hunter" and kept.chosen == "hunter" and kept.spent("sweeper") == 8 and kept.spent("hunter") == 4 and kept.rank("sweeper_fire") == 1
 	game.profile.totals = career
 	game.reset_skills()
-	expect(spread and all_in and sweeping and switched and hunting and rows and named.ends_with("JÄGER") and marks == 1 and stored and skills.spent() == 0, "Points go into any of the trees; only the tree in force counts, another can be put in force without losing a point, and the profile keeps all of it")
+	expect(spread and all_in and sweeping and switched and hunting and rows and named.ends_with("4 FREI") and marks == 1 and stored and skills.spent() == 0, "Points go into each of the trees; only the tree in force counts, another can be put in force without losing a point, and the profile keeps all of it")
 	# --- what the sweeper's flamethrower sets alight goes off without harm
 	var post := Vector3(0, 0.05, 22.0)
 	skills.chosen = "sweeper"

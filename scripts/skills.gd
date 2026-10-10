@@ -3,19 +3,26 @@ extends RefCounted
 ## Three trees of abilities, each with a focus of its own: against the mass of the
 ## infected, against the special ones, and against the soldiers of the C.R.U.
 ##
-## A player has ONE pool of points and spreads it over the three trees as he likes, but
-## only one tree is in force at a time (chosen): only its abilities count, only its weapon
-## is on sale. Which one that is can be changed in the menu at any time, for nothing; the
-## points stay where they were put. They can also all be taken back, for nothing as well.
+## Only one tree is in force at a time (chosen): only its abilities count, only its weapon
+## is on sale. So a point earned counts in ALL three trees: each tree has the full number
+## of points to itself, and what is spent in one takes nothing from the other two. Which
+## tree is in force can be changed at once and for nothing - in the menu before a night
+## and at the open shop counter during one (Game.may_switch_tree) - and nothing is given
+## up for it: each tree keeps its own choices. A tree's choices can be taken back, for
+## nothing as well, and made anew.
 ##
 ## Finished nights earn experience (from the career totals in the profile), experience
 ## gives levels, every level after the first one point. A point buys one rank of an
-## ability. The abilities of a tree come in three tiers; a tier opens once enough points
-## have gone into that tree. The last level leaves a player with LEVELS - 1 points: about
-## enough for every rank of one tree, or for the better part of two.
+## ability in each tree. The abilities of a tree come in three tiers; a tier opens once
+## enough points have gone into that tree. The last level leaves a player with LEVELS - 1
+## points for each tree: about enough for every rank of it.
 ##
 ## Each tree also has a weapon of its own, which the shop only sells while that tree is in
 ## force and WEAPON_NEEDS points are in it.
+##
+## The profile keeps the ranks by ability and the tree in force, as it always did: one that
+## was saved while the three trees shared one pool has its points where they were put, and
+## as many free in the other two as its level gives.
 ##
 ## IN_SERVICE false puts all of it out of service again: the trees can then still be looked
 ## at, but no points can be spent and nothing here changes a night.
@@ -133,9 +140,13 @@ func spent(tree: String = "") -> int:
 			sum += int(ranks[id])
 	return sum
 
-## Points still to be spent with these career totals.
-func points_left(totals: Dictionary) -> int:
-	return maxi(0, level_of(experience(totals)) - 1 - spent())
+## Points a career has earned: each tree has that many to itself.
+static func points(totals: Dictionary) -> int:
+	return level_of(experience(totals)) - 1
+
+## Points still to be spent in a tree with these career totals.
+func points_left(totals: Dictionary, tree: String) -> int:
+	return maxi(0, points(totals) - spent(tree))
 
 ## Why an ability cannot be raised right now ("" if it can).
 func barred(id: String, totals: Dictionary) -> String:
@@ -150,7 +161,7 @@ func barred(id: String, totals: Dictionary) -> String:
 	var need: int = TIER_NEEDS[int(skill.tier) - 1]
 	if spent(tree) < need:
 		return "Erst %d Punkte in %s" % [need, TREES[tree].label]
-	if points_left(totals) <= 0:
+	if points_left(totals, tree) <= 0:
 		return "Kein Punkt frei"
 	return ""
 
@@ -171,10 +182,16 @@ func choose(tree: String) -> bool:
 	chosen = tree
 	return true
 
-## Takes back every point; with none spent, no tree is in force either.
-func reset() -> void:
-	ranks.clear()
-	chosen = ""
+## Takes back the points of one tree: its choices can be made anew, and whichever tree is
+## in force stays so. Without a tree, every point is taken back, and none is in force.
+func reset(tree: String = "") -> void:
+	if tree == "":
+		ranks.clear()
+		chosen = ""
+		return
+	for id in ranks.keys():
+		if tree_of(str(id)) == tree:
+			ranks.erase(id)
 
 ## The tree a weapon belongs to, or "" for one that anybody may buy.
 static func weapon_tree(id: String) -> String:
