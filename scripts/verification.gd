@@ -6781,6 +6781,21 @@ func _hive(game: Node3D) -> void:
 	game.start_run()
 	await frames(4)
 	expect(hive.on and hive.stage == "terminal" and hive.checkpoint == "terminal" and player.global_position.distance_to(map.points.car_b) < 1.5 and not is_instance_valid(hive.nadja) and not map.is_locked("station") and map.is_locked("admin") and map.door_open("car_b") and game.credits >= 900 and game.cabin == map, "A defeat can be taken up at the last checkpoint: the squad stands in the car at the terminal, what lies behind it is open, what lies ahead is shut")
+	# --- nobody hangs on small things on the floor: what the rule of the builders calls
+	# small (CabinMap.snag_kind - low, a post, a pot plant) has no collider, on this map and
+	# on the farm, unless a builder wanted it firm; and the rule has let things go at all.
+	# (tools/snag_check.gd lists them and walks a body over every floor.)
+	var hive_small: Array = map.snags()
+	var farm_small: Array = farm.snags()
+	var hive_gone: int = int(map.snag_dropped.low) + int(map.snag_dropped.thin) + int(map.snag_dropped.small)
+	var farm_gone: int = int(farm.snag_dropped.low) + int(farm.snag_dropped.thin) + int(farm.snag_dropped.small)
+	var plant_at := Vector3(-23.0, 0.4, 21.0)
+	var plant_solid := false
+	for entry in map.floor_solids():
+		if Vector2((entry.at as Vector3).x - plant_at.x, (entry.at as Vector3).z - plant_at.z).length() < 0.3 and float(entry.wide) < 0.7:
+			plant_solid = true
+	var first_small := "" if hive_small.is_empty() and farm_small.is_empty() else ", the first: %s" % str((hive_small + farm_small)[0].at)
+	expect(hive_small.is_empty() and farm_small.is_empty() and hive_gone >= 60 and farm_gone >= 5 and int(farm.snag_dropped.thin) == 0 and not plant_solid, "Small things on the floor are not solid: none of them has a collider in mission two or on the farm, the builders have let %d and %d of them go, and the posts of the farm stand (%d and %d left solid%s)" % [hive_gone, farm_gone, hive_small.size(), farm_small.size(), first_small])
 	# --- what the passes over the map's design added: the plan of the Hive on its walls,
 	# the lockdown's light and horn with the lock of the canteen, the flooded stretch of
 	# the laboratory corridor, the voices of the place
