@@ -35,10 +35,16 @@ const HEAD_SHOCK := 1.7
 const REEL_REST := 3.5
 ## How long it runs before it is simply gone.
 const FLEE_SECONDS := 7.0
-## Enraged (the last fight): faster on its feet, and less time between its blows.
+## Enraged (the last fight): faster on its feet, less time between its attacks
+## (RAGE_HASTE), a blow that comes quicker (RAGE_SWIFT) and hurts more.
 const RAGE_PACE := 1.12
-const RAGE_HASTE := 0.72
-const RAGE_HARM := 1.25
+const RAGE_HASTE := 0.8
+const RAGE_SWIFT := 0.85
+const RAGE_HARM := 1.15
+## Every step of boldness takes this share off the wait between two attacks; rage and
+## boldness together never take it below HASTE_LEAST of what it is.
+const BOLD_HASTE := 0.06
+const HASTE_LEAST := 0.6
 ## Above this speed its bounds are heard.
 const RUN_HEARD := 4.5
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
@@ -182,7 +188,7 @@ func soak() -> void:
 	pass
 
 func _haste() -> float:
-	return (RAGE_HASTE if enraged else 1.0) * maxf(0.6, 1.0 - 0.1 * bold)
+	return maxf(HASTE_LEAST, (RAGE_HASTE if enraged else 1.0) * (1.0 - BOLD_HASTE * bold))
 
 func _set_mode(next: String) -> void:
 	mode = next
@@ -395,7 +401,8 @@ func _look(look: Vector3, delta: float, rate: float) -> void:
 func _strike() -> void:
 	var clip := model.pick_attack()
 	var haste := _haste()
-	_begin_attack(clip, float(spec.attack_time) * haste, float(spec.strike_at) * haste, float(spec.reach) * 1.2, float(spec.damage) * (1.3 if clip == "slam" else 1.0) * (RAGE_HARM if enraged else 1.0))
+	var swift := RAGE_SWIFT if enraged else 1.0
+	_begin_attack(clip, float(spec.attack_time) * swift, float(spec.strike_at) * swift, float(spec.reach) * 1.2, float(spec.damage) * (1.3 if clip == "slam" else 1.0) * (RAGE_HARM if enraged else 1.0))
 	mode = "strike"
 	attack_left = randf_range(WAIT.x, WAIT.y) * haste
 
