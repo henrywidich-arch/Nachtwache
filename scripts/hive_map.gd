@@ -4203,7 +4203,7 @@ func _tower(kind: String, pos: Vector3, yaw: float, options: Dictionary = {}) ->
 		_floor_text(tag, frame * Vector3(0, 0, half + 1.5), 100, Color(0.72, 0.58, 0.16), yaw)
 		var plate_at := Vector3(-0.82, 2.05, front + 0.03) if kind != "shaft" else Vector3(-1.3, 2.75, 2.3)
 		_placed(frame, "plate", plate_at, Vector3(0.9, 0.42, 0.03), Color("0d0f10"))
-		_placed(frame, "plain", plate_at + Vector3(0, 0.185, 0.004), Vector3(0.9, 0.05, 0.03), Color("a8322c") if kind == "burst" else Color("c9a227"))
+		_placed(frame, "plain", plate_at + Vector3(0, 0.17, 0.006), Vector3(0.88, 0.05, 0.03), Color("a8322c") if kind == "burst" else Color("c9a227"))
 		var first := _wall_sign(tag, frame * (plate_at + Vector3(0, 0.04, 0.02)), 30, Color(0.88, 0.9, 0.92), yaw)
 		first.name = "TowerTag"
 		_wall_sign(str(data.plate), frame * (plate_at + Vector3(0, -0.12, 0.02)), 11, Color(0.74, 0.77, 0.8), yaw)
@@ -4342,7 +4342,7 @@ func _hall_clearing() -> void:
 		for k in range(4):
 			_led(Vector3(desk_x - 0.1, UNDER + 0.866, z - 0.24 + k * 0.16), Vector3(0.05, 0.012, 0.05), [Color("5ee07a"), Color("ffb347"), Color("5ee07a"), Color("ff3a2a")][k], 3.0, [1.0, 0.7, 1.0, 0.4][k])
 	_solid(Vector3(desk_x + 0.02, UNDER + 0.68, mid), Vector3(0.82, 1.36, 4.5))
-	_lab_chair(Vector3(9.5, UNDER, mid - 1.2), PI / 2)
+	_lab_chair(Vector3(9.5, UNDER, mid - 1.2), PI / 2 + 0.22)
 	_lab_chair(Vector3(9.2, UNDER, mid + 1.5), 2.3, true)
 	_litter(Vector3(9.0, UNDER, mid + 0.4), 1.6, 9)
 	_floor_text("LEITSTAND", Vector3(8.2, UNDER, mid), 90, Color(0.72, 0.58, 0.16), -PI / 2)
@@ -4420,7 +4420,7 @@ func _hall_lift(hall: Dictionary) -> void:
 	for corner: Vector3 in [Vector3(-3.1, 0, -3.1), Vector3(3.1, 0, -3.1), Vector3(-3.1, 0, 3.1), Vector3(3.1, 0, 3.1)]:
 		_part("plate", lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3), Color("c9a227"))
 		_add_shape(body, lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3))
-	_part("plate", lift + Vector3(0, 6.1, 0), Vector3(6.5, 0.3, 6.5), Color("1c2023"))
+	_part("plate", lift + Vector3(0, 6.1, 0), Vector3(6.62, 0.3, 6.62), Color("1c2023"))
 	# The doors of the shaft in the wall behind it, with their stripes.
 	_face_box(hall, NORTH, "shutter", -2.9, 2.9, 0.0, 5.4, -0.09, 0.03, Color(0.36, 0.38, 0.4))
 	_hazard(_face_point(hall, NORTH, -2.9, 0.4, -0.1), _face_point(hall, NORTH, 2.9, 0.4, -0.1), Vector3(0.48, 0.5, 0.012), 12)
@@ -4611,10 +4611,10 @@ func _terminal(room_id: String, side: int, a: float, loop: String, code: String,
 	var look := _look(room)
 	# The collar: it stands a little proud of the wall, reaches back to the end of the niche
 	# and covers the edges of what was cut.
-	_face_box(room, side, "plate", a0 - 0.07, a1 + 0.07, head - 0.03, head + 0.07, -0.06, 0.17, steel)
-	_face_box(room, side, "plate", a0 - 0.07, a1 + 0.07, sill - 0.07, sill + 0.03, -0.06, 0.17, steel)
-	_face_box(room, side, "plate", a0 - 0.07, a0 + 0.03, sill + 0.02, head - 0.02, -0.06, 0.17, steel)
-	_face_box(room, side, "plate", a1 - 0.03, a1 + 0.07, sill + 0.02, head - 0.02, -0.06, 0.17, steel)
+	_face_box(room, side, "plate", a0 - 0.07, a1 + 0.07, head - 0.03, head + 0.07, -0.066, 0.17, steel)
+	_face_box(room, side, "plate", a0 - 0.07, a1 + 0.07, sill - 0.07, sill + 0.03, -0.066, 0.17, steel)
+	_face_box(room, side, "plate", a0 - 0.07, a0 + 0.03, sill + 0.02, head - 0.02, -0.066, 0.17, steel)
+	_face_box(room, side, "plate", a1 - 0.03, a1 + 0.07, sill + 0.02, head - 0.02, -0.066, 0.17, steel)
 	# The back of the niche; nothing gets through it.
 	_face_box(room, side, "plain", a0 - 0.02, a1 + 0.02, sill - 0.02, head + 0.02, 0.15, 0.195, Color("0b0d0e"))
 	_part_shape(_face_centre(room, side, a0, a1, sill, head, 0.14, 0.2), _face_size(side, a0, a1, sill, head, 0.14, 0.2))
