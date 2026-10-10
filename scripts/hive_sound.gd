@@ -47,7 +47,8 @@ func _voice(kind: String, at: Vector3, volume: float, reach: float, looped: bool
 	voice.stream = _stream(kind, looped)
 	voice.position = at
 	voice.volume_db = volume
-	voice.unit_size = 4.0
+	# (What is heard from far away is also loud from farther away.)
+	voice.unit_size = maxf(4.0, reach * 0.2)
 	voice.max_distance = reach
 	voice.attenuation_filter_cutoff_hz = 9000
 	voice.bus = "Field" if AudioServer.get_bus_index("Field") >= 0 else "Master"

@@ -2975,9 +2975,9 @@ func _sounds() -> void:
 	sound.call("loop", "hum", Vector3(37.0, UNDER + 1.6, -381.0), -14.0, 24.0)
 	sound.call("loop", "plant", Vector3(50.0, UNDER + 1.4, -446.7), -10.0, 28.0)
 	sound.call("loop", "plant", Vector3(50.0, UNDER + 1.4, -481.0), -14.0, 24.0, 0.84)
-	sound.call("horn", Vector3(0, UNDER + 4.4, -420.0), -12.0, 46.0)
+	sound.call("horn", Vector3(0, UNDER + 4.4, -420.0), -15.0, 46.0)
 	for at in [Vector3(-44, 7, 58), Vector3(40, 7, 30), Vector3(6, 9, 92), Vector3(-30, 8, 8)]:
-		sound.call("now_and_then", "gust", at, -14.0, 9.0, 24.0, 60.0, 0.1)
+		sound.call("now_and_then", "gust", at, -7.0, 9.0, 24.0, 60.0, 0.1)
 
 func lock(id: String, instant: bool = false) -> void:
 	var was_open := locked.has(id) and not bool(locked[id])
