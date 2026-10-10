@@ -1978,7 +1978,7 @@ func _arsenal(game: Node3D) -> void:
 	game.phase = "preparing"
 	game.begin_wave()
 	var twelfth: Dictionary = game.roster_of(12)
-	var beyond: bool = game.wave == 12 and game.phase == "wave" and game.mission.plan.size() >= 12 and int(twelfth.mauler) == 22 and int(twelfth.crusher) == 1 and int(game.roster_of(11).crusher) == 0 and int(game.roster_of(20).crusher) == 2 and game.roster_of(3) == game.ROUNDS[2] and game.spawn_queue.size() >= 50 and game.mission.opening_cue() != "round_final"
+	var beyond: bool = game.wave == 12 and game.phase == "wave" and game.mission.plan.size() >= 12 and int(twelfth.mauler) == 26 and int(twelfth.crusher) == 1 and int(game.roster_of(11).crusher) == 0 and int(game.roster_of(20).crusher) == 2 and game.roster_of(3) == game.ROUNDS[2] and game.spawn_queue.size() >= 50 and game.mission.opening_cue() != "round_final"
 	_wipe(game)
 	game.boss = null
 	game.complete_wave()
@@ -7247,6 +7247,11 @@ func _hive_caches(game: Node3D) -> void:
 	var caches: HiveCaches = hive.caches
 	hive.set_process(false)
 	hive.prowl.set_process(false)
+	# (The ways in begin their night a frame behind the director, and whether they have by
+	# now hangs on how the frames fell: begun here, or a pack announced below is wiped when
+	# they do.)
+	hive.entries.begin()
+	hive.entries.seen = hive.clock
 	for mate in game.team:
 		mate.set_physics_process(false)
 	_wipe_all(game)
@@ -7397,6 +7402,7 @@ func _hive_caches(game: Node3D) -> void:
 	var warns := hive.prompt()
 	var tasks_before: int = game.stats.objectives
 	caches.answered = 0
+	var through: int = hive.entries.came
 	hive.stage = "station"
 	game.interact()
 	for k in range(10):
@@ -7416,12 +7422,13 @@ func _hive_caches(game: Node3D) -> void:
 	for k in range(10):
 		caches._process(0.5)
 	var stopped: bool = is_equal_approx(float(cage.left), half) and not bool(cage.near) and caches.answered == came and " ".join(PackedStringArray(caches.summary())).contains("UNTERBROCHEN") and not caches.markers().is_empty()
-	# (Long enough for the slowest way in: its warning, a drop from a high ceiling, and the
-	# second of the pack half a second behind the first.)
+	# (Counted as they come through a way in, not by who of them still stands a moment
+	# later: whoever of the squad is near shoots at them at once.)
 	await wait(2.8)
-	var bodies := 0
+	var standing := 0
 	for node in get_tree().get_nodes_in_group("infected"):
-		bodies += 1 if not (node as Infected).dead else 0
+		standing += 1 if not (node as Infected).dead else 0
+	var bodies: int = maxi(standing, hive.entries.came - through)
 	_wipe_all(game)
 	face(game, (cage.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
 	cage.answer = 999.0
@@ -7430,7 +7437,17 @@ func _hive_caches(game: Node3D) -> void:
 	var open: bool = str(cage.state) == "open" and game.stats.objectives == tasks_before + 1 and hive.prompt().contains("nehmen")
 	game.interact()
 	var heavy: bool = player.inventory.has("mg") and player.current_weapon == "mg" and str(cage.state) == "empty"
-	expect(warns.contains(str(int(HiveCaches.SEALED_SECONDS))) and held and came >= 2 and bodies >= 2 and stopped and open and heavy, "A sealed cache takes %d seconds beside it: it goes on only while the survivor stays near (held down or on the ground as well), stands still when he walks off and goes on when he is back - and for as long as it lasts packs come for it, in a stage in which nobody comes by himself as well (%d in five seconds, %d through the ways in)" % [int(HiveCaches.SEALED_SECONDS), came, bodies])
+	expect(warns.contains(str(int(HiveCaches.SEALED_SECONDS))) and held and came >= 2 and bodies >= 2 and stopped and open and heavy, "A sealed cache takes %d seconds beside it: it goes on only while the survivor stays near (held down or on the ground as well), stands still when he walks off and goes on when he is back - and for as long as it lasts packs come for it, in a stage in which nobody comes by himself as well (%d in five seconds, %d through the ways in, %d of them standing)" % [int(HiveCaches.SEALED_SECONDS), came, bodies, standing])
+	# Strikers and Chargers are thinned wherever this mission dices a kind, and in the farm's rounds.
+	var thin := {"striker": 0, "charger": 0, "ripper": 0}
+	for thinned: String in thin:
+		for k in range(4000):
+			thin[thinned] += 1 if HiveDirector.pick([thinned]) == thinned else 0
+	var farm := {"striker": 0, "charger": 0}
+	for roster: Dictionary in game.ROUNDS:
+		for thinned: String in farm:
+			farm[thinned] += int(roster.get(thinned, 0))
+	expect(absf(int(thin.striker) / 4000.0 - float(HiveDirector.THIN.striker)) < 0.05 and absf(int(thin.charger) / 4000.0 - float(HiveDirector.THIN.charger)) < 0.04 and int(thin.ripper) == 4000 and float(HiveDirector.THIN.striker) < float(HiveDirector.THIN.charger) and int(farm.striker) < int(farm.charger), "Strikers come less often than the dice choose them, Chargers a little less (%d and %d of 4000; %d and %d in the farm's ten rounds)" % [int(thin.striker), int(thin.charger), int(farm.striker), int(farm.charger)])
 	_wipe_all(game)
 	# --- a checkpoint keeps what was found before it, and nothing that was found after it
 	var night_was := caches.night
