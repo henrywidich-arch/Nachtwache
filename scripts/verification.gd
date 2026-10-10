@@ -2772,6 +2772,12 @@ func _crusher_shell(game: Node3D) -> void:
 	health = giant.health
 	giant.receive_hit(100.0, Vector3.BACK)
 	var bullet: bool = is_equal_approx(giant.health, health - 100.0 * Infected.SHELL_SHARE)
+	# (A Medic's gas adds nothing to the shell; without the shell it counts as ever.)
+	health = giant.health
+	giant.warded = 5.0
+	giant.receive_hit(100.0, Vector3.BACK)
+	bullet = bullet and is_equal_approx(giant.health, health - 100.0 * Infected.SHELL_SHARE)
+	giant.warded = 0.0
 	health = giant.health
 	giant.ignite(1.0)
 	giant._burn(Infected.BURN_TICK)
@@ -2818,11 +2824,11 @@ func _crusher_shell(game: Node3D) -> void:
 	var shot_open: float = health - giant.health
 	var rings: bool = sounds.dulls == dulls + 1 and int(sounds.answers.ding) + int(sounds.answers.ding_head) == dings + 1 and not game.hud.hit_is_dull and is_equal_approx(shot_shut, shot_open * Infected.SHELL_SHARE)
 	expect(built and waits and armed and warns and open and creeps and shut and opens, "The Crusher's shell comes by the clock once it has lost a tenth of its health: a second of warning in which it is still open, %.0f seconds shut, %.0f to %.0f open" % [Infected.SHELL_SECONDS, Infected.SHELL_PAUSE.x, Infected.SHELL_PAUSE.y])
-	expect(bullet and fire and unmoved, "Behind its shell a quarter of everything gets through - bullets and fire alike - and neither a blow nor a flashbang holds it up")
+	expect(bullet and fire and unmoved, "Behind its shell a quarter of everything gets through - bullets and fire alike, no less under a Medic's gas - and neither a blow nor a flashbang holds it up")
 	expect(shows and over_sheen and bare, "The shell shows: amber plates over the whole body, eyes of the same colour and a light around it - over a Medic's sheen, and gone when it opens")
 	expect(dull and named and rings, "A bullet on the shell is answered with a dull knock and a mark of its own, and the boss's bar says GEHÄRTET; on the open Crusher it dings again (%.1f against %.1f)" % [shot_shut, shot_open])
-	# It is faster behind its shell.
-	face(game, Vector3(0, 0.05, 6.0), PI)
+	# It is faster behind its shell. (Near enough that it does not hurry: see HURRY_FROM.)
+	face(game, Vector3(0, 0.05, 19.0), PI)
 	giant.special_cooldown = 99.0
 	giant.set_shell("")
 	giant.set_physics_process(true)
@@ -2836,7 +2842,7 @@ func _crusher_shell(game: Node3D) -> void:
 	game.sandbox.crusher_state("shell", false)
 	var room_open: bool = not giant.hardened() and not game.sandbox.crusher_shows("shell")
 	game.sandbox.crusher_state("shell", true)
-	expect(slow > 1.0 and fast > slow * 1.1 and fast < slow * 1.3 and room_open and giant.hardened() and game.sandbox.crusher_shows("shell"), "Behind its shell the Crusher walks a fifth faster (%.2f against %.2f m/s), and the test room shuts and opens the shell at a click" % [fast, slow])
+	expect(slow > 1.0 and fast > slow * 1.15 and fast < slow * 1.25 and room_open and giant.hardened() and game.sandbox.crusher_shows("shell"), "Behind its shell the Crusher walks a fifth faster (%.2f against %.2f m/s), and the test room shuts and opens the shell at a click" % [fast, slow])
 	_take_off(game, giant)
 	game.boss = null
 	# How much longer it lasts under steady fire: half as long again at the most, never twice.

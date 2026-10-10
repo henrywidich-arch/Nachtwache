@@ -1300,11 +1300,12 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		elif headshot:
 			head_hits += 1
 			head_hits_left = GUARD_MEMORY
-	# Behind its shell the Crusher takes a fraction, whatever it is that strikes it.
+	# Behind its shell the Crusher takes a fraction, whatever it is that strikes it. (A
+	# Medic's gas adds nothing to that: the two together made it a wall.)
 	if shell == "on":
 		amount *= SHELL_SHARE
 	# Strengthened by a Medic's gas, it takes less.
-	if warded > 0.0:
+	elif warded > 0.0:
 		amount *= CLOUD_WARD
 	health -= amount
 	# Which way the shot twists the body depends on the side it came from.
