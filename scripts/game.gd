@@ -425,6 +425,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_crusher_check")
+	elif "--boomer-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_boomer_check")
 	elif "--map-check" in args:
 		check_mode = true
 		call_deferred("_run_map_check")
@@ -1234,7 +1238,8 @@ func skip_round() -> void:
 ## Blast damage for the Charger and the Striker's growths. Walls shield the survivor.
 func explode(center: Vector3, radius: float, player_damage: float, infected_damage: float, style: String, source: Node = null) -> void:
 	fx.explosion(center, radius, style)
-	sounds.play_at("pop" if style == "growth" else "explosion", center)
+	# ("boomer": the second exploding infected - no bang, something wet and heavy.)
+	sounds.play_at("pop" if style == "growth" else ("boomer_burst" if style == "boomer" else "explosion"), center)
 	net.send_explosion(center, radius, player_damage, style)
 	for survivor in survivors:
 		# A blast without harm for the survivors (a Charger that burnt out) leaves them be.
@@ -3291,6 +3296,49 @@ func _run_blast_check() -> void:
 		await get_tree().create_timer(float(moments[i])).timeout
 		await _capture(folder, "blast_%d.png" % (i + 1))
 	print("BLAST_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Pictures of the two exploding infected side by side, of the burst of each a few moments
+## apart, and of the second one's puddle while it lies and while it dries away
+## (--boomer-check --capture-dir=<folder>).
+func _run_boomer_check() -> void:
+	var folder := _capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	start_run()
+	set_process(false)
+	hud.banner_left = 0
+	hud.radio_left = 0
+	mission.plain()
+	preparation_left = 9999.0
+	var south := Vector3(0, 0, 13.0)
+	_place_player(south + Vector3(0, 0.05, 0), 180)
+	await get_tree().create_timer(1.0).timeout
+	var eye := south + Vector3(0, 1.6, 1.0)
+	var looks := ["charger", "boomer2"]
+	var pair: Array[Infected] = []
+	for i in range(2):
+		var one := spawn_enemy("charger", looks[i])
+		one.set_physics_process(false)
+		one.position = south + Vector3(-1.1 + i * 2.2, 0.05, 5.0)
+		pair.append(one)
+	await get_tree().create_timer(0.6).timeout
+	await _capture_from(folder, "boomer_0_pair.png", eye, south + Vector3(0, 1.0, 5.0), 50)
+	pair[0].position = south + Vector3(-2.5, 0.05, 8.0)
+	pair[1].position = south + Vector3(2.5, 0.05, 8.0)
+	var waits := [0.1, 0.02, 0.06, 0.12, 0.3, 0.9]
+	for i in range(2):
+		var at: Vector3 = pair[i].global_position
+		pair[i].receive_hit(9999.0, Vector3.BACK)
+		for step in range(waits.size()):
+			await get_tree().create_timer(float(waits[step])).timeout
+			await _capture_from(folder, "boomer_%d_%s_%d.png" % [i + 1, looks[i], step + 1], eye + Vector3(at.x * 0.5, 0, 0), at + Vector3(0, 0.8, 0), 60)
+		await _capture_from(folder, "boomer_%d_%s_floor.png" % [i + 1, looks[i]], at + Vector3(0.2, 7.5, -0.4), at, 60)
+	if not fx.puddles.is_empty():
+		var pool: Decal = fx.puddles[0]
+		var life: Tween = pool.get_meta("life")
+		life.custom_step(CombatEffects.PUDDLE_SECONDS + CombatEffects.PUDDLE_FADE * 0.6)
+		await _capture_from(folder, "boomer_3_puddle_drying.png", pool.global_position + Vector3(0.2, 7.5, -0.4), pool.global_position, 60)
+	print("BOOMER_CAPTURE_COMPLETE puddles=%d" % fx.puddles.size())
 	get_tree().quit()
 
 ## Screenshots of what stands and lies around: each kind of dead body (with its case and,

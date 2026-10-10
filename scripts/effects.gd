@@ -11,6 +11,15 @@ const ACID_DENSITY := 0.42
 const ACID_GLOW := 1.6
 const BLOOD := Color(0.26, 0.012, 0.01, 0.95)
 const BLOOD_DARK := Color(0.16, 0.006, 0.006, 0.95)
+## What the second exploding infected is full of: the colour of blood orange, on the floor
+## and in the air. Its puddle: how wide it gets (metres), how long it lies before it
+## dries away, how long that takes, and how much it glows in the dark.
+const OOZE := Color(0.9, 0.31, 0.04, 0.95)
+const OOZE_DARK := Color(0.55, 0.15, 0.02, 0.95)
+const PUDDLE_SIZE := 5.4
+const PUDDLE_SECONDS := 16.0
+const PUDDLE_FADE := 5.0
+const PUDDLE_GLOW := 0.22
 
 var game: Node3D
 var transient: Node3D
@@ -32,6 +41,12 @@ var ring_texture: GradientTexture2D
 ## Torn clouds for fire and smoke: a round sprite reads as a ball, a ragged one as a blast.
 var puff_textures: Array[ImageTexture] = []
 var splat_textures: Array[ImageTexture] = []
+## The second exploder's puddle (a picture of its own, with the colour in it, so that it
+## can glow), the puddles that lie about, and the drops and the haze of its burst.
+var puddle_texture: ImageTexture
+var puddles: Array[Decal] = []
+var ooze_mesh: SphereMesh
+var ooze_mist: QuadMesh
 var drop_mesh: SphereMesh
 var mist_mesh: QuadMesh
 var gib_mesh: SphereMesh
@@ -54,7 +69,8 @@ func _ready() -> void:
 	# Godot packs the textures of all decals in use into one atlas and rebuilds it whenever
 	# a texture comes or goes, which stalls the game for a moment. One hidden decal per
 	# texture, far below the map, keeps the atlas the same for the whole session.
-	var marks: Array = [soft_texture]
+	puddle_texture = _puddle_texture()
+	var marks: Array = [soft_texture, puddle_texture]
 	marks.append_array(splat_textures)
 	for texture in marks:
 		var anchor := Decal.new()
@@ -90,6 +106,15 @@ func _ready() -> void:
 	drop_mesh.material = blood_material
 	for i in range(12):
 		blood_pool.append(_burst(drop_mesh, 30, 0.6, Vector3(0, -11, 0), 1.8, 5.6, 0.014, 0.045, 48.0))
+	ooze_mesh = drop_mesh.duplicate() as SphereMesh
+	var ooze_material := StandardMaterial3D.new()
+	ooze_material.albedo_color = Color(OOZE.r, OOZE.g, OOZE.b)
+	ooze_material.roughness = 0.25
+	ooze_material.emission_enabled = true
+	ooze_material.emission = Color(0.3, 0.09, 0.012)
+	ooze_mesh.material = ooze_material
+	# Longer than wide: in flight a drop lies along its way (see _ooze_blast).
+	ooze_mesh.height = 2.4
 	# A fine red haze hangs in the air for a moment where a bullet went through.
 	mist_mesh = QuadMesh.new()
 	mist_mesh.size = Vector2(1.0, 1.0)
@@ -104,6 +129,10 @@ func _ready() -> void:
 		var mist := _burst(mist_mesh, 5, 0.55, Vector3(0, -0.6, 0), 0.3, 1.3, 0.22, 0.5, 70.0)
 		mist.color_ramp = _fade()
 		mist_pool.append(mist)
+	ooze_mist = mist_mesh.duplicate() as QuadMesh
+	var haze_material := mist_material.duplicate() as StandardMaterial3D
+	haze_material.albedo_color = Color(0.85, 0.33, 0.06, 0.4)
+	ooze_mist.material = haze_material
 	var puff := QuadMesh.new()
 	puff.size = Vector2(0.22, 0.22)
 	var puff_material := StandardMaterial3D.new()
@@ -227,6 +256,7 @@ func clear() -> void:
 		transient.remove_child(child)
 		child.queue_free()
 	decals.clear()
+	puddles.clear()
 	growths.clear()
 	clouds.clear()
 	for tracer in tracer_pool:
@@ -249,9 +279,10 @@ func vanish(center: Vector3) -> void:
 
 ## Shows one of every effect at `center`. Called once at start behind a black curtain.
 func warm_up(center: Vector3) -> void:
-	for style in ["growth", "charger", "blast"]:
+	for style in ["growth", "charger", "boomer", "blast"]:
 		explosion(center, 2.0, style)
 	charger_burst(center)
+	boomer_burst(center)
 	drop_growths(center, 1, true)
 	acid_cloud(center, true)
 	blood(center + Vector3.UP, Vector3.FORWARD, true)
@@ -516,6 +547,9 @@ func explosion(center: Vector3, radius: float, style: String) -> void:
 		smoke_tint = Color(0.28, 0.1, 0.09, 0.7)
 	elif style in ["blast", "frag"]:
 		_detonation(center, radius)
+		return
+	elif style == "boomer":
+		_ooze_blast(center, radius)
 		return
 	var flash := OmniLight3D.new()
 	flash.light_color = tint
@@ -880,6 +914,135 @@ func charger_burst(center: Vector3) -> void:
 	if not above.is_empty():
 		decal(above.position, random.randf_range(1.6, 2.4), BLOOD, above.normal)
 	game.sounds.play_at("gore_burst", center)
+	var gap: float = game.player.global_position.distance_to(center)
+	if gap < 7.0:
+		game.hud.splatter(1.0 - gap / 7.0)
+
+# ---------------------------------------------------------------- the second exploder
+
+## The picture of its puddle: one ragged pool with lobes and a few drops thrown clear. The
+## colour is in the picture and thins out with it, so that the same picture can make the
+## puddle glow a little (a decal's glow takes no notice of how see-through it is).
+func _puddle_texture() -> ImageTexture:
+	var size := 128
+	var outline := FastNoiseLite.new()
+	outline.seed = 2202
+	outline.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	outline.frequency = 1.0
+	var mottle := FastNoiseLite.new()
+	mottle.seed = 517
+	mottle.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	mottle.frequency = 0.06
+	# Drops that were thrown clear of the pool: [middle, radius], in shares of the picture.
+	var drops: Array = []
+	for i in range(14):
+		drops.append([Vector2.from_angle(random.randf() * TAU) * random.randf_range(0.36, 0.47), random.randf_range(0.007, 0.026)])
+	var image := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	for y in range(size):
+		for x in range(size):
+			var spot := Vector2(x + 0.5, y + 0.5) / size - Vector2(0.5, 0.5)
+			var away := spot.length()
+			var ray := Vector2.from_angle(spot.angle())
+			# The edge wanders in and out: wide bays, and smaller tongues on top of them.
+			var edge := 0.29 + 0.085 * outline.get_noise_2d(ray.x * 1.5, ray.y * 1.5) + 0.04 * outline.get_noise_2d(ray.x * 4.5 + 9.0, ray.y * 4.5)
+			var cover := clampf((edge - away) / 0.028 + 0.5, 0.0, 1.0)
+			for drop: Array in drops:
+				cover = maxf(cover, clampf((float(drop[1]) - spot.distance_to(drop[0])) / 0.012 + 0.5, 0.0, 1.0))
+			# Deeper, and so darker, towards the middle; and never quite even.
+			var shade := (1.0 - 0.28 * clampf(1.0 - away / 0.26, 0.0, 1.0)) * (0.86 + 0.14 * mottle.get_noise_2d(x, y))
+			image.set_pixel(x, y, Color(OOZE.r * cover * shade, OOZE.g * cover * shade, OOZE.b * cover * shade, cover * OOZE.a))
+	return ImageTexture.create_from_image(image)
+
+## A puddle of it spreads on the floor below `point`, lies there for a while and dries
+## away. It only looks the part: nothing happens to whoever walks through it.
+func ooze_puddle(point: Vector3, size: float = PUDDLE_SIZE) -> Decal:
+	var ground := floor_below(point + Vector3.UP * 0.5)
+	var pool := Decal.new()
+	pool.texture_albedo = puddle_texture
+	pool.texture_emission = puddle_texture
+	pool.emission_energy = PUDDLE_GLOW
+	pool.size = Vector3(size * 0.3, 0.5, size * 0.3)
+	pool.cull_mask = 1
+	pool.normal_fade = 0.35
+	pool.upper_fade = 0.02
+	pool.lower_fade = 0.02
+	transient.add_child(pool)
+	pool.global_transform = Transform3D(Basis(Vector3.UP, random.randf() * TAU), ground + Vector3.UP * 0.08)
+	puddles.append(pool)
+	var life := pool.create_tween()
+	life.tween_property(pool, "size", Vector3(size, 0.5, size * random.randf_range(0.82, 1.0)), 1.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	life.tween_interval(PUDDLE_SECONDS)
+	life.tween_property(pool, "modulate:a", 0.0, PUDDLE_FADE)
+	life.parallel().tween_property(pool, "emission_energy", 0.0, PUDDLE_FADE)
+	life.tween_callback(_puddle_gone.bind(pool))
+	# (The checks run it to its end without waiting.)
+	pool.set_meta("life", life)
+	return pool
+
+func _puddle_gone(pool: Decal) -> void:
+	puddles.erase(pool)
+	pool.queue_free()
+
+## The second exploding infected does not go off like a shell: it bursts open low and
+## wide. A dull flash the colour of blood orange, a sheet of drops thrown out flat over
+## the ground, and a haze that hangs knee-high - no fire, no smoke, no burn on the floor.
+## (What its blast does is the Charger's; this is only how it looks.)
+func _ooze_blast(center: Vector3, radius: float) -> void:
+	var ground := floor_below(center)
+	var low := ground + Vector3(0, 0.45, 0)
+	var flash := OmniLight3D.new()
+	flash.light_color = Color(1.0, 0.42, 0.1)
+	flash.light_energy = 3.4
+	flash.omni_range = radius * 1.9
+	transient.add_child(flash)
+	flash.global_position = low
+	var fade := flash.create_tween()
+	fade.tween_property(flash, "light_energy", 0.0, 0.34)
+	fade.tween_callback(flash.queue_free)
+	# It spills over the ground: a glow that runs out as far as the blast reaches.
+	var spill := _glow_sprite(soft_texture, Color(1.5, 0.5, 0.1, 0.55), true)
+	spill.global_position = ground + Vector3(0, 0.07, 0)
+	spill.rotation.x = -PI / 2
+	spill.scale = Vector3.ONE * 0.5
+	var run := spill.create_tween().set_parallel(true)
+	run.tween_property(spill, "scale", Vector3.ONE * radius * 1.25, 0.32).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	run.tween_property(spill.material_override, "albedo_color:a", 0.0, 0.32)
+	run.chain().tween_callback(spill.queue_free)
+	# Drops thrown out flat, all the way round: each a streak along its way.
+	var sheet := _one_shot(ooze_mesh, 160, 0.9, Vector3(0, -7.5, 0), 4.0, radius * 2.6, 0.022, 0.06, 180.0)
+	sheet.direction = Vector3.FORWARD
+	sheet.flatness = 0.9
+	sheet.set_particle_flag(CPUParticles3D.PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY, true)
+	sheet.global_position = low
+	var globs := _one_shot(ooze_mesh, 44, 1.2, Vector3(0, -9.0, 0), 2.0, radius * 1.5, 0.05, 0.12, 180.0)
+	globs.direction = Vector3.FORWARD
+	globs.flatness = 0.7
+	globs.set_particle_flag(CPUParticles3D.PARTICLE_FLAG_ALIGN_Y_TO_VELOCITY, true)
+	globs.global_position = low
+	var haze := _one_shot(ooze_mist, 26, 2.0, Vector3(0, -0.25, 0), 2.0, radius * 2.1, radius * 0.22, radius * 0.44, 180.0)
+	haze.direction = Vector3.FORWARD
+	haze.flatness = 0.93
+	haze.damping_min = 1.7
+	haze.damping_max = 2.6
+	haze.color_ramp = _fade()
+	haze.global_position = low + Vector3(0, 0.1, 0)
+
+## What is left of it: scraps thrown low and wide, its insides across the floor and up to
+## the knees of whatever stands around, and the puddle. (The sound of it comes with the
+## blast, see Game.explode.)
+func boomer_burst(center: Vector3) -> void:
+	chunks(center + Vector3.DOWN * 0.3, 30, 1.35, Vector3(0, -2.2, 0))
+	ooze_puddle(center)
+	for i in range(16):
+		var reach := random.randf_range(1.4, 6.2)
+		var around := random.randf() * TAU
+		decal(floor_below(center + Vector3(cos(around), 0, sin(around)) * reach), random.randf_range(0.6, 1.7), OOZE_DARK if i % 3 == 0 else OOZE)
+	for i in range(10):
+		var angle := TAU * i / 10.0 + random.randf_range(-0.25, 0.25)
+		var out := Vector3(cos(angle), random.randf_range(-0.28, 0.02), sin(angle)).normalized()
+		var hit := _ray(center, center + out * 6.0)
+		if not hit.is_empty() and absf((hit.normal as Vector3).y) < 0.7:
+			decal(hit.position, random.randf_range(0.9, 1.8), OOZE, hit.normal)
 	var gap: float = game.player.global_position.distance_to(center)
 	if gap < 7.0:
 		game.hud.splatter(1.0 - gap / 7.0)

@@ -32,7 +32,8 @@ const TYPES := {
 		"stagger": "stumble"
 	},
 	"charger": {
-		"label": "CHARGER", "visuals": ["charger"],
+		# Two bodies, one enemy: the second ("boomer2") bursts wet and wide, see bursts_wet.
+		"label": "CHARGER", "visuals": ["charger", "boomer2"],
 		"voice": "charger_roar", "idle": "gurgle", "strike": "", "pain": "", "death": "",
 		"health": 85.0, "health_per_round": 4.0, "speed": 3.6, "speed_per_round": 0.05,
 		"damage": 50.0, "reach": 2.3, "attack_time": 0.55, "attack_gap": 9.0, "strike_at": 9.0,
@@ -593,7 +594,10 @@ func show_cue(action: String, args: Array) -> void:
 			model.swell = 1.0
 		"burst":
 			model.hide()
-			game.fx.charger_burst(global_position + Vector3(0, 0.9, 0))
+			if bursts_wet():
+				game.fx.boomer_burst(global_position + Vector3(0, 0.9, 0))
+			else:
+				game.fx.charger_burst(global_position + Vector3(0, 0.9, 0))
 		"shed":
 			game.fx.drop_growths(global_position + Vector3(0, 1.0, 0), int(args[0]), puppet, args.size() > 1 and bool(args[1]))
 		"enrage":
@@ -1324,8 +1328,15 @@ func _explode() -> void:
 	cue("burst")
 	# One that burnt out (the sweeper's ability) still tears the infected around it apart,
 	# but does the survivors nothing.
-	game.explode(centre, CHARGER_BLAST, 0.0 if burn_tame else float(spec.damage), 110.0, "charger", self)
+	game.explode(centre, CHARGER_BLAST, 0.0 if burn_tame else float(spec.damage), 110.0, "boomer" if bursts_wet() else "charger", self)
 	queue_free()
+
+## True for the second exploding infected: a Charger in another body. It is the same enemy
+## in every number and in all it does; only its burst looks and sounds different - low,
+## wide and the colour of blood orange, with a puddle left behind. (The look is what the
+## host of a co-op match tells the guest about every spawn, so both see the same one.)
+func bursts_wet() -> bool:
+	return kind == "charger" and model != null and model.kind == "boomer2"
 
 func _shot_from_behind(direction: Vector3) -> bool:
 	return facing().dot(direction) > 0.2

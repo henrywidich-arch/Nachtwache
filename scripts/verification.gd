@@ -1724,8 +1724,8 @@ func _arsenal(game: Node3D) -> void:
 	var flung := 0
 	for kind in InfectedVisual.KINDS:
 		var build: Dictionary = InfectedVisual.KINDS[kind]
-		# The Charger never lies down: it bursts.
-		if str(build.set) != "zombie" or kind == "charger":
+		# The Charger never lies down: it bursts - in either of its two bodies.
+		if str(build.set) != "zombie" or kind in ["charger", "boomer2"]:
 			continue
 		var size: float = float(build.height) / 1.78
 		var asked := false
@@ -2421,8 +2421,106 @@ func _threats(game: Node3D) -> void:
 	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
 	await _zombie_test(game)
 	await _hit_answer(game)
+	await _second_exploder(game)
 	game.team_enabled = true
 	game.start_run()
+
+## Takes an enemy off the field without a death: nothing bursts, nobody is paid.
+func _take_off(game: Node3D, enemy: Infected) -> void:
+	enemy._retire()
+	enemy.queue_free()
+	game.alive_count = maxi(0, game.alive_count - 1)
+
+## The second exploding infected: a Charger in another body, with a burst of its own -
+## low, wide, the colour of blood orange, and a puddle that lies there for a while.
+func _second_exploder(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var fx: CombatEffects = game.fx
+	_wipe_all(game)
+	await wait(0.6)
+	fx.clear()
+	game.wave = 3
+	# Roughly every second Charger wears the new body, and it is a Charger in every number.
+	var worn := {}
+	var same := true
+	for i in range(24):
+		var one: Infected = game.spawn_enemy("charger")
+		one.set_physics_process(false)
+		worn[one.model.kind] = int(worn.get(one.model.kind, 0)) + 1
+		same = same and one.kind == "charger" and one.spec == Infected.TYPES.charger and is_equal_approx(one.max_health, 85.0 + 4.0 * 2.0) and str(one.voices.voice) == "charger_roar" and one.bursts_wet() == (one.model.kind == "boomer2")
+		_take_off(game, one)
+	await frames(2)
+	var boomer: Infected = game.spawn_enemy("charger", "boomer2")
+	boomer.set_physics_process(false)
+	boomer.position = Vector3(0, 0.05, 30.0)
+	var body: InfectedVisual = boomer.model
+	var library: AnimationLibrary = InfectedVisual.libraries["boomer2"]
+	var rigged: bool = body.kind == "boomer2" and body.skeleton.get_bone_count() == 22 and library.has_animation("run") and library.has_animation("shamble") and library.has_animation("stumble") and library.has_animation("scream") and body.eyes != null
+	body.swell = 1.0
+	body.animate(0.05, 0.0)
+	var swells: bool = body.holder.scale.x > body.model_scale * 1.1
+	body.swell = 0.0
+	expect(Infected.TYPES.charger.visuals == ["charger", "boomer2"] and worn.size() == 2 and int(worn.get("boomer2", 0)) >= 3 and int(worn.get("charger", 0)) >= 3 and same and rigged and swells and boomer.bursts_wet() and (game.sounds.clips.boomer_burst as Array).size() == 3 and bool(game.sounds.recorded.boomer_burst), "The second exploding infected is a Charger in another body: about every second one wears it (%d of 24), with the same numbers, the same voice and the same swelling" % int(worn.get("boomer2", 0)))
+	# Shot, it bursts like the Charger - and looks nothing like it.
+	face(game, Vector3(0, 0.05, 18.0), PI)
+	player.health = 100.0
+	var bystander: Infected = game.spawn_enemy("mauler")
+	bystander.set_physics_process(false)
+	bystander.position = Vector3(1.4, 0.05, 30.0)
+	await frames(3)
+	boomer.receive_hit(9999.0, Vector3.BACK)
+	var swollen: bool = boomer.dead and is_instance_valid(boomer) and fx.puddles.is_empty()
+	await wait(0.5)
+	var orange := 0
+	var burnt := 0
+	for mark in fx.decals:
+		if is_instance_valid(mark) and (mark.modulate == CombatEffects.OOZE or mark.modulate == CombatEffects.OOZE_DARK):
+			orange += 1
+		elif is_instance_valid(mark) and mark.texture_albedo == fx.soft_texture:
+			burnt += 1
+	var pool: Decal = fx.puddles[0] if fx.puddles.size() == 1 else null
+	var lies: bool = pool != null and pool.texture_albedo == fx.puddle_texture and pool.texture_emission == fx.puddle_texture and pool.emission_energy > 0.0 and Vector2(pool.global_position.x, pool.global_position.z).distance_to(Vector2(0, 30.0)) < 0.3 and absf(pool.global_position.y) < 0.3
+	expect(swollen and not is_instance_valid(boomer) and bystander.health < bystander.max_health and player.health == 100.0 and orange >= 16 and burnt == 0 and lies and CombatEffects.OOZE.r > 0.6 and CombatEffects.OOZE.g > CombatEffects.BLOOD.g * 5.0 and CombatEffects.OOZE.g < 0.4, "Shot, it swells and bursts wet: it tears into those around it like the Charger, but leaves no burn - %d splashes the colour of blood orange and one puddle under it" % orange)
+	# The puddle does nothing to whoever stands in it; it spreads, lies there and dries away.
+	var grown := false
+	if pool != null:
+		face(game, pool.global_position + Vector3(0.3, 0.05, 0.3), PI)
+		var first_size: float = pool.size.x
+		await wait(1.7)
+		grown = pool.size.x > first_size and is_equal_approx(pool.size.x, CombatEffects.PUDDLE_SIZE) and player.health == 100.0 and is_equal_approx(pool.modulate.a, 1.0)
+		var life: Tween = pool.get_meta("life")
+		life.custom_step(CombatEffects.PUDDLE_SECONDS + CombatEffects.PUDDLE_FADE * 0.5)
+		grown = grown and pool.modulate.a < 0.75 and pool.modulate.a > 0.25 and pool.emission_energy < CombatEffects.PUDDLE_GLOW
+		life.custom_step(CombatEffects.PUDDLE_FADE)
+		await frames(3)
+	expect(grown and fx.puddles.is_empty() and not is_instance_valid(pool) and CombatEffects.PUDDLE_SECONDS >= 8.0, "Its puddle spreads to %.1f m, harms nobody who stands in it, and dries away after a while" % CombatEffects.PUDDLE_SIZE)
+	# The Charger itself bursts as it always did: fire, a burn on the floor, no puddle.
+	face(game, Vector3(0, 0.05, 18.0), PI)
+	var plain: Infected = game.spawn_enemy("charger", "charger")
+	plain.set_physics_process(false)
+	plain.position = Vector3(6.0, 0.05, 30.0)
+	await frames(3)
+	var marks_before: int = fx.decals.size()
+	plain.receive_hit(9999.0, Vector3.BACK)
+	await wait(0.5)
+	var charred := 0
+	for mark in fx.decals:
+		if is_instance_valid(mark) and mark.texture_albedo == fx.soft_texture:
+			charred += 1
+	var as_ever: bool = not is_instance_valid(plain) and fx.puddles.is_empty() and charred == 1 and fx.decals.size() > marks_before
+	# One that reaches a survivor goes off and hurts, in either body; nobody is credited.
+	player.health = 100.0
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var runner: Infected = game.spawn_enemy("charger", "boomer2")
+	runner.position = Vector3(0, 0.05, 24.0)
+	var kills_then: int = game.kills
+	game.hud.splatter_left = 0.0
+	await wait(1.1)
+	expect(as_ever and not is_instance_valid(runner) and player.health < 100.0 and game.kills == kills_then and game.hud.splatter_left > 0.0 and fx.puddles.size() == 1, "The Charger bursts as it always did, and the second one that reaches a survivor goes off and hurts like it")
+	player.health = 100.0
+	_wipe_all(game)
+	await wait(0.5)
+	fx.clear()
 
 ## What a shooter hears when his own bullet lands: a tick for flesh, a brighter one for a
 ## head, a fuller one on top for a kill - one answer per shot, and none for anybody else.
@@ -3442,6 +3540,12 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var revived := false
 	var bought := false
 	var soldier_sent := false
+	# The second exploding infected: what the host sent, the look of every Charger each side
+	# saw (by its number, which both sides share), and the puddles that lay about.
+	var wet_step := 0
+	var wet_one: Infected = null
+	var charger_looks := {}
+	var wet_puddles := 0
 	var cru_seen := false
 	var cru_fired := false
 	var cru_walked := 0.0
@@ -3574,6 +3678,22 @@ func coop(game: Node3D, as_host: bool) -> void:
 			var soldier: Infected = game.spawn_enemy("cru_assault")
 			soldier.position = (game.cabin.points.front_door_out as Vector3) + Vector3(0, 0.05, 2.0)
 			soldier.health = 700.0
+		# A third of the way in the host puts the second exploding infected into the yard and
+		# sets it off two seconds later (harmlessly: this is about what both sides see of it).
+		if as_host and clock > seconds * 0.3 and wet_step == 0:
+			wet_step = 1
+			wet_one = game.spawn_enemy("charger", "boomer2")
+			wet_one.set_physics_process(false)
+			wet_one.position = (game.cabin.points.front_door_out as Vector3) + Vector3(4.0, 0.05, 7.0)
+			wet_one.burn_tame = true
+		elif as_host and clock > seconds * 0.3 + 2.0 and wet_step == 1:
+			wet_step = 2
+			if is_instance_valid(wet_one) and not wet_one.dead:
+				wet_one.receive_hit(9999.0, Vector3.BACK)
+		for foe in game.enemies.get_children():
+			if foe is Infected and (foe as Infected).kind == "charger" and (foe as Infected).model != null:
+				charger_looks[(foe as Infected).net_id] = str((foe as Infected).model.kind)
+		wet_puddles = maxi(wet_puddles, game.fx.puddles.size())
 		for foe in game.enemies.get_children():
 			if foe is CruSoldier and not foe.dead:
 				cru_seen = true
@@ -3605,6 +3725,14 @@ func coop(game: Node3D, as_host: bool) -> void:
 	# What this side heard of its own hits: never more ticks than shots fired here, never
 	# more answers to a kill than kills made here.
 	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills])
+	# Both sides must name the same look for the same Charger, and both must have seen the
+	# puddle of the one the host set off.
+	var seen_looks: Array = []
+	var numbers: Array = charger_looks.keys()
+	numbers.sort()
+	for number in numbers:
+		seen_looks.append("%d:%s" % [int(number), str(charger_looks[number])])
+	print("%s_CHARGERS looks=%s puddles=%d" % [tag, ",".join(PackedStringArray(seen_looks)), wet_puddles])
 	var partner_at := Vector3.ZERO
 	var partner_health := -1.0
 	if is_instance_valid(game.net.remote):
