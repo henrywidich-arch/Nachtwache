@@ -711,7 +711,7 @@ func _answer(index: int, delta: float) -> void:
 	var pack: Array[String] = []
 	var rare := false
 	for k in range(count):
-		var kind := str(kinds[randi() % kinds.size()])
+		var kind := HiveDirector.pick(kinds)
 		if HiveEntries.RARE.has(kind):
 			kind = "mauler" if rare else kind
 			rare = true
