@@ -827,9 +827,17 @@ func _build_room(room: Dictionary) -> void:
 	_chunk("Shell")
 	if room.get("floor", true):
 		var ground: Array = look.floor
-		_part(str(ground[0]), Vector3(middle.x, y - 0.15, middle.y), Vector3(outer.size.x, 0.3, outer.size.y), ground[1])
-		for tile in _split(outer, 15.0):
-			_solid(Vector3(tile.get_center().x, y - 0.25, tile.get_center().y), Vector3(tile.size.x, 0.5, tile.size.y), false)
+		# (`pits`: rectangles left open in it - a trench under a grating, see HiveMap._way_trench.)
+		if (room.get("pits", []) as Array).is_empty():
+			_part(str(ground[0]), Vector3(middle.x, y - 0.15, middle.y), Vector3(outer.size.x, 0.3, outer.size.y), ground[1])
+			for tile in _split(outer, 15.0):
+				_solid(Vector3(tile.get_center().x, y - 0.25, tile.get_center().y), Vector3(tile.size.x, 0.5, tile.size.y), false)
+		else:
+			for slab in _tiles(outer, room.pits):
+				var plate: Rect2 = slab
+				_part(str(ground[0]), Vector3(plate.get_center().x, y - 0.15, plate.get_center().y), Vector3(plate.size.x, 0.3, plate.size.y), ground[1])
+				for tile in _split(plate, 15.0):
+					_solid(Vector3(tile.get_center().x, y - 0.25, tile.get_center().y), Vector3(tile.size.x, 0.5, tile.size.y), false)
 	if room.get("ceiling", true):
 		var cover: Array = look.ceiling
 		# (`shafts`: rectangles left open in it - a way in from above, see HiveMap._way_drop.)
@@ -1666,6 +1674,15 @@ func room_at(pos: Vector3) -> Dictionary:
 			if not bool(room.outdoor):
 				return room
 			open_ground = room
+	# (`nooks`: what belongs to a room beyond its walls - the cavity behind a wall that
+	# was torn open, see HiveMap._way_breach. Whoever stands in one is in that room.)
+	if open_ground.is_empty():
+		for room in floors[level_of(pos)].rooms:
+			if absf(pos.y - float(room.y)) > 3.0:
+				continue
+			for nook: Rect2 in room.get("nooks", []):
+				if nook.has_point(flat):
+					return room
 	return open_ground
 
 ## The zone a position is in. On a flight between two floors that is the zone the flight

@@ -51,8 +51,22 @@ const FRESH_SECONDS := 4.0
 const FRESH_PACE := 1.25
 const FRESH_WARD := 0.75
 const FRESH_HARM := 0.85
-const FRESH_FILM := 0.5
-const FRESH_TINT := Color(0.82, 0.78, 0.7)
+const FRESH_FILM := 0.45
+const FRESH_TINT := Color(0.96, 0.8, 0.52)
+## The film: the dust lies on the whole body and catches the light at its edges, so that
+## it shows on a white coat as on a black suit.
+const FILM_CODE := """shader_type spatial;
+render_mode blend_mix, cull_back, depth_draw_never, shadows_disabled;
+uniform vec3 tint : source_color = vec3(0.96, 0.8, 0.52);
+uniform float strength = 1.0;
+void fragment() {
+	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 1.8);
+	ALBEDO = tint * 0.55;
+	ROUGHNESS = 1.0;
+	EMISSION = tint * (0.05 + rim * 0.5) * strength;
+	ALPHA = clamp((0.3 + rim * 0.6) * strength, 0.0, 1.0);
+}
+"""
 ## How much more likely a way in is taken that lies behind the survivor's back, or
 ## beside him, than one he is looking towards.
 const BEHIND := 3.0
@@ -85,6 +99,9 @@ const RISE := 0.22
 const HOP := 0.15
 const VAULT := 0.58
 const CLIMB := 0.72
+## WALK_REST: whoever came out on foot (out of a cavity, down a ramp of rubble, through a
+## door forced open) is his own master this long after his last step of the way.
+const WALK_REST := 0.08
 ## How what hangs at a way in moves, by its kind: degrees it rattles, and degrees it is
 ## thrown aside when somebody comes through.
 const SWING := {"drop": [7.0, 30.0], "hole": [9.0, -50.0], "duct": [8.0, -16.0], "cellar": [4.0, 7.0], "window": [1.3, 0.0]}
@@ -112,7 +129,7 @@ var seen := 0.0
 var due: Array[Dictionary] = []
 ## Who is fresh out of a way in: {body, dust} (see FRESH_SECONDS).
 var fresh: Array[Dictionary] = []
-var films: Array[StandardMaterial3D] = []
+var films: Array[ShaderMaterial] = []
 var trails: Array[CPUParticles3D] = []
 ## How many packs came this night, and the biggest of them (for the checks).
 var packs := 0
@@ -378,7 +395,7 @@ func _warn(index: int, lasts: float = 0.0) -> void:
 	var entry: Dictionary = map.entries[index]
 	var at: Vector3 = entry.at
 	var out: Vector3 = entry.out
-	match str(entry.kind):
+	match str(entry.get("look", entry.kind)):
 		"drop":
 			_sound("rattle", at)
 			_puff(at + Vector3(0, -0.15, 0), Vector3.DOWN, 10)
@@ -396,6 +413,20 @@ func _warn(index: int, lasts: float = 0.0) -> void:
 		"edge":
 			_sound("scrabble", at)
 			_puff(at - out * 0.3, Vector3.UP, 8)
+		"trench":
+			_sound("rattle", at, 0.0, 0.86)
+			_puff(at - out * 0.4, Vector3.UP, 8)
+		"breach":
+			_sound("scrabble", at + Vector3(0, 0.9, 0) - out * 1.5, 1.0, 0.82)
+			_puff(at + Vector3(0, 1.0, 0) - out * 0.3, out, 10)
+		"gate":
+			_sound("knock", at + Vector3(0, 1.1, 0), 1.0, 0.6)
+			_sound("rattle", at + Vector3(0, 1.1, 0), -3.0, 0.7)
+			_puff(at + Vector3(0, 1.2, 0), out, 6)
+		"fall":
+			_sound("scrabble", at, 1.0, 0.9)
+			_sound("rattle", at, -2.0)
+			_puff(at + Vector3(0, -0.15, 0), Vector3.DOWN, 14)
 	if is_instance_valid(entry.node):
 		swings[index] = {"time": 0.0, "rattle": WARN + 0.1 + lasts, "kicked": -1.0}
 
@@ -410,7 +441,7 @@ func _swing(delta: float) -> void:
 			continue
 		state.time = float(state.time) + delta
 		var time: float = state.time
-		var how: Array = SWING.get(str(entry.kind), [6.0, 0.0])
+		var how: Array = entry.get("swing", SWING.get(str(entry.kind), [6.0, 0.0]))
 		var angle := 0.0
 		if time < float(state.rattle):
 			angle += sin(time * 47.0) * float(how[0]) * (0.55 + 0.45 * sin(time * 13.0))
@@ -467,7 +498,18 @@ func come(index: int, kind: String, fan: int = 0) -> Infected:
 		enemy.model.pounce()
 	var at: Vector3 = entry.at
 	var out: Vector3 = entry.out
-	match str(entry.kind):
+	match str(entry.get("look", entry.kind)):
+		"trench":
+			_sound("bang", at, -1.0, 0.85)
+			_puff(at - out * 0.4, Vector3.UP, 10)
+		"breach":
+			_puff(at + Vector3(0, 0.8, 0), out, 8)
+		"gate":
+			_sound("bang", at + Vector3(0, 1.1, 0), -1.0, 0.75)
+			_puff(at + Vector3(0, 1.0, 0) + out * 0.2, out, 8)
+		"fall":
+			_sound("bang", at, -2.0, 0.8)
+			_puff(at + Vector3(0, -0.2, 0), Vector3.DOWN, 16)
 		"drop":
 			_sound("bang", at)
 			_puff(at + Vector3(0, -0.2, 0), Vector3.DOWN, 14)
@@ -541,6 +583,21 @@ func _plan(entry: Dictionary, enemy: Infected, land: Vector3 = Vector3.INF) -> D
 			plan.peak = at.y + (0.14 if hound else 0.1)
 			plan.rest = RISE
 			plan.pace = 2.0
+		"walk":
+			# On foot, out of where nobody sees them: along the way the map laid, then to
+			# where this one comes out.
+			var points := PackedVector3Array(entry.path as PackedVector3Array)
+			points.append(to)
+			plan["path"] = points
+			plan["long"] = map._length(points)
+			plan["duck"] = float(entry.get("duck", 0.0))
+			plan.from = points[0]
+			plan.pace = float(entry.get("pace", 4.0)) * (1.3 if hound else 1.0)
+			plan.span = float(plan.long) / float(plan.pace)
+			plan.rest = WALK_REST
+			var first := points[1] - points[0]
+			if Vector2(first.x, first.z).length() > 0.05:
+				plan.yaw = atan2(-first.x, -first.z)
 	return plan
 
 ## Where the body is `time` seconds after it appeared.
@@ -572,6 +629,14 @@ func _where(plan: Dictionary, time: float) -> Vector3:
 			var peak: float = plan.peak
 			var height := lerpf(from.y, peak, 1.0 - pow(1.0 - minf(1.0, share / 0.55), 2.0)) if share < 0.55 else lerpf(peak, to.y, pow((share - 0.55) / 0.45, 2.0))
 			return Vector3(flat.x, height, flat.z)
+		"walk":
+			var points: PackedVector3Array = plan.path
+			var left := share * float(plan.long)
+			for k in range(points.size() - 1):
+				var piece := points[k].distance_to(points[k + 1])
+				if left <= piece or k == points.size() - 2:
+					return points[k].lerp(points[k + 1], clampf(left / maxf(piece, 0.001), 0.0, 1.0))
+				left -= piece
 	return to
 
 ## How deep it crouches on the way (see InfectedVisual.duck), `share` of the way done.
@@ -585,6 +650,8 @@ func _crouch(plan: Dictionary, share: float) -> float:
 			return lerpf(2.0, 0.7, smoothstep(0.5, 1.0, share))
 		"window":
 			return lerpf(1.5, 0.7, share)
+		"walk":
+			return float(plan.get("duck", 0.0))
 	return lerpf(1.3, 0.6, share)
 
 ## Called by an infected that is on its way through (Infected.entering), every step: moves
@@ -610,6 +677,11 @@ func carry(enemy: Infected, delta: float) -> bool:
 	if time < span:
 		model.duck = _crouch(plan, time / span)
 		model.animate(delta, 0.0 if bool(plan.leaps) else float(plan.pace))
+		if str(plan.kind) == "walk":
+			# (It looks where it goes.)
+			var ahead := _where(plan, minf(time + 0.1, span)) - enemy.global_position
+			if Vector2(ahead.x, ahead.z).length() > 0.02:
+				model.rotation.y = lerp_angle(model.rotation.y, atan2(-ahead.x, -ahead.z), minf(1.0, delta * 12.0))
 	else:
 		if not bool(plan.landed):
 			plan.landed = true
@@ -648,16 +720,15 @@ func _let_go(enemy: Infected, plan: Dictionary) -> void:
 # ---------------------------------------------------------------- fresh out of a way in
 
 ## The film of dust on a body, `share` of it left (a few steps of it, shared by all).
-func _film(share: float) -> StandardMaterial3D:
+func _film(share: float) -> ShaderMaterial:
 	if films.is_empty():
-		for k in range(6):
-			var made := StandardMaterial3D.new()
-			made.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			made.albedo_color = Color(FRESH_TINT, FRESH_FILM * (k + 1) / 6.0)
-			made.roughness = 1.0
-			made.emission_enabled = true
-			made.emission = FRESH_TINT
-			made.emission_energy_multiplier = 0.12 * (k + 1) / 6.0
+		var code := Shader.new()
+		code.code = FILM_CODE
+		for k in range(8):
+			var made := ShaderMaterial.new()
+			made.shader = code
+			made.set_shader_parameter("tint", Vector3(FRESH_TINT.r, FRESH_TINT.g, FRESH_TINT.b))
+			made.set_shader_parameter("strength", FRESH_FILM * (k + 1) / 8.0)
 			films.append(made)
 	return films[clampi(ceili(share * films.size()) - 1, 0, films.size() - 1)]
 
@@ -685,8 +756,8 @@ func _freshen(enemy: Infected) -> void:
 		dust.gravity = Vector3(0, -2.6, 0)
 		dust.initial_velocity_min = 0.1
 		dust.initial_velocity_max = 0.6
-		dust.scale_amount_min = 0.5
-		dust.scale_amount_max = 1.3
+		dust.scale_amount_min = 0.4
+		dust.scale_amount_max = 1.0
 		dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(dust)
 		trails.append(dust)
@@ -749,6 +820,9 @@ func seconds(index: int) -> float:
 			return CRAWL + RISE
 		"window":
 			return VAULT + LAND
+		"walk":
+			var way: PackedVector3Array = entry.path
+			return (map._length(way) + way[way.size() - 1].distance_to(to)) / float(entry.get("pace", 4.0)) + WALK_REST
 	return CLIMB + RISE
 
 # ---------------------------------------------------------------- noise and dust

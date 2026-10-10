@@ -208,6 +208,15 @@ func _film(folder: String, index: int, kind: String) -> void:
 	var aim: Vector3 = (view[1] as Vector3) + Vector3(0, 0.2, 0)
 	if str(entry.kind) in ["drop", "duct"] and entry.land != Vector3.INF:
 		aim.y = ((entry.at as Vector3).y + (entry.land as Vector3).y) * 0.5 + 0.2
+	# --entries-pack=<n>: a pack of so many comes (see HiveEntries.announce), the camera
+	# looks at where they come down, and the film runs on until the dust is off them.
+	var pack: Array[String] = []
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--entries-pack="):
+			for k in range(int(arg.trim_prefix("--entries-pack="))):
+				pack.append(kind if k % 2 == 0 else "striker")
+	if not pack.is_empty() and entry.land != Vector3.INF:
+		aim = (entry.land as Vector3) + Vector3(0, 1.0, 0)
 	var line: Vector3 = aim - (from + Vector3(0, 1.62, 0))
 	game._place_player(from + Vector3(0, 0.05, 0), rad_to_deg(atan2(-line.x, -line.z)), rad_to_deg(atan2(line.y, Vector2(line.x, line.z).length())))
 	game.player.set_physics_process(false)
@@ -226,10 +235,13 @@ func _film(folder: String, index: int, kind: String) -> void:
 	Engine.time_scale = 0.2
 	var tag := "film_%s_%s" % [entry.id, kind]
 	await game._capture(folder, "%s_0.png" % tag)
-	entries.announce(index, kind)
+	entries.announce(index, kind, pack)
 	var took := 0.0
 	var shot := 1
-	for wait in [0.4, 0.34, 0.1, 0.1, 0.1, 0.1, 0.1, 0.12, 0.14, 0.2, 0.3]:
+	var waits: Array = [0.4, 0.34, 0.1, 0.1, 0.1, 0.1, 0.1, 0.12, 0.14, 0.2, 0.3]
+	if not pack.is_empty():
+		waits = [0.7, 0.5, 0.4, 0.4, 0.4, 0.4, 0.5, 0.6, 0.8, 1.0, 1.2]
+	for wait in waits:
 		await get_tree().create_timer(float(wait)).timeout
 		took += float(wait)
 		await game._capture(folder, "%s_%d.png" % [tag, shot])

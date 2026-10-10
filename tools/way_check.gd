@@ -166,10 +166,51 @@ func _initialize() -> void:
 				var back := _span(floor_at, out, -0.65, 0.65, 0.0, 1.5, -1.45, -0.25)
 				pocket = Rect2(Vector2((back[0] as Vector3).x, (back[0] as Vector3).z), Vector2((back[1] as Vector3).x - (back[0] as Vector3).x, (back[1] as Vector3).z - (back[0] as Vector3).z))
 			"cellar":
-				var box := _span(at - out * 0.6 - Vector3(0, 0.5, 0), out, -0.7, 0.7, 0.06, 1.9, -0.7, 0.7)
-				var mouth := _hits(box[0], box[1])
-				if mouth != "":
-					said.append("where it stands: " + mouth)
+				if entry.has("pit"):
+					# (A trench in the floor: nothing may stand on it or where they climb out.)
+					var pit: Rect2 = (entry.pit as Rect2).grow(0.15)
+					var over := _hits(Vector3(pit.position.x, float(room.y) + 0.06, pit.position.y), Vector3(pit.end.x, float(room.y) + 1.7, pit.end.y))
+					if over != "":
+						said.append("on it: " + over)
+					var rim := _span(at, out, -0.6, 0.6, 0.06, 1.8, 0.05, 1.3)
+					var climb := _hits(rim[0], rim[1])
+					if climb != "":
+						said.append("where they climb out: " + climb)
+					for other in map.rooms:
+						if str(other.id) != str(entry.room) and absf(float(other.y) - float(room.y)) < 1.0 and (other.outer as Rect2).intersects(pit):
+							said.append("it reaches into '%s'" % other.id)
+					if not (room.inner as Rect2).grow(-0.2).encloses(pit):
+						said.append("it reaches into the wall of its room")
+				else:
+					var box := _span(at - out * 0.6 - Vector3(0, 0.5, 0), out, -0.7, 0.7, 0.06, 1.9, -0.7, 0.7)
+					var mouth := _hits(box[0], box[1])
+					if mouth != "":
+						said.append("where it stands: " + mouth)
+			"walk":
+				if str(entry.get("look", "")) == "fall":
+					# (A ceiling come down: nothing may hang where it is torn, or stand where its rubble lies.)
+					var tear := _span(at, out, -1.3, 1.3, -1.2, -0.01, -1.0, 1.0)
+					var mouth := _hits(tear[0], tear[1])
+					if mouth != "":
+						said.append("under the ceiling: " + mouth)
+					var heap: Rect2 = entry.heap
+					var lies := _hits(Vector3(heap.position.x, float(room.y) + 0.08, heap.position.y), Vector3(heap.end.x, float(room.y) + 2.4, heap.end.y))
+					if lies != "":
+						said.append("where its rubble lies: " + lies)
+					var foot := _span(Vector3(at.x, float(room.y), at.z), out, -0.9, 0.9, 0.08, 1.8, 2.3, 3.6)
+					var runs := _hits(foot[0], foot[1])
+					if runs != "":
+						said.append("at its foot: " + runs)
+				else:
+					# (A wall torn open, a door forced: nothing before it, nothing where its space lies.)
+					var size: Array = entry.mouth
+					var box := _span(at, out, -float(size[0]), float(size[0]), 0.06, float(size[1]) + 0.25, -0.03, 1.6)
+					var mouth := _hits(box[0], box[1])
+					if mouth != "":
+						said.append("before it: " + mouth)
+					var reach: Array = entry.pocket
+					var back := _span(at, out, -float(reach[0]), float(reach[0]), 0.0, 1.5, -float(reach[1]), -0.25)
+					pocket = Rect2(Vector2((back[0] as Vector3).x, (back[0] as Vector3).z), Vector2((back[1] as Vector3).x - (back[0] as Vector3).x, (back[1] as Vector3).z - (back[0] as Vector3).z))
 		if pocket.size.x > 0.0:
 			for other in map.rooms:
 				if str(other.id) == str(entry.room):

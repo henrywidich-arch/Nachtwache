@@ -6121,7 +6121,7 @@ func _hive(game: Node3D) -> void:
 			way_faults.append("%s: no way from it" % entry.id)
 		elif is_instance_valid(entry.node) == (str(entry.kind) == "edge"):
 			way_faults.append("%s: nothing to rattle" % entry.id)
-	expect(map.entries.size() >= 100 and way_faults.is_empty() and way_kinds.size() == 6 and int(way_kinds.get("drop", 0)) >= 30 and int(way_kinds.get("hole", 0)) >= 30 and int(way_kinds.get("duct", 0)) >= 10 and int(way_kinds.get("window", 0)) >= 8, "The map has more than a hundred ways in through ceilings, walls, windows and over the edge of the platforms, each leading to free ground that is joined to the rest (%d: %s)%s" % [map.entries.size(), str(way_kinds), "" if way_faults.is_empty() else " - " + ", ".join(PackedStringArray(way_faults.slice(0, 6)))])
+	expect(map.entries.size() >= 100 and way_faults.is_empty() and way_kinds.size() == 7 and int(way_kinds.get("walk", 0)) >= 12 and int(way_kinds.get("drop", 0)) >= 30 and int(way_kinds.get("hole", 0)) >= 30 and int(way_kinds.get("duct", 0)) >= 10 and int(way_kinds.get("window", 0)) >= 8, "The map has more than a hundred ways in through ceilings, walls, windows and over the edge of the platforms, each leading to free ground that is joined to the rest (%d: %s)%s" % [map.entries.size(), str(way_kinds), "" if way_faults.is_empty() else " - " + ", ".join(PackedStringArray(way_faults.slice(0, 6)))])
 	var thin: Array[String] = []
 	for need in [["ring_s", 8], ["spine", 4], ["lab_corridor", 5], ["cross", 4], ["maint", 4], ["platform", 7], ["stairs", 1], ["stair_lobby", 1], ["terminal", 6], ["cafeteria", 6], ["atrium", 6], ["containment", 6], ["dining", 2], ["checkpoint", 2]]:
 		if int(way_rooms.get(str(need[0]), 0)) < int(need[1]):
@@ -6320,6 +6320,64 @@ func _hive(game: Node3D) -> void:
 		var sizes: Array = HiveDirector.PRESSURE[id][4]
 		every_pack = every_pack and int(sizes[0]) >= 1 and int(sizes[1]) >= int(sizes[0]) and (id == "landing" or int(sizes[1]) >= 2)
 	expect(HiveDirector.PRESSURE.has("terminal") and term_ways >= 13 and on_deck >= 5 and deck_reached and cafe_drops >= 8 and every_pack, "The terminal has infected coming while it lasts, through %d ways in - %d of them come down on its gallery, from where they reach the control room and the hall -, and the canteen's ceiling has %d holes" % [term_ways, on_deck, cafe_drops])
+	# --- the other looks of a way in: a wall torn open into a dark cavity, a door forced
+	# half open, a ceiling come down, a trench under gratings, a pipe chase that burst
+	var way_looks := {}
+	for way in map.entries:
+		var look := str(way.get("look", "pipes" if str(way.get("skin", "")) == "pipes" else ""))
+		way_looks[look] = int(way_looks.get(look, 0)) + 1
+	var other_ways: Array[String] = []
+	var out_of_sight := true
+	for trial in [["ring_s_breach", Vector3(24, 0, -365)], ["terminal_gate", Vector3(16, 0, -340)], ["ring_s_fall", Vector3(-11, 0, -364.5)], ["maint_trench", Vector3(39, 0, -469.2)]]:
+		var way_index := -1
+		for k in range(map.entries.size()):
+			if way_index < 0 and str(map.entries[k].id).begins_with(str(trial[0])):
+				way_index = k
+		if way_index < 0:
+			other_ways.append("%s: missing" % trial[0])
+			continue
+		var way: Dictionary = map.entries[way_index]
+		var goal: Vector3 = way.land
+		face(game, Vector3((trial[1] as Vector3).x, goal.y + 0.05, (trial[1] as Vector3).z), 0.0)
+		await frames(2)
+		var comer: Infected = ways.come(way_index, "mauler")
+		if comer == null:
+			other_ways.append("%s: nobody came" % way.id)
+			continue
+		# (Out of a cavity: where it begins nobody in the room sees it - a wall is between.)
+		if str(way.look) == "breach":
+			var eye: Vector3 = player.global_position + Vector3(0, 1.6, 0)
+			var hit: Dictionary = player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(eye, comer.global_position + Vector3(0, 1.2, 0), 1))
+			out_of_sight = out_of_sight and not hit.is_empty() and comer.global_position.distance_to(way.at) > 3.5
+		var steps := 0
+		while is_instance_valid(comer) and comer.entering != null and steps < 240:
+			await frames(1)
+			steps += 1
+		var stands: bool = is_instance_valid(comer) and not comer.dead and Vector2(comer.global_position.x - goal.x, comer.global_position.z - goal.z).length() < 0.5 and absf(comer.global_position.y - goal.y) < 0.3
+		var gap_before: float = comer.global_position.distance_to(player.global_position) if stands else 0.0
+		var reaches: bool = stands and not map.path_between(comer.global_position, player.global_position).is_empty()
+		await frames(80)
+		var nearer: bool = is_instance_valid(comer) and (comer.dead or comer.global_position.distance_to(player.global_position) < gap_before - 0.5)
+		if not (stands and reaches and nearer and absf(steps / 60.0 - ways.seconds(way_index)) < 0.25 and steps < 170):
+			other_ways.append("%s: stands %s reaches %s nearer %s after %d steps (meant %.2f s)" % [way.id, str(stands), str(reaches), str(nearer), steps, ways.seconds(way_index)])
+		_wipe_all(game)
+		await frames(2)
+	# (The cavity belongs to its room, and no path of the squad leads into it: it is
+	# walked into by whoever wants to, as far as the slab; the trench is no ground at all.)
+	var nook_room := ""
+	var nook_closed := false
+	var pit_closed := false
+	for host in map.rooms:
+		if str(host.id) == "ring_s" and host.has("nooks"):
+			var nook: Rect2 = host.nooks[0]
+			var inside := Vector3(nook.get_center().x, HiveMap.UNDER + 0.1, nook.get_center().y)
+			nook_room = str(map.room_at(inside).get("id", ""))
+			nook_closed = map.navigation[int(host.level)].is_point_solid(Vector2i(roundi(inside.x / CabinMap.CELL), roundi(inside.z / CabinMap.CELL))) and bool(map.is_indoors(inside))
+		if str(host.id) == "maint" and host.has("pits"):
+			var pit: Rect2 = host.pits[0]
+			pit_closed = map.navigation[int(host.level)].is_point_solid(Vector2i(roundi(pit.get_center().x / CabinMap.CELL), roundi(pit.get_center().y / CabinMap.CELL)))
+	expect(other_ways.is_empty() and out_of_sight and int(way_looks.get("breach", 0)) >= 6 and int(way_looks.get("gate", 0)) >= 5 and int(way_looks.get("fall", 0)) >= 2 and int(way_looks.get("trench", 0)) >= 5 and int(way_looks.get("pipes", 0)) >= 6, "A way in has other looks too - %d walls torn open into a dark cavity (they come round a slab at its back, out of sight, and walk out), %d doors forced half open, %d ceilings come down, %d trenches under gratings, %d burst pipe chases -, and a body comes through each as it is meant to%s" % [int(way_looks.get("breach", 0)), int(way_looks.get("gate", 0)), int(way_looks.get("fall", 0)), int(way_looks.get("trench", 0)), int(way_looks.get("pipes", 0)), "" if other_ways.is_empty() else ": " + "; ".join(PackedStringArray(other_ways))])
+	expect(nook_room == "ring_s" and nook_closed and pit_closed, "A cavity behind a torn wall counts as its room and is closed to the path finding of the squad, like the trench in a floor (%s)" % nook_room)
 	# --- camping: staying put is noticed, and answered from the nearest ways in - the one
 	# in the survivor's own room among them -, sooner and with more
 	face(game, Vector3(27.5, HiveMap.UNDER + 0.05, -410.0), 0.0)

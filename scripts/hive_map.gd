@@ -4801,6 +4801,17 @@ func _lay_terminals() -> void:
 ##   cellar  a hatch that stands in a room, and
 ##   edge    the edge of a platform over the track: `at` is the rim they climb, `deep`
 ##           how far below it they start
+##   walk    a place they come out of on foot: along `path` (points of the map, the first
+##           out of sight) to where they come out, at `pace` metres a second
+## So that it does not always look the same, a way in has a `look` of its own where the
+## map has room for one (its kind says how a body comes through, its look what stands
+## there):
+##   breach  a wall torn open into a dark cavity one can step a few metres into; they
+##           come round a slab at its back and walk out of the dark (walk)
+##   gate    the door of a lift or a service shaft, forced half open (walk)
+##   fall    a ceiling come down: they drop out of it on to the rubble and run down it (walk)
+##   trench  a trench in the floor, its gratings thrown aside (cellar)
+## and a hole at the foot of a wall can be a pipe chase that burst open (the skin "pipes").
 ## `land` is the free ground they come down on (`wish` moved to the path grid by
 ## _settle_ways), `node` what hangs loose there and rattles before somebody comes, `rest`
 ## how it hangs.
@@ -4808,7 +4819,7 @@ var entries: Array[Dictionary] = []
 
 func _way(kind: String, room_id: String, at: Vector3, out: Vector3, wish: Vector3, more: Dictionary = {}) -> void:
 	var entry := {
-		"id": "%s_%s_%d" % [room_id, kind, entries.size()], "kind": kind, "room": room_id, "zone": zone, "at": at, "out": out,
+		"id": "%s_%s_%d" % [room_id, str(more.get("look", kind)), entries.size()], "kind": kind, "room": room_id, "zone": zone, "at": at, "out": out,
 		"wish": wish, "land": Vector3.INF, "level": 0, "deep": 0.0, "node": null, "rest": Transform3D.IDENTITY
 	}
 	entry.merge(more, true)
@@ -5022,6 +5033,29 @@ func _way_hole(room_id: String, side: int, a: float, skin: String = "breach") ->
 		for i in range(4):
 			_placed(lying, "plate", Vector3(0, 0, -0.21 + i * 0.14), Vector3(wide - 0.18, 0.012, 0.09), (tones.grille as Color).darkened(0.14), Vector3(28, 0, 0))
 		_way_chips(tones, frame * Vector3(0, 0, -0.7), 0.8, 4, 0.1)
+	elif skin == "pipes":
+		# A pipe chase up the wall that burst open at its foot: its cheeks, its cover torn
+		# off below, the pipes bare above the hole and their ends bent into the room.
+		var up := float(room.height)
+		var casing: Color = tones.trunk
+		for edge in [-1.0, 1.0]:
+			_placed(frame, "plate", Vector3(float(edge) * (half + 0.05), tall + (up - tall) * 0.5, -0.17), Vector3(0.1, up - tall, 0.34), casing)
+			_placed(frame, "plate", Vector3(float(edge) * (half + 0.05), tall * 0.5, -0.12), Vector3(0.1, tall, 0.24), casing.darkened(0.12), Vector3(0, 0, float(edge) * -3.0))
+		var cover := tall + random.randf_range(0.7, 1.0)
+		if up - cover > 0.2:
+			_placed(frame, "plate", Vector3(0, (up + cover) * 0.5, -0.325), Vector3(wide, up - cover, 0.03), casing)
+			_placed(frame, "plate", Vector3(0, cover + 0.04, -0.345), Vector3(wide + 0.2, 0.07, 0.04), casing.darkened(0.3))
+		for k in range(4):
+			var px := -0.42 + k * 0.28
+			var radius: float = [0.07, 0.05, 0.085, 0.045][k]
+			var tint: Color = [Color("6d6f6c"), Color("8a5a2c"), Color("5a6468"), Color("7a3a2a")][k]
+			var cut := tall + random.randf_range(-0.3, 0.15)
+			_pipe(frame * Vector3(px, cut, -0.16), frame * Vector3(px, up - 0.02, -0.16), radius, tint, 8)
+			_pipe(frame * Vector3(px, cut + 0.02, -0.16), frame * Vector3(px + random.randf_range(-0.14, 0.14), cut - random.randf_range(0.16, 0.32), -0.2 - random.randf_range(0.2, 0.42)), radius, tint.darkened(0.2), 8)
+		_placed(frame, "plate", Vector3(random.randf_range(-0.3, 0.3), 0.02, -random.randf_range(1.05, 1.3)), Vector3(wide - 0.1, 0.03, 0.8), casing, Vector3(3, random.randf_range(-30, 30), 0))
+		_blot(frame * Vector3(random.randf_range(-0.2, 0.2), 0, -0.9), 1.5, 1.0, Color(0.03, 0.035, 0.04, 0.55))
+		_way_chips(tones, frame * Vector3(0, 0, -0.8), 0.9, 5, 0.1)
+		flap = _way_flap(Transform3D(frame.basis * Basis(Vector3.UP, PI), frame * Vector3(0, cover - 0.02, -0.35)), wide - 0.14, 0.72, casing.darkened(0.08), 0, random.randf_range(54.0, 70.0))
 	else:
 		if bunker:
 			# Broken out of the concrete: what is left of it lies at its foot, the iron sticks out.
@@ -5055,7 +5089,7 @@ func _way_hole(room_id: String, side: int, a: float, skin: String = "breach") ->
 	_way_stain(frame, front, -mark * (half + 0.34), 1.16, 0.13, 0.2, Color(0.2, 0.015, 0.012, 0.7))
 	_way_stain(frame, front, -mark * (half + 0.4), 0.82, 0.06, 0.3, Color(0.2, 0.015, 0.012, 0.55))
 	_smear(frame * Vector3(0, 0, 0.3), frame * Vector3(random.randf_range(-0.5, 0.5), 0, -random.randf_range(1.6, 2.3)), 0.28)
-	_way("hole", room_id, frame.origin, -frame.basis.z, frame * Vector3(0, 0, -1.2), {"node": flap, "deep": 0.85})
+	_way("hole", room_id, frame.origin, -frame.basis.z, frame * Vector3(0, 0, -1.2), {"node": flap, "deep": 0.85, "skin": skin})
 	_end_zone()
 
 ## The mouth of an air duct high in a wall, its trunk running up the wall above it, its
@@ -5210,6 +5244,311 @@ func _way_edge(room_id: String, at: Vector3, into: Vector3, drop: float = 1.1) -
 	_way("edge", room_id, at, into, at + into * 1.3, {"deep": drop})
 	_end_zone()
 
+## Broken pieces of what a way in was torn out of, in its frame: `count` of them over the
+## rectangle x0..x1, z0..z1 on the floor, as big as `big` at the most, `shade` darker
+## than what lies in the light.
+func _way_rubble(frame: Transform3D, tones: Dictionary, x0: float, x1: float, z0: float, z1: float, count: int, big: float, shade: float = 0.0) -> void:
+	for k in range(count):
+		var size := Vector3(random.randf_range(0.12, big), random.randf_range(0.06, big * 0.5), random.randf_range(0.1, big * 0.8))
+		_placed(frame, str(tones.rubble), Vector3(random.randf_range(x0, x1), size.y * 0.42, random.randf_range(z0, z1)), size, _vary((tones.chip as Color).darkened(shade), 0.05), Vector3(random.randf_range(-12, 12), random.randf_range(1, 179), random.randf_range(-12, 12)))
+
+## The rectangle of the map between two corners given in the frame of a way in.
+func _way_rect(frame: Transform3D, x0: float, x1: float, z0: float, z1: float) -> Rect2:
+	var a := frame * Vector3(x0, 0, z0)
+	var b := frame * Vector3(x1, 0, z1)
+	return Rect2(minf(a.x, b.x), minf(a.z, b.z), absf(a.x - b.x), absf(a.z - b.z))
+
+## A grating that lies or stands somewhere: its frame and its slats, `wide` by `long`,
+## flat in the given frame.
+func _way_grate(lying: Transform3D, wide: float, long: float, tint: Color) -> void:
+	for edge in [-1.0, 1.0]:
+		_placed(lying, "plate", Vector3(0, 0, float(edge) * (long * 0.5 - 0.025)), Vector3(wide, 0.03, 0.05), tint)
+		_placed(lying, "plate", Vector3(float(edge) * (wide * 0.5 - 0.025), 0, 0), Vector3(0.05, 0.03, long - 0.1), tint)
+	var slats := maxi(3, roundi((long - 0.1) / 0.16))
+	for i in range(slats):
+		_placed(lying, "plate", Vector3(0, 0, -long * 0.5 + 0.05 + (i + 0.5) * (long - 0.1) / slats), Vector3(wide - 0.1, 0.012, 0.09), tint.darkened(0.14), Vector3(28, 0, 0))
+
+## A wall torn open into a dark cavity: one can step a few metres into it, over rubble,
+## as far as a slab that stands across it. They wait behind that slab, out of sight, come
+## round its end and walk out of the dark. `turn` (-1 or 1): the end they come round.
+## Only where nothing lies behind the wall for six metres.
+func _way_breach(room_id: String, side: int, a: float, turn: float = 1.0) -> void:
+	var room: Dictionary = room_of[room_id]
+	_begin_zone(str(room.zone))
+	_chunk("Ways", false)
+	var tones := _way_tones(room)
+	var bunker := str(tones.family) == "bunker"
+	var wide := 2.3
+	var half := wide * 0.5
+	var tall := minf(2.5, float(room.height) - 0.5)
+	var span := 1.9
+	var deep := 5.2
+	var high := tall + 0.4
+	var slab := 2.9
+	var gap := 1.35
+	var front := _wall_front(room)
+	(room.open[side] as Array).append([a - half, a + half, 0.0, tall, "way"])
+	var frame := Transform3D(Basis(Vector3.UP, _face_yaw(side)), _face_point(room, side, a, 0.0, 0.0))
+	var dark: Color = tones.dark
+	var rock := Color(0.13, 0.125, 0.12) if bunker else Color(0.1, 0.105, 0.11)
+	# The cavity: black all round, only the ground of its first steps catches some light.
+	var shell := [
+		[Vector3(0, -0.15, HALF + 0.9), Vector3(span * 2.0 + 0.4, 0.3, 1.8), rock, "beton"],
+		[Vector3(0, -0.15, HALF + 1.8 + (deep - 1.8) * 0.5 + 0.1), Vector3(span * 2.0 + 0.4, 0.3, deep - 1.8 + 0.2), dark, "plain"],
+		[Vector3(0, high + 0.1, HALF + deep * 0.5 + 0.1), Vector3(span * 2.0 + 0.4, 0.2, deep + 0.2), dark, "plain"],
+		[Vector3(-span - 0.1, high * 0.5, HALF + deep * 0.5 + 0.1), Vector3(0.2, high, deep + 0.2), dark, "plain"],
+		[Vector3(span + 0.1, high * 0.5, HALF + deep * 0.5 + 0.1), Vector3(0.2, high, deep + 0.2), dark, "plain"],
+		[Vector3(0, high * 0.5, HALF + deep + 0.1), Vector3(span * 2.0, high, 0.2), dark, "plain"],
+		# the slab across it
+		[Vector3(-turn * gap * 0.5, high * 0.5, HALF + slab), Vector3(span * 2.0 - gap, high, 0.22), dark, "plain"]
+	]
+	for piece: Array in shell:
+		_placed(frame, str(piece[3]), piece[0], piece[1], piece[2])
+		_add_shape(body, frame * (piece[0] as Vector3), piece[1], frame.basis)
+	# Nobody but they gets round the slab: bodies stop at its end, shots do not.
+	_add_shape(rails, frame * Vector3(turn * (span - gap * 0.5), high * 0.5, HALF + slab), Vector3(gap, high, 0.14), frame.basis)
+	_glow_box(frame * Vector3(-turn * 0.9, 1.95, HALF + slab - 0.116), Vector3(0.16, 0.04, 0.012), Color("ff2814"), 1.5, frame.basis)
+	# What is left of the wall stands into the tear, and cracks run on from its corners.
+	var core: Array = _look(room).core
+	for k in range(13):
+		var along := random.randf_range(0.1, 0.36)
+		var into := random.randf_range(0.06, 0.26)
+		var where := random.randf()
+		var tooth := Vector3(-half + into * 0.5, where * (tall - 0.3) + 0.15, HALF * 0.5 + 0.01)
+		var size := Vector3(into, along, HALF - 0.04)
+		if k % 3 == 1:
+			tooth.x = half - into * 0.5
+		elif k % 3 == 2:
+			tooth = Vector3((where - 0.5) * (wide - 0.3), tall - into * 0.5, HALF * 0.5 + 0.01)
+			size = Vector3(along, into, HALF - 0.04)
+		_placed(frame, str(core[0]), tooth, size, (core[1] as Color).darkened(0.25))
+	for crack in [[-half - 0.04, tall - 0.1, 0.7, 52.0], [half + 0.05, tall - 0.2, 0.9, -40.0], [-half - 0.06, 1.1, 0.5, 74.0], [half + 0.04, 0.8, 0.6, -68.0], [0.2, tall + 0.03, 0.55, 8.0]]:
+		var long := float(crack[2]) * random.randf_range(0.8, 1.2)
+		var lean := deg_to_rad(float(crack[3]))
+		_placed(frame, "plain", Vector3(float(crack[0]) - sin(lean) * long * 0.5, float(crack[1]) + cos(lean) * long * 0.5, -(front + 0.007)), Vector3(0.016, long, 0.004), Color("0b0b0b"), Vector3(0, 0, float(crack[3])))
+	if bunker:
+		# Concrete: its iron hangs out of the edge above, what broke off lies before it.
+		for k in range(5):
+			var root := frame * Vector3(-0.9 + k * 0.45 + random.randf_range(-0.08, 0.08), tall + 0.02, 0.08)
+			_pipe(root, root + frame.basis * Vector3(random.randf_range(-0.12, 0.12), -random.randf_range(0.25, 0.6), -random.randf_range(0.15, 0.4)), 0.012, Color("3a2a22"), 5)
+		for edge in [-1.0, 1.0]:
+			for k in range(3):
+				var size := Vector3(random.randf_range(0.24, 0.5), random.randf_range(0.16, 0.34), random.randf_range(0.2, 0.42))
+				_placed(frame, "beton", Vector3(float(edge) * (half + random.randf_range(-0.2, 0.4)), size.y * 0.5 + k * 0.03, -random.randf_range(0.15, 0.7)), size, _vary(tones.chip, 0.05), Vector3(random.randf_range(-14, 14), random.randf_range(1, 89), random.randf_range(-14, 14)))
+	else:
+		# Panels: torn outwards on either side, one hangs by a corner over the tear.
+		var panel: Color = tones.chip
+		for edge in [-1.0, 1.0]:
+			var bend := random.randf_range(34.0, 60.0)
+			var long := random.randf_range(0.4, 0.6)
+			var up := random.randf_range(1.5, 2.0)
+			var root := Vector3(float(edge) * half, up * 0.5 + 0.14, -(front + 0.012))
+			_placed(frame, "cladding", root + Vector3(float(edge) * long * 0.5 * cos(deg_to_rad(bend)), 0, -long * 0.5 * sin(deg_to_rad(bend))), Vector3(long, up, 0.02), _vary(panel, 0.03), Vector3(0, float(edge) * bend, random.randf_range(-6.0, 6.0)))
+		_placed(frame, "cladding", Vector3(random.randf_range(-0.5, 0.5), 0.016, -random.randf_range(1.1, 1.5)), Vector3(0.9, 0.02, 0.6), _vary(panel, 0.03), Vector3(0, random.randf_range(-40, 40), 0))
+	# Rubble: before it, under foot inside, and two slabs that lean in the dark.
+	_way_rubble(frame, tones, -1.4, 1.4, -1.9, 0.2, 10, 0.34)
+	_way_rubble(frame, tones, -1.6, 1.6, HALF + 0.1, HALF + 2.5, 11, 0.42, 0.5)
+	_placed(frame, "beton", Vector3(-turn * 1.45, 0.62, HALF + 1.5), Vector3(0.16, 1.4, 1.0), rock.lightened(0.05), Vector3(0, 8, turn * 22.0))
+	_placed(frame, "beton", Vector3(turn * 1.6, 0.4, HALF + 0.8), Vector3(0.9, 0.14, 0.7), rock.lightened(0.08), Vector3(24, 30, 0))
+	var flap := _way_flap(Transform3D(frame.basis * Basis(Vector3.UP, PI), frame * Vector3(-turn * 0.55, tall - 0.03, -(front + 0.03))), 0.7, random.randf_range(0.6, 0.85), (tones.grille as Color) if bunker else (tones.chip as Color).darkened(0.1), 0, random.randf_range(60.0, 76.0))
+	# Their marks: what they dragged out of it.
+	_smear(frame * Vector3(turn * 0.4, 0, HALF + 1.2), frame * Vector3(random.randf_range(-0.6, 0.6), 0, -random.randf_range(2.0, 2.8)), 0.34)
+	_way_stain(frame, front, turn * (half + 0.4), 1.2, 0.14, 0.24, Color(0.2, 0.015, 0.012, 0.7))
+	if not room.has("nooks"):
+		room["nooks"] = []
+	(room.nooks as Array).append(_way_rect(frame, -span, span, HALF, HALF + slab))
+	var path := PackedVector3Array([
+		frame * Vector3(-turn * 0.7, 0, HALF + slab + 1.25), frame * Vector3(turn * (span - gap * 0.5), 0, HALF + slab + 0.95),
+		frame * Vector3(turn * (span - gap * 0.5 - 0.05), 0, HALF + slab - 0.75), frame * Vector3(turn * 0.25, 0, 0.1)
+	])
+	_way("walk", room_id, frame.origin, -frame.basis.z, frame * Vector3(0, 0, -1.7), {"node": flap, "look": "breach", "path": path, "pace": 4.4, "pocket": [span + 0.3, deep + 0.6], "mouth": [half + 0.1, tall]})
+	_end_zone()
+
+## The door of a lift or of a service shaft in a wall, forced half open: one leaf jammed
+## in its pocket, the other bent into the shaft, black behind them. They squeeze out
+## between the two. `title`: what stands over it. Only where nothing lies behind the wall.
+func _way_gate(room_id: String, side: int, a: float, title: String = "AUFZUG") -> void:
+	var room: Dictionary = room_of[room_id]
+	_begin_zone(str(room.zone))
+	_chunk("Ways", false)
+	var tones := _way_tones(room)
+	var bunker := str(tones.family) == "bunker"
+	var wide := 1.8
+	var half := wide * 0.5
+	var tall := minf(2.25, float(room.height) - 0.75)
+	var deep := 2.0
+	var front := _wall_front(room)
+	(room.open[side] as Array).append([a - half, a + half, 0.0, tall, "way"])
+	var frame := Transform3D(Basis(Vector3.UP, _face_yaw(side)), _face_point(room, side, a, 0.0, 0.0))
+	var dark: Color = tones.dark
+	var steel: Color = tones.steel
+	var leaf_tint := Color("5b4a3a") if bunker else Color("8d9498")
+	var back := HALF + deep
+	var shell := [
+		[Vector3(0, -0.15, HALF + deep * 0.5 + 0.04), Vector3(wide + 0.16, 0.3, deep + 0.08)],
+		[Vector3(0, tall + 0.44, HALF + deep * 0.5 + 0.04), Vector3(wide + 0.16, 0.08, deep + 0.08)],
+		[Vector3(-half - 0.04, tall * 0.5 + 0.2, HALF + deep * 0.5), Vector3(0.08, tall + 0.4, deep)],
+		[Vector3(half + 0.04, tall * 0.5 + 0.2, HALF + deep * 0.5), Vector3(0.08, tall + 0.4, deep)],
+		[Vector3(0, tall * 0.5 + 0.2, back + 0.04), Vector3(wide + 0.16, tall + 0.4, 0.08)]
+	]
+	for piece: Array in shell:
+		_placed(frame, "plain", piece[0], piece[1], dark)
+		_add_shape(body, frame * (piece[0] as Vector3), piece[1], frame.basis)
+	_glow_box(frame * Vector3(-half + 0.3, tall - 0.1, back - 0.008), Vector3(0.16, 0.04, 0.012), Color("ff2814"), 1.5, frame.basis)
+	# Its ropes hang in the dark.
+	for k in range(2):
+		_pipe(frame * Vector3(-0.2 + k * 0.5, 0.0, HALF + 1.2 + k * 0.2), frame * Vector3(-0.2 + k * 0.5, tall + 0.38, HALF + 1.2 + k * 0.2), 0.016, Color("26282a"), 5)
+	# The frame of the door, a warning stripe over it, and what it says.
+	# (Its posts and its head reach a little into the opening: flush with the cut ends of
+	# the wall they would lie in one plane with them, and that flickers.)
+	for edge in [-1.0, 1.0]:
+		_placed(frame, "plate", Vector3(float(edge) * (half + 0.055), (tall + 0.16) * 0.5, -0.05), Vector3(0.14, tall + 0.16, 0.14), steel)
+	_placed(frame, "plate", Vector3(0, tall + 0.065, -0.05), Vector3(wide - 0.03, 0.16, 0.14), steel)
+	_hazard(frame * Vector3(-half, tall + 0.08, -0.124), frame * Vector3(half, tall + 0.08, -0.124), Vector3(wide / 8.0, 0.1, 0.006) if side == NORTH or side == SOUTH else Vector3(0.006, 0.1, wide / 8.0), 8)
+	if float(room.height) - tall > 1.0:
+		_placed(frame, "plate", Vector3(0, tall + 0.42, -0.03), Vector3(1.3, 0.3, 0.04), Color("101214"))
+		_wall_sign(title, frame * Vector3(0, tall + 0.42, -0.056), 26, Color("ffb066"), _face_yaw(side) + PI)
+	# The call button beside it: dead, but for its red lamp.
+	_placed(frame, "plate", Vector3(-half - 0.42, 1.2, -(front + 0.02)), Vector3(0.14, 0.26, 0.04), Color("17191b"))
+	_glow_box(frame * Vector3(-half - 0.42, 1.27, -(front + 0.043)), Vector3(0.04, 0.04, 0.008), Color("ff2814"), 2.6, frame.basis)
+	# The leaf that jammed in its pocket, dented, with their marks on it.
+	_placed(frame, "plate", Vector3(-half + 0.28, tall * 0.5 - 0.01, 0.09), Vector3(0.52, tall - 0.04, 0.05), leaf_tint)
+	_placed(frame, "plate", Vector3(-half + 0.5, tall * 0.5, 0.06), Vector3(0.05, tall, 0.03), leaf_tint.darkened(0.3))
+	for k in range(4):
+		_placed(frame, "plain", Vector3(-half + 0.14 + k * 0.07, 1.25 + k * 0.05, 0.062), Vector3(0.014, random.randf_range(0.3, 0.46), 0.004), Color("0c0c0c"), Vector3(0, 0, 15.0))
+	# Nobody but they gets in there: bodies stop at its mouth, shots do not.
+	_add_shape(rails, frame * Vector3(0, tall * 0.5, 0.12), Vector3(wide, tall, 0.12), frame.basis)
+	# The other leaf hangs at its outer edge, bent into the shaft: it is what rattles.
+	var leaf := _way_flap(Transform3D(Basis(Vector3.UP, -frame.basis.z, -frame.basis.x), frame * Vector3(half - 0.02, tall * 0.5, 0.09)), tall - 0.02, 0.86, leaf_tint, 0, random.randf_range(44.0, 54.0), "plate", 0.05)
+	_smear(frame * Vector3(0, 0, 0.5), frame * Vector3(random.randf_range(-0.5, 0.5), 0, -random.randf_range(1.6, 2.4)), 0.3)
+	_blot(frame * Vector3(random.randf_range(-0.3, 0.2), 0, -0.6), 0.5, 0.34)
+	_way_chips(tones, frame * Vector3(0, 0, -0.7), 0.8, 4, 0.09)
+	var path := PackedVector3Array([frame * Vector3(0.2, 0, HALF + 1.3), frame * Vector3(-0.05, 0, 0.35)])
+	_way("walk", room_id, frame.origin, -frame.basis.z, frame * Vector3(0, 0, -1.5), {"node": leaf, "look": "gate", "path": path, "pace": 3.2, "duck": 0.3, "swing": [2.5, 12.0], "pocket": [half + 0.2, deep + 0.3], "mouth": [half + 0.2, tall]})
+	_end_zone()
+
+## A ceiling come down along a wall: a tear in it with the dark above, and what fell lies
+## under it as a ramp of rubble against the wall. They drop out of the dark on to it and
+## run down it into the room. (The squad's paths go round the rubble.)
+func _way_fall(room_id: String, side: int, a: float) -> void:
+	var room: Dictionary = room_of[room_id]
+	_begin_zone(str(room.zone))
+	_chunk("Ways", false)
+	var tones := _way_tones(room)
+	var ceiling := float(room.height)
+	var frame := Transform3D(Basis(Vector3.UP, _face_yaw(side)), _face_point(room, side, a, 0.0, 0.0))
+	var basis := frame.basis
+	# The tear: 2.4 m along the wall, from 0.2 to 2.0 m out of it.
+	var x1 := 1.2
+	var z0 := -0.2
+	var z1 := -2.0
+	var shaft := 1.7
+	if not room.has("shafts"):
+		room["shafts"] = []
+	(room.shafts as Array).append(_way_rect(frame, -x1, x1, z1, z0))
+	var mid := (z0 + z1) * 0.5
+	for edge in [-1.0, 1.0]:
+		_glow_box(frame * Vector3(float(edge) * (x1 - 0.02), ceiling + shaft * 0.5, mid), Vector3(0.04, shaft, z0 - z1), Color.BLACK, 0.0, basis)
+	for z in [z0 - 0.02, z1 + 0.02]:
+		_glow_box(frame * Vector3(0, ceiling + shaft * 0.5, float(z)), Vector3(x1 * 2.0, shaft, 0.04), Color.BLACK, 0.0, basis)
+	_glow_box(frame * Vector3(0, ceiling + shaft + 0.03, mid), Vector3(x1 * 2.0, 0.06, z0 - z1), Color.BLACK, 0.0, basis)
+	_add_shape(body, frame * Vector3(0, ceiling + shaft + 0.1, mid), Vector3(x1 * 2.0, 0.2, z0 - z1), basis)
+	_glow_box(frame * Vector3(x1 - 0.047, ceiling + 0.9, mid + 0.3), Vector3(0.012, 0.045, 0.15), Color("ff2814"), 1.5, basis)
+	# What still hangs at its edges: pieces of the ceiling by their iron.
+	var chip: Color = tones.chip
+	for piece in [[-0.75, z1 + 0.1, 0.9, 0.75, -52.0], [0.6, z1 + 0.05, 0.7, 0.5, -68.0], [-x1 + 0.05, mid, 0.6, 0.9, 0.0], [x1 - 0.1, mid - 0.3, 0.5, 0.7, 0.0]]:
+		var tilt := float(piece[4])
+		var hung := Vector3(float(piece[0]), ceiling - 0.28, float(piece[1]))
+		_placed(frame, str(tones.rubble), hung, Vector3(float(piece[2]), 0.1, float(piece[3])), _vary(chip.darkened(0.2), 0.04), Vector3(tilt, random.randf_range(-12, 12), 0.0 if tilt != 0.0 else (58.0 if float(piece[0]) < 0.0 else -58.0)))
+		_pipe(frame * (hung + Vector3(0, 0.3, 0)), frame * (hung + Vector3(random.randf_range(-0.1, 0.1), -0.25, random.randf_range(-0.1, 0.1))), 0.011, Color("3a2a22"), 5)
+	for k in range(4):
+		_hose(frame * Vector3(-0.8 + k * 0.5, ceiling + 0.5, mid + 0.4), frame * Vector3(-0.7 + k * 0.45 + random.randf_range(-0.15, 0.15), ceiling - 0.5 - random.randf() * 0.7, mid + random.randf_range(-0.5, 0.4)), 0.013, [Color("101214"), Color("5d2f22"), Color("2b3a4a"), Color("101214")][k], 0.0, basis * Vector3(0.1, 0, -0.05), 4)
+	# The ramp: the big slab that came down in one piece, leaning on what lies under it.
+	var top := 1.7
+	var foot := -3.3
+	var head := -0.25
+	var run := head - foot
+	var slope := atan2(top, run)
+	var long := sqrt(run * run + top * top)
+	var lean := Basis(Vector3.RIGHT, -slope)
+	var centre := Vector3(0, top * 0.5, (head + foot) * 0.5) - lean * Vector3(0, 0.11, 0)
+	# (Concrete, whatever the room is clad in: what came down is its roof.)
+	var slab_tint := Color(0.34, 0.335, 0.32)
+	batch.box(mats["beton"], frame * centre, Vector3(2.0, 0.22, long), slab_tint, basis * lean)
+	_add_shape(body, frame * centre, Vector3(2.0, 0.22, long), basis * lean)
+	for step in [[-0.7, 0.9, 1.18], [-1.6, 0.9, 0.68], [-2.45, 0.8, 0.24]]:
+		var block := Vector3(0, float(step[2]) * 0.5, float(step[0]))
+		var size := Vector3(2.15, float(step[2]), float(step[1]))
+		_placed(frame, "beton", block, size, _vary(slab_tint.darkened(0.3), 0.04), Vector3(0, random.randf_range(-3, 3), 0))
+		_add_shape(body, frame * block, size, basis)
+	# What it carried down with it lies on it: pieces of the finish of the ceiling, cracks.
+	for k in range(5):
+		var along := random.randf_range(0.12, 0.9)
+		var spot := Vector3(random.randf_range(-0.8, 0.8), top * along, foot + run * along)
+		batch.box(mats[str(tones.rubble)], frame * (spot + lean * Vector3(0, 0.035, 0)), Vector3(random.randf_range(0.2, 0.5), 0.03, random.randf_range(0.18, 0.4)), _vary(chip.darkened(0.15), 0.05), basis * lean * Basis(Vector3.UP, random.randf() * PI))
+	for k in range(3):
+		var along := 0.2 + k * 0.28
+		batch.box(mats["plain"], frame * (Vector3(random.randf_range(-0.5, 0.5), top * along, foot + run * along) + lean * Vector3(0, 0.004, 0)), Vector3(random.randf_range(0.9, 1.6), 0.004, 0.018), Color("121212"), basis * lean * Basis(Vector3.UP, random.randf_range(-0.5, 0.5)))
+	_placed(frame, "beton", Vector3(1.05, 0.42, -1.9), Vector3(0.9, 0.16, 1.5), _vary(slab_tint.darkened(0.1), 0.04), Vector3(-22, 18, 14))
+	_placed(frame, "beton", Vector3(-1.1, 0.3, -1.3), Vector3(0.7, 0.14, 1.1), _vary(slab_tint.darkened(0.18), 0.04), Vector3(-18, -24, -16))
+	_way_rubble(frame, tones, -1.7, 1.7, -4.0, -0.3, 16, 0.42, 0.1)
+	_register(frame * Vector3(0, 0.6, -1.75), Vector3(2.5, 1.2, 3.3), _face_yaw(side))
+	_blot(frame * Vector3(random.randf_range(-0.4, 0.4), 0, -4.0), 0.6, 0.4)
+	var flap := _way_flap(Transform3D(basis, frame * Vector3(0.35, ceiling - 0.04, z1 + 0.03)), 1.0, 0.9, tones.grille, 5, random.randf_range(76.0, 88.0))
+	var path := PackedVector3Array([frame * Vector3(0, ceiling + 0.5, -0.95), frame * Vector3(0, 1.42, -0.8), frame * Vector3(0, 0.08, foot - 0.1)])
+	_way("walk", room_id, frame * Vector3(0, ceiling, mid), -basis.z, frame * Vector3(0, 0, -4.3), {"node": flap, "look": "fall", "path": path, "pace": 5.2, "duck": 0.3, "swing": [7.0, 30.0], "heap": _way_rect(frame, -1.3, 1.3, -3.5, -0.1)})
+	_end_zone()
+
+## A trench in the floor of a room - pipes run in it -, its gratings thrown aside: one
+## still lies in its frame, one stands tipped up (it rattles), one lies beside it. They
+## climb out of it. `turn` (0..3): the way it runs and the side they climb out on.
+## Nobody walks over it.
+func _way_trench(room_id: String, x: float, z: float, turn: int = 0) -> void:
+	var room: Dictionary = room_of[room_id]
+	_begin_zone(str(room.zone))
+	_chunk("Ways", false)
+	var tones := _way_tones(room)
+	var floor_y := float(room.y)
+	var long := 2.7
+	var wide := 1.0
+	var deep := 1.05
+	var facing := Basis(Vector3.UP, turn * PI / 2)
+	var frame := Transform3D(facing, Vector3(x, floor_y, z))
+	var pit := _way_rect(frame, -long * 0.5, long * 0.5, -wide * 0.5, wide * 0.5)
+	if not room.has("pits"):
+		room["pits"] = []
+	(room.pits as Array).append(pit)
+	# Its walls under the floor and its bottom: black. Two pipes and a cable run in it.
+	for edge in [-1.0, 1.0]:
+		_placed(frame, "plain", Vector3(0, -(deep + 0.3) * 0.5, float(edge) * (wide * 0.5 + 0.03)), Vector3(long + 0.12, deep - 0.3, 0.06), Color(0.05, 0.05, 0.05))
+		_placed(frame, "plain", Vector3(float(edge) * (long * 0.5 + 0.03), -(deep + 0.3) * 0.5, 0), Vector3(0.06, deep - 0.3, wide), Color(0.05, 0.05, 0.05))
+	_glow_box(frame * Vector3(0, -deep - 0.03, 0), Vector3(long + 0.12, 0.06, wide + 0.12), Color.BLACK, 0.0, facing)
+	_add_shape(body, frame * Vector3(0, -deep - 0.1, 0), Vector3(long, 0.2, wide), facing)
+	_pipe(frame * Vector3(-long * 0.5, -deep + 0.22, -0.24), frame * Vector3(long * 0.5, -deep + 0.22, -0.24), 0.08, Color("6a5a40"), 8)
+	_pipe(frame * Vector3(-long * 0.5, -deep + 0.16, 0.05), frame * Vector3(long * 0.5, -deep + 0.16, 0.05), 0.05, Color("4d5357"), 8)
+	_pipe(frame * Vector3(-long * 0.5, -deep + 0.4, 0.3), frame * Vector3(long * 0.5, -deep + 0.34, 0.3), 0.018, Color("5d2f22"), 5)
+	_glow_box(frame * Vector3(long * 0.5 - 0.3, -0.5, -wide * 0.5 + 0.004), Vector3(0.14, 0.04, 0.008), Color("ff2814"), 1.5, facing)
+	# The steel of its rim.
+	var steel: Color = tones.steel
+	for edge in [-1.0, 1.0]:
+		_placed(frame, "plate", Vector3(0, 0.007, float(edge) * (wide * 0.5 + 0.035)), Vector3(long + 0.14, 0.014, 0.07), steel)
+		_placed(frame, "plate", Vector3(float(edge) * (long * 0.5 + 0.035), 0.007, 0), Vector3(0.07, 0.014, wide), steel)
+	# Its three gratings.
+	var part := long / 3.0
+	var grille: Color = tones.grille
+	_way_grate(Transform3D(facing * Basis(Vector3.UP, PI / 2), frame * Vector3(-part, -0.012, 0)), wide - 0.03, part - 0.03, grille)
+	var flap := _way_flap(Transform3D(facing, frame * Vector3(0, 0.02, -wide * 0.5 + 0.02)), part - 0.04, wide - 0.05, grille, 5, -random.randf_range(58.0, 70.0))
+	_way_grate(Transform3D(facing * Basis(Vector3.UP, deg_to_rad(random.randf_range(18.0, 50.0))), frame * Vector3(long * 0.5 + random.randf_range(0.7, 0.9), 0.02, random.randf_range(-0.1, 0.35))), wide - 0.03, part - 0.03, grille)
+	# Nobody walks over it or falls into it; shots go in.
+	_add_shape(rails, frame * Vector3(0, 0.65, 0), Vector3(long, 1.3, wide), facing)
+	_register(frame * Vector3(0, 0.4, 0), Vector3(long, 0.6, wide), turn * PI / 2)
+	var rim := frame * Vector3(part, 0, wide * 0.5)
+	_smear(rim + facing.z * 0.25, rim + facing.z * random.randf_range(1.6, 2.2) + facing.x * random.randf_range(-0.5, 0.5), 0.3)
+	_blot(rim + facing.z * 0.5, 0.45, 0.3)
+	_way_chips(tones, rim + facing.z * 0.7, 0.8, 5, 0.09)
+	_way("cellar", room_id, rim, facing.z, rim + facing.z * 0.95, {"node": flap, "deep": deep, "look": "trench", "swing": [5.0, -14.0], "pit": pit})
+	_end_zone()
+
 ## Moves every way in's landing place to free ground of the path grid.
 func _settle_ways() -> void:
 	for entry in entries:
@@ -5252,20 +5591,22 @@ func _lay_entries() -> void:
 		_way_edge("platform", Vector3(float(x), UNDER, -55.0), Vector3(0, 0, 1))
 	_way_duct("platform", SOUTH, -26.4, {"sill": 2.6, "trunk": 4.5})
 	_way_hole("platform", SOUTH, 4.4)
+	_way_breach("platform", SOUTH, 14.2, -1.0)
+	_way_trench("platform", -12.0, -37.0, 2)
 	_way_duct("platform", SOUTH, 18.3, {"sill": 2.6, "trunk": 4.5})
 	_way_drop("booth", 26.5, -32.0, 1)
 	_way_drop("depot", 46.5, -48.0, 0)
 	_way_hole("depot", SOUTH, 49.8)
 	_way_drop("workshop", -46.5, -39.5, 0)
-	_way_hole("workshop", NORTH, -43.4)
+	_way_hole("workshop", NORTH, -43.4, "pipes")
 	# --- the terminal: the track again, ducts high in its end walls, holes under the
 	# gallery, and the control room up there
 	for x in [-24.0, 12.0, 26.0]:
 		_way_edge("terminal", Vector3(float(x), UNDER, -319.0), Vector3(0, 0, -1))
 	_way_duct("terminal", WEST, -323.4, {"sill": 2.6, "trunk": 5.4})
 	_way_duct("terminal", EAST, -330.0, {"sill": 2.6, "trunk": 5.4})
-	_way_hole("terminal", NORTH, -30.0, "vent")
-	_way_hole("terminal", NORTH, 22.0)
+	_way_breach("terminal", NORTH, -30.0)
+	_way_gate("terminal", NORTH, 22.0, "WARTUNG")
 	_way_drop("control", 24.0, -343.5, 0, {"shaft": 2.2})
 	# (and what the gallery and its stairs were missing: out of the roof of the hall on to
 	# the gallery, ducts in the wall along it, and down on to the floor at the foot of the
@@ -5288,32 +5629,33 @@ func _lay_entries() -> void:
 	_way_hole("ring_s", SOUTH, -35.2, "vent")
 	_way_drop("ring_s", -29.0, -367.5, 0)
 	_way_duct("ring_s", SOUTH, -23.0)
-	_way_drop("ring_s", -12.0, -367.5, 0)
+	_way_fall("ring_s", NORTH, -17.5)
 	_way_drop("ring_s", 6.0, -367.5, 0)
 	_way_duct("ring_s", SOUTH, 17.3)
 	_way_drop("ring_s", 23.0, -367.5, 0)
-	_way_hole("ring_s", SOUTH, 30.0)
+	_way_breach("ring_s", SOUTH, 30.0, -1.0)
 	_way_drop("ring_s", 41.0, -367.5, 0)
 	_way_drop("office", -28.0, -383.5, 0)
-	_way_hole("office", WEST, -382.9)
+	_way_breach("office", WEST, -382.9)
 	_way_drop("meeting", -10.0, -373.5, 2)
 	_way_drop("copy", 8.0, -374.0, 0)
 	_way_drop("security", 16.4, -375.5, 0)
 	_way_hole("server", EAST, -382.0, "vent")
-	_way_hole("archive", WEST, -401.0)
+	_way_hole("archive", WEST, -401.0, "pipes")
 	_way_drop("staff", -13.5, -398.5, 0)
-	_way_hole("spine", EAST, -401.0)
+	_way_gate("spine", EAST, -401.0, "TECHNIK")
 	_way_duct("spine", EAST, -395.9)
 	_way_drop("spine", 2.5, -389.9, 3)
 	_way_hole("spine", WEST, -384.2, "vent")
 	_way_drop("spine", 2.5, -377.9, 3)
 	# --- the canteen: all four walls and the ceiling of the hall that is held, its kitchen,
 	# its store, the way north
-	_way_hole("cafeteria", NORTH, -15.0)
+	_way_breach("cafeteria", NORTH, -15.0)
+	_way_fall("cafeteria", WEST, -409.5)
 	_way_duct("cafeteria", NORTH, 8.0)
 	_way_hole("cafeteria", EAST, -428.0, "vent")
 	_way_duct("cafeteria", WEST, -432.9)
-	_way_hole("cafeteria", SOUTH, 12.0)
+	_way_gate("cafeteria", SOUTH, 12.0, "LASTENAUFZUG")
 	_way_duct("cafeteria", SOUTH, 18.0)
 	_way_drop("cafeteria", -12.0, -420.5, 0)
 	_way_drop("cafeteria", 10.0, -415.5, 2)
@@ -5326,53 +5668,55 @@ func _lay_entries() -> void:
 	_way_drop("cafeteria", 14.0, -408.4, 0)
 	_way_drop("kitchen_f", 31.0, -414.0, 0)
 	_way_duct("kitchen_f", NORTH, 31.0)
-	_way_hole("cafe_store", WEST, -422.6)
+	_way_hole("cafe_store", WEST, -422.6, "pipes")
 	_way_hole("north_link", WEST, -440.0, "vent")
 	_way_drop("north_link", 2.5, -438.5, 3)
 	# --- the central hall: its walls under the gallery, beside the supply point too; the
 	# infirmary
-	_way_hole("atrium", SOUTH, -20.0)
+	_way_hole("atrium", SOUTH, -20.0, "pipes")
 	_way_duct("atrium", SOUTH, 12.0, {"sill": 2.6, "trunk": 4.0})
 	_way_hole("atrium", NORTH, -14.0, "vent")
-	_way_hole("atrium", NORTH, 14.0)
-	_way_hole("atrium", EAST, -485.5)
+	_way_gate("atrium", NORTH, 14.0, "AUFZUG  B3")
+	_way_breach("atrium", EAST, -485.5, -1.0)
 	_way_duct("atrium", EAST, -452.0, {"sill": 2.6, "trunk": 4.0})
 	_way_hole("atrium", WEST, -484.0, "vent")
 	_way_duct("atrium", WEST, -452.0, {"sill": 2.6, "trunk": 4.0})
-	_way_hole("med", NORTH, -43.9)
+	_way_gate("med", NORTH, -43.9, "AUFZUG")
 	_way_drop("med", -36.0, -468.5, 0)
 	# --- the plant rooms: the passage and the two rooms at its end
-	_way_hole("maint", NORTH, 27.1, "vent")
+	_way_hole("maint", NORTH, 27.1, "pipes")
 	_way_hole("maint", SOUTH, 33.1, "vent")
-	_way_drop("maint", 45.0, -467.25, 2)
+	_way_trench("maint", 45.0, -467.3, 2)
 	_way_drop("maint", 56.9, -467.25, 2)
-	_way_hole("generator", EAST, -456.0, "vent")
+	_way_hole("generator", EAST, -456.0, "pipes")
+	_way_trench("generator", 46.0, -446.5, 2)
 	_way_duct("generator", WEST, -452.0)
-	_way_hole("pump", NORTH, 45.0)
+	_way_hole("pump", NORTH, 45.0, "pipes")
 	_way_duct("pump", WEST, -486.0)
 	# --- the research wing: the lock, the corridor from end to end, every laboratory, the
 	# crossing, and the hall at the end
 	_way_drop("decon", -2.5, -499.5, 0)
 	_way_drop("lab_corridor", 2.5, -509.5, 3)
-	_way_drop("lab_corridor", -2.5, -520.5, 1)
+	_way_trench("lab_corridor", -2.9, -520.5, 1)
 	_way_drop("lab_corridor", 2.5, -532.0, 3)
 	_way_drop("lab_corridor", -2.5, -543.5, 1)
-	_way_drop("lab_corridor", 2.5, -554.5, 3)
+	_way_trench("lab_corridor", 2.9, -554.5, 3)
 	_way_drop("lab_corridor", -2.5, -565.5, 1)
-	_way_hole("lab_a", SOUTH, -18.0)
+	_way_breach("lab_a", SOUTH, -18.0)
 	_way_drop("lab_a", -14.0, -513.5, 0)
 	_way_hole("lab_b", WEST, -535.6, "vent")
 	_way_drop("lab_b", -14.0, -531.5, 0)
 	_way_hole("quarantine", NORTH, -15.0)
-	_way_hole("quarantine", WEST, -558.4)
+	_way_breach("quarantine", WEST, -558.4, -1.0)
 	_way_drop("quarantine", -18.0, -551.0, 0)
 	_way_hole("lab_c", SOUTH, 16.0, "vent")
 	_way_drop("lab_c", 18.0, -513.5, 0)
-	_way_hole("cryo", EAST, -536.5)
+	_way_hole("cryo", EAST, -536.5, "pipes")
 	_way_drop("cryo", 16.0, -524.0, 0)
 	_way_duct("flooded", EAST, -562.4)
 	_way_drop("flooded", 16.0, -563.5, 0)
-	_way_hole("cross", SOUTH, -26.9)
+	_way_gate("cross", SOUTH, -26.9, "AUFZUG")
+	_way_trench("cross", 16.0, -570.5, 2)
 	_way_hole("cross", SOUTH, -14.9, "vent")
 	_way_drop("cross", -7.9, -575.5, 0)
 	_way_drop("cross", 7.9, -575.5, 0)
