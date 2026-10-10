@@ -2495,7 +2495,10 @@ func _later(game: Node3D) -> void:
 	for prowl_step in range(45):
 		prowl_d._physics_process(1.0 / 60.0)
 	var prowl_torn: bool = player.health < 100.0 and prowl_d.global_position.distance_to(player.global_position) < Prowler.PIN_STAND + 0.2
-	prowl_d.shaken = 1.0
+	# Two presses of the key, not one and not seven.
+	prowl_d.shaken = 0.0
+	prowl_d.shake()
+	var prowl_once: bool = player.clung_by == prowl_d
 	prowl_d.shake()
 	var prowl_shaken: bool = player.clung_by == null and prowl_d.mode == "reel" and prowl_d.pin_cooldown > 5.0
 	prowl_d.held_left = 0.0
@@ -2503,7 +2506,7 @@ func _later(game: Node3D) -> void:
 	prowl_d.prey = player
 	prowl_d._start_pin()
 	prowl_d.receive_hit(Prowler.PIN_BREAK * prowl_d.level + 1.0, Vector3.BACK, false)
-	expect(prowl_held and prowl_torn and prowl_shaken and player.clung_by == null and prowl_d.mode == "reel" and not prowl_d.dead, "Its pounce can pin the survivor: it stands over him and tears at him until he has shaken it off with [E] or it has been shot off him")
+	expect(prowl_held and prowl_torn and prowl_once and prowl_shaken and player.clung_by == null and prowl_d.mode == "reel" and not prowl_d.dead, "Its pounce can pin the survivor: it stands over him and tears at him until he has shaken it off with [E] or it has been shot off him")
 	player.health = 100.0
 	face(game, Vector3(0, 0.05, 22.0), PI)
 	prowl_d.global_position = Vector3(0.0, 0.08, 31.0)
@@ -7413,7 +7416,9 @@ func _hive_caches(game: Node3D) -> void:
 	for k in range(10):
 		caches._process(0.5)
 	var stopped: bool = is_equal_approx(float(cage.left), half) and not bool(cage.near) and caches.answered == came and " ".join(PackedStringArray(caches.summary())).contains("UNTERBROCHEN") and not caches.markers().is_empty()
-	await wait(1.6)
+	# (Long enough for the slowest way in: its warning, a drop from a high ceiling, and the
+	# second of the pack half a second behind the first.)
+	await wait(2.8)
 	var bodies := 0
 	for node in get_tree().get_nodes_in_group("infected"):
 		bodies += 1 if not (node as Infected).dead else 0

@@ -81,6 +81,9 @@ const PIN_REST := 10.0
 const PIN_APART := 4.0
 ## How far in front of him it stands while it holds him.
 const PIN_STAND := 1.6
+## What one press of [E] is worth against its hold (it lets go at 1; the grip tightens
+## again by SHAKE_FADE a second): two quick presses are enough.
+const PIN_SHAKE := 0.6
 ## The charge: at a squad of which two or more stand within CLUMP metres of each other.
 ## It rakes the ground and bellows first; then it goes straight, CHARGE_PACE fast, and
 ## whoever is within CHARGE_WIDTH of its way is hurt and thrown aside.
@@ -414,9 +417,13 @@ func _start_pin() -> void:
 	if prey == game.player:
 		game.hud.flash(Color(0.4, 0.0, 0.0), 0.5)
 
-## One press of [E] by the survivor it holds down (the game has counted it already).
+## One press of [E] by the survivor it holds down. (Only a co-op guest's machine counts a
+## press before it comes here; in a night of one's own nothing did, and pressing was no use.)
 func shake() -> void:
-	if clung_to != null and not dead and shaken >= 1.0:
+	if clung_to == null or dead:
+		return
+	shaken += PIN_SHAKE
+	if shaken >= 1.0:
 		release(true)
 
 ## It lets go. thrown: shaken off or shot off - it reels back.
