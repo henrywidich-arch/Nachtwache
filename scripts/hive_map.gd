@@ -292,6 +292,19 @@ func _park_wall(from: Vector2, to: Vector2, gaps: Array = []) -> void:
 				var out := random.randf_range(-1.6, 1.6)
 				var spot := Vector3(mid + off, 0.12, fixed + out) if along_x else Vector3(fixed + out, 0.12, mid + off)
 				_part("stonewall", spot, Vector3(random.randf_range(0.4, 0.9), random.randf_range(0.2, 0.4), random.randf_range(0.4, 0.8)), _vary(Color(0.55, 0.55, 0.53), 0.04), Vector3(random.randf_range(-12, 12), random.randf_range(0, 180), random.randf_range(-12, 12)))
+			# The broken ends of the wall beside it (they reach a little into the standing wall),
+			# and slabs of it that lie in the grass.
+			for end in [[float(gap[0]), 1.0], [float(gap[1]), -1.0]]:
+				var at := float(end[0]) + float(end[1]) * 0.26
+				var tall := random.randf_range(1.2, 2.1)
+				var stub := Vector3(at, tall * 0.5, fixed) if along_x else Vector3(fixed, tall * 0.5, at)
+				var stub_size := Vector3(0.72, tall, 0.58) if along_x else Vector3(0.58, tall, 0.72)
+				_part("stonewall", stub, stub_size, Color(0.56, 0.56, 0.54))
+				_solid(stub, stub_size)
+				var out := random.randf_range(1.0, 1.5) * (1.0 if random.randf() < 0.5 else -1.0)
+				var lying := float(end[0]) + float(end[1]) * random.randf_range(0.3, 0.9)
+				var slab := Vector3(lying, 0.2, fixed + out) if along_x else Vector3(fixed + out, 0.2, lying)
+				_part("stonewall", slab, Vector3(1.5, 0.32, 1.0), _vary(Color(0.52, 0.52, 0.5), 0.03), Vector3(random.randf_range(5, 14), random.randf_range(0, 180), random.randf_range(-6, 6)))
 
 ## A tree of the farm's kinds; in the park it has a trunk to bump into.
 func _tree(pos: Vector3, tall: float, trunk: bool = true) -> void:
@@ -407,6 +420,7 @@ func _lay_grounds() -> void:
 		var far := random.randf_range(0.0, 1.0)
 		var spot := Vector2(cos(turn) * (76 + far * 34), 28 + sin(turn) * (72 + far * 34))
 		_tree(Vector3(spot.x, 0, spot.y), random.randf_range(13.0, 19.0), false)
+	_dress_grounds(basin)
 	# --- the supply drop beside the landing ground
 	_supply(Vector3(-13.5, 0, 70), Vector3(1, 0, 0), "ABWURFZONE")
 	for spot in [Vector3(7.5, 0, 75.5), Vector3(-7.5, 0, 75.5), Vector3(7.5, 0, 60.5), Vector3(-7.5, 0, 60.5)]:
@@ -482,6 +496,13 @@ func _upper_window(room_id: String, side: int, at: float, lit: bool) -> void:
 		_face_box(room, side, "plain", at - 0.7, at + 0.7, 5.5, 7.9, depth + 0.06, depth + 0.075, Color("0a0d12"))
 	_face_box(room, side, "panelwood", at - 0.03, at + 0.03, 5.5, 7.9, depth + 0.075, depth + 0.1, Color(0.3, 0.24, 0.2))
 	_face_box(room, side, "panelwood", at - 0.7, at + 0.7, 6.9, 6.96, depth + 0.075, depth + 0.1, Color(0.3, 0.24, 0.2))
+	# Shutters folded back against the wall.
+	var shutter := Color(0.13, 0.2, 0.17)
+	for edge in [-1.0, 1.0]:
+		var mid: float = at + float(edge) * 1.03
+		_face_box(room, side, "plain", mid - 0.3, mid + 0.3, 5.42, 7.98, depth + 0.07, depth + 0.11, shutter)
+		for k in range(8):
+			_face_box(room, side, "plain", mid - 0.25, mid + 0.25, 5.56 + k * 0.3, 5.63 + k * 0.3, depth + 0.1, depth + 0.125, shutter.darkened(0.4))
 
 func _villa_outside() -> void:
 	_chunk("Outside")
@@ -497,6 +518,12 @@ func _villa_outside() -> void:
 		var room: Dictionary = room_of[wall[0]]
 		_face_box(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), 4.55, 4.85, HALF + 0.25, HALF + 0.37, TRIM)
 		_face_box(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), 0.0, 0.7, HALF + 0.25, HALF + 0.33, TRIM.darkened(0.2))
+		# A frieze under the cornice and a row of dentils in it.
+		_face_box(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), EAVES - 1.0, EAVES - 0.39, HALF + 0.22, HALF + 0.3, TRIM.darkened(0.05))
+		var teeth := maxi(1, roundi((float(wall[3]) - float(wall[2])) / 0.5))
+		for i in range(teeth):
+			var tooth := float(wall[2]) + (i + 0.5) * (float(wall[3]) - float(wall[2])) / teeth
+			_face_box(room, int(wall[1]), "plaster", tooth - 0.11, tooth + 0.11, EAVES - 0.63, EAVES - 0.395, HALF + 0.22, HALF + 0.45, TRIM)
 	for corner in [["salon", SOUTH, -24.3, -23.5], ["galerie", SOUTH, 23.5, 24.3], ["hall", SOUTH, -7.4, -6.6], ["hall", SOUTH, 6.6, 7.4], ["library", NORTH, -24.3, -23.5], ["kitchen", NORTH, 23.5, 24.3], ["salon", WEST, 21.5, 22.3], ["library", WEST, -4.3, -3.5], ["galerie", EAST, 21.5, 22.3], ["kitchen", EAST, -4.3, -3.5]]:
 		_face_box(room_of[corner[0]], int(corner[1]), "plaster", float(corner[2]), float(corner[3]), 0.7, EAVES - 0.4, HALF + 0.25, HALF + 0.34, TRIM)
 	# The upper storey: nobody gets up there, but somebody has left lamps burning.
@@ -507,15 +534,11 @@ func _villa_outside() -> void:
 	for piece in [[-26.0, -16.0], [-12.0, -4.5], [4.5, 12.0], [16.0, 26.0]]:
 		var mid := (float(piece[0]) + float(piece[1])) * 0.5
 		var long := float(piece[1]) - float(piece[0])
-		_part("marble", Vector3(mid, 0.45, 28.6), Vector3(long, 0.9, 0.34), Color(0.76, 0.75, 0.72))
-		_part("marble", Vector3(mid, 0.94, 28.6), Vector3(long + 0.1, 0.1, 0.46), Color(0.7, 0.69, 0.66))
-		_solid(Vector3(mid, 0.5, 28.6), Vector3(long, 1.0, 0.36))
+		_balustrade(Vector3(mid - long * 0.5, 0, 28.6), Vector3(mid + long * 0.5, 0, 28.6))
 	for x in [-3.9, -1.8, 1.8, 3.9]:
 		_column(Vector3(x, 0, 24.9), 0.3, 4.4, "marble", Color(0.84, 0.82, 0.78))
 	_part("plaster", Vector3(0, 4.65, 23.75), Vector3(9.2, 0.5, 3.0), TRIM)
-	_part("plaster", Vector3(0, 5.3, 25.05), Vector3(9.2, 0.8, 0.3), TRIM.darkened(0.05))
-	for x in [-4.45, 4.45]:
-		_part("plaster", Vector3(x, 5.3, 23.75), Vector3(0.3, 0.8, 2.9), TRIM.darkened(0.05))
+	_front_dress()
 	# Light on the front: lanterns beside the doors and a wash from below.
 	for x in [-22.0, -15.7, -8.6, 8.6, 15.7, 22.0]:
 		var at := Vector3(x, 3.0, 22.52)
@@ -751,6 +774,252 @@ func _dress_villa() -> void:
 	_chair(Vector3(4.6, 0, 4.6), 2.2, Color(0.3, 0.22, 0.17), true)
 	_litter(Vector3(-16.4, 0.016, 3.6), 1.2, 9)
 	_litter(Vector3(4.2, 0, 17.2), 0.9, 6)
+
+# ---------------------------------------------------------------- the park and the front, second pass
+
+## A clipped cone of yew on a short stem, in a stone tub if `tub`: the dark shapes before
+## the lit front.
+func _topiary(pos: Vector3, tall: float = 3.0, radius: float = 0.8, tub: bool = false) -> void:
+	var foot := pos
+	if tub:
+		_part("marble", pos + Vector3(0, 0.27, 0), Vector3(0.86, 0.58, 0.86), Color(0.6, 0.59, 0.56))
+		_part("marble", pos + Vector3(0, 0.56, 0), Vector3(0.96, 0.08, 0.96), Color(0.68, 0.67, 0.64))
+		_solid(pos + Vector3(0, 0.3, 0), Vector3(0.9, 0.6, 0.9))
+		foot = pos + Vector3(0, 0.55, 0)
+	else:
+		_round_solid(pos, radius * 0.6, 2.0)
+	batch.cylinder(mats["panelwood"], foot, 0.07, 0.07, 0.5, Color(0.3, 0.24, 0.2), 6)
+	batch.cylinder(mats["lawn"], foot + Vector3(0, 0.35, 0), radius, 0.05, tall - 0.35, Color(0.15, 0.23, 0.15), 12)
+
+## A bench of the park: wooden slats on iron ends. The seat faces local +z.
+func _park_bench(pos: Vector3, yaw: float) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var iron := Color("15171a")
+	var wood := Color(0.44, 0.36, 0.28)
+	for edge in [-1.0, 1.0]:
+		var x: float = float(edge) * 0.82
+		_placed(frame, "metal", Vector3(x, 0.21, 0.0), Vector3(0.06, 0.46, 0.5), iron)
+		_placed(frame, "metal", Vector3(x, 0.66, -0.24), Vector3(0.05, 0.5, 0.05), iron)
+		_placed(frame, "metal", Vector3(x, 0.62, 0.02), Vector3(0.07, 0.04, 0.5), iron)
+	for k in range(4):
+		_placed(frame, "panelwood", Vector3(0, 0.45, -0.17 + k * 0.125), Vector3(1.8, 0.035, 0.1), wood)
+	for k in range(3):
+		_placed(frame, "panelwood", Vector3(0, 0.58 + k * 0.13, -0.225), Vector3(1.8, 0.1, 0.03), wood)
+	_solid(pos + Vector3(0, 0.45, 0), Vector3(1.8, 0.9, 0.5), true, yaw)
+
+## A stone balustrade from one spot to another (along x or along z): piers, balusters and a
+## rail. `first` and `last` say whether a pier stands at either end.
+func _balustrade(from: Vector3, to: Vector3, solid: bool = true, first: bool = true, last: bool = true) -> void:
+	var stone := Color(0.76, 0.75, 0.72)
+	var span := to - from
+	var long := span.length()
+	var dir := span / long
+	var mid := (from + to) * 0.5
+	var along := Vector3(absf(dir.x), 0, absf(dir.z))
+	var across := Vector3(absf(dir.z), 0, absf(dir.x))
+	_part("marble", mid + Vector3(0, 0.08, 0), along * long + across * 0.34 + Vector3(0, 0.2, 0), stone.darkened(0.1))
+	_part("marble", mid + Vector3(0, 0.9, 0), along * (long + 0.08) + across * 0.42 + Vector3(0, 0.12, 0), stone)
+	var bays := maxi(1, roundi(long / 3.4))
+	var piers: Array[float] = []
+	for i in range(bays + 1):
+		if (i == 0 and not first) or (i == bays and not last):
+			continue
+		piers.append(long * i / bays)
+		var at := from + dir * (long * i / bays)
+		_part("marble", at + Vector3(0, 0.49, 0), Vector3(0.4, 1.02, 0.4), stone.darkened(0.04))
+		_part("marble", at + Vector3(0, 1.03, 0), Vector3(0.5, 0.08, 0.5), stone)
+	var count := maxi(1, roundi(long / 0.3))
+	for i in range(count):
+		var way := long * (i + 0.5) / count
+		var free := true
+		for pier in piers:
+			if absf(pier - way) < 0.3:
+				free = false
+		if free:
+			_part("marble", from + dir * way + Vector3(0, 0.51, 0), Vector3(0.12, 0.68, 0.12), stone)
+	if solid:
+		_solid(mid + Vector3(0, 0.5, 0), along * long + across * 0.36 + Vector3(0, 1.0, 0))
+
+## What a window of the house has on its outside: a stone surround with a sill and a small
+## cornice, and shutters folded back. (Everything reaches a little into the wall, so that
+## no back lies in the wall's own plane.)
+func _window_dress(room_id: String, side: int, at: float, wide: float, sill: float, head: float, shutters: bool = true) -> void:
+	var room: Dictionary = room_of[room_id]
+	var skin := HALF + 0.25
+	var back := skin - 0.03
+	var half := wide * 0.5
+	var green := Color(0.13, 0.2, 0.17)
+	for edge in [-1.0, 1.0]:
+		var e: float = edge
+		var a0: float = at + e * (half + 0.03)
+		var a1: float = at + e * (half + 0.3)
+		_face_box(room, side, "plaster", minf(a0, a1), maxf(a0, a1), sill - 0.1, head + 0.12, back, skin + 0.1, TRIM)
+		if shutters:
+			var mid: float = at + e * (half + 0.63)
+			_face_box(room, side, "plain", mid - 0.3, mid + 0.3, sill - 0.02, head + 0.02, skin + 0.012, skin + 0.05, green)
+			var slats := maxi(2, roundi((head - sill) / 0.3))
+			for k in range(slats):
+				var y: float = sill + 0.1 + k * (head - sill - 0.2) / slats
+				_face_box(room, side, "plain", mid - 0.25, mid + 0.25, y, y + 0.07, skin + 0.04, skin + 0.065, green.darkened(0.4))
+	_face_box(room, side, "plaster", at - half - 0.31, at + half + 0.31, head + 0.03, head + 0.34, back, skin + 0.11, TRIM)
+	_face_box(room, side, "plaster", at - half - 0.44, at + half + 0.44, head + 0.32, head + 0.46, back, skin + 0.24, TRIM.darkened(0.04))
+	_face_box(room, side, "plaster", at - half - 0.44, at + half + 0.44, sill - 0.19, sill - 0.03, back, skin + 0.16, TRIM.darkened(0.04))
+
+## The same for a door of the house: pilaster strips beside it, a frieze and a cornice.
+func _door_dress(room_id: String, side: int, at: float, wide: float, head: float) -> void:
+	var room: Dictionary = room_of[room_id]
+	var skin := HALF + 0.25
+	var back := skin - 0.03
+	var half := wide * 0.5
+	for edge in [-1.0, 1.0]:
+		var e: float = edge
+		var a0: float = at + e * (half + 0.1)
+		var a1: float = at + e * (half + 0.42)
+		_face_box(room, side, "plaster", minf(a0, a1), maxf(a0, a1), -0.05, head + 0.14, back, skin + 0.1, TRIM)
+	_face_box(room, side, "plaster", at - half - 0.43, at + half + 0.43, head + 0.1, head + 0.38, back, skin + 0.11, TRIM)
+	_face_box(room, side, "plaster", at - half - 0.58, at + half + 0.58, head + 0.36, head + 0.52, back, skin + 0.28, TRIM.darkened(0.04))
+
+## The front of the house, second pass: the balcony over the porch, a gable with a lit
+## round window, chimneys, and stone around every window and door.
+func _front_dress() -> void:
+	# --- the balcony on the porch: a balustrade, urns on its corners, a lantern under it
+	_balustrade(Vector3(-4.36, 4.9, 25.0), Vector3(4.36, 4.9, 25.0), false)
+	for x in [-4.36, 4.36]:
+		_balustrade(Vector3(float(x), 4.9, 22.3), Vector3(float(x), 4.9, 25.0), false, false, false)
+		batch.ellipsoid(mats["marble"], Vector3(float(x), 6.22, 25.0), Vector3(0.27, 0.27, 0.27), Color(0.78, 0.77, 0.74), Basis.IDENTITY, 12, 8)
+	batch.cylinder(mats["metal"], Vector3(0, 3.75, 24.0), 0.02, 0.02, 0.66, Color("15171a"), 6)
+	_part("metal", Vector3(0, 3.74, 24.0), Vector3(0.36, 0.05, 0.36), Color("15171a"))
+	_glow_box(Vector3(0, 3.5, 24.0), Vector3(0.26, 0.42, 0.26), Color("ffd08a"), 5.5)
+	_part("metal", Vector3(0, 3.262, 24.0), Vector3(0.32, 0.04, 0.32), Color("15171a"))
+	_light(Vector3(0, 3.3, 24.2), Color("ffc884"), 2.2, 9.0, false, 0.04, 1.0, 110.0)
+	# --- the gable over the middle of the front, with a round window somebody has left lit
+	var plaster: Material = mats["plaster"]
+	var low := EAVES + 0.1
+	var rise := 2.7
+	var reach := 7.8
+	var face := 22.96
+	batch.quad(plaster, Vector3(-reach, low, face), Vector3(reach, low, face), Vector3(0, low + rise, face), Vector3(0, low + rise, face), OCHRE)
+	batch.quad(plaster, Vector3(reach, low, face - 0.44), Vector3(-reach, low, face - 0.44), Vector3(0, low + rise, face - 0.44), Vector3(0, low + rise, face - 0.44), OCHRE.darkened(0.4))
+	var slope := atan2(rise, reach)
+	var rake := Vector2(reach, rise).length() + 0.7
+	for edge in [-1.0, 1.0]:
+		var e: float = edge
+		_part("plaster", Vector3(e * reach * 0.5, low + rise * 0.5 + 0.12, 22.9 + e * 0.006), Vector3(rake, 0.3, 0.84), TRIM, Vector3(0, 0, -e * rad_to_deg(slope)))
+	var window := Vector3(0, low + 1.05, 0)
+	var turned := Basis(Vector3.RIGHT, PI / 2)
+	batch.cylinder(plaster, window + Vector3(0, 0, 22.9), 0.84, 0.84, 0.075, TRIM, 20, turned)
+	batch.cylinder(mats[glow_key], window + Vector3(0, 0, 22.9), 0.64, 0.64, 0.09, Color(0.52, 0.42, 0.29), 20, turned)
+	_part("plain", window + Vector3(0, 0, 23.006), Vector3(1.3, 0.05, 0.02), Color(0.2, 0.16, 0.13))
+	_part("plain", window + Vector3(0, 0, 23.008), Vector3(0.05, 1.3, 0.02), Color(0.2, 0.16, 0.13))
+	# --- chimneys over the fireplaces
+	for spot in [Vector3(-22.4, 0, 16.0), Vector3(22.4, 0, 16.0), Vector3(-10.6, 0, 5.6), Vector3(10.6, 0, 5.6)]:
+		var at: Vector3 = spot
+		_part("plaster", at + Vector3(0, EAVES + 1.65, 0), Vector3(1.0, 3.2, 1.6), OCHRE.darkened(0.15))
+		_part("plaster", at + Vector3(0, EAVES + 3.3, 0), Vector3(1.24, 0.2, 1.84), TRIM.darkened(0.1))
+		for z in [-0.42, 0.42]:
+			batch.cylinder(mats["metal"], at + Vector3(0, EAVES + 3.38, float(z)), 0.17, 0.14, 0.5, Color(0.3, 0.2, 0.16), 8)
+	# --- stone around the windows and the doors of the ground floor, and shutters
+	for entry in [["hall", SOUTH, -4.3, 1.4, 0.9, 3.4], ["hall", SOUTH, 4.3, 1.4, 0.9, 3.4], ["salon", WEST, 11.5, 1.5, 0.9, 3.4], ["library", WEST, -1.0, 1.5, 0.9, 3.4], ["library", WEST, 5.0, 1.5, 0.9, 3.4],
+			["library", NORTH, -21.0, 1.5, 0.9, 3.4], ["library", NORTH, -13.0, 1.5, 0.9, 3.4], ["dining", NORTH, -6.5, 1.5, 0.9, 3.4], ["dining", NORTH, 6.5, 1.5, 0.9, 3.4], ["kitchen", NORTH, 14.0, 1.5, 1.1, 3.2],
+			["kitchen", NORTH, 20.0, 1.5, 1.1, 3.2], ["kitchen", EAST, 5.6, 1.4, 1.1, 3.2], ["galerie", EAST, 12.0, 1.5, 0.9, 3.4], ["galerie", EAST, 18.0, 1.5, 0.9, 3.4]]:
+		_window_dress(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]), float(entry[4]), float(entry[5]))
+	for entry in [["hall", SOUTH, -4.3, 1.4], ["hall", SOUTH, 4.3, 1.4], ["hall", SOUTH, 0.0, 2.0]]:
+		_window_dress(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]), 5.2, 7.8, false)
+	for entry in [["hall", SOUTH, 0.0, 2.6, 3.2], ["salon", SOUTH, -19.5, 1.8, 3.0], ["salon", SOUTH, -12.0, 1.8, 3.0], ["galerie", SOUTH, 12.0, 1.8, 3.0], ["galerie", SOUTH, 19.5, 1.8, 3.0],
+			["library", NORTH, -17.0, 1.6, DOOR_TALL], ["kitchen", EAST, 2.0, 1.6, DOOR_TALL]]:
+		_door_dress(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]), float(entry[4]))
+	# --- yew in stone tubs on the terrace
+	for x in [-18.0, -6.2, 6.2, 18.0]:
+		_topiary(Vector3(float(x), 0.02, 27.9), 2.9, 0.62, true)
+
+## A clipped hedge along an arc around a spot of the park (degrees: 0 is east, 90 south).
+func _hedge_arc(centre: Vector3, radius: float, from_deg: float, to_deg: float, tall: float = 0.95, thick: float = 0.9) -> void:
+	var count := maxi(1, roundi(absf(to_deg - from_deg) / 11.0))
+	var step := deg_to_rad(to_deg - from_deg) / count
+	var long := 2.0 * (radius + thick * 0.5) * tan(absf(step) * 0.5) + 0.04
+	for i in range(count):
+		var turn := deg_to_rad(from_deg) + step * (i + 0.5)
+		var high := tall + (0.014 if i % 2 == 1 else 0.0)
+		var at := centre + Vector3(cos(turn) * radius, high * 0.5 - 0.02, sin(turn) * radius)
+		var yaw := atan2(-cos(turn), -sin(turn))
+		batch.box(mats["lawn"], at, Vector3(long, high, thick), Color(0.2, 0.3, 0.19), Basis(Vector3.UP, yaw))
+		_solid(at, Vector3(long, high, thick), true, yaw)
+
+## The post of the guards at the gate: a hut with its lamp on, a barrier that stands open,
+## sandbags, and nobody.
+func _guard_post(at: Vector3) -> void:
+	var wall := Color(0.62, 0.63, 0.6)
+	var dark := Color("1b1e20")
+	_part("plaster", at + Vector3(0, 0.49, 0), Vector3(2.6, 1.02, 3.0), wall)
+	_part("plaster", at + Vector3(0, 2.25, 0), Vector3(2.6, 0.52, 3.0), wall)
+	_glow_box(at + Vector3(0, 1.5, 0), Vector3(2.5, 1.04, 2.9), Color("ffcf8f"), 1.5)
+	for x in [-1.24, 1.24]:
+		for z in [-1.44, 0.0, 1.44]:
+			_part("plain", at + Vector3(float(x), 1.5, float(z)), Vector3(0.14, 1.02, 0.14), dark)
+	for z in [-1.44, 1.44]:
+		_part("plain", at + Vector3(0, 1.5, float(z)), Vector3(0.12, 1.02, 0.14), dark)
+	_part("slate", at + Vector3(-0.3, 2.57, 0), Vector3(3.8, 0.14, 3.6), Color(0.3, 0.31, 0.33))
+	_part("plain", at + Vector3(-1.31, 0.985, 0.72), Vector3(0.04, 2.0, 0.9), Color("23282b"))
+	_glow_box(at + Vector3(-1.33, 1.55, 0.72), Vector3(0.02, 0.5, 0.5), Color("ffcf8f"), 2.2)
+	var label := lettering("WACHE", at + Vector3(-1.32, 2.27, -0.3), 34, Color("d8dde0"))
+	label.rotation.y = -PI / 2
+	_solid(at + Vector3(0, 1.3, 0), Vector3(2.6, 2.6, 3.0))
+	_glow_box(at + Vector3(-1.9, 2.46, 0), Vector3(0.5, 0.06, 0.16), Color("fff1d6"), 6.0)
+	_light(at + Vector3(-2.1, 2.2, 0), Color("ffe2b8"), 2.0, 9.0, false, 0.03, 1.2, 100.0)
+	# The barrier: its post beside the drive, the boom up.
+	var pivot := at + Vector3(-4.0, 1.0, -0.6)
+	_part("metal", pivot + Vector3(0, -0.47, 0), Vector3(0.26, 1.1, 0.26), Color("2a2e31"))
+	_solid(pivot + Vector3(0, -0.45, 0), Vector3(0.26, 1.1, 0.26))
+	var lean := deg_to_rad(112.0)
+	for k in range(5):
+		var along := 0.2 + k * 0.92
+		_part("plain", pivot + Vector3(cos(lean) * along, sin(lean) * along, 0.14), Vector3(0.92, 0.1, 0.08), Color(0.8, 0.12, 0.1) if k % 2 == 0 else Color(0.86, 0.86, 0.82), Vector3(0, 0, 112.0))
+	# Sandbags towards the house, a crate of theirs, and what is left of one of them.
+	var bags := at + Vector3(-1.6, 0, -3.0)
+	for row in range(3):
+		for k in range(4 - row % 2):
+			_part("cloth", bags + Vector3(-0.9 + k * 0.6 + (0.3 if row % 2 == 1 else 0.0), 0.11 + row * 0.19, random.randf_range(-0.02, 0.02)), Vector3(0.57, 0.2, 0.34), _vary(Color(0.42, 0.39, 0.3), 0.03), Vector3(0, random.randf_range(-5, 5), 0))
+	_solid(bags + Vector3(0, 0.3, 0), Vector3(2.4, 0.6, 0.36))
+	_crate(at + Vector3(0.6, 0, -2.3), Vector3(0.9, 0.6, 0.6), Color("4d5a46"), 0.3)
+	_blot(at + Vector3(-2.6, 0, 1.6), 0.9, 0.6)
+	_smear(at + Vector3(-2.4, 0, 1.9), at + Vector3(-1.2, 0, 3.4), 0.26)
+	_litter(at + Vector3(-2.4, 0.004, -1.2), 0.8, 5)
+
+## The park, second pass: the landing ground marked and lit, the round with its hedge and
+## benches, statues, the guards' post at the gate.
+func _dress_grounds(basin: Vector3) -> void:
+	# --- the landing ground: a broken ring and an H in paint, lamps in the gravel, a floodlight
+	var pad := Vector3(0, 0, 68)
+	var paint := Color(0.8, 0.78, 0.7)
+	for i in range(24):
+		var turn := TAU * (i + 0.5) / 24.0
+		_part("plain", pad + Vector3(cos(turn) * 8.8, 0.034, sin(turn) * 8.8), Vector3(1.4, 0.012, 0.24), paint, Vector3(0, rad_to_deg(atan2(-cos(turn), -sin(turn))), 0))
+	for x in [-1.2, 1.2]:
+		_part("plain", pad + Vector3(float(x), 0.034, 0), Vector3(0.5, 0.012, 3.6), paint)
+	_part("plain", pad + Vector3(0, 0.034, 0), Vector3(1.88, 0.012, 0.5), paint)
+	for i in range(8):
+		var turn := TAU * i / 8.0 + PI / 8.0
+		_glow_box(pad + Vector3(cos(turn) * 9.9, 0.056, sin(turn) * 9.9), Vector3(0.2, 0.07, 0.2), Color("ffb04a"), 5.5)
+	_floodlight(Vector3(10.6, 0, 77.4), Vector3(0, 0.3, 68))
+	# --- the round: a step around the basin, a low hedge in two arcs, urns where they end,
+	# benches that look at the water
+	batch.cylinder(mats["marble"], basin + Vector3(0, -0.02, 0), 4.5, 4.5, 0.14, Color(0.6, 0.59, 0.56), 28)
+	_hedge_arc(basin, 13.7, -52.0, 52.0)
+	_hedge_arc(basin, 13.7, 128.0, 232.0)
+	for deg in [-58.0, 58.0, 122.0, 238.0]:
+		var turn := deg_to_rad(float(deg))
+		_plinth(basin + Vector3(cos(turn) * 13.7, 0, sin(turn) * 13.7), 1.1, "", 0.0, 0.0, 0.62)
+		batch.ellipsoid(mats["marble"], basin + Vector3(cos(turn) * 13.7, 1.44, sin(turn) * 13.7), Vector3(0.33, 0.33, 0.33), Color(0.78, 0.77, 0.74), Basis.IDENTITY, 12, 8)
+	for deg in [-30.0, 30.0, 150.0, 210.0]:
+		var turn := deg_to_rad(float(deg))
+		_park_bench(basin + Vector3(cos(turn) * 11.4, 0, sin(turn) * 11.4), atan2(-cos(turn), -sin(turn)))
+	for side in [-1.0, 1.0]:
+		_plinth(Vector3(float(side) * 19.5, 0, 41.0), 1.5, "marble_bust_01", 1.1, -float(side) * PI / 2, 0.7)
+	# --- yew along the drive between the gate and the landing ground
+	for z in [80.0, 84.5]:
+		_topiary(Vector3(-5.2, 0, float(z)), 3.4, 0.9)
+	_topiary(Vector3(5.2, 0, 80.0), 3.4, 0.9)
+	_guard_post(Vector3(8.4, 0, 84.8))
 
 # ---------------------------------------------------------------- more of the kit
 
@@ -2751,6 +3020,10 @@ func tour() -> Array:
 		["14_kitchen", Vector3(11.5, 0, 6.5), Vector3(22, 1.2, -3)],
 		["15_rear", Vector3(-12, 0, -16), Vector3(0, 3, -4)],
 		["16_supply", Vector3(-7, 0, 66), Vector3(-13.5, 1.2, 70)],
+		["16b_gate_post", Vector3(-3.5, 0, 76.5), Vector3(7.5, 1.6, 85.5)],
+		["16c_round", Vector3(-8.5, 0, 55.5), Vector3(5, 1.0, 40)],
+		["16d_porch", Vector3(6.5, 0, 31.5), Vector3(-1, 4.6, 22)],
+		["16e_breach", Vector3(-27, 0, 78), Vector3(-36, 0.8, 88)],
 		["20_vestibule", Vector3(0, 0, -5.0), Vector3(0, -3.0, -18.0)],
 		["20b_stairs_top", Vector3(0, -1.2, -11.5), Vector3(0, -4.4, -17.6)],
 		["20c_stairs_upper", Vector3(0, -3.3, -15.1), Vector3(0, -4.2, -19.5)],
