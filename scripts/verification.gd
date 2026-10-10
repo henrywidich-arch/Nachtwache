@@ -3119,6 +3119,339 @@ func _story(game: Node3D) -> void:
 	game.intro_skipped = false
 	game.start_run()
 	expect(not game.story.enabled and not cabin.is_locked("cellar") and not is_instance_valid(game.story.nadja), "A night without the story has every door open")
+	await _spoken(game)
+
+## Lets the director of the second mission take its next turn: what is said there runs
+## with the picture, and under load several steps of the physics pass between two pictures.
+func _turn(hive: HiveDirector) -> void:
+	var before := hive.clock
+	# (Nobody of the squad is in the middle of a call the director would wait for.)
+	hive.game.bark_until.clear()
+	for i in range(40):
+		await get_tree().process_frame
+		if hive.clock != before:
+			return
+
+## What is said in the second mission (v0.24): its own lines instead of stand-ins, one
+## queue for the radio and the squad, the taken channel until the station.
+func _spoken(game: Node3D) -> void:
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	var profile: Profile = game.profile
+	var kept_mission: int = profile.mission
+	# --- everything the director says is written, and everything written for it is said
+	var source := FileAccess.get_file_as_string("res://scripts/hive.gd")
+	var finder := RegEx.new()
+	finder.compile("(line|face|talk|radio)\\(\"(m2_[a-z_0-9]+)\"")
+	var used := {}
+	var unknown: Array[String] = []
+	for found in finder.search_all(source):
+		var cue := found.get_string(2)
+		used[found.get_string(1) + ":" + cue] = true
+		if (found.get_string(1) == "talk" and not Radio.BARKS.has(cue)) or (found.get_string(1) != "talk" and not Radio.LINES.has(cue)):
+			unknown.append(cue)
+	var later: Array[String] = []
+	var unsaid: Array[String] = []
+	for cue: String in Radio.LINES:
+		if cue.begins_with("m2_") and not later.has(cue) and not (used.has("line:" + cue) or used.has("face:" + cue) or used.has("radio:" + cue)):
+			unsaid.append(cue)
+	for cue: String in Radio.BARKS:
+		if cue.begins_with("m2_") and not later.has(cue) and not used.has("talk:" + cue):
+			unsaid.append(cue)
+	expect(unknown.is_empty() and unsaid.is_empty() and not source.contains("say(\""), "Every line written for the second mission is said somewhere in it, and nothing is said there that is not written%s" % ("" if unknown.is_empty() and unsaid.is_empty() else " - unknown: %s, never said: %s" % [str(unknown), str(unsaid)]))
+	# --- a night of the second mission
+	game.return_to_menu()
+	await frames(2)
+	profile.mission = 2
+	game.team_enabled = true
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	if not hive.on:
+		expect(false, "The second mission starts for the check of what is said in it")
+		profile.mission = kept_mission
+		return
+	# Command's first words: over the radio, and not in a voice that can be trusted.
+	var first: String = hud.radio_label.text
+	var taken: bool = hive.channel_taken() and Radio.hijacked and first.begins_with("COLEMAN:") and first.contains("#") and hive.line_left > 2.0
+	var fake_sound: bool = str(Radio.pick("m2_arrival").sound) == "" or is_equal_approx(game.sounds.radio_voice.pitch_scale, game.sounds.FAKE_PITCH)
+	# A line of the game's own takes its turn in the same queue.
+	game.radio("mate_down", 5.0)
+	var one_queue: bool = game.radio_queue.is_empty() and hive.lines.size() == 1 and str(hive.lines[0].kind) == "game" and hud.radio_label.text == first
+	hive.lines.clear()
+	# --- the squad among itself: who is there and on his feet, in the order written
+	var viper: Teammate = null
+	var scorpion: Teammate = null
+	for mate: Teammate in game.team:
+		if mate.look == "viper":
+			viper = mate
+		elif mate.look == "scorpion":
+			scorpion = mate
+	if viper == null or scorpion == null:
+		expect(false, "Viper and Scorpion are the squad of the check")
+	else:
+		var said: Array[String] = []
+		var shown := hud.radio_label.text
+		hive.talk("m2_colonel")
+		var parts: int = hive.lines.size()
+		for turn in range(8):
+			hive.line_left = 0.0
+			game.bark_until.clear()
+			await _turn(hive)
+			if hud.radio_label.text != shown:
+				shown = hud.radio_label.text
+				said.append(shown.get_slice(":", 0))
+		# While one of them says his line the other keeps small talk to himself - but not a cry for help.
+		hive.talk("m2_train")
+		hive.line_left = 0.0
+		await _turn(hive)
+		var busy: bool = shown != hud.radio_label.text and hud.radio_label.text.begins_with("SCORPION:") and hive.line_left > 0.5
+		var hushed: bool = not game.bark(viper, "viper", "kill") and game.bark(viper, "viper", "down")
+		hive.lines.clear()
+		game.bark_until.clear()
+		# Down, he says nothing; and a word that waited too long is not said at all.
+		viper._go_down(Vector3.INF)
+		shown = hud.radio_label.text
+		hive.talk("m2_colonel")
+		var alone: Array[String] = []
+		for turn in range(8):
+			hive.line_left = 0.0
+			await _turn(hive)
+			if hud.radio_label.text != shown:
+				shown = hud.radio_label.text
+				alone.append(shown.get_slice(":", 0))
+		viper.revive(true)
+		hive.talk("m2_station")
+		hive.clock += HiveDirector.STALE + 1.0
+		hive.line_left = 0.0
+		await _turn(hive)
+		var stale: bool = hive.lines.is_empty() and hud.radio_label.text == shown
+		# A line of the mission waits for a call somebody of the squad is in the middle of.
+		game.talk_until = 0
+		var calling: bool = game.bark(scorpion, "scorpion", "reload") and hive._squad_calling()
+		hive.line("m2_depot")
+		hive.line_left = 0.0
+		var clock_before: float = hive.clock
+		for step in range(40):
+			await get_tree().process_frame
+			if hive.clock != clock_before:
+				break
+		var waited: bool = calling and hive.lines.size() == 1 and hive.call_wait > 0.0 and hud.radio_label.text == shown
+		hive.lines.clear()
+		stale = stale and waited
+		if not (parts == 3 and said == ["VIPER", "SCORPION"] and alone == ["SCORPION"] and busy and hushed and stale):
+			print("SPOKEN_SQUAD parts=%d busy=%s hushed=%s stale=%s scorpion: down=%s visible=%s health=%.0f rising=%.2f at=%s  viper: down=%s  player at=%s stage=%s alive=%d" % [parts, busy, hushed, stale, scorpion.down, scorpion.visible, scorpion.health, scorpion.rising_left, str(scorpion.global_position.snapped(Vector3.ONE * 0.1)), viper.down, str(game.player.global_position.snapped(Vector3.ONE * 0.1)), hive.stage, game.alive_count])
+		expect(parts == 3 and said == ["VIPER", "SCORPION"] and alone == ["SCORPION"] and busy and hushed and stale, "The squad talks among itself in the order its lines are written; who is not there or is down says nothing, small talk waits while a line is said, a line waits for a call that is being made, and a word that comes too late is dropped (%s / %s)" % [str(said), str(alone)])
+	# --- once the channel is cleared, command's words come through whole
+	hive.lines.clear()
+	hive.done["radio_clear"] = true
+	hive.line("m2_power")
+	hive.line_left = 0.0
+	await _turn(hive)
+	var whole: String = hud.radio_label.text
+	var clean_sound: bool = str(Radio.pick("m2_power").sound) == "" or is_equal_approx(game.sounds.radio_voice.pitch_scale, 1.0)
+	# Nadja over the loudspeakers, in her own ink; and nothing of all this in the game's own queue.
+	hive.line("m2_n_lock")
+	hive.line_left = 0.0
+	await _turn(hive)
+	var speakers: bool = hud.radio_label.text.begins_with("NADJA:") and hud.radio_label.get_theme_color("font_color").is_equal_approx(HiveDirector.INK.nadja)
+	if not (taken and fake_sound and one_queue and clean_sound and speakers and game.radio_queue.is_empty()):
+		print("SPOKEN taken=%s fake_sound=%s one_queue=%s clean_sound=%s speakers=%s queue=%d first=%s whole=%s now=%s" % [taken, fake_sound, one_queue, clean_sound, speakers, game.radio_queue.size(), first, whole, hud.radio_label.text])
+	expect(taken and fake_sound and one_queue and not hive.channel_taken() and whole.begins_with("COLEMAN:") and not whole.contains("#") and clean_sound and speakers and game.radio_queue.is_empty(), "Until the channel is cleared at the station command's lines come through a taken channel, after it whole; the game's own radio lines wait in the same queue, and Nadja speaks over the loudspeakers")
+	# --- the new calls of the squad: a word for a good shot, the leader down, a pack
+	if viper != null and scorpion != null:
+		var player: Survivor = game.player
+		var map := game.cabin as HiveMap
+		hive.set_process(false)
+		hive.lines.clear()
+		_wipe_all(game)
+		await frames(2)
+		game.talk_until = 0
+		game.round_called = true
+		# Scorpion stands by the survivor, Viper has been sent far off.
+		viper.order = "hold"
+		viper.hold_point = map.points.forecourt
+		viper.global_position = map.points.forecourt
+		scorpion.global_position = player.global_position + Vector3(1.5, 0, 1.0)
+		var beast: Infected = game.spawn_enemy("mauler")
+		beast.position = player.global_position + Vector3(0, 0.08, -9.0)
+		var freak: Infected = game.spawn_enemy("striker")
+		freak.position = player.global_position + Vector3(2.0, 0.08, -9.0)
+		game.bark_until.clear()
+		var plain: bool = not game.praise(beast, false, true)
+		var praised: bool = game.praise(beast, true, true) and game.bark_until.has("call_praise")
+		var again: bool = not game.praise(beast, true, true)
+		game.bark_until.clear()
+		var special: bool = game.praise(freak, false, true)
+		game.bark_until.clear()
+		scorpion.down = true
+		var nobody: bool = not game.praise(freak, true, true)
+		scorpion.down = false
+		_wipe_all(game)
+		await frames(2)
+		expect(plain and praised and again and special and nobody and Radio.bark("phantom", "praise").size() > 0 and Radio.bark("main", "praise").is_empty(), "Whoever of the squad stands near has a word for a shot to the head or a special infected brought down by the survivor - not for an ordinary kill, not twice in a row, and nobody from far off")
+		# The survivor goes down: the one who comes for him says so, once.
+		game.bark_until.clear()
+		player.go_down()
+		for turn in range(40):
+			await get_tree().physics_frame
+			if game.bark_until.has("call_leader_down"):
+				break
+		var coming: bool = game.bark_until.has("call_leader_down") and scorpion.leader_called and not viper.leader_called and game.rescuer() == scorpion
+		player.get_up()
+		player.health = 100.0
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		# A pack around one of the squad: he says so, and the squad not again for a while.
+		game.bark_until.clear()
+		for index in range(Teammate.HORDE_COUNT):
+			var one: Infected = game.spawn_enemy("mauler")
+			one.position = scorpion.global_position + Vector3(cos(index * 1.05) * 4.0, 0.08, sin(index * 1.05) * 4.0)
+		for turn in range(120):
+			await get_tree().physics_frame
+			if game.bark_until.has("call_horde"):
+				break
+		var packed: bool = game.bark_until.has("call_horde") and scorpion.crowd >= Teammate.HORDE_COUNT and not game.squad_says(scorpion, "horde", Teammate.HORDE_PAUSE)
+		_wipe_all(game)
+		viper.order = "follow"
+		expect(coming and not scorpion.leader_called and packed and Radio.BARKS.has("low_ammo") and Radio.BARKS.leader_down.has("ghost"), "When the survivor goes down the one who comes for him calls it out, once; a pack around one of the squad is called out, and not again right away")
+		hive.set_process(true)
+	# --- the arrival is filmed: what command says meanwhile is read on the lower bar
+	game.story_in_checks = true
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	await _turn(hive)
+	var filmed: bool = hive.intro_left > 0.0 and not hud.play_ui.visible and is_instance_valid(hive.caption) and hive.caption.text.begins_with("COLEMAN:") and hive.caption.text == hud.radio_label.text
+	hive._end_intro()
+	await frames(2)
+	expect(filmed and not is_instance_valid(hive.caption) and hud.play_ui.visible and hud.radio_left >= 3.0 and game.player.controlled, "While the arrival at the villa is filmed, command's first words are read on the lower bar of the picture, and after it on the radio's panel for long enough")
+	game.story_in_checks = false
+	Radio.hijacked = false
+	await _company(game)
+	game.return_to_menu()
+	await frames(2)
+	profile.mission = kept_mission
+	game.team_enabled = false
+	game.start_run()
+	await frames(2)
+
+## The operators as companions (v0.24): chosen in the main menu for the second mission,
+## they take the squad's places at the station.
+func _company(game: Node3D) -> void:
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	var profile: Profile = game.profile
+	var kept: String = profile.company
+	# --- the switch: only for the second mission, and the menu still fits the screen
+	profile.company = "fireteam"
+	profile.mission = 2
+	game.return_to_menu()
+	await frames(2)
+	var switch_button: Button = null
+	var bottom := 0.0
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("BEGLEITER AB BAHNHOF"):
+			switch_button = node as Button
+	for node in hud.modal.get_children():
+		if node is VBoxContainer:
+			bottom = (node as VBoxContainer).position.y + (node as VBoxContainer).get_combined_minimum_size().y
+	var offered: bool = switch_button != null and switch_button.text.ends_with("FIRETEAM")
+	if switch_button != null:
+		hud._next_company()
+	var chosen := false
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text == "BEGLEITER AB BAHNHOF  ·  OPERATOREN":
+			chosen = true
+	profile.mission = 1
+	hud.show_menu("main")
+	var absent := true
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("BEGLEITER"):
+			absent = false
+	profile.mission = 2
+	expect(offered and chosen and absent and profile.company == "operators" and bottom > 300.0 and bottom <= 720.0, "For the second mission the main menu asks who goes on from the station, the squad or the operators; the first mission is not asked, and the menu still fits the screen (it ends at %d of 720)" % int(bottom))
+	# --- at the station the three take the squad's places
+	game.team_enabled = true
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	var before: Array[String] = []
+	var old_mates: Array = []
+	for mate: Teammate in game.team:
+		before.append(mate.look)
+		old_mates.append(mate)
+	hive.lines.clear()
+	hive._enter("deal")
+	var heard: Array[String] = []
+	var shown := hud.radio_label.text
+	for turn in range(200):
+		if hive.done.has("joined") and hive.lines.is_empty():
+			break
+		hive.line_left = 0.0
+		hive.hold_left = 0.0
+		game.bark_until.clear()
+		await _turn(hive)
+		if hud.radio_label.text != shown:
+			shown = hud.radio_label.text
+			heard.append(shown.get_slice(":", 0))
+	var order := ",".join(PackedStringArray(heard))
+	var looks: Array[String] = []
+	var armed := true
+	var counted := true
+	for mate: Teammate in game.team:
+		looks.append(mate.look)
+		armed = armed and not mate.unarmed and mate.label == str(Radio.NAMES[mate.look]) and not Radio.bark(mate.look, "reload").is_empty()
+		counted = counted and game.survivors.has(mate)
+	var dropped := true
+	for mate: Teammate in old_mates:
+		dropped = dropped and not game.team.has(mate) and not game.survivors.has(mate) and str(mate.order) == "hold"
+	var shotgun: bool = looks.size() == 3 and game.team[1].gun == Teammate.GUNS.shotgun and game.team[0].gun == Teammate.GUNS.badger
+	game.talk_until = 0
+	game.bark_until.clear()
+	var called: bool = looks.size() == 3 and game.bark(game.team[0], "phantom", "reload") and str(Radio.bark("ghost", "kill").sound) != ""
+	if not order.ends_with("COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,VIPER,SCORPION"):
+		print("COMPANY heard: ", order)
+	expect(before == ["viper", "scorpion"] and looks == ["phantom", "havoc", "ghost"] and armed and counted and dropped and shotgun and called and hive.puppets.is_empty() and hive.stage == "power" and hive.leavers.size() == 2 and order.ends_with("COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,VIPER,SCORPION") and not order.contains("PHANTOM,VIPER,SCORPION,PHANTOM"), "With the operators chosen, Phantom says at the end of the truce that they come along, the squad stays to hold the tunnel, and Phantom, Havoc and Ghost are the survivor's companions - armed like the squad, with their own calls (%s)" % str(looks))
+	# The squad is gone once it has reached the tunnel; a companion who goes down gets up again.
+	for leaver: Dictionary in hive.leavers:
+		(leaver.node as Node3D).global_position = map_point(game, "ops_from")
+	await _turn(hive)
+	await _turn(hive)
+	var ghost: Teammate = game.team[2] if game.team.size() == 3 else null
+	var rises := false
+	if ghost != null:
+		ghost._go_down(Vector3.INF)
+		ghost.down_left = 0.05
+		for turn in range(30):
+			await get_tree().physics_frame
+			if not ghost.down:
+				break
+		rises = not ghost.down and ghost.health > 0.0
+	expect(hive.leavers.is_empty() and rises and game.team.size() == 3 and game.extra_guns() == 3, "The squad has left for the tunnel, and an operator who goes down is back on his feet like any companion: none of them dies")
+	# --- a night taken up behind the station begins with the three at the survivor's side
+	hive.resume_at = "terminal"
+	game.start_run()
+	await frames(3)
+	looks.clear()
+	for mate: Teammate in game.team:
+		looks.append(mate.look)
+	var fireteam_first := true
+	hive.resume_at = "descent"
+	game.start_run()
+	await frames(3)
+	for mate: Teammate in game.team:
+		fireteam_first = fireteam_first and mate.look in ["viper", "scorpion"]
+	expect(looks == ["phantom", "havoc", "ghost"] and fireteam_first and game.team.size() == 2 and hive.company == "operators", "Taken up behind the station the night begins with the three operators at the survivor's side, taken up before it with the squad")
+	profile.company = kept
+	Radio.hijacked = false
+
+func map_point(game: Node3D, id: String) -> Vector3:
+	return (game.cabin as HiveMap).points[id]
 
 ## What came with v0.7: voices, the C.R.U., six more weapons, more errands, skins.
 func _newer(game: Node3D) -> void:
@@ -3279,7 +3612,8 @@ func _near(game: Node3D, reach: float) -> String:
 	return "[" + ", ".join(PackedStringArray(names)) + "]"
 
 ## Run with -- --bot-check [--bot-seconds=180] [--bot-pos=x,z] [--bot-round=1]
-## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]. With a window (no --headless)
+## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]
+## [--bot-company=operators]. With a window (no --headless)
 ## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
 ## position while the real spawner runs, which exercises navigation, special infected and
@@ -3321,6 +3655,9 @@ func bot(game: Node3D) -> void:
 				game.profile.mission = 2
 		if arg.begins_with("--bot-level="):
 			game.profile.difficulty = arg.trim_prefix("--bot-level=")
+		# --bot-company=operators: in the second mission the three operators go on from the station.
+		if arg.begins_with("--bot-company="):
+			game.profile.company = arg.trim_prefix("--bot-company=")
 	Engine.time_scale = pace
 	await wait(1.0)
 	game.start_run()
@@ -4898,7 +5235,7 @@ func _sandbox(game: Node3D) -> void:
 	await wait(0.3)
 	var first_of_all: bool = room.now_playing.begins_with("HÄNDLERIN:") and room.queue.size() == queued - 1
 	room.hush()
-	expect(spoken == written and recorded == spoken and room.lines_of("phantom").size() == 16 and taunt and call_heard and taken and honest and queued == 6 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, all recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of a speaker in a row" % spoken)
+	expect(spoken == written and recorded == spoken and room.lines_of("phantom").size() == 83 and taunt and call_heard and taken and honest and queued == 6 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, all recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of a speaker in a row" % spoken)
 	# --- the menu
 	game.open_test()
 	var pages := {}
@@ -4967,7 +5304,7 @@ func _hive(game: Node3D) -> void:
 	for node in hud.modal.find_children("*", "Button", true, false):
 		if (node as Button).text.begins_with("MODUS"):
 			mode_button = node as Button
-	expect(words.contains("MISSION 1") and words.contains("MISSION 2") and words.contains("EINSATZ STARTEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and mode_button != null and mode_button.disabled and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen in the main menu; the second has leaderboards of its own and neither an endless night nor modifiers")
+	expect(words.contains("MISSION 1") and words.contains("MISSION 2") and words.contains("EINSATZ STARTEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and words.contains("MODUS") and mode_button == null and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen in the main menu; the second has leaderboards of its own and neither an endless night nor modifiers")
 	profile.mode = "endless"
 	hud._next_board()
 	var after_villa: String = profile.play()
@@ -5101,13 +5438,37 @@ func _hive(game: Node3D) -> void:
 	var leaving: bool = hive.stage == "nadja" and map.door_open("nadja") and not game.survivors.has(hive.nadja)
 	hive.stage_time = 12.5
 	await frames(12)
-	var locked_in: bool = not map.door_open("nadja")
-	hive.stage_time = 31.0
-	await frames(6)
-	var dealt: bool = hive.stage == "deal" and hive.nadja_gone and not is_instance_valid(hive.nadja) and hive.puppets.size() == 3
-	hive.stage_time = 32.0
-	await frames(6)
-	expect(reached == ["station"] and guarded >= 6 and leaving and locked_in and dealt and hive.stage == "power" and hive.puppets.is_empty(), "At the station the guards have to fall; then Nadja leaves through a door that shuts behind her, the three operators come and go, and the train can be started (%d guards)" % guarded)
+	var locked_in: bool = not map.door_open("nadja") and hive.channel_taken()
+	# What is said carries the rest of the scene. Here every line is over as soon as it
+	# has begun, and nobody has to walk anywhere: who spoke, in which order?
+	var dealt := false
+	var early := false
+	var heard: Array[String] = []
+	var shown := ""
+	for turn in range(300):
+		if hive.stage == "power" and hive.puppets.is_empty() and hive.lines.is_empty():
+			break
+		hive.line_left = 0.0
+		hive.hold_left = 0.0
+		game.bark_until.clear()
+		for puppet: Dictionary in hive.puppets:
+			if bool(puppet.leaving) and is_instance_valid(puppet.node):
+				(puppet.node as Node3D).global_position = puppet.goal
+		await _turn(hive)
+		if hive.stage == "deal" and not dealt:
+			dealt = hive.nadja_gone and not is_instance_valid(hive.nadja) and hive.puppets.size() == 3
+		# (The control room can be used while the last words are still being said.)
+		early = early or (hive.stage == "power" and not hive.lines.is_empty())
+		if hud.radio_label.text != shown:
+			shown = hud.radio_label.text
+			heard.append(("~" if shown.contains("#") else "") + shown.get_slice(":", 0))
+	var order := ",".join(PackedStringArray(heard))
+	# (What was said on the way here is still being said: it comes first. A "~" marks words that came through a taken channel.)
+	var told: bool = order.ends_with("NADJA,NADJA,NADJA,SCORPION,VIPER,SCORPION,VIPER,PHANTOM,HAVOC,GHOST,GHOST,COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM") and order.contains("~COLEMAN") and order.rfind("~COLEMAN") < order.find("PHANTOM") and not hive.channel_taken()
+	if not told:
+		print("HIVE_STATION heard: ", order)
+	expect(reached == ["station"] and guarded >= 6 and leaving and locked_in and dealt and early and hive.stage == "power" and hive.puppets.is_empty(), "At the station the guards have to fall; then Nadja leaves through a door that shuts behind her, the three operators come and go, and the train can be started while the last words are still being said (%d guards)" % guarded)
+	expect(told, "What is said at the station comes in its order, nobody talking over anybody: Nadja through the glass, the squad about her, the three operators, and - once Ghost has cleared the channel - a Coleman whose words come through whole")
 	player.global_position = (map.points.booth as Vector3) + Vector3(0, 0.05, 0)
 	await frames(4)
 	var asked: bool = hive.prompt() != "" and game.interaction_prompt() == hive.prompt()
@@ -5174,7 +5535,8 @@ func _hive(game: Node3D) -> void:
 	_wipe_all(game)
 	player.global_position = (map.points.lift as Vector3) + Vector3(0, 0.05, 0)
 	await frames(8)
-	expect(reached == ["generator", "decon", "labs", "hall", "exit"] and game.state == "win" and hive.on and hive.checkpoint == "labs", "Power for the sluice, the sluice, the laboratories, the containment hall and the freight lift end the mission (%s, state %s)" % [str(reached), game.state])
+	var last_word: bool = (not game.radio_queue.is_empty() and str(game.radio_queue[-1][0]) == "m2_end") or hud.radio_label.text.contains("losing your signal")
+	expect(reached == ["generator", "decon", "labs", "hall", "exit"] and game.state == "win" and hive.on and hive.checkpoint == "labs" and last_word and hive.lines.is_empty(), "Power for the sluice, the sluice, the laboratories, the containment hall and the freight lift end the mission, and the last word is Coleman's (%s, state %s)" % [str(reached), game.state])
 	# --- taking it up again at a checkpoint
 	hive.resume_at = "terminal"
 	game.start_run()
@@ -5322,6 +5684,10 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 		squad_kills += mate.kills
 	print("BOT_RESULT state=%s stage=%s t=%d kills=%d squad_kills=%d score=%d heals=%d most_alive=%d seen=%s lost=%d paths=%d path_ms_each=%.3f" % [game.state, hive.stage, int(game.elapsed), game.kills, squad_kills, game.score, heals, most_alive, str(seen), lost.size(), map.path_calls, (map.path_usec / 1000.0) / maxf(1.0, float(map.path_calls))])
 	print("BOT_STAGES ", " ".join(PackedStringArray(stages)))
+	var company: Array[String] = []
+	for mate in game.team:
+		company.append("%s:%d" % [mate.look, mate.kills])
+	print("BOT_COMPANY ", " ".join(PackedStringArray(company)))
 	for entry in lost:
 		print("BOT_LOST ", entry)
 	game.sounds.stop_all()
