@@ -29,6 +29,12 @@ extends Node
 ## checkpoint: the same places, the caches opened by then still open, and the found
 ## weapons he carried then in his hands again.
 ##
+## Now and then a found weapon is a RARE one (RARE_PLAIN, RARE_SEALED): it has something
+## of its own that the workbench's levels come on top of, and one that takes attachments
+## may come with some fitted (rare_of). Gold shows it - in its cache, in what [E] offers,
+## in the banner, as a star before its name - and it stays rare for the night (its record
+## carries it: Survivor.rare). No display and no terminal tells of one: it is a find.
+##
 ## The furniture of every place is built once with the map (furnish, called by HiveMap);
 ## this node, a child of the director, deals the night and runs it.
 ##   --caches-check --capture-dir=<folder>   pictures of all of it (see _pictures)
@@ -1529,6 +1535,7 @@ func _index_of(id: String) -> int:
 ## comes for it (seal_...), the side goal on the HUD and on the map in the corner, a
 ## display and a terminal that tell of caches, and the lockers' short list.
 ## --caches-part=<text>[,<more>]: only the places whose name contains one of them.
+## --caches-rare: the pictures of a rare weapon instead (see _rare_pictures).
 func _pictures() -> void:
 	var folder: String = game._capture_dir()
 	var part := ""
@@ -1561,6 +1568,11 @@ func _pictures() -> void:
 	fill_all({"depot": "mg", "server": "minigun", "archiv": "svd", "labor_a": "launcher", "salon": "shotgun", "werkstatt": "mp7", "depot_kiste": "m14"})
 	set_process(false)
 	game.hud.play_ui.hide()
+	if "--caches-rare" in OS.get_cmdline_user_args():
+		await _rare_pictures(folder)
+		print("CACHES_CHECK COMPLETE rare")
+		get_tree().quit()
+		return
 	for index in range(sites.size()):
 		var site := sites[index]
 		print("CACHE %d %s look=%s room=%s at=%s stand=%s holds=%s" % [index, site.id, site.look, site.room, str((site.at as Vector3).snappedf(0.01)), str((site.stand as Vector3).snappedf(0.01)), site.holds])
@@ -1686,3 +1698,56 @@ func _pictures() -> void:
 			await game._capture(folder, "shop_%s.png" % tab)
 	print("CACHES_CHECK COMPLETE sites=%d" % sites.size())
 	get_tree().quit()
+
+## --caches-check --caches-rare: a rare weapon behind the bars of a cage, one found in a
+## locker with what [E] offers, the banner when it is taken, its name on the HUD, and
+## its numbers at the workbench and at a weapon locker.
+func _rare_pictures(folder: String) -> void:
+	fill_all({"scanner": "g36", "server": "minigun"}, {"scanner": {"damage": 0.12, "parts": ["reddot", "silencer"]}, "server": {"steady": 0.15}})
+	game.hud.play_ui.show()
+	set_process(true)
+	game.credits = 2000
+	game.wave = 6
+	var cage := sites[_index_of("server")]
+	var frame: Transform3D = cage.frame
+	await game._shot_at(folder, "rare_1_cage.png", frame * Vector3(0.8, 0, 2.9), cage.at, 1.0)
+	var index := _index_of("scanner")
+	var site := sites[index]
+	site.known = true
+	frame = site.frame
+	game._place_player(frame * Vector3(0.5, 0.05, 2.0), 0.0)
+	var line: Vector3 = (site.at as Vector3) - (game.player.global_position + Vector3(0, 1.6, 0))
+	game.player.rotation.y = atan2(-line.x, -line.z)
+	game.player.camera.rotation.x = -0.2
+	use()
+	await get_tree().create_timer(4.2).timeout
+	game.hud.banner_left = 0
+	await game._capture(folder, "rare_2_found.png")
+	use()
+	await get_tree().create_timer(0.9).timeout
+	await game._capture(folder, "rare_3_taken.png")
+	game.hud.banner_left = 0
+	game.player.rotation.y += 1.2
+	game.player.camera.rotation.x = 0.0
+	await get_tree().create_timer(0.7).timeout
+	await game._capture(folder, "rare_4_hud.png")
+	var middle: Vector3 = map.points.supply_checkpoint
+	for station in map.stations:
+		var pos: Vector3 = station.pos
+		if str(station.kind) == "upgrade" and pos.distance_to(middle) < 12.0:
+			game._place_player(pos + pos.direction_to(Vector3(middle.x, pos.y, middle.z)) + Vector3(0, 0.05, 0), 0.0)
+	await get_tree().create_timer(0.4).timeout
+	game.open_bench()
+	game.hud.counter.pick("bench", "g36")
+	await get_tree().create_timer(0.9).timeout
+	await game._capture(folder, "rare_5_bench.png")
+	game.resume_run()
+	for station in map.stations:
+		if str(station.kind) == "shop" and (station.pos as Vector3).distance_to(middle) < 12.0:
+			game._place_player((station.view.position as Vector3) - Vector3(0, 1.5, 0), 0.0)
+	await get_tree().create_timer(0.4).timeout
+	game.open_shop()
+	game.hud._open_tab("weapons")
+	game.hud.counter.pick("weapon", "g36")
+	await get_tree().create_timer(0.9).timeout
+	await game._capture(folder, "rare_6_locker.png")
