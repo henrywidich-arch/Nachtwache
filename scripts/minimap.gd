@@ -21,6 +21,9 @@ const SOLDIER := Color("5fd0f0")
 const FRIEND := Color("7fe3b4")
 const TASK := Color("fff0b8")
 const SIDE := Color("7ff2b8")
+## The stations of the second mission: nobody's colour, so that nothing hostile is read
+## into them.
+const STATION := Color("eef1f5")
 const WALL := Color(0.7, 0.78, 0.84, 0.62)
 ## How much of that colour closed ground has where no open ground is beside it.
 const FILL := 0.14
@@ -129,7 +132,7 @@ static func offset(place: Vector3, here: Vector3, yaw: float) -> Vector2:
 	return (Vector2(place.x - here.x, place.z - here.z) * (SIZE * 0.5 / REACH)).rotated(yaw)
 
 ## Everything that is marked on the map right now, each {"at" (from the middle of the map),
-## "color", "size", "shape" ("dot", "ring", "square", "diamond"), "rim" (it lies further
+## "color", "size", "shape" ("dot", "ring", "square", "diamond", "box", "plus"), "rim" (it lies further
 ## off than the map reaches)}. The drawing and the checks both read this.
 func marks() -> Array:
 	var out: Array = []
@@ -140,6 +143,16 @@ func marks() -> Array:
 	var here: Vector3 = player.global_position
 	var yaw: float = player.rotation.y
 	var level: int = cabin.level_of(here)
+	# The second mission, whose supply points lie far apart: where something is to be had,
+	# as far as the map reaches - a workbench a hollow square, a counter that sells (a
+	# weapon locker, an equipment station) a cross, ammunition and first aid a small dot.
+	if game.hive.on:
+		for station in cabin.stations:
+			var kind := str(station.kind)
+			var shape := "box" if kind == "upgrade" else ("plus" if kind in ["gear", "shop"] else "dot")
+			var spot := _mark(station.pos, here, yaw, STATION, 1.4 if shape == "dot" else 3.0, shape, cabin.level_of((station.pos as Vector3) + Vector3(0, 0.3, 0)) == level)
+			if not spot.rim:
+				out.append(spot)
 	for marker in game.markers():
 		# A side goal (a weapon cache) is a small hollow mark, and none at the rim.
 		if marker.get("side", false):
@@ -236,6 +249,11 @@ func _draw_face() -> void:
 				face.draw_arc(at, size + 0.9, 0.0, TAU, 14, Color(0.05, 0.05, 0.05, color.a * 0.9), 1.1, true)
 			"hollow":
 				face.draw_arc(at, size, 0.0, TAU, 14, color, 1.6, true)
+			"box":
+				face.draw_rect(Rect2(at - Vector2(size, size), Vector2(size, size) * 2.0), color, false, 1.4)
+			"plus":
+				face.draw_line(at - Vector2(size, 0), at + Vector2(size, 0), color, 1.8)
+				face.draw_line(at - Vector2(0, size), at + Vector2(0, size), color, 1.8)
 			_:
 				face.draw_circle(at, size, color)
 	# --- the survivor himself: an arrow in the middle, pointing ahead

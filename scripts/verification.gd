@@ -6504,7 +6504,7 @@ func _hive(game: Node3D) -> void:
 	var benches := 0
 	for station in map.stations:
 		shops += 1 if str(station.kind) == "shop" else 0
-		benches += 1 if str(station.kind) == "upgrade" else 0
+		benches += 1 if str(station.kind) == "upgrade" and not station.get("outpost", false) else 0
 	expect(map.floors.size() == 5 and map.navigation.size() == 5 and map.rooms.size() >= 50 and shops == 4 and benches == 4 and map.plans().size() == 5 and map.level_label(map.under) == "BAHNHOF" and map.abyss() < HiveMap.UNDER - 5.0, "The map has five floors, more than fifty rooms and four supply points, each with ammunition, first aid, a workbench and a weapon locker (%d rooms, %d doors)" % [map.rooms.size(), map.doors.size()])
 	# --- no round comes by itself; the guards of the house come out when the squad nears it
 	var quiet: bool = game.alive_count == 0
@@ -7423,8 +7423,197 @@ func _hive_caches(game: Node3D) -> void:
 		if map.path_between(from, stand).is_empty():
 			cut_off += str(site.id) + " "
 	expect(way.size() > 400 and nearest >= 5.0 and in_way_rooms <= 1 and cut_off == "", "No cache stands on the main way - the nearest (%s) is %.1f m beside it, at the dead end of a gallery; no other is in a room the way leads through - and every one can be walked to%s" % [nearest_id, nearest, "" if cut_off == "" else " (not: %s)" % cut_off])
+	# --- the workbenches and equipment stations between the supply points
+	await _hive_stations(game, way)
 	hive.prowl.set_process(true)
 	hive.set_process(true)
+
+## The workbenches and the equipment stations between the supply points of the second
+## mission (HiveStations): their models, where they stand, what each opens and what it
+## does not. `way` is the main way of the mission, point by point; every area is open.
+func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	var map := game.cabin as HiveMap
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	_wipe_all(game)
+	# --- the four models: one mesh with one surface each, lit, with what glows, man-high
+	var looks_ok := true
+	var heaviest := 0
+	for look: String in HiveStations.LOOKS:
+		var file: String = map._model_path(str(HiveStations.LOOKS[look].model))
+		var meshes := 0
+		var surfaces := 0
+		var triangles := 0
+		var lit := false
+		if ResourceLoader.exists(file):
+			var probe: Node = (load(file) as PackedScene).instantiate()
+			for node in probe.find_children("*", "MeshInstance3D", true, false):
+				var mesh := (node as MeshInstance3D).mesh as ArrayMesh
+				meshes += 1
+				surfaces += mesh.get_surface_count()
+				for surface in range(mesh.get_surface_count()):
+					triangles += mesh.surface_get_array_index_len(surface) / 3
+					var material := mesh.surface_get_material(surface) as BaseMaterial3D
+					lit = lit or (material != null and material.shading_mode == BaseMaterial3D.SHADING_MODE_PER_PIXEL and material.albedo_texture != null and material.emission_enabled and material.emission_texture != null)
+			probe.free()
+		var size: Vector3 = HiveStations.size_of(map, look) if meshes > 0 else Vector3.ZERO
+		heaviest = maxi(heaviest, triangles)
+		looks_ok = looks_ok and meshes == 1 and surfaces == 1 and lit and triangles > 8000 and triangles < 30000 and size.y > 2.05 and size.y < 2.45 and size.x > 1.5 and size.x < 2.9 and size.z > 0.5 and size.z < 1.2
+	expect(looks_ok and HiveStations.LOOKS.size() == 4, "The four station models load - two workbenches, two equipment stations -, each one mesh with one lit surface whose lamps and displays glow, a little over man-high and at most %d triangles" % heaviest)
+	# --- where they stand: at seven places between the supply points, each walked to, with
+	# free ground before it, and none where something of the mission or a cache is used
+	var posts: Array = HiveStations.outposts(map)
+	var places := {}
+	var benches := 0
+	var counters := 0
+	var cut_off := ""
+	var cramped := ""
+	var crowded := ""
+	var deaf := ""
+	var beside_way := 0
+	var furthest := 0.0
+	for station: Dictionary in posts:
+		var stand: Vector3 = station.stand
+		var facing: Vector3 = station.facing
+		var level: int = map.level_of(stand + Vector3(0, 0.3, 0))
+		var title := "%s/%s " % [station.site, station.look]
+		places[str(station.room)] = true
+		benches += 1 if str(station.kind) == "upgrade" else 0
+		counters += 1 if str(station.kind) == "gear" else 0
+		var steps := map.path_between(map.points.platform if level == map.under else map.points.terminal, stand)
+		if steps.size() < 2 or steps[steps.size() - 1].distance_to(stand) > 0.9:
+			cut_off += title
+		# (A lane of two and a half metres before it: the squad and the Prowler pass. The
+		# first cell before a thing belongs to it on the grid.)
+		var grid: AStarGrid2D = map.navigation[level]
+		for k in range(2, 8):
+			var spot: Vector3 = (station.pos as Vector3) + facing * (k * 0.5)
+			var cell := Vector2i(roundi(spot.x / CabinMap.CELL), roundi(spot.z / CabinMap.CELL))
+			if not grid.is_in_boundsv(cell) or grid.is_point_solid(cell):
+				cramped += title
+				break
+		for site in map.caches:
+			if (site.stand as Vector3).distance_to(stand) < 3.0:
+				crowded += title
+		if not HiveStations.wall_free(map, station):
+			crowded += title
+		for name: String in ["keypad", "booth", "control", "security", "generator"]:
+			if (map.points[name] as Vector3).distance_to(station.pos) < 4.7:
+				crowded += title
+		face(game, stand + Vector3(0, 0.05, 0), 0.0)
+		if game.closest_station().get("pos", Vector3.INF) != station.pos or hive.prompt() != "":
+			deaf += title
+		var gap := INF
+		for point in way:
+			if absf(point.y - stand.y) < 2.0:
+				gap = minf(gap, Vector2(point.x - stand.x, point.z - stand.z).length())
+		beside_way += 1 if gap < 8.0 else 0
+		furthest = maxf(furthest, gap)
+	var shops := 0
+	var supply_looks: Array[String] = []
+	for station in map.stations:
+		shops += 1 if str(station.kind) == "shop" else 0
+		if str(station.kind) == "upgrade" and not station.get("outpost", false):
+			supply_looks.append(str(station.get("look", "")))
+	expect(posts.size() == 10 and benches == 5 and counters == 5 and places.size() == 7 and cut_off == "" and cramped == "" and crowded == "" and deaf == "" and beside_way >= 5 and furthest < 30.0 and shops == 4 and " ".join(PackedStringArray(supply_looks)) == "bay bench bay bench", "Between the four supply points stand five workbenches and five equipment stations at seven places (%s): each can be walked to and answers there, stands before plain wall - no door, no window, no terminal behind it - with a lane of two and a half metres before it, clear of the caches and of what the mission has used; %d of the ten within eight metres of the main way, none more than %.0f m off; the workbench of each supply point is one of the two upgrade models in turn%s" % [", ".join(PackedStringArray(places.keys())), beside_way, furthest, "" if cut_off + cramped + crowded + deaf == "" else " (cut off: %s; cramped: %s; crowded: %s; deaf: %s)" % [cut_off, cramped, crowded, deaf]])
+	# --- a workbench between the supply points is a workbench: the same screen, the same
+	# prices, the gold line of a rare weapon - and nothing else is sold there
+	var bench: Dictionary = {}
+	var rack: Dictionary = {}
+	var cabinet: Dictionary = {}
+	for station: Dictionary in posts:
+		if str(station.kind) == "upgrade" and bench.is_empty():
+			bench = station
+		if str(station.look) == "rack" and rack.is_empty():
+			rack = station
+		if str(station.look) == "cabinet" and cabinet.is_empty():
+			cabinet = station
+	game.credits = 5000
+	game.wave = 9
+	hud.shop_tab = "weapons"
+	if not player.inventory.has("g36"):
+		player.unlock("g36")
+		hive.caches.make_rare("g36", {"damage": 0.12})
+	player.equip_weapon("g36", true)
+	face(game, (bench.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	var bench_prompt: String = game.interaction_prompt()
+	game.interact()
+	var bench_open: bool = game.state == "bench" and hud.current_menu == "bench" and get_tree().paused and not game.shop_camera.current
+	hud.counter.pick("bench", "g36")
+	var gold := ""
+	for node in hud.counter.detail.find_children("*", "Label", true, false):
+		if (node as Label).text.contains("SELTEN"):
+			gold = (node as Label).text
+	var level_then: int = player.upgrade("g36", "mags")
+	var cost: int = game.upgrade_price("g36", "mags")
+	var paid: bool = cost == game.price(int(Survivor.UPGRADES.mags.prices[level_then])) and game.buy_upgrade("mags", "g36") and game.credits == 5000 - cost and player.upgrade("g36", "mags") == level_then + 1
+	var only_bench: bool = not game.buy_weapon("ak") and not game.buy_item("grenade") and not game.buy_part("g36", "silencer") and not game.gear_only()
+	game.resume_run()
+	expect(bench_prompt.begins_with("[E] Werkbank") and bench_open and gold == HiveCaches.rare_title("g36", player.inventory.g36.rare) and paid and only_bench and game.state == "playing" and not get_tree().paused, "A workbench between the supply points opens the workbench's screen and stops the fight like any other, shows a rare weapon's gold line (%s), sells a level at the price it has everywhere (%d) - and no weapon, no gear, no attachment" % [gold, cost])
+	# --- an equipment station: the shop's counter with four lists - attachments, gear, what
+	# is used up, the squad's - at the prices of the lockers; no weapon is bought or sold
+	# there and no tree of abilities changed
+	var gear_ok := true
+	var opened: Array[String] = []
+	for station: Dictionary in [rack, cabinet]:
+		game.credits = 5000
+		player.items.grenade = 0
+		face(game, (station.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+		var said: String = game.interaction_prompt()
+		game.interact()
+		opened.append(hud.shop_tab)
+		var view: Dictionary = station.view
+		var seen: bool = game.state == "shop" and hud.current_menu == "shop" and get_tree().paused and game.gear_only() and game.shop_camera.current and game.shop_camera.global_position.distance_to(view.position) < 0.01
+		var chips: Array[String] = []
+		for chip in hud.counter.tabs.get_children():
+			chips.append((chip as Button).text)
+		# (Whatever list is asked for: it shows one of its four, and never a weapon or a tree.)
+		var strays := 0
+		for tab in SurvivalHUD.SHOP_TABS:
+			hud._open_tab(str(tab[0]))
+			strays += 0 if hud.shop_tab in HiveStations.TABS and (hud.shop_tab == str(tab[0])) == (str(tab[0]) in HiveStations.TABS) else 1
+			for entry: Dictionary in hud.counter.entries:
+				strays += 1 if str(entry.get("kind", "")) in ["weapon", "bench"] or entry.has("trees") else 0
+		hud.counter._show_carried("g36")
+		strays += 0 if hud.shop_tab == "mods" and str(hud.counter.picked.get("kind", "")) == "part" else 1
+		var tree_then: String = game.skills.chosen
+		var refused: bool = not game.buy_weapon("ak") and not player.inventory.has("ak") and player.inventory.size() >= 2 and not game.sell_weapon("g36") and player.inventory.has("g36") and not game.may_switch_tree() and not game.choose_tree("breacher" if tree_then != "breacher" else "hunter") and game.skills.chosen == tree_then and not game.buy_upgrade("mags", "g36")
+		var before: int = game.credits
+		var part: String = "silencer" if station == rack else "scope"
+		var sold: bool = game.buy_item("grenade") and int(player.items.grenade) == 1 and game.buy_item("mask") and game.buy_item("squad_armor") and game.buy_part("g36", part) and player.owns_part("g36", part)
+		var spent: int = game.price(int(Survivor.GOODS.grenade.price)) + game.price(int(Survivor.GOODS.mask.prices[player.mask_level - 1])) + game.price(int(Survivor.GOODS.squad_armor.prices[int(game.squad_levels.squad_armor) - 1])) + game.price(int(Survivor.ATTACHMENTS.g36[part].price))
+		game.resume_run()
+		gear_ok = gear_ok and said.begins_with("[E] Ausrüstung") and seen and " ".join(PackedStringArray(chips)) == "AUFSÄTZE AUSRÜSTUNG VERBRAUCH TEAM" and strays == 0 and refused and sold and game.credits == before - spent and game.state == "playing" and hud.shop_tab == "weapons" and game.locker_tab == ""
+	# (And a weapon locker is what it was.)
+	face(game, beside(game, "shop", map.points.supply_station, 1), 0.0)
+	game.open_shop()
+	var locker: bool = not game.gear_only() and game.may_switch_tree() and hud.shop_tab == "weapons" and hud.counter.tabs.get_child_count() == SurvivalHUD.SHOP_TABS.size()
+	game.resume_run()
+	expect(gear_ok and " ".join(PackedStringArray(opened)) == "mods gear" and locker, "An equipment station opens the shop's counter from its own side with four lists only - attachments, gear, what is used up, the squad's; the one its sign promises first - and sells them at the lockers' prices; it buys and sells no weapon, improves none and changes no tree of abilities, whatever list is asked for; a weapon locker keeps all its lists")
+	# --- on the map in the corner, and after a defeat taken up again
+	face(game, (bench.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	await frames(2)
+	var shapes := {}
+	for mark: Dictionary in hud.minimap.marks():
+		if (mark.color as Color).is_equal_approx(Minimap.STATION) or (mark.color as Color).is_equal_approx(Color(Minimap.STATION, Minimap.ELSEWHERE)):
+			shapes[str(mark.shape)] = int(shapes.get(str(mark.shape), 0)) + 1
+	face(game, (map.points.supply_station as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	var at_supply := {}
+	for mark: Dictionary in hud.minimap.marks():
+		if (mark.color as Color).is_equal_approx(Minimap.STATION):
+			at_supply[str(mark.shape)] = int(at_supply.get(str(mark.shape), 0)) + 1
+	var count_then := map.stations.size()
+	game.retry_checkpoint()
+	await frames(3)
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	_wipe_all(game)
+	face(game, (bench.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	var still: bool = map.stations.size() == count_then and HiveStations.outposts(map).size() == 10 and game.interaction_prompt().begins_with("[E] Werkbank") and is_instance_valid(bench.sign) and (bench.sign as Label3D).text == HiveStations.BENCH_WORD
+	expect(int(shapes.get("box", 0)) >= 1 and int(at_supply.get("box", 0)) == 1 and int(at_supply.get("plus", 0)) == 1 and int(at_supply.get("dot", 0)) == 2 and still, "The map in the corner shows the stations of the second mission as far as it reaches - a workbench a hollow square, a counter that sells a cross, ammunition and first aid a dot - and a defeat taken up again leaves every station as it was")
 
 ## Rare weapons in the caches of the second mission (HiveCaches.rare_of): how often there
 ## is one, what makes it one, and that it stays one.

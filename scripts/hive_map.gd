@@ -78,6 +78,8 @@ func _ready() -> void:
 		build_times[str((part as Callable).get_method())] = Time.get_ticks_msec() - from
 	# The furniture of the weapon caches, in the rooms off the way (see HiveCaches).
 	HiveCaches.furnish(self)
+	# The workbenches and equipment stations between the supply points (see HiveStations).
+	HiveStations.furnish(self)
 	var mark := Time.get_ticks_msec()
 	_compile()
 	build_times["compile"] = Time.get_ticks_msec() - mark
@@ -330,14 +332,18 @@ func _column(base: Vector3, radius: float, tall: float, material: String, color:
 		_round_solid(base, radius * 1.15, tall)
 
 ## The four things a supply point offers, side by side, looking the way `facing` points:
-## ammunition, first aid, a workbench and a weapon locker.
-func _supply(centre: Vector3, facing: Vector3, title: String) -> void:
+## ammunition, first aid, a workbench and a weapon locker. The workbench is one of the two
+## upgrade models (HiveStations.LOOKS: "bay" or "bench"); it is wider than a counter, and
+## the row grows by that much, half to each side.
+func _supply(centre: Vector3, facing: Vector3, title: String, bench: String = "bay") -> void:
 	var yaw := atan2(-facing.z, facing.x)
 	var along := Vector3(-facing.z, 0, facing.x)
-	_station("ammo", "MUNITION", "60", centre + along * -3.3, yaw, Color("84d4c2"))
-	_station("health", "ERSTE HILFE", "100", centre + along * -1.1, yaw, Color("f5b68e"))
-	_station("upgrade", "WERKBANK", "250", centre + along * 1.1, yaw, Color("e8bd79"))
-	var at := centre + along * 3.4
+	var wide := HiveStations.wide(self, bench)
+	var shift := maxf(0.0, wide - 1.45) * 0.5
+	_station("ammo", "MUNITION", "60", centre + along * (-3.3 - shift), yaw, Color("84d4c2"))
+	_station("health", "ERSTE HILFE", "100", centre + along * (-1.1 - shift), yaw, Color("f5b68e"))
+	HiveStations.put(self, bench, centre + along * (0.375 - shift + wide * 0.5) - facing * 0.39, facing)
+	var at := centre + along * (3.4 + shift)
 	var frame := Transform3D(Basis(Vector3.UP, yaw), at)
 	_placed(frame, "steel", Vector3(-0.1, 1.05, 0), Vector3(0.6, 2.1, 1.7), Color("2c3236"))
 	_placed(frame, "plain", Vector3(0.21, 1.1, 0), Vector3(0.02, 1.8, 0.02), Color("0d0f10"))
@@ -348,7 +354,8 @@ func _supply(centre: Vector3, facing: Vector3, title: String) -> void:
 	label.rotation.y = yaw + PI / 2
 	_solid(at + Vector3(0, 1.05, 0) + frame.basis * Vector3(-0.1, 0, 0), Vector3(0.6, 2.1, 1.7), true, yaw)
 	stations.append({"kind": "shop", "title": "WAFFENSCHRANK", "pos": at, "view": {"position": at + facing * 2.3 + Vector3(0, 1.55, 0), "target": at + Vector3(0, 1.2, 0)}})
-	var head := lettering(title, centre + Vector3(0, 2.75, 0) - facing * 0.2, 44, Color("cfe6ff"))
+	# (The name of the place, clear of the word over the workbench.)
+	var head := lettering(title, centre + Vector3(0, maxf(2.75, HiveStations.tall(self, bench) + 0.8), 0) - facing * 0.2, 44, Color("cfe6ff"))
 	head.rotation.y = yaw + PI / 2
 	_light(centre + facing * 1.4 + Vector3(0, 2.6, 0), Color("dff0ff"), 1.3, 8.0, false, 0.0, 0.4, 60.0)
 
@@ -2378,7 +2385,7 @@ func _lay_station() -> void:
 	_belt_posts(Vector3(-39.4, UNDER, -48.25), Vector3(-36.6, UNDER, -48.25), Color("b8961e"))
 	_hazard(Vector3(-36.4, UNDER + 0.009, -50.6), Vector3(-36.4, UNDER + 0.009, -48.4), Vector3(0.3, 0.018, 0.275), 8)
 	_floor_text("SCHLEUSE  2", Vector3(-35.2, UNDER, -49.5), 54, Color("b8452f"), PI / 2)
-	_supply(Vector3(-14.0, UNDER, -35.7), Vector3(0, 0, -1), "DEPOT  ·  BAHNSTEIG")
+	_supply(Vector3(-14.0, UNDER, -35.7), Vector3(0, 0, -1), "DEPOT  ·  BAHNSTEIG", "bench")
 	# The radio set of the station, beside the control room.
 	_face_box(platform, SOUTH, "steel", 19.6, 22.4, 0.0, 2.0, -0.6, 0.0, Color("2c3236"))
 	_model("vintage_radio_transceiver", Vector3(21.0, UNDER + 2.0, -35.5), PI, {"width": 0.9, "solid": false, "far": 40.0})
@@ -3051,7 +3058,7 @@ func _lay_atrium() -> void:
 	_wall_sign("FORSCHUNG  ▲", _face_point(hall, NORTH, 0.0, 3.4, -0.05), 26, Color("c9a227"))
 	_wall_sign("◄  KRANKENSTATION", _face_point(hall, WEST, -469.0, 3.0, -0.05), 22, Color("1c555b"), PI / 2)
 	_wall_sign("TECHNIK  ►", _face_point(hall, EAST, -469.0, 3.0, -0.05), 22, Color("1c555b"), -PI / 2)
-	_supply(Vector3(-12.0, UNDER, -445.7), Vector3(0, 0, -1), "ZENTRALRAUM  B2")
+	_supply(Vector3(-12.0, UNDER, -445.7), Vector3(0, 0, -1), "ZENTRALRAUM  B2", "bench")
 	for spot in [Vector3(-14, UNDER, -476), Vector3(14, UNDER, -478), Vector3(-14.0, UNDER, -462.0), Vector3(10, UNDER, -482)]:
 		_stores(spot, 3)
 	for spot in [Vector3(-8.5, UNDER, -453.0), Vector3(8.5, UNDER, -453.0)]:
@@ -3167,8 +3174,10 @@ func _lay_research() -> void:
 	for z in [-506.0, -524.0]:
 		_floor_arrow(Vector3(0, UNDER, z), 0.0, GUIDE.research)
 	_display(Vector3(0, UNDER + 3.55, -512.47), 0.0, 3.0, "research", "hang", 0.3)
-	for tag in [[WEST, -510.0, "L-01", "LABOR  A"], [EAST, -510.0, "L-03", "LABOR  C"], [WEST, -528.0, "L-02", "LABOR  B"], [EAST, -530.0, "L-04", "KRYOLAGER"], [WEST, -551.0, "Q-01", "QUARANTÄNE"]]:
-		_door_tag("lab_corridor", int(tag[0]), float(tag[1]) + 1.55, str(tag[2]), str(tag[3]), Color("9fe8e0") if str(tag[2]) != "Q-01" else Color("ff8a7a"))
+	# (The tag of laboratory A is on the other side of its door: an equipment station
+	# stands in the pier on this side, see HiveStations.)
+	for tag in [[WEST, -510.0, "L-01", "LABOR  A", -1.55], [EAST, -510.0, "L-03", "LABOR  C"], [WEST, -528.0, "L-02", "LABOR  B"], [EAST, -530.0, "L-04", "KRYOLAGER"], [WEST, -551.0, "Q-01", "QUARANTÄNE"]]:
+		_door_tag("lab_corridor", int(tag[0]), float(tag[1]) + (float(tag[4]) if tag.size() > 4 else 1.55), str(tag[2]), str(tag[3]), Color("9fe8e0") if str(tag[2]) != "Q-01" else Color("ff8a7a"))
 	for entry in [[-510.0, "LABOR  A", "LABOR  C"], [-528.0, "LABOR  B", "KRYOLAGER"], [-553.0, "QUARANTÄNE", ""]]:
 		_wall_sign(str(entry[1]), _face_point(corridor, WEST, float(entry[0]) + 2.0, 3.1, -0.058), 18, Color("1c555b"), PI / 2)
 		if str(entry[2]) != "":

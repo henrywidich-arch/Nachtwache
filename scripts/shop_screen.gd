@@ -49,7 +49,7 @@ func _ready() -> void:
 	add_theme_constant_override("separation", 7)
 	var head := HBoxContainer.new()
 	head.add_theme_constant_override("separation", 26)
-	head.add_child(hud.label("WERKBANK" if mode == "bench" else "WAFFENSHOP", 40, SurvivalHUD.IVORY, true))
+	head.add_child(hud.label("WERKBANK" if mode == "bench" else ("AUSRÜSTUNG" if _short() else "WAFFENSHOP"), 40, SurvivalHUD.IVORY, true))
 	purse = hud.label("", 26, SurvivalHUD.AMBER, true)
 	purse.size_flags_vertical = Control.SIZE_SHRINK_END
 	head.add_child(purse)
@@ -103,6 +103,11 @@ func first_focus() -> Control:
 			return button
 	return row_buttons[0] if not row_buttons.is_empty() else null
 
+## The counter of an equipment station of the second mission (HiveStations): only the
+## lists HiveStations.TABS - no weapons, no change of the tree of abilities.
+func _short() -> bool:
+	return mode == "shop" and game.gear_only()
+
 func open_tab(tab: String) -> void:
 	hud.shop_tab = tab
 	picked = {}
@@ -139,6 +144,8 @@ func _list() -> Array:
 				out.append({"kind": "bench", "id": id, "title": str(Survivor.WEAPONS[id].label), "tag": "IN DER HAND" if id == player.current_weapon else "", "tone": SurvivalHUD.MINT})
 		return out
 	var tab: String = hud.shop_tab
+	if _short():
+		out.append({"head": "Aufsätze und Ausrüstung. Waffen und den Wechsel des Fähigkeiten-Wegs gibt es am Waffenschrank der Versorgungspunkte."})
 	if tab == "class":
 		# The tree in force can be changed here, at the counter, at once (see _tree_row).
 		out.append({"head": "Dein Fähigkeiten-Weg: hier wechselst du ihn sofort und kostenlos."})
@@ -160,6 +167,7 @@ func _list() -> Array:
 			out.append({"kind": "weapon", "id": id, "title": str(Survivor.WEAPONS[id].label), "tag": state[0], "tone": state[1]})
 	if tab == "mods":
 		var takers: Array = []
+		var before := out.size()
 		for id in Survivor.ATTACHMENTS:
 			takers.append(str(Survivor.WEAPONS[id].label))
 			if not player.inventory.has(id):
@@ -178,7 +186,7 @@ func _list() -> Array:
 					tag = "VORHANDEN"
 					tone = SurvivalHUD.IVORY
 				out.append({"kind": "part", "id": id, "part": part, "title": str(data.label), "tag": tag, "tone": tone})
-		out.append({"head": "%sVisiere und Schalldämpfer gibt es für: %s." % ["" if out.size() > 0 else "Du trägst gerade keine Waffe, die Aufsätze nimmt.\n", ", ".join(takers)]})
+		out.append({"head": "%sVisiere und Schalldämpfer gibt es für: %s." % ["" if out.size() > before else"Du trägst gerade keine Waffe, die Aufsätze nimmt.\n", ", ".join(takers)]})
 	for id in Survivor.GOODS:
 		if str(Survivor.GOODS[id].group) == tab:
 			var cost: int = game.item_price(id)
@@ -200,6 +208,10 @@ func _same(a: Dictionary, b: Dictionary) -> bool:
 func refresh() -> void:
 	var keep := scroll.scroll_vertical
 	var had_action := is_instance_valid(action) and action.has_focus()
+	# (An equipment station has no other lists, however one got here.)
+	if _short() and hud.shop_tab not in HiveStations.TABS:
+		hud.shop_tab = "gear"
+		picked = {}
 	purse.text = "VORRAT  %d" % game.credits
 	_fill_strip()
 	_fill_tabs()
@@ -339,6 +351,16 @@ func pick(kind: String, id: String, part: String = "") -> void:
 
 ## Picks a weapon that is carried, from the strip above the list.
 func _show_carried(id: String) -> void:
+	# (At an equipment station: what can be fitted to it.)
+	if _short():
+		hud.shop_tab = "mods"
+		picked = {}
+		if Survivor.ATTACHMENTS.has(id):
+			picked = {"kind": "part", "id": id, "part": str((Survivor.ATTACHMENTS[id] as Dictionary).keys()[0])}
+		swap = ""
+		scroll.scroll_vertical = 0
+		refresh()
+		return
 	hud.shop_tab = str(Survivor.WEAPONS[id].get("group", "weapons"))
 	picked = {"kind": "weapon", "id": id, "part": ""}
 	swap = ""
@@ -382,7 +404,10 @@ func _fill_tabs() -> void:
 		child.queue_free()
 	if mode == "bench":
 		return
+	var short := _short()
 	for tab in SurvivalHUD.SHOP_TABS:
+		if short and str(tab[0]) not in HiveStations.TABS:
+			continue
 		var chip := hud._chip(str(tab[1]), open_tab.bind(tab[0]), hud.shop_tab == tab[0], 128)
 		chip.custom_minimum_size = Vector2(128, 34)
 		chip.focus_mode = Control.FOCUS_NONE

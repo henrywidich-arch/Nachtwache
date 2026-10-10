@@ -1736,12 +1736,13 @@ func set_shop_open(open: bool, _instant: bool = false) -> void:
 func set_daylight(_bright: bool) -> void:
 	pass
 
-## The picture a shop's counter is seen from, for the one nearest to `pos`.
+## The picture a shop's counter is seen from, for the one nearest to `pos` (a weapon
+## locker, or an equipment station: see HiveStations).
 func shop_view_at(pos: Vector3) -> Dictionary:
 	var best := shop_view
 	var best_gap := INF
 	for station in stations:
-		if str(station.kind) == "shop" and station.has("view"):
+		if str(station.kind) in ["shop", "gear"] and station.has("view"):
 			var gap := (station.pos as Vector3).distance_squared_to(pos)
 			if gap < best_gap:
 				best_gap = gap

@@ -136,6 +136,9 @@ var next_pickup_id := 1
 var remote_remaining := 0
 ## Menu shown over a running co-op match ("pause" or "shop"); the match itself goes on.
 var overlay := ""
+## The list the weapon lockers showed last, kept while an equipment station of the second
+## mission shows its own ("": no such station is open).
+var locker_tab := ""
 ## Chosen difficulty, best runs and career totals.
 var profile := Profile.new()
 ## "story": ten rounds and the way to Nadja. "endless": no story and no last round.
@@ -481,6 +484,9 @@ func _ready() -> void:
 	elif "--hive-check" in args:
 		check_mode = true
 		call_deferred("_run_hive_check")
+	elif "--stations-check" in args:
+		check_mode = true
+		HiveStations.pictures.call_deferred(self)
 	elif "--shop-check" in args:
 		check_mode = true
 		team_enabled = true
@@ -1441,7 +1447,7 @@ func item_price(id: String) -> int:
 
 ## Buys gear or consumables at the open shop counter.
 func buy_item(id: String) -> bool:
-	if (state != "shop" and overlay != "shop") or not _at("shop") or not Survivor.GOODS.has(id):
+	if (state != "shop" and overlay != "shop") or not _at_counter() or not Survivor.GOODS.has(id):
 		return false
 	var cost := item_price(id)
 	if cost < 0 or credits < cost:
@@ -1461,7 +1467,7 @@ func buy_item(id: String) -> bool:
 ## Buys a part for a weapon the survivor owns and fits it. A part that is owned already
 ## is put on or taken off for nothing.
 func buy_part(id: String, part: String) -> bool:
-	if (state != "shop" and overlay != "shop") or not _at("shop"):
+	if (state != "shop" and overlay != "shop") or not _at_counter():
 		return false
 	if not Survivor.ATTACHMENTS.has(id) or not Survivor.ATTACHMENTS[id].has(part) or not player.inventory.has(id):
 		return false
@@ -1558,6 +1564,19 @@ func _at(kind: String) -> bool:
 		return true
 	var station := closest_station()
 	return not station.is_empty() and station.kind == kind
+
+## Whether the survivor stands at an equipment station of the second mission
+## (HiveStations): its counter sells attachments, gear, what is used up and what the squad
+## wears - no weapons, and no tree of abilities is changed there.
+func gear_only() -> bool:
+	if sandbox.on:
+		return false
+	var station := closest_station()
+	return not station.is_empty() and station.kind == "gear"
+
+## Whether he stands at a counter that sells: a weapon shop, or an equipment station.
+func _at_counter() -> bool:
+	return _at("shop") or gear_only()
 
 func closest_station() -> Dictionary:
 	var best := {}
@@ -1693,6 +1712,7 @@ func interaction_prompt() -> String:
 		"health": return "[E] +%d Gesundheit · %d Vorrat" % [int(healing(50.0)), price(100)]
 		"upgrade": return "[E] Werkbank: %s verbessern" % player.weapon_label()
 		"shop": return "[E] Waffenshop öffnen" if cabin.shop_open else "Waffenshop geschlossen · öffnet nach der Runde"
+		"gear": return "[E] Ausrüstung: Aufsätze, Schutz, Granaten  ·  Waffen gibt es am Waffenschrank"
 	return ""
 
 ## The co-op partner lies within arm's reach.
@@ -1736,6 +1756,9 @@ func interact() -> void:
 		return
 	if station.kind == "upgrade":
 		open_bench()
+		return
+	if station.kind == "gear":
+		open_shop()
 		return
 	var cost := 0
 	match station.kind:
@@ -1883,6 +1906,9 @@ func learn_skill(id: String) -> bool:
 ## open shop counter during one, and anywhere in the test room - not in the middle of a
 ## fight.
 func may_switch_tree() -> bool:
+	# (Not at an equipment station of the second mission: that is for the weapon lockers.)
+	if (state == "shop" or overlay == "shop") and gear_only():
+		return false
 	return state in ["menu", "win", "lose", "shop"] or overlay == "shop" or sandbox.on
 
 ## Puts one of the trees in force, at once and for nothing, and keeps that in the profile.
@@ -2007,6 +2033,10 @@ func open_shop() -> void:
 		_aim_shop_camera(cabin.shop_view_at(player.global_position))
 	shop_camera.current = true
 	cabin.get_node("WeaponShopLabel").hide()
+	# An equipment station opens with its own list; the lockers keep the one they had.
+	if gear_only():
+		locker_tab = hud.shop_tab
+		hud.shop_tab = str(closest_station().get("tab", "gear"))
 	hud.show_menu("shop")
 
 ## What a weapon the survivor carries is worth when it is traded in for another one.
@@ -2142,6 +2172,9 @@ func resume_run() -> void:
 	player.camera.current = true
 	cabin.get_node("WeaponShopLabel").show()
 	hud.hide_menu()
+	if locker_tab != "":
+		hud.shop_tab = locker_tab
+		locker_tab = ""
 	if not check_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		if from_shop and not hive.on:
