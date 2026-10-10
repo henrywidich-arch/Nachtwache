@@ -36,7 +36,7 @@ const MOODS := {
 	"villa": {"ambient": Color(0.56, 0.45, 0.34), "energy": 0.5, "fog": 0.003, "haze": 0.007, "glow": 0.25, "sky": 1.0, "moon": 1.0, "tint": Color(0.2, 0.17, 0.13)},
 	"under": {"ambient": Color(0.52, 0.57, 0.63), "energy": 0.62, "fog": 0.0012, "haze": 0.006, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.16, 0.2, 0.26)},
 	# The station: sodium light on concrete, dust in the air.
-	"sodium": {"ambient": Color(0.62, 0.5, 0.36), "energy": 0.4, "fog": 0.003, "haze": 0.013, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.22, 0.16, 0.09)},
+	"sodium": {"ambient": Color(0.62, 0.5, 0.36), "energy": 0.46, "fog": 0.003, "haze": 0.013, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.22, 0.16, 0.09)},
 	# The terminal, the offices, the canteen: cold and white.
 	"cold": {"ambient": Color(0.5, 0.57, 0.66), "energy": 0.52, "fog": 0.0024, "haze": 0.008, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.14, 0.19, 0.26)},
 	# Where the facility has locked itself down: red, and nothing else.
