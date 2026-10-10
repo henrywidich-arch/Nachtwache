@@ -66,20 +66,20 @@ const PRESSURE := {
 	"villa": [["mauler", "mauler", "mauler", "striker"], 5, 8.0, "hidden", [2, 2]],
 	# (Where the squad holds a place - the dining room, the platform, the canteen, the hall
 	# of towers - they come faster than three guns put them down: it fills up.)
-	"mirror": [["mauler", "mauler", "striker", "ripper"], 8, 5.5, "hidden", [2, 3]],
+	"mirror": [["mauler", "mauler", "striker", "ripper"], 7, 5.5, "hidden", [2, 3]],
 	"descent": [["mauler", "ripper"], 4, 8.0, "hidden", [2, 2]],
-	"hold": [["mauler", "mauler", "striker", "ripper", "charger", "leech"], 14, 5.5, "hidden", [3, 4]],
+	"hold": [["mauler", "mauler", "striker", "ripper", "charger", "leech"], 12, 5.5, "hidden", [3, 4]],
 	# (Where it is on its way they come in packs it can fight down and walk on from.
 	# The terminal had nobody coming at all: once its hall was cleared it stayed empty.)
-	"terminal": [["mauler", "mauler", "striker", "ripper", "leech"], 8, 9.0, "hidden", [2, 4]],
-	"admin": [["mauler", "mauler", "striker", "ripper"], 8, 9.0, "hidden", [2, 3]],
-	"security": [["mauler", "striker", "ripper", "leech"], 8, 9.0, "hidden", [2, 4]],
-	"cafe": [["mauler", "striker", "ripper"], 8, 9.0, "hidden", [2, 3]],
-	"lockdown": [["mauler", "mauler", "striker", "ripper", "charger", "leech", "healer"], 14, 5.5, "hidden", [3, 4]],
-	"atrium": [["mauler", "striker", "ripper", "leech"], 8, 9.0, "hidden", [2, 4]],
-	"generator": [["ripper", "ripper", "leech", "mauler", "striker"], 9, 8.0, "hidden", [2, 4]],
-	"labs": [["mauler", "striker", "ripper", "leech", "healer"], 9, 8.5, "hidden", [2, 4]],
-	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 12, 6.5, "hidden", [3, 4]]
+	"terminal": [["mauler", "mauler", "striker", "ripper", "leech"], 8, 10.0, "hidden", [2, 4]],
+	"admin": [["mauler", "mauler", "striker", "ripper"], 8, 10.0, "hidden", [2, 3]],
+	"security": [["mauler", "striker", "ripper", "leech"], 8, 10.0, "hidden", [2, 4]],
+	"cafe": [["mauler", "striker", "ripper"], 8, 10.0, "hidden", [2, 3]],
+	"lockdown": [["mauler", "mauler", "striker", "ripper", "charger", "leech", "healer"], 13, 5.5, "hidden", [3, 4]],
+	"atrium": [["mauler", "striker", "ripper", "leech"], 8, 10.0, "hidden", [2, 4]],
+	"generator": [["ripper", "ripper", "leech", "mauler", "striker"], 9, 9.0, "hidden", [2, 4]],
+	"labs": [["mauler", "striker", "ripper", "leech", "healer"], 9, 9.5, "hidden", [2, 4]],
+	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 10, 6.5, "hidden", [3, 4]]
 }
 const LONE := 0.5
 ## How many may be alive at once in this mission whatever a stage and a level say (the
@@ -1286,7 +1286,7 @@ func _run_pressure(delta: float) -> void:
 	# wall -, also in plain sight, and a pack of them; the others as they always did, one
 	# at a time from where nobody looks.
 	var sizes: Array = plan[4]
-	var pack := mini(room, maxi(1, roundi(randf_range(float(sizes[0]) - 0.49, float(sizes[1]) + 0.49) * _horde())))
+	var pack := mini(room, randi_range(int(sizes[0]), int(sizes[1])))
 	if entries.send(kind, pack, kinds):
 		return
 	if int(sizes[1]) > 1:

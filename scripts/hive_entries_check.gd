@@ -154,6 +154,12 @@ func _index(text: String) -> int:
 ## What the eye is drawn to at a way in.
 func _mark(entry: Dictionary) -> Vector3:
 	var at: Vector3 = entry.at
+	# (A ceiling come down: its rubble is what one looks at. A torn wall, a forced door:
+	# the middle of the opening.)
+	if str(entry.get("look", "")) == "fall" and entry.land != Vector3.INF:
+		return ((entry.land as Vector3) + Vector3(at.x, (entry.land as Vector3).y + 3.2, at.z)) * 0.5
+	if str(entry.kind) == "walk":
+		return at + Vector3(0, 1.1, 0)
 	match str(entry.kind):
 		"drop":
 			return at + Vector3(0, -0.5, 0)

@@ -87,6 +87,12 @@ const CAMP_HASTE := 0.7
 const CAMP_MORE := 2
 const CAMP_NEAREST := 3
 const CAMP_KEEP := 2.5
+## Whoever has CAMP_BUSY or more of them on him is not camping, he is pinned: the count
+## stands still then, and runs back at CAMP_EASE seconds a second. (A hold that fills up
+## would otherwise be answered like a hideout - sooner, and from the three nearest ways
+## in only instead of from all sides.)
+const CAMP_BUSY := 5
+const CAMP_EASE := 0.5
 ## The coming through. A fall begins at PUSH metres a second and gains FALL a second;
 ## whoever has come down is back on his feet after LAND seconds. CRAWL: out of a hole in
 ## a wall, RISE: up from the crouch after it. HOP: out of a duct before the fall. VAULT:
@@ -234,6 +240,8 @@ func _watch(delta: float) -> void:
 		camp_stage = director.stage
 		camp_at = here
 		camp_time = 0.0
+	elif int(game.alive_count) >= CAMP_BUSY:
+		camp_time = maxf(0.0, camp_time - delta * CAMP_EASE)
 	else:
 		camp_time += delta
 
@@ -668,10 +676,14 @@ func carry(enemy: Infected, delta: float) -> bool:
 	enemy.velocity = Vector3.ZERO
 	enemy.global_position = _where(plan, minf(time, span))
 	if enemy.dead:
-		# Shot on the way: what is left of it still comes down.
+		# Shot on the way: what is left of it still comes down - or, on foot on level
+		# ground (in a cavity, in a doorway), lies where it was hit.
 		model.duck = move_toward(model.duck, 0.0, delta * 6.0)
 		model.animate(delta, 0.0)
-		if time >= span:
+		if str(plan.kind) == "walk" and absf(enemy.global_position.y - (plan.to as Vector3).y) < 0.25:
+			plan.to = enemy.global_position
+			_let_go(enemy, plan)
+		elif time >= span:
 			_let_go(enemy, plan)
 		return true
 	if time < span:
