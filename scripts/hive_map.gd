@@ -3236,7 +3236,7 @@ func tour() -> Array:
 		["06_hall_in", Vector3(0, 0, 20.5), Vector3(0, 3.2, 9)],
 		["07_hall_back", Vector3(0, 0, 10.5), Vector3(0, 2.5, 22)],
 		["08_gallery", Vector3(0, STOREY_VILLA, 10), Vector3(0, 1.5, 20)],
-		["09_salon", Vector3(-9, 0, 20.5), Vector3(-22, 1.2, 13)],
+		["09_salon", Vector3(-8.6, 0, 18.0), Vector3(-22, 1.2, 13.4)],
 		["10_galerie", Vector3(9, 0, 20.5), Vector3(22, 1.4, 12)],
 		["11_library", Vector3(-11.4, 0, 0.2), Vector3(-22, 1.3, 5.5)],
 		["12_dining", Vector3(-8, 0, 6.6), Vector3(6, 1.2, -3.5)],
