@@ -1321,6 +1321,14 @@ func _lay_descent() -> void:
 		_part("plate", at, Vector3(0.1, 0.24, 0.2), Color("1b1c1b"))
 		_glow_box(at - Vector3(signf(at.x) * 0.07, 0, 0), Vector3(0.06, 0.16, 0.12), Color("ffe2b0"), 4.5)
 		_light(at - Vector3(signf(at.x) * 0.5, 0, 0), Color("ffe2b0"), 1.3, 7.0, false, float(spot[1]), 0.5, LAMP_FADE)
+	# Whose stairs these are: the name on the wall, where they lead, and the cables that
+	# run down with them.
+	_wall_sign("HELIX", Vector3(-1.192, -0.45, -13.0), 120, Color(0.17, 0.18, 0.19), PI / 2)
+	_wall_sign("▼   BAHNHOF  U1", Vector3(-1.192, -5.55, -24.4), 84, Color(0.5, 0.4, 0.1), PI / 2)
+	for run in [[0.0, Color("17191b"), 0.035], [0.11, Color("5d2f22"), 0.025]]:
+		var lift := Vector3(1.13, 2.25 + float(run[0]), 0)
+		for leg in [[top, rest_a], [rest_a, rest_b], [rest_b, bottom]]:
+			_pipe((leg[0] as Vector3) + lift, (leg[1] as Vector3) + lift, float(run[2]), run[1], 6)
 	_link(PackedVector3Array([Vector3(0, UNDER, -29.5), bottom, rest_b, rest_a, top, Vector3(0, 0, -8.0)]), 2.4, under, ground, "descent")
 	_wall_sign("HELIX  ·  ZUTRITT NUR MIT FREIGABE", Vector3(0, 3.04, -8.78), 14, Color("c9a227"))
 	var plate := _wall_sign("EBENE  U1  ·  BAHNHOF", Vector3(0, UNDER + 2.88, -34.78), 16, Color("c9a227"))
