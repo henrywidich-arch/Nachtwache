@@ -386,7 +386,7 @@ func _ready() -> void:
 		var prowler_check := ProwlerCheck.new()
 		prowler_check.game = self
 		add_child(prowler_check)
-		prowler_check.call_deferred("run_hive" if "--prowler-hive" in args else "run")
+		prowler_check.call_deferred("run_map" if "--prowler-map" in args else ("run_hive" if "--prowler-hive" in args else "run"))
 	elif "--ripper-check" in args:
 		check_mode = true
 		team_enabled = false

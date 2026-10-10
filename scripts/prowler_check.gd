@@ -198,6 +198,37 @@ func run_hive() -> void:
 	print("PROWLER_CAPTURE_COMPLETE")
 	get_tree().quit()
 
+## Where it can come (`--prowler-check --prowler-map`, runs headless): for every room of
+## mission two the free ground at its best spot and how wide it is there, and for every
+## stage's goal whether it would come to somebody standing there.
+func run_map() -> void:
+	await get_tree().create_timer(1.0).timeout
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.hive.resume_at = "labs"
+	game.start_run()
+	await get_tree().create_timer(1.0).timeout
+	var hive: HiveDirector = game.hive
+	var prowl: HiveProwler = hive.prowl
+	for room: Dictionary in hive.map.rooms:
+		var outer: Rect2 = room.outer
+		var best := 0.0
+		var wide := 0.0
+		for fx: float in [0.5, 0.25, 0.75]:
+			for fz: float in [0.5, 0.25, 0.75]:
+				var at := Vector3(outer.position.x + outer.size.x * fx, float(room.y) + 0.1, outer.position.y + outer.size.y * fz)
+				var ground := prowl.open_ground(at)
+				if ground > best:
+					best = ground
+					wide = prowl.width_of(at)
+		print("PROWLER_ROOM %-16s level=%d size=%4.1fx%4.1f ground=%3d width=%.1f %s" % [str(room.id), int(room.level), outer.size.x, outer.size.y, int(best), wide, "COMES" if best >= HiveProwler.ROOM_MIN else ("stays" if best >= HiveProwler.ROOM_STAY else "never")])
+	for stage: String in HiveDirector.ORDER:
+		var goal: Vector3 = hive._point(str(HiveDirector.STAGES[stage][2]))
+		if goal != Vector3.INF:
+			print("PROWLER_STAGE %-10s goal=%-12s ground=%3d width=%.1f away=%s" % [stage, str(HiveDirector.STAGES[stage][2]), int(prowl.open_ground(goal)), prowl.width_of(goal), str(HiveProwler.AWAY.has(stage))])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
 ## Freezes the body `seconds` into a clip (for a gait: that long at a ground speed).
 func _pose(body: ProwlerVisual, clip: String, seconds: float, speed: float) -> void:
 	body.busy_left = 0.0

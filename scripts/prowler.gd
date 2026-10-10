@@ -47,11 +47,19 @@ const BOLD_HASTE := 0.06
 const HASTE_LEAST := 0.6
 ## Above this speed its bounds are heard.
 const RUN_HEARD := 4.5
+## Its prey has gone where it has no room: so long it prowls in front of that (on a visit;
+## then it goes), at this pace, and only where the passage is at least this wide.
+const LURK_SECONDS := Vector2(6.0, 9.0)
+const LURK_PACE := 1.5
+const LURK_WIDE := 2.5
+## From how far it shows itself (and roars) on its first visit.
+const HERALD_RANGE := 18.0
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
 const WAIT := Vector2(1.8, 3.4)
 
 ## close: on its way to its prey. circle: round it. rush: in for a blow. strike: the blow.
 ## back: out of reach again. leap, reel (knocked off balance or roaring), flee.
+## lurk: its prey is where it has no room, and it waits in front of that.
 var mode := "close"
 var mode_left := 0.0
 ## Which way round it goes.
@@ -69,6 +77,18 @@ var flee_unseen := 0.0
 ## Asked for a place to run to when it breaks off (the director of the mission has one
 ## that nobody of the squad can see).
 var lair: Callable
+## Asked whether it may go for somebody from where it stands (from, to): he is on open
+## ground and the way to him is wide. Without it (the test room) it goes anywhere.
+var roomy: Callable
+## Asked how wide the passage is at a place, in metres.
+var width: Callable
+## Its prey is where it does not follow (asked a few times a second).
+var tight := false
+var tight_left := 0.0
+## Seconds it has spent waiting in front of something tight since it came.
+var lurked := 0.0
+## It has not shown itself yet: at the first sight of its prey it stands and roars.
+var herald := false
 ## It was put into the world past the count of the round (see _die).
 var uncounted := false
 ## Blows and leaps that hit somebody since it came.
@@ -204,6 +224,9 @@ func _set_mode(next: String) -> void:
 			blows_left = 2 if (enraged or bold >= 3) and randf() < 0.5 else 1
 		"back":
 			mode_left = BACK_SECONDS
+		"lurk":
+			mode_left = randf_range(LURK_SECONDS.x, LURK_SECONDS.y)
+			game.sounds.play_at(str(voices.voice), mouth(), 2.0)
 		"close":
 			mode_left = 0.0
 			repath_left = 0.0
@@ -262,7 +285,39 @@ func _physics_process(delta: float) -> void:
 	var pace := 0.0
 	var look := toward
 	var back := false
+	# Where its prey is now: somewhere it has room to hunt, or not.
+	tight_left -= delta
+	if tight_left <= 0.0:
+		tight_left = 0.4
+		tight = roomy.is_valid() and not roomy.call(global_position, target)
+	if tight and mode in ["close", "circle", "rush"]:
+		_set_mode("lurk")
 	match mode:
+		"lurk":
+			# It prowls where it is, to and fro across the way to its prey, its head on them.
+			lurked += delta
+			var side := Vector3(-toward.z, 0, toward.x) * orbit
+			if width.is_valid() and float(width.call(global_position + side * 2.0)) < LURK_WIDE:
+				orbit = -orbit
+				side = -side
+				if float(width.call(global_position + side * 2.0)) < LURK_WIDE:
+					side = Vector3.ZERO
+			direction = side
+			pace = LURK_PACE if side != Vector3.ZERO else 0.0
+			look = (side + toward * 0.5).normalized() if side != Vector3.ZERO else toward
+			if pace > 0.0 and flat_speed < pace * 0.3:
+				stuck_for += delta
+				if stuck_for > 0.5:
+					stuck_for = 0.0
+					orbit = -orbit
+			else:
+				stuck_for = 0.0
+			if not tight:
+				_set_mode("close")
+			elif mode_left <= 0.0 and nerve > 0.0:
+				# They do not come out: then another time. (Nobody drove it off.)
+				break_off(false)
+				return
 		"flee":
 			direction = _steer(flee_to, delta)
 			pace = sprint
@@ -293,9 +348,13 @@ func _physics_process(delta: float) -> void:
 					return
 				far_mark = distance
 			var clear := same_floor and _clear_line(target, true)
-			if clear and distance < RING.y:
+			if herald and clear and distance < HERALD_RANGE:
+				# Its first visit: it stands in the open and lets them hear who has come.
+				herald = false
+				roar()
+			elif clear and distance < RING.y:
 				_set_mode("circle")
-			elif clear and special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and randf() < delta * 2.5:
+			elif clear and special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target) and randf() < delta * 2.5:
 				_start_leap()
 			else:
 				direction = _steer(target, delta)
@@ -324,7 +383,7 @@ func _physics_process(delta: float) -> void:
 			if distance > RING.y + 6.0 or blind_for > 0.5:
 				_set_mode("close")
 			elif attack_left <= 0.0 and clear:
-				if special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor():
+				if special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target):
 					_start_leap()
 				else:
 					_set_mode("rush")
@@ -390,7 +449,7 @@ func _physics_process(delta: float) -> void:
 	body.backwards = back
 	# Its head stays on its prey while the body goes its own way.
 	var aside := wrapf(atan2(-toward.x, -toward.z) - model.rotation.y, -PI, PI)
-	body.look_yaw = lerpf(body.look_yaw, clampf(aside, -1.0, 1.0) if mode in ["circle", "close", "rush"] else 0.0, minf(1.0, delta * 6.0))
+	body.look_yaw = lerpf(body.look_yaw, clampf(aside, -1.0, 1.0) if mode in ["circle", "close", "rush", "lurk"] else 0.0, minf(1.0, delta * 6.0))
 	model.animate(delta, flat_speed)
 	# Its gallop is heard: one beat for every bound.
 	var bound := int(model.phase / TAU)
@@ -402,6 +461,10 @@ func _physics_process(delta: float) -> void:
 	if growl_left <= 0.0 and mode != "flee":
 		growl_left = randf_range(3.0, 6.5)
 		game.sounds.play_at(str(voices.voice), mouth())
+
+## True where it has room to come down or to walk (always, when nobody tells it how wide a place is).
+func _has_room(at: Vector3) -> bool:
+	return not width.is_valid() or float(width.call(at)) >= LURK_WIDE
 
 func _look(look: Vector3, delta: float, rate: float) -> void:
 	if rate > 0.0 and look.length() > 0.1:

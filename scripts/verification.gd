@@ -2299,12 +2299,61 @@ func _later(game: Node3D) -> void:
 	prowl_b.flanks[0].receive_hit(50.0, Vector3.BACK, false)
 	expect(prowl_rage and prowl_stands and prowl_b.dead and prowl_b.flanks[0].dead and game.credits > prowl_purse and game.alive_count == prowl_count and game.boss == null, "Enraged it roars and glows, its bar is its health, and a hit on its flank is a hit on it: it can be killed, and that pays")
 	var prowl_never := true
-	for prowl_stage in ["landing", "villa", "mirror", "nadja", "deal", "board", "ride", "decon", "exit"]:
+	for prowl_stage in ["landing", "villa", "mirror", "descent", "station", "nadja", "deal", "power", "hold", "board", "ride", "terminal", "lockdown", "decon", "exit"]:
 		prowl_never = prowl_never and not HiveProwler.comes_in(prowl_stage, 99.0)
 	var prowl_comes := true
-	for prowl_stage in ["descent", "station", "power", "hold", "terminal", "admin", "security", "cafe", "lockdown", "atrium", "generator", "labs"]:
+	for prowl_stage in ["admin", "security", "cafe", "atrium", "generator", "labs"]:
 		prowl_comes = prowl_comes and HiveProwler.comes_in(prowl_stage, 99.0) and not HiveProwler.comes_in(prowl_stage, 3.0)
-	expect(prowl_never and prowl_comes and not HiveProwler.comes_in("hall", 99.0) and HiveProwler.nerve_on(3) > HiveProwler.nerve_on(0) and HiveProwler.stay_on(9) == HiveProwler.stay_on(HiveProwler.BOLD_MOST) and HiveProwler.end_health(2) < HiveProwler.end_health(0) and HiveProwler.end_health(99) == HiveProwler.end_health(HiveProwler.WEAR_MOST) and game.hive.prowl != null and HiveDirector.ORDER.has("descent"), "In mission two it stays away from the arrival, the truce, the ride and the first seconds of a stage, takes more with every visit, and comes to the last fight weakened if it was driven off by force")
+	expect(prowl_never and prowl_comes and not HiveProwler.comes_in("hall", 99.0) and HiveProwler.nerve_on(3) > HiveProwler.nerve_on(0) and HiveProwler.stay_on(9) == HiveProwler.stay_on(HiveProwler.BOLD_MOST) and HiveProwler.end_health(2) < HiveProwler.end_health(0) and HiveProwler.end_health(99) == HiveProwler.end_health(HiveProwler.WEAR_MOST) and game.hive.prowl != null and HiveDirector.ORDER.find(HiveProwler.FIRST_STAGE) > HiveDirector.ORDER.find("ride"), "In mission two it comes from the administration on and not during the hold in the canteen, the lock or the first seconds of a stage, takes more with every visit, and comes to the last fight weakened if it was driven off by force")
+	# --- where it has room: the map of mission two
+	var prowl_mission: int = game.profile.mission
+	var prowl_skipped: bool = game.intro_skipped
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.hive.resume_at = "labs"
+	game.start_run()
+	await frames(3)
+	var prowl_dir: HiveProwler = game.hive.prowl
+	var prowl_wide: Vector3 = game.hive._point("junction")
+	var prowl_tight: Vector3 = game.hive._point("control")
+	expect(prowl_dir.open_ground(prowl_wide) >= HiveProwler.ROOM_MIN and prowl_dir.open_ground(game.hive._point("hall_end")) >= HiveProwler.ROOM_MIN and prowl_dir.open_ground(game.hive._point("cafeteria")) >= HiveProwler.ROOM_MIN and prowl_dir.open_ground(prowl_tight) < HiveProwler.ROOM_STAY and prowl_dir.open_ground(game.hive._point("car_a")) < HiveProwler.ROOM_STAY and prowl_dir.width_of(prowl_wide) >= 6.0 and not prowl_dir.may_follow(prowl_wide, prowl_tight) and not prowl_dir.wide_way(prowl_wide, game.hive._point("car_a")), "The ring, the canteen and the hall are ground it comes to (%d m2 at the junction); the control room and a carriage are not (%d m2), and no wide way leads into them" % [int(prowl_dir.open_ground(prowl_wide)), int(prowl_dir.open_ground(prowl_tight))])
+	# In something tight no call comes; in the open it does, and the first time it shows itself.
+	face(game, prowl_tight + Vector3(0, 0.05, 0), 0.0)
+	prowl_dir.wait_left = 0.0
+	for prowl_step in range(150):
+		await get_tree().physics_frame
+		game.hive.stage_time = 30.0
+		player.health = 100.0
+	var prowl_quiet: bool = not prowl_dir.visiting and prowl_dir.call_left < 0.0
+	prowl_dir.visits = 0
+	prowl_dir.shown = false
+	face(game, prowl_wide + Vector3(0, 0.05, 0), 0.0)
+	for prowl_step in range(600):
+		await get_tree().physics_frame
+		game.hive.stage_time = 30.0
+		player.health = 100.0
+		if prowl_dir.visiting:
+			break
+	var prowl_c: Prowler = prowl_dir.beast
+	var prowl_came: bool = prowl_dir.visiting and is_instance_valid(prowl_c) and prowl_c.herald and prowl_c.roomy.is_valid() and prowl_dir.wide_way(prowl_c.global_position, prowl_wide)
+	# The squad withdraws into something tight: it does not follow, waits, and goes - undriven.
+	var prowl_lurks := false
+	var prowl_near := 99.0
+	if prowl_came:
+		face(game, prowl_tight + Vector3(0, 0.05, 0), 0.0)
+		for prowl_step in range(900):
+			await get_tree().physics_frame
+			game.hive.stage_time = 30.0
+			player.health = 100.0
+			if not is_instance_valid(prowl_c) or prowl_c.leaving:
+				break
+			prowl_c.prey = player
+			prowl_lurks = prowl_lurks or prowl_c.mode == "lurk"
+			prowl_near = minf(prowl_near, prowl_c.global_position.distance_to(player.global_position))
+	expect(prowl_quiet and prowl_came and prowl_lurks and prowl_near > 6.0 and (not is_instance_valid(prowl_c) or (prowl_c.leaving and not prowl_c.broke_hurt)) and prowl_dir.wounds == 0, "It does not come to a squad in a tight place; it comes to one in the open, and when they withdraw into something tight it waits outside and goes without having been driven off (never nearer than %.0f m)" % prowl_near)
+	game.return_to_menu()
+	game.profile.mission = prowl_mission
+	game.intro_skipped = prowl_skipped
 	game.team_enabled = true
 	game.start_run()
 
