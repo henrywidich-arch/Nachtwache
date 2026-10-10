@@ -183,8 +183,10 @@ var noisy := -1
 ## For the checks: how many came because of a cache, how many caches were opened.
 var answered := 0
 var opened := 0
-## The bot of the checks has been to this many (see bot_goal).
+## The bot of the checks has been to this many (see bot_goal), and the place it has
+## turned off to (-1: none).
 var bot_visits := 0
+var bot_target := -1
 
 static var grind: AudioStreamWAV
 
@@ -401,6 +403,7 @@ func begin(from: String) -> void:
 	answered = 0
 	opened = 0
 	bot_visits = 0
+	bot_target = -1
 	clock = 0.0
 	look_left = 0.0
 	_quiet()
@@ -838,21 +841,36 @@ func markers() -> Array:
 ## Never while a place has to be held.
 func bot_goal(here: Vector3) -> Vector3:
 	if not on or director.stage in ["mirror", "hold", "lockdown", "hall", "ride", "nadja", "deal", "board", "exit"]:
+		bot_target = -1
 		return Vector3.INF
-	var best := Vector3.INF
+	# Once it has turned off to a cache it goes there. (It used to ask anew every second
+	# which one is within thirty metres as the crow flies: a cache behind a wall whose
+	# door is round the block - the staff room, seen from the spine - had it turn back,
+	# lose the cache as the way led away from it, turn round again, and so on for the
+	# rest of the night.)
+	if bot_target >= 0 and bot_target < sites.size() and _bot_wants(sites[bot_target], here) and not map.path_between(here, sites[bot_target].stand).is_empty():
+		return sites[bot_target].stand
+	bot_target = -1
 	var best_gap := 30.0
-	for site in sites:
-		if bool(site.sealed) or not _reachable(site, here) or absf((site.stand as Vector3).y - here.y) > 2.5:
-			continue
-		var state := str(site.state)
-		var takes: bool = state == "open" and str(site.holds) != "" and not game.player.inventory.has(str(site.holds)) and game.player.to_replace(str(site.holds)) == ""
-		if not ((state == "shut" and bot_visits < 2) or state == "opening" or takes):
+	for index in range(sites.size()):
+		var site := sites[index]
+		if not _bot_wants(site, here):
 			continue
 		var gap := here.distance_to(site.stand)
 		if gap < best_gap and not map.path_between(here, site.stand).is_empty():
 			best_gap = gap
-			best = site.stand
-	return best
+			bot_target = index
+	return sites[bot_target].stand if bot_target >= 0 else Vector3.INF
+
+## Whether the bot has a reason to go to a place from where it is: a plain cache on its
+## floor that is still shut (two a night at the most), is opening, or holds something it
+## has a hand free for.
+func _bot_wants(site: Dictionary, here: Vector3) -> bool:
+	if bool(site.sealed) or not _reachable(site, here) or absf((site.stand as Vector3).y - here.y) > 2.5:
+		return false
+	var state := str(site.state)
+	var takes: bool = state == "open" and str(site.holds) != "" and not game.player.inventory.has(str(site.holds)) and game.player.to_replace(str(site.holds)) == ""
+	return (state == "shut" and bot_visits < 2) or state == "opening" or takes
 
 ## The bot stands before a cache: it opens it, takes what it has a hand free for and
 ## goes on with the weapon it had. True if it did anything.

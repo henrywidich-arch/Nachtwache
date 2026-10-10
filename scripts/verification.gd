@@ -7835,10 +7835,16 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 	var next_grenade := 0.0
 	var side_goal := Vector3.INF
 	var side_wait := 0.0
+	# (The heavy blows it took: what a defeat was lost by.)
+	var blows: Array[String] = []
+	var health_seen: float = player.health
+	var near_seen := "-"
 	# (A physics step lasts longer in game time while the bot runs faster than real time.)
 	var step := Engine.time_scale / float(Engine.physics_ticks_per_second)
 	while game.state == "playing" and game.elapsed < limit:
 		await get_tree().physics_frame
+		if health_seen - player.health >= 50.0:
+			blows.append("%s t=%d %d-%d %s squad_down=%d" % [hive.stage, int(game.elapsed), int(health_seen), int(health_seen - player.health), near_seen, game.team.filter(func(mate: Teammate) -> bool: return mate.down).size()])
 		if hive.stage != last_stage:
 			stages.append("%s:%ds" % [last_stage, int(game.elapsed - stage_began)])
 			print("BOT_STAGE %s after %ds at t=%d kills=%d alive=%d heals=%d" % [last_stage, int(game.elapsed - stage_began), int(game.elapsed), game.kills, game.alive_count, heals])
@@ -7851,6 +7857,7 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 			heals += 1
 		if player.reserve == 0:
 			player.reserve = player.max_reserve()
+		health_seen = player.health
 		most_alive = maxi(most_alive, game.alive_count)
 		# --- shoot the nearest enemy in sight
 		var best: Infected = null
@@ -7889,6 +7896,7 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 				player.throw_cooldown = 0.0
 				player.throw("grenade")
 			best_distance = fmod(best_distance, 1000.0)
+		near_seen = ("%s %.0fm" % [nearest_any.kind, nearest_gap]) if nearest_any != null else "-"
 		# --- use what is to be used: what the stage wants used, and a plain weapon cache
 		# the bot stands before (a sealed one it leaves alone)
 		if hive.use_at != Vector3.INF and player.global_position.distance_to(hive.use_at) < 2.6:
@@ -7959,8 +7967,12 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 	print("BOT_CACHES opened=%d carries=%s" % [hive.caches.opened, ",".join(PackedStringArray(carried))])
 	var company: Array[String] = []
 	for mate in game.team:
-		company.append("%s:%d" % [mate.look, mate.kills])
+		company.append("%s:%d%s@%dm" % [mate.look, mate.kills, " down" if mate.down else "", int(mate.global_position.distance_to(player.global_position))])
+	company.append("survivor%s" % (" down" if player.down else ""))
+	if is_instance_valid(hive.nadja) and not hive.nadja_gone:
+		company.append("nadja%s" % (" down %ds" % int(hive.nadja_down) if hive.nadja.down else ""))
 	print("BOT_COMPANY ", " ".join(PackedStringArray(company)))
+	print("BOT_BLOWS %d of fifty and more at once; the last: %s" % [blows.size(), "  |  ".join(PackedStringArray(blows.slice(maxi(0, blows.size() - 5))))])
 	for entry in lost:
 		print("BOT_LOST ", entry)
 	game.sounds.stop_all()
