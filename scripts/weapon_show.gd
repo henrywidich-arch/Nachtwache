@@ -63,6 +63,15 @@ func _ready() -> void:
 	camera.far = 20.0
 	stage.add_child(camera)
 	camera.current = true
+	# The camera is put by the shape of this picture, which it has only once the shop is
+	# laid out: the weapon that was shown before that (the first line of the list, as the
+	# shop opens) is framed again then. Without this it stood hundreds of metres away, and
+	# the first picture stayed empty until another line was picked.
+	resized.connect(_reframe)
+
+func _reframe() -> void:
+	if shown != "" and models.has(shown):
+		_frame((models[shown] as Node3D).get_meta("size", Vector3(0.1, 0.3, 0.8)))
 
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or shown == "":

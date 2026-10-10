@@ -1377,6 +1377,35 @@ func _latest(game: Node3D) -> void:
 	var owned: bool = player.unlock("mg")
 	var mg: Node3D = player.weapon
 	expect(owned and player.current_weapon == "mg" and player.ammo == 100 and player.max_reserve() == 400 and int(Survivor.WEAPONS.mg.slot) == int(Survivor.WEAPONS.minigun.slot) and Survivor.ORDER.has("mg") and str(Survivor.WEAPONS.mg.group) == "heavy" and mg.get_node_or_null("Magazine") != null and mg.find_child("Feed", true, false) != null and game.sounds.recorded.get("mg", false), "The machine gun carries a hundred rounds in its box and four boxes more, and shares its key with the minigun")
+	# --- the M21E, the second machine gun (its id is mg2): its drum has textures of its own
+	# and comes off whole. Its front post stands lower than its rear sight, so it is tipped up
+	# a little when aimed.
+	var mg2_owned: bool = player.unlock("mg2")
+	var mg2_full: bool = player.ammo == 75 and player.max_reserve() == 300
+	var mg2: Node3D = player.weapon
+	var mg2_gun: Dictionary = WeaponView.GUNS.mg2
+	var mg2_aim: Vector3 = WeaponView.VIEWS.mg2.aim
+	var mg2_lined: bool = absf(mg2_aim.y + (mg2_gun.mount as Vector3).y + float(mg2_gun.irons)) < 0.005 and float((WeaponView.VIEWS.mg2.aim_angles as Vector3).x) > 0.0 and mg2_aim.x == 0.0 and (WeaponView.VIEWS.mg2.muzzle as Vector3).is_equal_approx((mg2_gun.mount as Vector3) + (mg2_gun.muzzle as Vector3))
+	var mg2_drum := mg2.get_node_or_null("Magazine") as Node3D
+	var mg2_paint := false
+	if mg2_drum != null:
+		var mg2_body := mg2.find_child("Body", true, false) as MeshInstance3D
+		var mg2_shell := mg2_drum.find_child("*", true, false) as MeshInstance3D
+		if mg2_body != null and mg2_shell != null:
+			var mg2_skin := mg2_shell.get_surface_override_material(0) as BaseMaterial3D
+			mg2_paint = mg2_skin != null and mg2_skin.albedo_texture != null and mg2_skin != mg2_body.get_surface_override_material(0)
+	# What the player reads of it: its name, in the hand and on the shop's list of heavy
+	# weapons, where it stands right after the machine gun.
+	var mg2_named: bool = str(Survivor.WEAPONS.mg2.label) == "M21E" and player.weapon_label() == "M21E" and str(Survivor.WEAPONS.mg.label) == "MASCHINENGEWEHR" and Survivor.ORDER.find("mg2") == Survivor.ORDER.find("mg") + 1 and str(Survivor.WEAPONS.mg2.group) == "heavy" and str(SurvivalHUD.SHOP_NOTES.get("mg2", "")).contains("Trommel")
+	# The reload: the drum leaves the gun, and a full one comes back.
+	player.ammo = 5
+	player.start_reload()
+	var mg2_away := 0.0
+	for i in range(int(float(Survivor.WEAPONS.mg2.reload_time) * 60.0) + 20):
+		await get_tree().physics_frame
+		if mg2_drum != null:
+			mg2_away = maxf(mg2_away, mg2_drum.position.length())
+	expect(mg2_owned and player.current_weapon == "mg2" and mg2_full and mg2_named and Survivor.kind_of("mg2") == "heavy" and mg2_drum != null and mg2_lined and mg2_paint and (WeaponView.reload_step("mg2", 0.38).magazine as Vector3).length() > 0.2 and mg2_away > 0.2 and mg2_drum.position.length() < 0.001 and player.ammo == 75 and bool(game.sounds.recorded.get("mg2", false)) and float(Survivor.WEAPONS.mg2.damage) > float(Survivor.WEAPONS.mg.damage) and int(Survivor.WEAPONS.mg2.magazine) < int(Survivor.WEAPONS.mg.magazine), "The M21E is a second machine gun beside the old one: 75 harder rounds in a drum with textures of its own, which comes off the gun when it is reloaded; it is aimed over its iron sights")
 	game.team_enabled = true
 	game.start_run()
 
@@ -1934,11 +1963,18 @@ func _loadout(game: Node3D) -> void:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int(Survivor.KINDS[kind].key)
-	expect(keyed and int(kinds.primary) == 8 and int(kinds.secondary) == 2 and int(kinds.heavy) == 9 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
+	expect(keyed and int(kinds.primary) == 9 and int(kinds.secondary) == 2 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
 	# --- one of each kind; a second one is traded for the first
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	# (The shop opens on the list it was left on.)
+	game.hud.shop_tab = "weapons"
 	game.interact()
+	# The picture of the weapon that is picked as the shop opens: its camera stands where the
+	# weapon fills the picture, although the shop was not laid out yet when it was picked.
+	await frames(3)
+	var shop_show: WeaponShow = game.hud.counter.stage
+	expect(shop_show.shown == "rifle" and shop_show.is_visible_in_tree() and shop_show.size.x > 200.0 and shop_show.camera.position.length() > 0.5 and shop_show.camera.position.length() < 5.0, "The shop shows the picture of the first weapon of its list as it opens (its camera stands %.1f m from it)" % shop_show.camera.position.length())
 	var first_cost: int = game.weapon_cost("ak")
 	var swapped: bool = game.buy_weapon("ak") and player.inventory.has("ak") and not player.inventory.has("rifle") and player.current_weapon == "ak" and game.credits == 700
 	var beside: bool = game.buy_weapon("pistol") and game.buy_weapon("sniper") and player.inventory.size() == 3 and game.credits == 700 - 60 - 450
@@ -2110,7 +2146,48 @@ func _loadout(game: Node3D) -> void:
 	var cued := true
 	for cue in Survivor.WEAPONS.g36.cues:
 		cued = cued and str(cue[1]).begins_with("g36_")
-	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 4 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 is a primary weapon with its own shot and reload, a magazine that leaves the gun, a sight line through the middle of the picture and three parts; the list of parts shows only those for what is carried")
+	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 5 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 is a primary weapon with its own shot and reload, a magazine that leaves the gun, a sight line through the middle of the picture and three parts; the list of parts shows only those for what is carried")
+	_wipe(game)
+	# --- the MP7: its magazine comes out of the pistol grip, and it has no iron sights
+	game.preparation_left = 9999.0
+	game.credits = 2000
+	player.extra_slots = 1
+	player.inventory = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
+	player.equip_weapon("rifle", true)
+	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	var mp7_got: bool = game.buy_weapon("mp7") and player.current_weapon == "mp7" and player.inventory.has("rifle") and game.credits == 2000 - 280 and player.ammo == 30 and player.max_reserve() == 240
+	var mp7: Node3D = player.weapon
+	var mp7_gun: Dictionary = WeaponView.GUNS.mp7
+	var mp7_view: Dictionary = WeaponView.VIEWS.mp7
+	# Aimed, the eye looks along the top of the rail, just above it.
+	var mp7_rail: bool = float(mp7_gun.irons) == float(mp7_gun.rail) and (mp7_view.aim as Vector3).y < -((mp7_gun.mount as Vector3).y + float(mp7_gun.rail)) and (mp7_view.aim as Vector3).x == 0.0 and (mp7_view.muzzle as Vector3).is_equal_approx((mp7_gun.mount as Vector3) + (mp7_gun.muzzle as Vector3))
+	# The magazine goes straight down out of the grip.
+	var mp7_way: Vector3 = WeaponView.reload_step("mp7", 0.38).magazine
+	var mp7_down: bool = mp7_way.y < -0.15 and absf(mp7_way.x) < 0.01 and str(mp7_gun.hands) == "grip"
+	var mp7_plain: String = str(player.gun().sound)
+	# Its three parts: the sights take each other's place on the rail, the suppressor has a
+	# shot of its own, which a co-op partner's machine knows as a quiet one.
+	var mp7_dot: bool = game.buy_part("mp7", "reddot") and (mp7.get_node("Mod_reddot") as Node3D).visible and player.fitted("sight") == "reddot"
+	var mp7_scoped: bool = game.buy_part("mp7", "scope") and (mp7.get_node("Mod_scope") as Node3D).visible and not (mp7.get_node("Mod_reddot") as Node3D).visible and player.gun().has("scope")
+	var mp7_hushed: bool = game.buy_part("mp7", "silencer") and (mp7.get_node("Mod_silencer") as Node3D).visible and str(player.gun().sound) == "mp7_sil" and bool(player.gun().quiet) and Survivor.QUIET_SOUNDS.has("mp7_sil") and game.credits == 2000 - 280 - 120 - 260 - 180
+	# The list of parts names it, with those of the carbine that is carried beside it.
+	game.hud._open_tab("mods")
+	var mp7_listed := 0
+	for node in game.hud.counter.row_buttons:
+		if (node as Button).text.begins_with("SCHALLDÄMPFER"):
+			mp7_listed += 1
+	var mp7_heard: bool = mp7_plain == "mp7" and bool(game.sounds.recorded.get("mp7", false)) and bool(game.sounds.recorded.get("mp7_sil", false)) and FieldAudio.MIX.has("mp7") and FieldAudio.MIX.has("mp7_sil")
+	game.resume_run()
+	player.ammo = 3
+	player.start_reload()
+	var mp7_clip := mp7.get_node_or_null("Magazine") as Node3D
+	var mp7_out := 0.0
+	for i in range(int(float(Survivor.WEAPONS.mp7.reload_time) * 60.0) + 20):
+		await get_tree().physics_frame
+		if mp7_clip != null:
+			mp7_out = maxf(mp7_out, mp7_clip.position.length())
+	expect(mp7_got and mp7_rail and mp7_down and mp7_dot and mp7_scoped and mp7_hushed and mp7_listed == 2 and mp7_heard and mp7_clip != null and mp7.get_node_or_null("Support") != null and mp7_out > 0.12 and mp7_clip.position.length() < 0.001 and player.ammo == 30 and Survivor.kind_of("mp7") == "primary" and str(Survivor.WEAPONS.mp7.label) == "MP7" and Survivor.ORDER.find("mp7") == Survivor.ORDER.find("ump") + 1 and float(Survivor.WEAPONS.mp7.interval) < float(Survivor.WEAPONS.p90.interval) and SurvivalHUD.SHOP_NOTES.has("mp7"), "The MP7 is a quick primary weapon whose magazine comes out of its pistol grip; it has no iron sights and is aimed along its rail or through a fitted sight, and takes a suppressor with a shot of its own")
 	_wipe(game)
 	# --- the keys
 	var bound := {}
@@ -3171,7 +3248,7 @@ func _kit(game: Node3D) -> void:
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 7 and int(rows.heavy) == 6 and int(rows.mods) == 3 and not Survivor.GOODS.has("mags") and parts == 12 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 8 and int(rows.heavy) == 7 and int(rows.mods) == 3 and not Survivor.GOODS.has("mags") and parts == 15 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
@@ -3943,7 +4020,9 @@ func _near(game: Node3D, reach: float) -> String:
 
 ## Run with -- --bot-check [--bot-seconds=180] [--bot-pos=x,z] [--bot-round=1]
 ## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]
-## [--bot-company=phantom_havoc|phantom_ghost|havoc_ghost]. With a window (no --headless)
+## [--bot-company=phantom_havoc|phantom_ghost|havoc_ghost] [--bot-weapon=mp7 or
+## mp7:silencer,reddot: the weapon the bot fights the night with, and what is fitted to
+## it]. With a window (no --headless)
 ## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
 ## position while the real spawner runs, which exercises navigation, special infected and
@@ -3964,7 +4043,11 @@ func bot(game: Node3D) -> void:
 	var harm := 0.0
 	var next_look := 2.0
 	var next_grenade := 0.0
+	# --bot-weapon=mg2 or --bot-weapon=mp7:silencer,reddot: what the bot shoots with.
+	var arm := ""
 	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--bot-weapon="):
+			arm = arg.trim_prefix("--bot-weapon=")
 		if arg.begins_with("--bot-round="):
 			first_round = int(arg.trim_prefix("--bot-round="))
 		if arg.begins_with("--bot-seconds="):
@@ -4004,6 +4087,15 @@ func bot(game: Node3D) -> void:
 	# The bot does not run from gas in the house, so it gets the best mask there is.
 	game.player.mask_level = 4
 	game.player.filter_left = game.player.filter_capacity()
+	if arm != "":
+		var wanted: PackedStringArray = arm.split(":")
+		if Survivor.WEAPONS.has(wanted[0]):
+			game.player.unlock(wanted[0])
+			if wanted.size() > 1 and Survivor.ATTACHMENTS.has(wanted[0]):
+				for part in wanted[1].split(","):
+					if (Survivor.ATTACHMENTS[wanted[0]] as Dictionary).has(part):
+						game.player.fit(wanted[0], part)
+		print("BOT_WEAPON %s label=%s sound=%s fitted=%s" % [game.player.current_weapon, game.player.weapon_label(), str(game.player.gun().sound), str(game.player.inventory[game.player.current_weapon].get("fitted", {}))])
 	var heals := 0
 	var blasts := 0
 	var watched := {}
@@ -4389,6 +4481,12 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var ducked := false
 	var blows := 0
 	var modifier_seen := ""
+	# The newer weapons: for the last quarter of the fight the host takes the M21E in hand
+	# and the guest the MP7, with its suppressor on for the last seconds; each side has to
+	# hear the other's like any weapon (see RemoteSurvivor.shots_shown). volley: shots still
+	# to be fired with what was just taken in hand, whether or not anything stands before it.
+	var rearmed := 0
+	var volley := 0
 	# --mp-operator: an operator comes into the fight (see below).
 	var op_run := "--mp-operator" in OS.get_cmdline_user_args()
 	var op: Operator = null
@@ -4424,6 +4522,19 @@ func coop(game: Node3D, as_host: bool) -> void:
 			game.player.set_crouched(false)
 		if game.modifier != "":
 			modifier_seen = "%s harm=%.2f" % [game.modifier, float(game.rules.harm)]
+		if rearmed == 0 and clock > seconds * 0.75 and not game.player.down:
+			rearmed = 1
+			game.player.unlock("mg2" if as_host else "mp7")
+			volley = 5
+		elif rearmed == 1 and not as_host and clock > seconds * 0.88 and game.player.current_weapon == "mp7":
+			rearmed = 2
+			game.player.fit("mp7", "silencer")
+			volley = 5
+		if volley > 0 and not game.player.down:
+			var loaded: int = game.player.ammo
+			game.player.shoot()
+			if game.player.ammo < loaded:
+				volley -= 1
 		var within: Infected = null
 		for foe in game.enemies.get_children():
 			if not foe is Infected or foe.dead:
@@ -4563,6 +4674,15 @@ func coop(game: Node3D, as_host: bool) -> void:
 	for number in numbers:
 		seen_looks.append("%d:%s" % [int(number), str(charger_looks[number])])
 	print("%s_CHARGERS looks=%s puddles=%d" % [tag, ",".join(PackedStringArray(seen_looks)), wet_puddles])
+	# The weapon this side ended with, and which weapons of the partner it was shown shots
+	# of (by their sound, as they come across) and how many.
+	var partner_shots: Array = []
+	if is_instance_valid(game.net.remote):
+		var sounds_shown: Array = game.net.remote.shots_shown.keys()
+		sounds_shown.sort()
+		for sound in sounds_shown:
+			partner_shots.append("%s:%d" % [str(sound), int(game.net.remote.shots_shown[sound])])
+	print("%s_WEAPONS own=%s sound=%s partner=%s" % [tag, game.player.current_weapon, str(game.player.gun().sound), ",".join(PackedStringArray(partner_shots))])
 	var partner_at := Vector3.ZERO
 	var partner_health := -1.0
 	if is_instance_valid(game.net.remote):
@@ -5162,7 +5282,7 @@ func _overhaul(game: Node3D) -> void:
 		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x * small and mark_z > face_z + WeaponView.HOLO_TUNNEL.y * small
 		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS * small) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE * small) and rail_y + (WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5) * small > (spec.mount as Vector3).y + float(spec.irons)
 		sights += 1
-	expect(sights == 4 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all four guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
+	expect(sights == 5 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all five guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
 	# --- the lobby says what the router said
 	var link: NetLink = game.net
 	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")
