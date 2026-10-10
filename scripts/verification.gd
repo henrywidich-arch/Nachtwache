@@ -3157,9 +3157,23 @@ func _toughness(game: Node3D) -> void:
 	met.set_physics_process(false)
 	var standard: bool = is_equal_approx(met.max_health, 95.0 * float(Profile.DIFFICULTIES.normal.brood)) and is_equal_approx(met.health, met.max_health)
 	_take_off(game, met)
+	# The yard: where a level's infected are tougher than it takes at full crowd, fewer of
+	# them are let in at once - so few that the crowd weighs less, not more.
+	var caps := {}
+	game.wave = 9
+	for level in order:
+		game.level = str(level)
+		game._set_modifier("")
+		caps[level] = game.alive_cap()
 	game.brood_on = false
+	game.level = "hard"
+	game._set_modifier("")
+	var as_before: int = game.alive_cap()
+	var weight: float = int(caps.normal) * float(Profile.DIFFICULTIES.normal.brood)
+	var thinned: bool = int(caps.normal) == game.MAX_ALIVE and int(caps.easy) < int(caps.normal) and int(caps.hard) < int(caps.normal) and int(caps.nightmare) < int(caps.hard) and int(caps.nightmare) >= 6 and int(caps.hard) * float(Profile.DIFFICULTIES.hard.brood) <= weight and int(caps.nightmare) * float(Profile.DIFFICULTIES.nightmare.brood) <= int(caps.hard) * float(Profile.DIFFICULTIES.hard.brood) and as_before == 20 and float(Profile.DIFFICULTIES.normal.brood) <= game.FULL_CROWD_BROOD
 	game.level = level_before
 	game._set_modifier("")
+	expect(thinned, "The yard takes the full crowd on NORMAL (%d at once late in a night); where the infected are tougher, fewer are let in at once (SCHWER %d, ALBTRAUM %d instead of %d and more), and as many come in all" % [int(caps.normal), int(caps.hard), int(caps.nightmare), as_before])
 	expect(tougher and untouched and standard and horde >= 6 and apart >= 14 and Infected.BROOD_APART.has("crusher") and Infected.BROOD_APART.has("stalker") and Infected.BROOD_APART.has("prowler"), "In a night the horde (%d kinds) takes what its level says - a Mauler of the first round %.0f on NORMAL - while the C.R.U., the operators, the Crusher, the Stalker and the Prowler (%d kinds) keep their health on every level" % [horde, 95.0 * float(Profile.DIFFICULTIES.normal.brood), apart])
 	await frames(3)
 
