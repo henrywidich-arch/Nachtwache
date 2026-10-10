@@ -143,7 +143,7 @@ func marks() -> Array:
 		out.append(_mark(marker.pos, here, yaw, TASK, 4.2, "diamond", cabin.level_of(marker.pos) == level))
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy == null or enemy.dead or enemy.absent or enemy.kind == "stalker":
+		if enemy == null or enemy.dead or enemy.absent or enemy.kind in ["stalker", "prowler"]:
 			continue
 		var what := Skills.kind_of(enemy)
 		var size := 2.3

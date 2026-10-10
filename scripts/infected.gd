@@ -72,6 +72,15 @@ const TYPES := {
 		"radius": 0.3, "height": 2.0, "head": 1.8, "head_size": 0.2, "head_factor": 0.6, "reward": 500, "score": 2500,
 		"stagger": ""
 	},
+	# The four-legged hunter of mission two. `prowler`: it has a mind of its own (see Prowler).
+	"prowler": {
+		"label": "PROWLER", "visuals": ["prowler"], "prowler": true,
+		"voice": "prowler_growl", "idle": "prowler_growl", "strike": "prowler_strike", "pain": "prowler_pain", "death": "prowler_death",
+		"health": 3000.0, "health_per_round": 0.0, "speed": 8.6, "speed_per_round": 0.0,
+		"damage": 14.0, "reach": 2.5, "attack_time": 0.7, "attack_gap": 1.0, "strike_at": 0.31,
+		"radius": 0.5, "height": 1.3, "head": 1.0, "head_size": 0.3, "head_factor": 0.8, "reward": 800, "score": 4000,
+		"stagger": ""
+	},
 	# Helix's Containment Response Unit: `visuals` are looks of SoldierVisual, `role` is
 	# what CruSoldier makes of them.
 	"cru_assault": {
@@ -185,7 +194,7 @@ const TYPES := {
 const CHARGER_BLAST := 4.3
 ## Infected that are fights of their own: what a difficulty does to the health of the horde
 ## (the rule "brood", see Profile) leaves them as they are.
-const BROOD_APART := ["crusher", "stalker"]
+const BROOD_APART := ["crusher", "stalker", "prowler"]
 ## Looks of the plain infected that are women: they get the female voices.
 const FEMALE_LOOKS := ["mauler_female", "hive_lab"]
 ## The Medic's gas: how far it reaches at most, the health it gives back per second to
@@ -389,6 +398,8 @@ func _ready() -> void:
 	var look: String = visual_kind if visual_kind != "" else str(spec.visuals.pick_random())
 	if look == "ripper":
 		model = RipperVisual.new()
+	elif look == "prowler":
+		model = ProwlerVisual.new()
 	elif spec.get("human", false):
 		model = CruVisual.new()
 	else:

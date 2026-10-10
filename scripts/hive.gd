@@ -126,10 +126,15 @@ var lines: Array = []
 var line_left := 0.0
 var puppets: Array = []
 var stalker_sent := false
+## The Prowler's comings and goings (a node of its own).
+var prowl: HiveProwler
 var board_time := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	prowl = HiveProwler.new()
+	prowl.director = self
+	add_child(prowl)
 
 # ---------------------------------------------------------------- begin and end
 
@@ -145,7 +150,8 @@ func begin() -> void:
 	clock = 0.0
 	nadja_down = 0.0
 	nadja_gone = false
-	stalker_sent = false
+	# The Prowler has taken the Stalker's place in the laboratories: none is sent any more.
+	stalker_sent = true
 	board_time = 0.0
 	progress = -1.0
 	heli_clock = -1.0
@@ -153,6 +159,7 @@ func begin() -> void:
 	var from := resume_at if CHECKPOINTS.has(resume_at) else "landing"
 	resume_at = ""
 	checkpoint = from
+	prowl.begin(from)
 	var start: Dictionary = CHECKPOINTS[from]
 	map.lock_all()
 	for id in start.open:
@@ -181,6 +188,7 @@ func end() -> void:
 	if not on:
 		return
 	on = false
+	prowl.end()
 	_end_intro()
 	for puppet in puppets:
 		if is_instance_valid(puppet.node):

@@ -43,7 +43,10 @@ const MIX := {
 	# mix, the G36's at -5) and well above every shot between 1 and 5 kHz, where it is heard.
 	"hit_body": [-4.5, 0.06, 1], "hit_head": [-3.5, 0.045, 1], "hit_kill": [-3.5, 0.06, 1],
 	# The second exploding infected going off: wet and low, in place of the Charger's bang.
-	"boomer_burst": [0.0, 0.07, 2]
+	"boomer_burst": [0.0, 0.07, 2],
+	# The Prowler: its call carries through walls and corridors, the rest is as loud as a Crusher.
+	"prowler_call": [3.0, 0.04, 2], "prowler_growl": [-3.0, 0.08, 1], "prowler_strike": [0.0, 0.07, 1], "prowler_leap": [1.0, 0.06, 2],
+	"prowler_pain": [1.0, 0.06, 1], "prowler_roar": [4.0, 0.03, 2], "prowler_death": [3.0, 0.03, 2]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -67,6 +70,7 @@ const STAND_INS := {
 	"dog_growl": "growl", "dog_bark": "growl", "dog_bite": "squish", "dog_death": "growl", "dog_howl": "screech",
 	"striker_attack": "screech", "striker_death": "screech", "striker_idle": "screech",
 	"charger_roar": "gurgle", "crusher_pain": "roar", "crusher_attack": "roar", "crusher_death": "roar",
+	"prowler_call": "screech", "prowler_growl": "growl", "prowler_strike": "growl", "prowler_leap": "screech", "prowler_pain": "screech", "prowler_roar": "roar", "prowler_death": "roar",
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
 	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90",
 	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click",

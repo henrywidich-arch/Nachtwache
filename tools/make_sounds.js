@@ -435,7 +435,67 @@ const SET = [
   { name: 'death_female_4', from: 'Dying_female_zombie__', variant: 3, fade: 0.2 },
   { name: 'pain_female_1', from: 'Female_zombie_short__', variant: 1, length: 0.85, fade: 0.1 },
   { name: 'pain_female_2', from: 'Female_zombie_short__', variant: 2, length: 0.85, fade: 0.1 },
-  { name: 'pain_female_3', from: 'Female_zombie_short__', variant: 4, length: 0.85, fade: 0.1 }
+  { name: 'pain_female_3', from: 'Female_zombie_short__', variant: 4, length: 0.85, fade: 0.1 },
+  // The Prowler, the four-legged hunter of mission two. Its voice is made of the takes the
+  // other creatures use, played far slower: nothing of it is as high as a Striker or as
+  // doglike as a Ripper.
+  // Its call, heard before it is seen: a slow, deep rattle with a moan under it.
+  { name: 'prowler_call_1', mix: [
+    { from: 'Insect-like_creature_', variant: 3, pitch: 0.36, gain: 1.0 },
+    { from: 'Demonic_hound_howlin_', variant: 2, pitch: 0.42, lowpass: 900, gain: 0.55 }
+  ], length: 3.4, fade: 0.6, target: -13 },
+  { name: 'prowler_call_2', mix: [
+    { from: 'Insect-like_creature_', variant: 1, pitch: 0.34, gain: 1.0 },
+    { from: 'Demonic_hound_howlin_', variant: 3, pitch: 0.4, lowpass: 900, gain: 0.55 }
+  ], length: 3.4, fade: 0.6, target: -13 },
+  // What it mutters while it circles.
+  { name: 'prowler_growl_1', mix: [
+    { from: 'Large_monstrous_dog__', variant: 2, pitch: 0.46, lowpass: 1400, gain: 1.0 },
+    { from: 'Insect-like_creature_', variant: 4, pitch: 0.42, gain: 0.6 }
+  ], length: 2.2, fade: 0.3 },
+  { name: 'prowler_growl_2', mix: [
+    { from: 'Large_monstrous_dog__', variant: 3, pitch: 0.44, lowpass: 1400, gain: 1.0 },
+    { from: 'Insect-like_creature_', variant: 2, pitch: 0.45, gain: 0.6 }
+  ], length: 2.2, fade: 0.3 },
+  // A blow with the claws, and the shriek of its leap.
+  { name: 'prowler_strike_1', mix: [
+    { from: 'Monstrous_dog_attack_', variant: 2, pitch: 0.5, gain: 1.0 },
+    { from: 'Shrill_raspy_mutant__', variant: 2, pitch: 0.48, gain: 0.6 }
+  ], length: 0.9, fade: 0.2 },
+  { name: 'prowler_strike_2', mix: [
+    { from: 'Monstrous_dog_attack_', variant: 3, pitch: 0.48, gain: 1.0 },
+    { from: 'Shrill_raspy_mutant__', variant: 3, pitch: 0.5, gain: 0.6 }
+  ], length: 0.9, fade: 0.2 },
+  { name: 'prowler_strike_3', mix: [
+    { from: 'Monstrous_dog_attack_', variant: 4, pitch: 0.52, gain: 1.0 },
+    { from: 'Shrill_raspy_mutant__', variant: 1, pitch: 0.46, gain: 0.6 }
+  ], length: 0.9, fade: 0.2 },
+  { name: 'prowler_leap_1', mix: [
+    { from: 'Shrill_raspy_mutant__', variant: 2, pitch: 0.56, gain: 1.0 },
+    { from: 'Huge_monster_heavy_a_', variant: 3, pitch: 0.9, gain: 0.7 }
+  ], length: 1.0, fade: 0.25 },
+  { name: 'prowler_leap_2', mix: [
+    { from: 'Shrill_raspy_mutant__', variant: 3, pitch: 0.54, gain: 1.0 },
+    { from: 'Huge_monster_heavy_a_', variant: 1, pitch: 0.92, gain: 0.7 }
+  ], length: 1.0, fade: 0.25 },
+  // Hurt enough to break off, and the roar of the last fight.
+  { name: 'prowler_pain_1', mix: [
+    { from: 'Screeching_mutant_cr_', variant: 2, pitch: 0.52, gain: 1.0 },
+    { from: 'Monstrous_dog_attack_', variant: 4, pitch: 0.45, lowpass: 900, gain: 0.6 }
+  ], length: 1.3, fade: 0.3 },
+  { name: 'prowler_pain_2', mix: [
+    { from: 'Screeching_mutant_cr_', variant: 3, pitch: 0.5, gain: 1.0 },
+    { from: 'Monstrous_dog_attack_', variant: 2, pitch: 0.44, lowpass: 900, gain: 0.6 }
+  ], length: 1.3, fade: 0.3 },
+  { name: 'prowler_roar', mix: [
+    { from: 'Huge_monster_heavy_a_', variant: 2, pitch: 0.72, gain: 1.0 },
+    { from: 'Screeching_mutant_cr_', variant: 1, pitch: 0.46, gain: 0.7 },
+    { from: 'Colossal_monster_dyi_', variant: 2, pitch: 0.8, lowpass: 1200, gain: 0.6 }
+  ], length: 2.8, fade: 0.5, drive: 1.2, target: -12 },
+  { name: 'prowler_death', mix: [
+    { from: 'Colossal_monster_dyi_', variant: 2, pitch: 0.86, gain: 1.0 },
+    { from: 'Screeching_mutant_cr_', variant: 2, pitch: 0.42, gain: 0.6 }
+  ], length: 3.6, fade: 0.6, target: -13 }
 ];
 
 fs.mkdirSync(outDir, { recursive: true });

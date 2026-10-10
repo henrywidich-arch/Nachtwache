@@ -711,8 +711,12 @@ func _process(delta: float) -> void:
 		(team_rows[i][0] as Label).modulate = DANGER if mate.down or mate.health < mate.max_health * 0.3 else Color.WHITE
 	if is_instance_valid(game.boss) and not game.boss.dead:
 		boss_box.show()
-		boss_bar.max_value = game.boss.max_health
-		boss_bar.value = game.boss.health
+		# A boss may say itself what its bar shows (the Prowler: what it still takes before it breaks off).
+		var gauge: Vector2 = game.boss.call("gauge") if game.boss.has_method("gauge") else Vector2(game.boss.health, game.boss.max_health)
+		boss_bar.max_value = gauge.y
+		boss_bar.value = gauge.x
+		(boss_box.get_child(0) as Label).text = str(game.boss.spec.label)
+		boss_box.modulate = Color(2.4, 0.42, 0.3) if game.boss.kind == "prowler" else Color.WHITE
 	else:
 		boss_box.hide()
 	# Red vignette for wounds, a slow heartbeat when badly hurt.

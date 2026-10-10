@@ -369,6 +369,13 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_shotgun_check")
+	elif "--prowler-check" in args:
+		check_mode = true
+		team_enabled = "--prowler-hive" in args
+		var prowler_check := ProwlerCheck.new()
+		prowler_check.game = self
+		add_child(prowler_check)
+		prowler_check.call_deferred("run_hive" if "--prowler-hive" in args else "run")
 	elif "--ripper-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -485,12 +492,17 @@ func _warm_up() -> void:
 			var model: InfectedVisual
 			if look == "ripper":
 				model = RipperVisual.new()
+			elif look == "prowler":
+				model = ProwlerVisual.new()
 			elif Infected.TYPES[kind].get("human", false):
 				model = CruVisual.new()
 			else:
 				model = InfectedVisual.new()
 			model.kind = look
 			stage.add_child(model)
+			if model is ProwlerVisual:
+				# Its glow of the last fight is a shader of its own.
+				(model as ProwlerVisual).set_enraged(true)
 			model.position = Vector3(column * 0.9 - 2.3, 0, 0)
 			column += 1
 	fx.warm_up(stage.global_position + Vector3(0, 0.4, 1.5))
@@ -1052,6 +1064,8 @@ static func body_for(kind: String) -> Infected:
 	var spec: Dictionary = Infected.TYPES[kind]
 	if spec.get("operator", false):
 		return Operator.new()
+	if spec.get("prowler", false):
+		return Prowler.new()
 	return CruSoldier.new() if spec.get("human", false) else Infected.new()
 
 ## The infected come out of the gas on the side where the survivors are: through one of

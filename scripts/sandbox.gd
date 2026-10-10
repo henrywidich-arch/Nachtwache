@@ -8,7 +8,7 @@ extends Node
 ## that asks whether there is a story or a last round answers as it does there.
 
 ## What can be put on the field, in the order of the menu: [kind, name on the button].
-const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"]]
+const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"]]
 const SOLDIERS := [["cru_assault", "ASSAULT"], ["cru_shotgunner", "BREACHER"], ["cru_heavy", "HEAVY"], ["cru_marksman", "MARKSMAN"], ["cru_medic", "MEDIC"], ["cru_commander", "COMMANDER"], ["cru_shield", "SHIELD"], ["cru_elite", "ELITE"]]
 const OPERATORS := [["phantom", "PHANTOM"], ["havoc", "HAVOC"], ["ghost", "GHOST"]]
 ## A whole C.R.U. squad as a late round sends it.

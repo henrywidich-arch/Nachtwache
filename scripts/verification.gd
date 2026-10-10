@@ -2237,6 +2237,74 @@ func _later(game: Node3D) -> void:
 	var tile: Array = game.hud.tiles.grenade
 	game.hud.loadout()
 	expect((tile[1] as Label).text == "1" and game.hud.loadout_box.get_child_count() >= 2 and game.hud.loadout_left > 0.0, "What is in the pockets shows as tiles beside the weapon, and changing weapons lists what is carried")
+	# --- the Prowler, the four-legged hunter of mission two
+	game.start_run()
+	mission.plain()
+	game.preparation_left = 9999.0
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var prowl_count: int = game.alive_count
+	var prowl_a := game.spawn_enemy("prowler") as Prowler
+	prowl_a.position = Vector3(0, 0.08, 34.0)
+	var prowl_body := prowl_a.model as ProwlerVisual
+	var prowl_clips := 0
+	for prowl_clip in ["idle", "stalk", "trot", "run", "leap", "slash_l", "slash_r", "slam", "bite", "flinch", "stagger", "roar", "death"]:
+		if prowl_body != null and prowl_body.player.has_animation(prowl_clip):
+			prowl_clips += 1
+	expect(prowl_body != null and prowl_clips == 13 and prowl_a.flanks.size() == 2 and float(prowl_a.spec.radius) <= float(Infected.TYPES.crusher.radius) and game.boss == prowl_a and prowl_a.gauge() == Vector2(prowl_a.max_health, prowl_a.max_health) and game.fx.get_script() != null, "The Prowler brings its own body with thirteen clips, is no wider than a Crusher (the doors), can be hit at shoulders and haunches too, and has the bar on the HUD")
+	var prowl_top := 0.0
+	var prowl_modes := {}
+	for prowl_step in range(840):
+		await get_tree().physics_frame
+		player.health = 100.0
+		prowl_modes[prowl_a.mode] = true
+		var prowl_run: Vector3 = prowl_a.get_real_velocity()
+		prowl_top = maxf(prowl_top, Vector2(prowl_run.x, prowl_run.z).length())
+		if prowl_a.landed >= 1 and prowl_modes.has("circle") and prowl_modes.has("back"):
+			break
+	expect(prowl_top > 7.5 and prowl_modes.has("circle") and prowl_modes.has("back") and (prowl_modes.has("strike") or prowl_modes.has("leap")) and prowl_a.landed >= 1, "It comes in at a gallop, goes round its prey, attacks and springs back out of reach (top %.1f m/s, %d landed)" % [prowl_top, prowl_a.landed])
+	# A visit: it cannot die, a blast knocks it off its feet, and it breaks off when it has had enough.
+	prowl_a.leap = ""
+	prowl_a.mode = "circle"
+	prowl_a.attack_clock = -1.0
+	prowl_a.stagger_cooldown = 0.0
+	prowl_a.held_left = 0.0
+	prowl_a.nerve = 300.0
+	prowl_a.driven = 0.0
+	var prowl_health: float = prowl_a.health
+	prowl_a.receive_hit(120.0, Vector3.BACK, false)
+	var prowl_reeled: bool = prowl_a.mode == "reel" and prowl_a.held_left > 0.2
+	var prowl_bar: Vector2 = prowl_a.gauge()
+	prowl_a.receive_hit(100.0, Vector3.BACK, true)
+	prowl_a.receive_hit(100.0, Vector3.BACK, false)
+	var prowl_left: bool = prowl_a.leaving and prowl_a.broke_hurt and not prowl_a.dead and prowl_a.health == prowl_health and not prowl_a.is_targetable() and game.boss != prowl_a
+	prowl_a.receive_hit(99999.0, Vector3.BACK, false)
+	prowl_left = prowl_left and not prowl_a.dead
+	var prowl_gone := false
+	for prowl_step in range(600):
+		await get_tree().physics_frame
+		if not is_instance_valid(prowl_a):
+			prowl_gone = true
+			break
+	expect(prowl_reeled and prowl_bar == Vector2(180.0, 300.0) and prowl_left and prowl_gone and game.alive_count == prowl_count, "On a visit a blast knocks it off its feet, the bar shows what it still takes, and when that is gone it breaks off unhurt, runs and is gone")
+	# The last fight: enraged, and now it dies.
+	var prowl_b := game.spawn_enemy("prowler") as Prowler
+	prowl_b.position = Vector3(0, 0.08, 31.0)
+	prowl_b.max_health = HiveProwler.end_health(2)
+	prowl_b.health = prowl_b.max_health
+	prowl_b.enrage()
+	var prowl_rage: bool = prowl_b.enraged and prowl_b.mode == "reel" and prowl_b.held_left > 1.0 and (prowl_b.model as ProwlerVisual).glow != null and prowl_b.nerve == 0.0
+	var prowl_purse: int = game.credits
+	prowl_b.receive_hit(prowl_b.max_health - 10.0, Vector3.BACK, false)
+	var prowl_stands: bool = not prowl_b.dead and prowl_b.gauge().x == 10.0
+	prowl_b.flanks[0].receive_hit(50.0, Vector3.BACK, false)
+	expect(prowl_rage and prowl_stands and prowl_b.dead and prowl_b.flanks[0].dead and game.credits > prowl_purse and game.alive_count == prowl_count and game.boss == null, "Enraged it roars and glows, its bar is its health, and a hit on its flank is a hit on it: it can be killed, and that pays")
+	var prowl_never := true
+	for prowl_stage in ["landing", "villa", "mirror", "nadja", "deal", "board", "ride", "decon", "exit"]:
+		prowl_never = prowl_never and not HiveProwler.comes_in(prowl_stage, 99.0)
+	var prowl_comes := true
+	for prowl_stage in ["descent", "station", "power", "hold", "terminal", "admin", "security", "cafe", "lockdown", "atrium", "generator", "labs"]:
+		prowl_comes = prowl_comes and HiveProwler.comes_in(prowl_stage, 99.0) and not HiveProwler.comes_in(prowl_stage, 3.0)
+	expect(prowl_never and prowl_comes and not HiveProwler.comes_in("hall", 99.0) and HiveProwler.nerve_on(3) > HiveProwler.nerve_on(0) and HiveProwler.stay_on(9) == HiveProwler.stay_on(HiveProwler.BOLD_MOST) and HiveProwler.end_health(2) < HiveProwler.end_health(0) and HiveProwler.end_health(99) == HiveProwler.end_health(HiveProwler.WEAR_MOST) and game.hive.prowl != null and HiveDirector.ORDER.has("descent"), "In mission two it stays away from the arrival, the truce, the ride and the first seconds of a stage, takes more with every visit, and comes to the last fight weakened if it was driven off by force")
 	game.team_enabled = true
 	game.start_run()
 
