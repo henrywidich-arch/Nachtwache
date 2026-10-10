@@ -2762,6 +2762,27 @@ func _hit_answer(game: Node3D) -> void:
 	target.max_health = 5000.0
 	target.health = 5000.0
 	await frames(3)
+	# --- hit sounds of the player's own come first for the infected, and only for them
+	var own_a := AudioStreamWAV.new()
+	var own_b := AudioStreamWAV.new()
+	sounds.own_asked = true
+	sounds.own_hits = [own_a, own_b]
+	sounds.hit_heard = -10.0
+	sounds.confirm_hit(false, false, true)
+	var own_first: AudioStream = _latest_stream(sounds)
+	await wait(FieldAudio.HIT_FLOOR + 0.08)
+	sounds.confirm_hit(true, false, true)
+	var own_second: AudioStream = _latest_stream(sounds)
+	await wait(FieldAudio.HIT_FLOOR + 0.08)
+	sounds.confirm_hit(false, false, false)
+	var soldier: AudioStream = _latest_stream(sounds)
+	expect([own_a, own_b].has(own_first) and [own_a, own_b].has(own_second) and own_first != own_second and (sounds.clips.hit_body as Array).has(soldier), "Hit sounds the player has put into his own folder answer his hits on the infected, never the same twice in a row; a soldier keeps the game's own answer")
+	# (From here on the game's own answers are meant: the player's are set aside.)
+	sounds.own_hits.clear()
+	sounds.hit_landed = -10.0
+	sounds.hit_heard = -10.0
+	sounds.kill_heard = -10.0
+	await wait(0.2)
 	# In the chest, and again in the same instant: one tick.
 	var heard: Dictionary = sounds.answers.duplicate()
 	player.camera.rotation.x = -0.2
@@ -5587,6 +5608,14 @@ func _sandbox(game: Node3D) -> void:
 	expect(not room.on and game.mode == kept_mode and game.credits == 120 and cabin.environment.fog_enabled and not game.skills.open_all and game.team.is_empty(), "The next night is an ordinary one again")
 
 ## Takes every enemy off the field, also those a shot from the front would not (a shield).
+## What the voice that was started last is playing (see FieldAudio._start).
+func _latest_stream(sounds: Node) -> AudioStream:
+	var latest: Node = null
+	for voice in sounds.voices:
+		if voice.has_meta("started") and (latest == null or int(voice.get_meta("started")) >= int(latest.get_meta("started"))):
+			latest = voice
+	return null if latest == null else latest.stream
+
 func _wipe_all(game: Node3D) -> void:
 	_wipe(game)
 	for node in get_tree().get_nodes_in_group("infected"):
