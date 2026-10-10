@@ -8,6 +8,11 @@ extends Node
 ##       somebody comes through that way in: pictures from the warning to the first steps
 ##       (with several kinds, the first film shows the first of them, and so on;
 ##       --entries-eyes: as the survivor sees it, his weapon in the picture)
+##   --entries-check --entries-sweep   (runs --headless too)
+##       no pictures: somebody comes through every way in in turn, of every kind that
+##       can, the survivor a few metres off. A line SWEEP for each that did not get going
+##       afterwards, and a line ENTRIES_SWEEP with the numbers. (--entries-shift=<n>:
+##       the kinds are dealt out n places further on, so that other pairs meet.)
 ## Nothing attacks otherwise, every door stands open, the squad is out of the picture.
 
 var entries: HiveEntries
@@ -56,6 +61,10 @@ func run() -> void:
 	for index in range(map.entries.size()):
 		var entry: Dictionary = map.entries[index]
 		print("ENTRY %d %s kind=%s at=%s land=%s seconds=%.2f" % [index, entry.id, entry.kind, str((entry.at as Vector3).snapped(Vector3.ONE * 0.01)), str(entry.land), entries.seconds(index) if entry.land != Vector3.INF else -1.0])
+	if "--entries-sweep" in OS.get_cmdline_user_args():
+		await _sweep(part)
+		get_tree().quit()
+		return
 	if films.is_empty():
 		for index in range(map.entries.size()):
 			var entry: Dictionary = map.entries[index]
@@ -71,6 +80,65 @@ func run() -> void:
 		await _film(folder, index, kinds[number % kinds.size()])
 	print("ENTRIES_CAPTURE_COMPLETE ways=%d" % map.entries.size())
 	get_tree().quit()
+
+## Somebody comes through every way in (whose name contains `part`), each of another
+## kind than the one before; two and a half seconds later he has to be on his way to the
+## survivor or at him.
+func _sweep(part: String) -> void:
+	var player: Survivor = game.player
+	var tried := 0
+	var stuck := 0
+	var longest := 0.0
+	var shift := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--entries-shift="):
+			shift = int(arg.trim_prefix("--entries-shift="))
+	Engine.time_scale = 3.0
+	for index in range(map.entries.size()):
+		var entry: Dictionary = map.entries[index]
+		if part != "" and not str(entry.id).contains(part):
+			continue
+		tried += 1
+		if entry.land == Vector3.INF:
+			stuck += 1
+			print("SWEEP %s: no ground to come down on" % entry.id)
+			continue
+		var stand: Vector3 = _view(entry, 7.5, 2.5)[0]
+		game._place_player(stand + Vector3(0, 0.05, 0), 0.0)
+		player.health = 100.0
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var kind: String = HiveEntries.KINDS[(index + shift) % HiveEntries.KINDS.size()]
+		var comer: Infected = entries.come(index, kind)
+		if comer == null:
+			stuck += 1
+			print("SWEEP %s: nobody came" % entry.id)
+			continue
+		var steps := 0
+		while is_instance_valid(comer) and comer.entering != null and steps < 300:
+			await get_tree().physics_frame
+			steps += 1
+		longest = maxf(longest, steps / 60.0 * Engine.time_scale)
+		var from: Vector3 = comer.global_position if is_instance_valid(comer) else entry.land
+		var off: float = from.distance_to(entry.land)
+		await get_tree().create_timer(2.5).timeout
+		# (One that blew itself up at him, or hangs on him, got there.)
+		var got_going := not is_instance_valid(comer) or comer.dead or comer.clung_to != null
+		if not got_going:
+			got_going = comer.global_position.distance_to(from) > 1.5 or comer.global_position.distance_to(player.global_position) < 3.0
+		# (A Medic that sees him stops a good way off and lets its gas work: that is where it wants to be.)
+		if not got_going and kind == "healer":
+			got_going = comer.global_position.distance_to(player.global_position) < Infected.CLOUD_KEEP
+		if steps >= 300 or off > 0.6 or not got_going:
+			stuck += 1
+			print("SWEEP %s (%s): carried for %d steps, let go %.1f m from its ground, %s" % [entry.id, kind, steps, off, "then on its way" if got_going else "then stood where it was, %.1f m from the survivor at %s" % [comer.global_position.distance_to(player.global_position), str(stand.snapped(Vector3.ONE * 0.1))]])
+		for node in game.enemies.get_children():
+			node.queue_free()
+		game.alive_count = 0
+		player.health = 100.0
+		await get_tree().physics_frame
+	Engine.time_scale = 1.0
+	print("ENTRIES_SWEEP ways=%d stuck=%d longest=%.2f state=%s" % [tried, stuck, longest, game.state])
 
 func _index(text: String) -> int:
 	if text.is_valid_int():

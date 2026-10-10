@@ -4223,8 +4223,8 @@ func _way_window(room_id: String, side: int, at: float) -> void:
 	for i in range(1, bars):
 		for edge in [-1.0, 1.0]:
 			left.box(mats["panelwood"], Vector3(float(edge) * (wide * 0.5 - 0.1), i * high / bars, 0), Vector3(0.2, 0.04, 0.062), trim, Basis(Vector3.BACK, deg_to_rad(8.0 * float(edge))))
-	for corner in [[-1.0, 0.0, 28.0], [1.0, 0.0, -40.0], [-1.0, 1.0, -30.0], [1.0, 1.0, 35.0]]:
-		left.box(mats["shard"], Vector3(float(corner[0]) * (wide * 0.5 - 0.1), 0.12 + float(corner[1]) * (high - 0.24), 0), Vector3(0.22, 0.3, 0.006), Color.WHITE, Basis(Vector3.BACK, deg_to_rad(float(corner[2]))))
+	for corner in [[-1.0, 0.0, 28.0, 0.15], [1.0, 0.0, -40.0, 0.1], [-1.0, 1.0, -30.0, 0.1], [1.0, 1.0, 35.0, 0.16]]:
+		left.box(mats["shard"], Vector3(float(corner[0]) * (wide * 0.5 - 0.07), 0.09 + float(corner[1]) * (high - 0.18), 0), Vector3(float(corner[3]), float(corner[3]) * 1.5, 0.006), Color.WHITE, Basis(Vector3.BACK, deg_to_rad(float(corner[2]))))
 	left.commit(wreck, "Wreck", false)
 	wreck.hide()
 	var into := -frame.basis.z
@@ -4375,7 +4375,7 @@ func _lay_entries() -> void:
 	_way_drop("cafeteria", 10.0, -415.5, 2)
 	_way_drop("kitchen_f", 31.0, -414.0, 0)
 	_way_duct("kitchen_f", NORTH, 31.0)
-	_way_hole("cafe_store", WEST, -421.0)
+	_way_hole("cafe_store", WEST, -422.6)
 	_way_hole("north_link", WEST, -440.0, "vent")
 	_way_drop("north_link", 2.5, -438.5, 3)
 	# --- the central hall: its walls under the gallery, beside the supply point too; the

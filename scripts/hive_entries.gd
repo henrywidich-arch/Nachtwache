@@ -104,6 +104,8 @@ var voices: Array[AudioStreamPlayer3D] = []
 var streams: Dictionary = {}
 var puffs: Array[CPUParticles3D] = []
 var puff_next := 0
+## What the survivor has been told about them this night (see _tell).
+var told: Dictionary = {}
 ## How many came through a way in this night, and how many the old way; and the ways in
 ## that were used, in their order (for the checks).
 var came := 0
@@ -136,6 +138,7 @@ func begin() -> void:
 	came = 0
 	passed = 0
 	used.clear()
+	told.clear()
 	rested.resize(map.entries.size())
 	rested.fill(0.0)
 	# Everything hangs as it was built, and every window is whole again.
@@ -227,6 +230,7 @@ func send(kind: String) -> bool:
 
 ## Announces somebody at a way in: the warning now, the body WARN seconds later.
 func announce(index: int, kind: String) -> void:
+	_tell(str(map.entries[index].kind))
 	due.append({"entry": index, "kind": kind, "left": WARN})
 	rested[index] = clock + REST * lerpf(1.0, 0.6, heat())
 	last = index
@@ -301,6 +305,22 @@ func choose() -> int:
 	return int(options[options.size() - 1][1])
 
 # ---------------------------------------------------------------- the warning
+
+## The first time somebody comes through a window, the first time up from the track and
+## the first time through a ceiling or a wall, the survivor is told once what the noise
+## he hears means.
+func _tell(kind: String) -> void:
+	var what := "window" if kind in ["window", "cellar"] else ("edge" if kind == "edge" else "hole")
+	if told.has(what):
+		return
+	told[what] = true
+	match what:
+		"window":
+			game.hud.announce("SIE KOMMEN DURCH DIE FENSTER", "Es klopft an der Scheibe – einen Augenblick später sind sie im Haus. Auch hinter dir.", 4.5)
+		"edge":
+			game.hud.announce("SIE KOMMEN AUS DEM GLEISBETT", "Schotter klirrt unter der Bahnsteigkante – einen Augenblick später sind sie oben.", 4.5)
+		_:
+			game.hud.announce("SIE KOMMEN DURCH DECKEN UND WÄNDE", "Ein Gitter klappert, Staub fällt – einen Augenblick später sind sie da. Auch hinter dir.", 4.5)
 
 func _warn(index: int) -> void:
 	var entry: Dictionary = map.entries[index]

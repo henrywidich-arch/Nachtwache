@@ -5711,6 +5711,8 @@ func _hive(game: Node3D) -> void:
 	ways.came = 0
 	ways.passed = 0
 	ways.used.clear()
+	ways.told.clear()
+	hud.banner_left = 0.0
 	var warned := 0
 	for k in range(600):
 		hive.stage_time += 0.05
@@ -5721,7 +5723,7 @@ func _hive(game: Node3D) -> void:
 		if game.alive_count >= 6:
 			_wipe_all(game)
 	var open_share: float = float(ways.came) / maxf(1.0, ways.came + ways.passed)
-	expect(ways.came >= 4 and warned >= 1 and open_share > 0.4, "While a stage runs, most of those who keep coming are announced at a way in and come through it; the others come as before, from where nobody looks (%d of %d)" % [ways.came, ways.came + ways.passed])
+	expect(ways.came >= 4 and warned >= 1 and open_share > 0.4 and ways.told.has("hole"), "While a stage runs, most of those who keep coming are announced at a way in and come through it - the first time the survivor is told what the noise means -; the others come as before, from where nobody looks (%d of %d)" % [ways.came, ways.came + ways.passed])
 	_wipe_all(game)
 	await frames(2)
 	# --- camping: staying put is noticed, and answered from the nearest ways in - the one
