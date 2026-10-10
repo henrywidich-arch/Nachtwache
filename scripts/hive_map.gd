@@ -4848,7 +4848,7 @@ func tour() -> Array:
 		["72m_hall_back", Vector3(0, UNDER, -627.0), Vector3(0, UNDER + 4.0, -580.0)],
 		["72n_hall_watch", Vector3(8.6, UNDER, -603.5), Vector3(13.0, UNDER + 2.4, -603.5)],
 		["72o_hall_across", Vector3(20.0, UNDER, -599.25), Vector3(-20.0, UNDER + 3.0, -599.25)],
-		["72p_hall_air", Vector3(-22.0, UNDER + 11.0, -582.0), Vector3(6.0, UNDER + 1.0, -612.0), true],
+		["72p_hall_air", Vector3(-9.0, UNDER + 9.0, -579.5), Vector3(5.0, UNDER + 1.0, -615.0), true],
 		["75_lab_tables", Vector3(-9.0, UNDER, -514.5), Vector3(-22.0, UNDER + 1.0, -508.5)],
 		["76_work_place", Vector3(-21.0, UNDER, -511.5), Vector3(-27.4, UNDER + 1.1, -514.6)],
 		["77_microscope", Vector3(-20.7, UNDER, -513.5), Vector3(-21.6, UNDER + 1.2, -515.0)],

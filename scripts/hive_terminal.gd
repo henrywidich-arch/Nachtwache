@@ -32,7 +32,8 @@ var films := true
 
 func _init() -> void:
 	name = "Terminals"
-	films = DisplayServer.get_name() != "headless"
+	# (--no-films: stills only, to see what the films cost.)
+	films = DisplayServer.get_name() != "headless" and not "--no-films" in OS.get_cmdline_user_args()
 
 ## The surface all screens of a loop share.
 func _loop(id: String) -> Dictionary:
