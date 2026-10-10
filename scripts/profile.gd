@@ -12,7 +12,7 @@ const ORDER := ["easy", "normal", "hard", "nightmare", "zombie_test"]
 ## there to try how the weapons feel against bodies that do not fall to the first burst.
 ## (Helix's soldiers and operators are no infected, and the Crusher and the Stalker are
 ## fights of their own: those four keep their health, see Infected.BROOD_APART.)
-const ZOMBIE_TEST_HEALTH := 2.2
+const ZOMBIE_TEST_HEALTH := 1.8
 ## A harder night is not simply tougher skin. horde: how many come. specials: how many of
 ## them are special infected. pace: how fast they move and strike. harm: what a hit does
 ## to a survivor. drops: how often the dead leave supplies. prices: cost of stations and
