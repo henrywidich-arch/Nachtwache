@@ -33,7 +33,7 @@ const ZONE_SIGHT := 64.0
 ## glides from one to the next as the viewer walks from zone to zone.)
 const MOODS := {
 	"out": {"ambient": Color(0.34, 0.44, 0.6), "energy": 0.56, "fog": 0.0055, "haze": 0.011, "glow": 0.8, "sky": 1.0, "moon": 1.0, "tint": Color(0.16, 0.2, 0.26)},
-	"villa": {"ambient": Color(0.54, 0.43, 0.33), "energy": 0.38, "fog": 0.003, "haze": 0.007, "glow": 0.25, "sky": 1.0, "moon": 1.0, "tint": Color(0.2, 0.17, 0.13)},
+	"villa": {"ambient": Color(0.56, 0.45, 0.34), "energy": 0.5, "fog": 0.003, "haze": 0.007, "glow": 0.25, "sky": 1.0, "moon": 1.0, "tint": Color(0.2, 0.17, 0.13)},
 	"under": {"ambient": Color(0.52, 0.57, 0.63), "energy": 0.62, "fog": 0.0012, "haze": 0.006, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.16, 0.2, 0.26)},
 	# The station: sodium light on concrete, dust in the air.
 	"sodium": {"ambient": Color(0.62, 0.5, 0.36), "energy": 0.4, "fog": 0.003, "haze": 0.013, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.22, 0.16, 0.09)},
@@ -811,6 +811,9 @@ func _light_room(room: Dictionary, look: Dictionary) -> void:
 	# `lamp_every`: only every so many of them is a lamp that lights, the others only glow
 	# (a light costs time, a glowing tube none); `dead`: the share that is dark.
 	var every := maxi(1, int(look.get("lamp_every", 1)))
+	# (A room with a handful of lamps needs every one of them.)
+	if nx * nz <= 4:
+		every = 1
 	var dead := float(look.get("dead", 0.0))
 	var before := flickers.size()
 	for ix in range(nx):

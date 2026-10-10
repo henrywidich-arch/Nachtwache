@@ -555,6 +555,9 @@ func _villa_outside() -> void:
 	# --- behind the house: the concrete annex over the hidden stairs
 	_part("gravel", Vector3(-17, -0.035, -6), Vector3(4, 0.1, 3), Color(0.58, 0.56, 0.52))
 	_part("gravel", Vector3(27, -0.035, 2), Vector3(5, 0.1, 3), Color(0.58, 0.56, 0.52))
+	# Two floodlights of the guards on the terrace: their beams stand in the haze of the park.
+	_floodlight(Vector3(-13.6, 0, 27.3), Vector3(-3.0, 0.5, 54.0))
+	_floodlight(Vector3(13.6, 0, 27.3), Vector3(3.0, 0.5, 54.0))
 
 func _villa_hall() -> void:
 	var hall: Dictionary = room_of["hall"]
@@ -663,6 +666,73 @@ func _villa_rooms() -> void:
 	_model("plastic_crate_02", Vector3(21.6, 0, -3.0), 0.2, {"scale": 1.4})
 	_face_box(kitchen, NORTH, "steel", 16.2, 17.8, 0.92, 0.98, -0.6, -0.05, Color("3a3d3f"))
 	_face_box(kitchen, NORTH, "plain", 16.4, 17.6, 2.0, 2.5, -0.5, 0.0, Color("2a2c2d"))
+	_dress_villa()
+
+## Curtains drawn back at a window of a room, under a wooden pelmet.
+func _curtains(room_id: String, side: int, at: float, wide: float, head: float, cloth: Color) -> void:
+	var room: Dictionary = room_of[room_id]
+	for edge in [-1.0, 1.0]:
+		var a: float = at + edge * (wide * 0.5 + 0.22)
+		_face_box(room, side, "velvet", a - 0.24, a + 0.24, 0.06, head + 0.22, -0.16, -0.07, _vary(cloth, 0.02))
+		_face_box(room, side, "velvet", a - 0.15, a + 0.15, 0.4, head, -0.2, -0.16, cloth.darkened(0.14))
+	_face_box(room, side, "panelwood", at - wide * 0.5 - 0.56, at + wide * 0.5 + 0.56, head + 0.2, head + 0.4, -0.22, 0.0, Color(0.3, 0.23, 0.18))
+
+## A lamp on a wall of the house: a brass arm, a shade that glows, a little warm light.
+func _sconce(room_id: String, side: int, a: float, high: float = 2.3) -> void:
+	var room: Dictionary = room_of[room_id]
+	_face_box(room, side, "metal", a - 0.045, a + 0.045, high - 0.18, high + 0.02, -0.13, 0.0, Color(0.5, 0.4, 0.2))
+	_face_glow(room, side, a - 0.075, a + 0.075, high + 0.02, high + 0.2, -0.21, -0.07, Color("ffcf8f"), 4.4)
+	var lamp := _light(_face_point(room, side, a, high + 0.1, -0.55), Color("ffc27a"), 1.0, 5.5, false, 0.08, 0.5, LAMP_FADE)
+	lamp.omni_attenuation = 1.4
+
+## A floodlight on a stand, aimed at `target`: its beam stands in the haze of the park.
+func _floodlight(pos: Vector3, target: Vector3) -> void:
+	var head := pos + Vector3(0, 2.5, 0)
+	for k in range(3):
+		var turn := TAU * k / 3.0 + 0.4
+		_pipe(pos + Vector3(cos(turn) * 0.6, 0, sin(turn) * 0.6), pos + Vector3(0, 1.5, 0), 0.025, Color("15171a"), 6)
+	_pipe(pos + Vector3(0, 1.5, 0), head, 0.03, Color("15171a"), 6)
+	var aim := (target - head).normalized()
+	var turn_to := Basis.looking_at(aim, Vector3.UP)
+	batch.box(mats["metal"], head, Vector3(0.5, 0.36, 0.24), Color("17191b"), turn_to)
+	batch.box(mats["glow"], head + aim * 0.125, Vector3(0.42, 0.28, 0.012), Color(1.0, 0.95, 0.84), turn_to)
+	_spot(head + aim * 0.2, aim, Color("fff1d6"), 16.0, 52.0, 24.0, 0.03, 2.4, 160.0)
+	_round_solid(pos, 0.3, 2.6)
+
+## What makes the house a house somebody lived in, and one the guards held until tonight.
+func _dress_villa() -> void:
+	var red := Color(0.36, 0.08, 0.08)
+	var green := Color(0.1, 0.24, 0.17)
+	for at in [-4.3, 4.3]:
+		_curtains("hall", SOUTH, at, 1.4, 3.4, red)
+	_curtains("salon", WEST, 11.5, 1.5, 3.4, green)
+	for at in [-6.5, 6.5]:
+		_curtains("dining", NORTH, at, 1.5, 3.4, red)
+	for at in [12.0, 18.0]:
+		_curtains("galerie", EAST, at, 1.5, 3.4, green)
+	for entry in [["hall", EAST, 18.2, 2.5], ["hall", WEST, 18.2, 2.5], ["hall", SOUTH, -2.45, 2.5], ["hall", SOUTH, 2.45, 2.5], ["salon", NORTH, -14.4, 2.3], ["salon", SOUTH, -15.75, 2.3], ["salon", EAST, 17.0, 2.3],
+			["galerie", NORTH, 15.0, 2.3], ["galerie", NORTH, 18.7, 2.3], ["galerie", WEST, 16.6, 2.3], ["library", NORTH, -15.0, 2.3], ["dining", SOUTH, -3.2, 2.3], ["dining", SOUTH, 3.2, 2.3], ["dining", NORTH, -4.4, 2.3]]:
+		_sconce(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]))
+	_fireplace("library", EAST, 5.6)
+	# --- the post of the guards under the gallery: a table with their radio, what they had left
+	_table(Vector3(-5.2, 0, 9.4), Vector3(1.8, 0.78, 0.8), Color(0.24, 0.26, 0.2))
+	_model("vintage_radio_transceiver", Vector3(-5.6, 0.78, 9.3), 0.2, {"width": 0.6, "solid": false, "far": 30.0})
+	_papers(Transform3D(Basis(Vector3.UP, 0.3), Vector3(-4.8, 0.79, 9.45)), Vector3.ZERO, 5, 0.3)
+	_glow_box(Vector3(-4.5, 0.86, 9.2), Vector3(0.08, 0.14, 0.08), Color("ffd08a"), 4.5)
+	_light(Vector3(-4.5, 1.1, 9.4), Color("ffc884"), 0.9, 4.5, false, 0.1, 0.5, LAMP_FADE)
+	_crate(Vector3(5.0, 0, 9.3), Vector3(1.1, 0.7, 0.8), Color("4d5a46"), 0.1)
+	_crate(Vector3(5.1, 0.72, 9.3), Vector3(0.7, 0.45, 0.6), Color("56624a"), 0.4, false)
+	_crate(Vector3(6.1, 0, 10.1), Vector3(0.8, 0.55, 0.6), Color("5a4a36"), 1.0)
+	for k in range(3):
+		_model("ammo_box", Vector3(4.2 + k * 0.24, 0, 10.4 + k * 0.1), 0.4 * k, {"scale": 1.6, "solid": false, "far": 25.0})
+	# --- what happened here
+	_blot(Vector3(-11.0, 0, 18.6), 1.0, 0.7)
+	_smear(Vector3(-10.6, 0, 18.9), Vector3(-7.6, 0, 20.4), 0.28)
+	_blot(Vector3(13.0, 0, 20.2), 0.9, 0.6)
+	_blot(Vector3(2.4, 0, -1.5), 0.8, 0.6)
+	_chair(Vector3(4.6, 0, 4.6), 2.2, Color(0.3, 0.22, 0.17), true)
+	_litter(Vector3(-16.4, 0.016, 3.6), 1.2, 9)
+	_litter(Vector3(4.2, 0, 17.2), 0.9, 6)
 
 # ---------------------------------------------------------------- more of the kit
 
@@ -892,7 +962,7 @@ func _train_car(centre: Vector3, open: int) -> void:
 	for x in [-4.2, 4.2]:
 		_part("plate", centre + Vector3(x, 2.57, 0), Vector3(1.3, 0.06, 0.3), dark)
 		_glow_box(centre + Vector3(x, 2.53, 0), Vector3(1.2, 0.03, 0.22), Color("dfeaff"), 5.0)
-		_light(centre + Vector3(x, 2.1, 0), Color("dfeaff"), 1.2, 6.0, false, 0.05, 0.3, 60.0)
+		_light(centre + Vector3(x, 2.1, 0), Color("dfeaff"), 2.0, 7.0, false, 0.05, 0.3, 60.0)
 	_stripe(centre + Vector3(-1.2, 0.0, -1.7), centre + Vector3(1.2, 0.0, -1.7), 0.14, Color("c9a227"))
 	_stripe(centre + Vector3(-1.2, 0.0, 1.7), centre + Vector3(1.2, 0.0, 1.7), 0.14, Color("c9a227"))
 
@@ -1970,7 +2040,10 @@ func _lay_atrium() -> void:
 	_sign_board("maint", NORTH, 44.5, 2.2, [["▲   PUMPEN  ·  WASSER", GUIDE.tech], ["▼   GENERATOR  ·  NOTSTROM", GUIDE.tech]], 4.2, 26)
 	_stencil("maint", SOUTH, 32.9, 2.4, "TECHNIK", 150, Color(0.78, 0.6, 0.2))
 	_display(_face_point(room_of["maint"], SOUTH, 27.2, 1.75, 0.0), _model_yaw(SOUTH), 2.0, "tech")
-	_sealed_door("maint", EAST, -469.0)
+	# The end of the passage: the house's own steel door, shut for good.
+	if _house_prop("steel_door", _face_point(room_of["maint"], EAST, -469.0, 0.0, -0.56), _model_yaw(EAST), {"far": 60.0}) == null:
+		_sealed_door("maint", EAST, -469.0)
+	_face_glow(room_of["maint"], EAST, -469.3, -468.7, 2.5, 2.56, -0.2, -0.17, Color("ff3a2a"), 3.0)
 	_stores(Vector3(33.0, UNDER, -470.8), 2)
 	_blot(Vector3(38.0, UNDER, -468.6), 1.4, 0.9, Color(0.03, 0.03, 0.025, 0.7))
 	_dress_tech()
@@ -2609,6 +2682,11 @@ func _dress_hall() -> void:
 			for face in [-1.0, 1.0]:
 				_glow_box(Vector3(x + face * 0.456, UNDER + 4.2, z), Vector3(0.012, 0.5, 0.2), Color("ff3a2a"), 3.4)
 	_haze(Vector3(0, UNDER + 0.7, -598.0), Vector3(59.0, 1.4, 41.0), 0.05, Color(0.76, 0.8, 0.9))
+	var hall: Dictionary = room_of["containment"]
+	for side in [WEST, EAST]:
+		if _house_prop("steel_door", _face_point(hall, side, -586.0, 0.0, -0.56), _model_yaw(side), {"far": 70.0}) != null:
+			_face_glow(hall, side, -586.3, -585.7, 2.5, 2.56, -0.2, -0.17, Color("ff3a2a"), 3.0)
+			_stencil("containment", side, -586.0, 3.5, "LAGER  U3", 96, Color(0.5, 0.12, 0.1))
 
 # ---------------------------------------------------------------- after the build
 
@@ -2700,7 +2778,9 @@ func tour() -> Array:
 		["86_reception", Vector3(-3.5, UNDER, -453.0), Vector3(1.0, UNDER + 1.0, -462.0)],
 		["87_hall_bridge", Vector3(-4.0, UNDER, -590.0), Vector3(-18.0, UNDER + 6.0, -604.0)],
 		["88_cold_frost", Vector3(6.5, UNDER, -527.0), Vector3(22.0, UNDER + 0.8, -536.0)],
-		["89_hood", Vector3(-12.0, UNDER, -506.5), Vector3(-27.5, UNDER + 1.3, -510.0)]
+		["89_hood", Vector3(-12.0, UNDER, -506.5), Vector3(-27.5, UNDER + 1.3, -510.0)],
+		["17_post", Vector3(-1.0, 0, 14.5), Vector3(-5.2, 0.9, 9.4)],
+		["18_beams", Vector3(0, 0, 62.0), Vector3(0, 3.0, 26.0)]
 	]
 
 ## Starts or ends what is seen from the car while the train runs: the terminal is not
