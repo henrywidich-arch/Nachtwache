@@ -189,7 +189,8 @@ func _bookcase(room_id: String, side: int, a: float, b: float, tall: float = 2.9
 	for i in range(count):
 		var from := a + i * wide
 		var to := from + wide
-		_face_box(room, side, "panelwood", from, to, 0.0, tall, -0.42, -0.36, wood.darkened(0.2))
+		# (The back of the case, at the wall: it used to stand before the books and hide them.)
+		_face_box(room, side, "panelwood", from + 0.012, to - 0.012, 0.0, tall, -0.075, 0.01, wood.darkened(0.3))
 		_face_box(room, side, "panelwood", from, from + 0.05, 0.0, tall, -0.36, 0.0, wood)
 		_face_box(room, side, "panelwood", to - 0.05, to, 0.0, tall, -0.36, 0.0, wood)
 		_face_box(room, side, "panelwood", from, to, tall - 0.07, tall + 0.05, -0.44, 0.0, wood)
@@ -649,7 +650,7 @@ func _villa_rooms() -> void:
 	_bookcase("library", WEST, 6.2, 7.6)
 	_bookcase("library", WEST, -3.6, -2.2)
 	_bookcase("library", NORTH, -11.9, -10.4)
-	_bookcase("library", SOUTH, -23.6, -18.2)
+	_bookcase("library", SOUTH, -23.3, -18.2)
 	_bookcase("library", SOUTH, -15.8, -10.4)
 	_carpet(Vector3(-17.5, 0, 2.2), Vector2(6.0, 4.4), Color(0.3, 0.12, 0.1))
 	_table(Vector3(-17.5, 0, 2.2), Vector3(2.6, 0.78, 1.2), Color(0.3, 0.22, 0.17))
@@ -853,6 +854,16 @@ func _boarded(room_id: String, side: int, at: float, wide: float, sill: float, h
 		var tilt := random.randf_range(-7.0, 7.0)
 		_part("panelwood", _face_centre(room, side, a, b, y - 0.09, y + 0.09, front, front + 0.032), _face_size(side, a, b, y - 0.09, y + 0.09, front, front + 0.032), _vary(Color(0.52, 0.44, 0.36), 0.04), Vector3(0, 0, tilt) if (side == NORTH or side == SOUTH) else Vector3(tilt, 0, 0))
 
+## A table thrown on its side as cover: its top towards local +z, its legs behind it.
+func _toppled_table(pos: Vector3, yaw: float, long: float = 1.9) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var wood := Color(0.34, 0.25, 0.19)
+	_placed(frame, "panelwood", Vector3(0, 0.47, 0.0), Vector3(long, 0.94, 0.06), wood, Vector3(-8, 0, 0))
+	for x in [-1.0, 1.0]:
+		for y in [0.16, 0.8]:
+			_placed(frame, "panelwood", Vector3(float(x) * (long * 0.5 - 0.12), float(y), -0.38), Vector3(0.07, 0.07, 0.72), wood.darkened(0.2), Vector3(-8, 0, 0))
+	_solid(pos + Vector3(0, 0.47, 0) + frame.basis * Vector3(0, 0, -0.2), Vector3(long, 0.94, 0.8), true, yaw)
+
 ## The house inside, second pass: ceilings, panelling, heads over the doors, the moon in
 ## the windows, and more of what happened here.
 func _villa_rich() -> void:
@@ -935,6 +946,21 @@ func _villa_rich() -> void:
 	_blot(Vector3(16.6, 0.86, 2.0), 0.4, 0.24)
 	_blot(Vector3(18.1, 0, 3.4), 0.7, 0.5)
 	_smear(Vector3(18.4, 0, 3.8), Vector3(20.6, 0, 5.2), 0.26)
+	# --- more books in the library
+	_bookcase("library", NORTH, -19.85, -18.3)
+	_bookcase("library", EAST, -3.3, 0.6)
+	# --- the salon: somebody held the garden door from behind a table
+	_toppled_table(Vector3(-12.0, 0, 19.8), 0.0)
+	for k in range(24):
+		_part("metal", Vector3(-12.3 + random.randf_range(-1.3, 1.3), 0.012, 18.8 + random.randf_range(-0.7, 0.7)), Vector3(0.045, 0.014, 0.014), Color(0.78, 0.6, 0.25), Vector3(0, random.randf_range(0, 180), 0))
+	# --- the gallery of pictures: a plinth has gone over, its bust lies beside it
+	_part("marble", Vector3(17.6, 0.262, 17.6), Vector3(1.15, 0.5, 0.5), Color(0.8, 0.79, 0.76), Vector3(0, 28, 0))
+	_solid(Vector3(17.6, 0.26, 17.6), Vector3(1.15, 0.5, 0.5), true, deg_to_rad(28.0))
+	var bust := _model("marble_bust_01", Vector3(18.7, 0.2, 17.1), 0.5, {"height": 0.75, "solid": false, "far": 40.0})
+	bust.rotation.x = -PI / 2
+	for k in range(9):
+		_part("marble", Vector3(18.4 + random.randf_range(-0.6, 0.6), 0.03, 17.3 + random.randf_range(-0.5, 0.5)), Vector3(random.randf_range(0.04, 0.12), 0.04, random.randf_range(0.04, 0.1)), Color(0.8, 0.79, 0.76), Vector3(random.randf_range(-20, 20), random.randf_range(0, 180), 0))
+	_blot(Vector3(16.6, 0, 18.3), 0.7, 0.45)
 	# --- windows somebody boarded up
 	_boarded("kitchen", NORTH, 14.0, 1.5, 1.1, 3.2)
 	_boarded("kitchen", NORTH, 20.0, 1.5, 1.1, 3.2)
@@ -1104,6 +1130,9 @@ func _front_dress() -> void:
 	for entry in [["hall", SOUTH, 0.0, 2.6, 3.2], ["salon", SOUTH, -19.5, 1.8, 3.0], ["salon", SOUTH, -12.0, 1.8, 3.0], ["galerie", SOUTH, 12.0, 1.8, 3.0], ["galerie", SOUTH, 19.5, 1.8, 3.0],
 			["library", NORTH, -17.0, 1.6, DOOR_TALL], ["kitchen", EAST, 2.0, 1.6, DOOR_TALL]]:
 		_door_dress(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]), float(entry[4]))
+	# --- the light of the rooms falls out of two garden doors on to the terrace
+	for x in [-12.0, 12.0]:
+		_spot(Vector3(float(x), 2.7, 21.95), Vector3(0, -0.75, 1.0), Color("ffc27a"), 5.0, 9.0, 30.0, 0.0, 1.6, 110.0)
 	# --- yew in stone tubs on the terrace
 	for x in [-18.0, -6.2, 6.2, 18.0]:
 		_topiary(Vector3(float(x), 0.02, 27.9), 2.9, 0.62, true)
@@ -3208,6 +3237,11 @@ func tour() -> Array:
 		["16c_round", Vector3(-8.5, 0, 55.5), Vector3(5, 1.0, 40)],
 		["16d_porch", Vector3(6.5, 0, 31.5), Vector3(-1, 4.6, 22)],
 		["16e_breach", Vector3(-27, 0, 78), Vector3(-36, 0.8, 88)],
+		["16f_hall_wreck", Vector3(-1.8, 0, 18.6), Vector3(3.4, 0.5, 15.0)],
+		["16g_library_books", Vector3(-14.8, 0, 3.4), Vector3(-23.5, 1.5, 1.6)],
+		["16h_salon_door", Vector3(-15.5, 0, 15.5), Vector3(-12.0, 0.8, 20.5)],
+		["16i_gallery_up", Vector3(-5.6, STOREY_VILLA, 10.4), Vector3(3.5, STOREY_VILLA + 0.9, 8.6)],
+		["16j_kitchen_table", Vector3(13.0, 0, 5.6), Vector3(18.0, 1.2, 1.5)],
 		["20_vestibule", Vector3(0, 0, -5.0), Vector3(0, -3.0, -18.0)],
 		["20b_stairs_top", Vector3(0, -1.2, -11.5), Vector3(0, -4.4, -17.6)],
 		["20c_stairs_upper", Vector3(0, -3.3, -15.1), Vector3(0, -4.2, -19.5)],
