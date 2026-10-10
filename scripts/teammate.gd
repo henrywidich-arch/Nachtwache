@@ -32,6 +32,11 @@ const HELP_SECONDS := 2.2
 const GREEN_DAMAGE := 0.4
 const GREEN_WAIT := 0.8
 const SEASONED_ROUND := 7
+## A pack is on it when so many infected stand within so many metres of it. It says so,
+## and the squad not again before so many seconds have passed.
+const HORDE_COUNT := 6
+const HORDE_REACH := 8.0
+const HORDE_PAUSE := 50.0
 
 var game: Node3D
 var look := "viper"
@@ -86,6 +91,10 @@ var overlooked := 1.0
 var job: Dictionary = {}
 ## Seconds it still holds its fire on a target it has only just picked.
 var hold_fire := 0.0
+## How many infected stood close around it when it last looked for a target.
+var crowd := 0
+## Has called out that the survivor is down; it does so once for every time he falls.
+var leader_called := false
 
 func _ready() -> void:
 	# The player's layer: bullets of the squad pass through, the infected bump into it.
@@ -152,11 +161,14 @@ func _pick_target() -> Infected:
 	if unarmed:
 		return null
 	var candidates: Array = []
+	crowd = 0
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
 		var gap := enemy.global_position.distance_to(global_position)
 		if enemy.dead or enemy.absent or gap > float(gun.reach):
 			continue
+		if gap < HORDE_REACH and not enemy.spec.get("human", false):
+			crowd += 1
 		# The Stalker is left alone unless it is coming for somebody close by.
 		if enemy.kind == "stalker" and (enemy.haunt != "hunt" or gap > 14.0):
 			continue
@@ -241,6 +253,9 @@ func _physics_process(delta: float) -> void:
 					if randf() < 0.6:
 						spot_wait = 8.0
 						game.bark(self, look, "round")
+		# A whole pack around it: one of the squad says so, and then not for a good while.
+		if crowd >= HORDE_COUNT:
+			game.squad_says(self, "horde", HORDE_PAUSE)
 	var player: Survivor = game.player
 	var anchor: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * slot
 	var to_player := player.global_position - global_position
@@ -255,8 +270,13 @@ func _physics_process(delta: float) -> void:
 	# Where it is heading, and whether it is still on its way there.
 	var goal := anchor
 	var travelling := false
+	if not player.down:
+		leader_called = false
 	if player.down and game.rescuer() == self:
-		# The player is down: nothing matters more than getting there and helping.
+		# The player is down: nothing matters more than getting there and helping. Whoever
+		# goes says so, once.
+		if not leader_called:
+			leader_called = game.squad_says(self, "leader_down", 10.0, 2.0)
 		goal = player.global_position
 		travelling = player_gap > 1.3 or other_floor
 		pace = RUN_SPEED

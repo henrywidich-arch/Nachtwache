@@ -161,6 +161,17 @@ var radio_queue: Array = []
 var radio_busy := 0.0
 ## Who may call something out again at which tick (per speaker; the C.R.U. share one).
 var bark_until: Dictionary = {}
+## Until this tick the squad keeps its small talk to itself: a line of the mission's own
+## dialogue is being said (the second mission). What cannot wait is called out all the same.
+var talk_until := 0
+const URGENT_CALLS := ["down", "grenade", "leech", "gas", "hurt", "leader_down", "thanks", "rescue"]
+## A kill of the survivor's that is worth a word to whoever of the squad stands within
+## PRAISE_REACH of him: how often a shot to the head is, how often one of the special
+## infected brought down, and the seconds until the squad says such a thing again.
+const PRAISE_HEAD := 0.2
+const PRAISE_SPECIAL := 0.55
+const PRAISE_REACH := 14.0
+const PRAISE_PAUSE := 35.0
 ## Until this moment (in milliseconds) [E] does nothing: the presses that shake off a
 ## Leech must not go on to open the shop next to it.
 var interact_blocked_until := 0
@@ -1136,6 +1147,7 @@ func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node
 		kills += 1
 		hud.kill_feed(str(enemy.spec.label), points, headshot)
 		net.send_feed("PARTNER · %s" % enemy.spec.label, points, false, true, false)
+		praise(enemy, headshot)
 	elif killer is RemoteSurvivor:
 		hud.kill_feed("PARTNER · %s" % enemy.spec.label, points, false, true)
 		net.send_feed(str(enemy.spec.label), points, headshot, false, true)
@@ -1687,6 +1699,10 @@ func interact() -> void:
 ## A radio line: subtitle and recording. Lines never talk over each other; one that
 ## arrives while another is heard waits, and when too many pile up the oldest is dropped.
 func _say(cue: String, seconds: float = 7.0, speaker: String = "") -> void:
+	# The second mission has one queue for everything that is said in it (HiveDirector).
+	if hive.on and state not in ["menu", "win", "lose"]:
+		hive.heard(cue, seconds, speaker)
+		return
 	radio_queue.append([cue, seconds, speaker])
 	while radio_queue.size() > 4:
 		radio_queue.pop_front()
@@ -1697,14 +1713,19 @@ func _run_radio(delta: float) -> void:
 	if radio_busy > 0.0 or radio_queue.is_empty():
 		return
 	var entry: Array = radio_queue.pop_front()
-	# From the moment Nadja is out of her cell the voice of command is not Coleman's.
-	Radio.hijacked = story.enabled and story.stage in ["escort", "evac", "done"]
+	speak_radio(str(entry[0]), float(entry[1]), str(entry[2]) if entry.size() > 2 else "")
+
+## Says a radio line now: the recording, and its words on the radio's panel. Returns the
+## seconds until the channel is free again (0 if there was nothing to say). `tint`: the
+## ink of the words, for a speaker who is not command.
+func speak_radio(cue: String, seconds: float, intruder: String = "", tint: Color = Color(0, 0, 0, 0)) -> float:
+	# From the moment Nadja is out of her cell the voice of command is not Coleman's - and
+	# in the second mission not until the channel has been cleared at the station.
+	Radio.hijacked = (story.enabled and story.stage in ["escort", "evac", "done"]) or hive.channel_taken()
 	# A line of command, or somebody else who has got into the channel (an operator).
-	var intruder := str(entry[2]) if entry.size() > 2 else ""
-	var line := Radio.pick(str(entry[0])) if intruder == "" else Radio.bark(intruder, str(entry[0]))
+	var line := Radio.pick(cue) if intruder == "" else Radio.bark(intruder, cue)
 	if line.is_empty():
-		return
-	var seconds := float(entry[1])
+		return 0.0
 	var length := 0.0
 	if intruder != "":
 		sounds.play_sound("glitch", -9.0)
@@ -1718,7 +1739,8 @@ func _run_radio(delta: float) -> void:
 	else:
 		# Only read, not heard: the next line may follow sooner.
 		radio_busy = minf(seconds, 3.0)
-	hud.radio("%s:  %s" % [line.name, line.text], seconds, Operator.TINT if intruder != "" else Color(0, 0, 0, 0))
+	hud.radio("%s:  %s" % [line.name, line.text], seconds, tint if tint.a > 0.0 else (Operator.TINT if intruder != "" else Color(0, 0, 0, 0)))
+	return radio_busy
 
 ## Somebody who stands in the world calls something out: a squad member, a C.R.U. soldier,
 ## the shopkeeper. Nobody talks over himself, and the C.R.U. take turns.
@@ -1728,6 +1750,9 @@ func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0) -> boo
 	var key: Variant = "cru" if unit else who.get_instance_id()
 	var now := Time.get_ticks_msec()
 	if now < int(bark_until.get(key, 0)):
+		return false
+	# While the mission's own dialogue is heard, the squad keeps its small talk to itself.
+	if who is Teammate and now < talk_until and not cue in URGENT_CALLS:
 		return false
 	var line := Radio.bark(speaker, cue)
 	# A voice that has not recorded a line leaves it to the first voice of the unit.
@@ -1753,6 +1778,26 @@ func squad_call(cue: String, at: Vector3, reach: float, pause: float = 12.0) -> 
 		return false
 	bark_until["call_" + cue] = now + int(pause * 1000.0)
 	return true
+
+## One of the squad calls something out that the squad as a whole says only every `pause`
+## seconds (a pack around it, the leader down): whoever comes to it first says it.
+func squad_says(mate: Teammate, cue: String, pause: float, volume: float = 0.0) -> bool:
+	var now := Time.get_ticks_msec()
+	if now < int(bark_until.get("call_" + cue, 0)) or not bark(mate, mate.look, cue, volume):
+		return false
+	bark_until["call_" + cue] = now + int(pause * 1000.0)
+	return true
+
+## The survivor has put an enemy down in a way that is worth a word: with a shot to the
+## head, or one of the special infected. Whoever of the squad stands near him has that
+## word for it - now and then, not every time (`sure`: every time; for the checks).
+func praise(enemy: Infected, headshot: bool, sure: bool = false) -> bool:
+	var special: bool = enemy.kind != "mauler" and not enemy.spec.get("human", false)
+	if player.down or not (special or headshot):
+		return false
+	if not sure and randf() > (PRAISE_SPECIAL if special else PRAISE_HEAD):
+		return false
+	return squad_call("praise", player.global_position, PRAISE_REACH, PRAISE_PAUSE)
 
 ## Spends a point on an ability and keeps it in the profile. True if it could be spent.
 func learn_skill(id: String) -> bool:

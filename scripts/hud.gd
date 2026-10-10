@@ -871,6 +871,14 @@ func _choose_mission(number: int) -> void:
 	game.profile.choose_mission(number)
 	show_menu(current_menu)
 
+## The second mission: who goes on with the survivor from the station (Profile.company).
+func _company_label() -> String:
+	return "BEGLEITER AB BAHNHOF  ·  %s" % ("OPERATOREN" if game.profile.company == "operators" else "FIRETEAM")
+
+func _next_company() -> void:
+	game.profile.next_company()
+	show_menu(current_menu)
+
 ## A button for one of the missions; the one that is chosen stands out.
 func _mission_button(number: int, text: String) -> Button:
 	var button := _button(text, _choose_mission.bind(number))
@@ -1056,12 +1064,15 @@ func _menu_main(column: VBoxContainer) -> Control:
 	column.add_child(_pair(_button("KOOP HOSTEN", game.host_match), _button("KOOP BEITRETEN", show_menu.bind("join"))))
 	column.add_child(_pair(_button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty), _button("TRUPP & SKINS", show_menu.bind("skins"))))
 	# What the night is: the story or the endless mode, with or without a modifier per round.
-	var mode_button := _button(_mode_label(), _next_mode)
-	var modifier_button := _button(_modifiers_label(), _toggle_modifiers)
-	# The second mission has no rounds, so neither an endless night nor modifiers.
-	mode_button.disabled = second
-	modifier_button.disabled = second
-	column.add_child(_pair(mode_button, modifier_button))
+	# The second mission has no rounds, so neither of the two: in their place it asks who
+	# goes on with the survivor from the station.
+	if second:
+		var company_button := _button(_company_label(), _next_company)
+		company_button.custom_minimum_size = Vector2(430, 46)
+		company_button.add_theme_font_size_override("font_size", 19)
+		column.add_child(company_button)
+	else:
+		column.add_child(_pair(_button(_mode_label(), _next_mode), _button(_modifiers_label(), _toggle_modifiers)))
 	var free: int = game.skills.points_left(game.profile.totals) if Skills.IN_SERVICE else 0
 	var abilities := "FÄHIGKEITEN"
 	if free > 0:
