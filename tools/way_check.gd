@@ -146,7 +146,7 @@ func _initialize() -> void:
 					var mouth := _hits(at + Vector3(-0.7, -1.14, -0.7), at + Vector3(0.7, -0.01, 0.7))
 					if mouth != "":
 						said.append("under the ceiling: " + mouth)
-					var column := _hits(Vector3(at.x - 0.34, float(room.y) + 0.12, at.z - 0.34), Vector3(at.x + 0.34, at.y - 1.1, at.z + 0.34))
+					var column := _hits(Vector3(at.x - 0.34, maxf(float(room.y), land.y if land != Vector3.INF else -INF) + 0.12, at.z - 0.34), Vector3(at.x + 0.34, at.y - 1.1, at.z + 0.34))
 					if column != "":
 						said.append("below it: " + column)
 			"hole":

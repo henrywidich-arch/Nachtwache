@@ -4918,7 +4918,8 @@ func _way_mouth(at: Vector3, turn: int, shaft: float, tones: Dictionary, real: b
 		_hose(frame * Vector3(-0.42 + k * 0.1, (0.5 if real else -0.04), 0.4), foot, 0.013, [Color("101214"), Color("5d2f22"), Color("2b3a4a")][k], 0.0, facing * Vector3(0.12, 0, -0.05), 4)
 	return _way_flap(Transform3D(facing, frame * Vector3(0, -hang - 0.05, -(half - 0.06))), wide - 0.16, wide - 0.16, tones.grille, 6, random.randf_range(80.0, 88.0))
 
-## A hole in the ceiling of a room with a dark shaft above it. Options: shaft (its height).
+## A hole in the ceiling of a room with a dark shaft above it. Options: shaft (its height),
+## land (how far above the room's floor the ground lies they come down on: a gallery).
 func _way_drop(room_id: String, x: float, z: float, turn: int = 0, options: Dictionary = {}) -> void:
 	var room: Dictionary = room_of[room_id]
 	_begin_zone(str(room.zone))
@@ -4931,7 +4932,7 @@ func _way_drop(room_id: String, x: float, z: float, turn: int = 0, options: Dict
 	(room.shafts as Array).append(Rect2(x - 0.6, z - 0.6, 1.2, 1.2))
 	var flap := _way_mouth(Vector3(x, top, z), turn, float(options.get("shaft", 1.9)), tones, true)
 	# What came down with the first of them.
-	var ground := Vector3(x, floor_y, z)
+	var ground := Vector3(x, floor_y + float(options.get("land", 0.0)), z)
 	_blot(ground + Vector3(random.randf_range(-0.3, 0.3), 0, random.randf_range(-0.3, 0.3)), random.randf_range(0.4, 0.6), random.randf_range(0.26, 0.4))
 	_way_chips(tones, ground, 1.1, 7)
 	_part("plate", ground + Vector3(random.randf_range(-0.6, 0.6), 0.008, random.randf_range(-0.6, 0.6)), Vector3(0.9, 0.012, 0.07), tones.grille, Vector3(0, random.randf_range(1.0, 179.0), 0))
@@ -5060,7 +5061,8 @@ func _way_hole(room_id: String, side: int, a: float, skin: String = "breach") ->
 ## The mouth of an air duct high in a wall, its trunk running up the wall above it, its
 ## grille hanging down under it. Options: sill (its lower edge over the floor; left out,
 ## by the height of the room), trunk (how high its trunk reaches; left out, to the
-## ceiling). Only where nothing lies behind the wall.
+## ceiling), floor (how far above the room's floor the ground lies they come down on: a
+## gallery along that wall). Only where nothing lies behind the wall.
 func _way_duct(room_id: String, side: int, a: float, options: Dictionary = {}) -> void:
 	var room: Dictionary = room_of[room_id]
 	_begin_zone(str(room.zone))
@@ -5108,9 +5110,10 @@ func _way_duct(room_id: String, side: int, a: float, options: Dictionary = {}) -
 	# What ran down the wall under it, and lies on the floor.
 	for k in range(3):
 		_way_stain(frame, front, -0.36 + k * 0.33 + random.randf_range(-0.05, 0.05), sill - 0.16 - random.randf_range(0.3, 0.6), random.randf_range(0.04, 0.08), random.randf_range(0.35, 0.7), Color(0.03, 0.03, 0.03, 0.5) if k != 1 else Color(0.2, 0.015, 0.012, 0.6))
-	_blot(frame * Vector3(random.randf_range(-0.3, 0.3), 0, -random.randf_range(0.7, 1.2)), 0.5, 0.32)
-	_way_chips(tones, frame * Vector3(0, 0, -0.9), 0.8, 5, 0.1)
-	_way("duct", room_id, frame * Vector3(0, sill, 0), -frame.basis.z, frame * Vector3(0, 0, -1.5), {"node": flap, "deep": 0.55})
+	var ground := float(options.get("floor", 0.0))
+	_blot(frame * Vector3(random.randf_range(-0.3, 0.3), ground, -random.randf_range(0.7, 1.2)), 0.5, 0.32)
+	_way_chips(tones, frame * Vector3(0, ground, -0.9), 0.8, 5, 0.1)
+	_way("duct", room_id, frame * Vector3(0, sill, 0), -frame.basis.z, frame * Vector3(0, ground, -1.5), {"node": flap, "deep": 0.55})
 	_end_zone()
 
 ## A window of the house as a way in: its sash - glass and glazing bars - is a node of its
@@ -5264,6 +5267,16 @@ func _lay_entries() -> void:
 	_way_hole("terminal", NORTH, -30.0, "vent")
 	_way_hole("terminal", NORTH, 22.0)
 	_way_drop("control", 24.0, -343.5, 0, {"shaft": 2.2})
+	# (and what the gallery and its stairs were missing: out of the roof of the hall on to
+	# the gallery, ducts in the wall along it, and down on to the floor at the foot of the
+	# stairs and in the middle)
+	var up := DECK - UNDER
+	for x in [-14.0, 3.0, 18.6]:
+		_way_drop("terminal", float(x), -343.0, 2, {"land": up})
+	_way_duct("terminal", NORTH, -21.0, {"floor": up, "sill": up + 1.9, "trunk": 9.0})
+	_way_duct("terminal", NORTH, 11.0, {"floor": up, "sill": up + 1.9, "trunk": 9.0})
+	_way_drop("terminal", -22.0, -330.0, 1)
+	_way_drop("terminal", 6.5, -330.8, 3)
 	# --- the administration: the checkpoint and its two rooms, the ring from end to end,
 	# every office off it, the spine to the canteen
 	_way_drop("checkpoint", -3.6, -352.0, 1)
@@ -5304,6 +5317,13 @@ func _lay_entries() -> void:
 	_way_duct("cafeteria", SOUTH, 18.0)
 	_way_drop("cafeteria", -12.0, -420.5, 0)
 	_way_drop("cafeteria", 10.0, -415.5, 2)
+	# (the hall that is held is a siege: its ceiling opens all over)
+	_way_drop("cafeteria", -4.5, -410.0, 1)
+	_way_drop("cafeteria", 4.5, -422.5, 3)
+	_way_drop("cafeteria", -20.5, -415.5, 0)
+	_way_drop("cafeteria", 19.5, -430.5, 2)
+	_way_drop("cafeteria", -4.0, -431.5, 1)
+	_way_drop("cafeteria", 14.0, -408.4, 0)
 	_way_drop("kitchen_f", 31.0, -414.0, 0)
 	_way_duct("kitchen_f", NORTH, 31.0)
 	_way_hole("cafe_store", WEST, -422.6)

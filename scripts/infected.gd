@@ -363,6 +363,11 @@ var voices: Dictionary = {}
 ## Set while it comes through a way in of the second mission (a ceiling, a hole in a
 ## wall): that has the body until it stands on the floor. See HiveEntries.carry.
 var entering: HiveEntries = null
+## Fresh out of such a way in: the seconds left in which it is quicker, takes less and
+## deals less (HiveEntries.FRESH_*; HiveEntries counts them down and shows them).
+var fresh := 0.0
+func harm() -> float:
+	return float(game.rules.harm) * (HiveEntries.FRESH_HARM if fresh > 0.0 else 1.0)
 var model: InfectedVisual
 var head_box: StaticBody3D
 
@@ -747,6 +752,8 @@ func _physics_process(delta: float) -> void:
 	var pace := speed if alert else LURK_SPEED
 	if alert and warded > 0.0:
 		pace *= BUFF_PACE
+	if fresh > 0.0:
+		pace *= HiveEntries.FRESH_PACE
 	if alert and distance > HURRY_FROM:
 		pace = minf(pace * (1.0 + minf((distance - HURRY_FROM) / 18.0, 1.0) * HURRY_BOOST), maxf(pace, HURRY_TOP))
 	if enraged:
@@ -800,7 +807,7 @@ func _physics_process(delta: float) -> void:
 			struck = true
 			var hit := distance < attack_reach * 1.25 and same_floor and _clear_line(target)
 			if hit:
-				prey.receive_damage(attack_damage * float(game.rules.harm), global_position, "", Skills.kind_of(self))
+				prey.receive_damage(attack_damage * harm(), global_position, "", Skills.kind_of(self))
 			if kind == "crusher":
 				game.sounds.play_at("thud", global_position, 6.0 if jump != "" else 4.0)
 				game.player.shake_from(global_position, 1.3 if jump != "" else 0.9, 18.0 if jump != "" else 14.0)
@@ -878,7 +885,7 @@ func _cling(delta: float, target: Vector3, distance: float, same_floor: bool) ->
 	cling_tick -= delta
 	if cling_tick <= 0.0:
 		cling_tick = 0.5
-		clung_to.receive_damage(float(spec.cling_damage) * 0.5 * float(game.rules.harm), global_position, "", "special")
+		clung_to.receive_damage(float(spec.cling_damage) * 0.5 * harm(), global_position, "", "special")
 		cue("attack", ["punch" if randf() < 0.5 else "punch_left", 0.45, 0.2])
 	return true
 
@@ -1097,7 +1104,7 @@ func _pounce(delta: float, target: Vector3, distance: float, same_floor: bool) -
 			var chest: Vector3 = prey.global_position + Vector3(0, 0.9, 0)
 			if not leap_hit and chest.distance_to(global_position + Vector3(0, 0.5, 0)) < 1.25:
 				leap_hit = true
-				prey.receive_damage(float(spec.pounce_damage) * float(game.rules.harm), global_position, "", Skills.kind_of(self))
+				prey.receive_damage(float(spec.pounce_damage) * harm(), global_position, "", Skills.kind_of(self))
 				cue("bite")
 				velocity.x *= 0.15
 				velocity.z *= 0.15
@@ -1160,6 +1167,8 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 	# Strengthened by a Medic's gas, it takes less.
 	if warded > 0.0:
 		amount *= CLOUD_WARD
+	if fresh > 0.0:
+		amount *= HiveEntries.FRESH_WARD
 	health -= amount
 	# Which way the shot twists the body depends on the side it came from.
 	var side := 1.0 if facing().cross(direction).y > 0.0 else -1.0

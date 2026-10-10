@@ -52,25 +52,40 @@ const CHECKPOINTS := {
 	"labs": {"at": "labs_south", "open": ["descent", "station", "admin", "cafe", "atrium", "decon", "research"], "credits": 1700}
 }
 ## Who keeps coming while a stage lasts: the kinds (drawn at random), how many may be alive
-## at once, the seconds between two, and where they come from ("park": over the park's
-## wall; "hidden": anywhere near that the squad cannot see). Under a roof most of them
-## take a way in instead - a hole in a ceiling or a wall, a window: see HiveEntries.
+## at once, the seconds between two deliveries, where they come from ("park": over the
+## park's wall; "hidden": anywhere near that the squad cannot see), and how many a
+## delivery through a way in brings, at the least and at the most. Under a roof nearly
+## every delivery is such a pack: it pours out of a hole in a ceiling or a wall, out of a
+## duct, through a window, one behind the other (see HiveEntries) - the next pack out of
+## another one, so that a stage that lasts has the squad under attack from several sides.
+## A delivery that finds no way in is one body, as it always was, and the next is sooner
+## (LONE of the time). The numbers are those of NORMAL: see _crowd for the other levels.
 const PRESSURE := {
 	# (The first stages are gentle: the squad has only what it landed with.)
-	"landing": [["mauler", "mauler", "mauler", "striker"], 3, 7.0, "park"],
-	"villa": [["mauler", "mauler", "mauler", "striker"], 4, 6.0, "hidden"],
-	"mirror": [["mauler", "mauler", "striker", "ripper"], 6, 3.0, "hidden"],
-	"descent": [["mauler", "ripper"], 3, 6.0, "hidden"],
-	"hold": [["mauler", "mauler", "striker", "ripper", "charger", "leech"], 11, 1.7, "hidden"],
-	"admin": [["mauler", "mauler", "striker", "ripper"], 6, 5.0, "hidden"],
-	"security": [["mauler", "striker", "ripper", "leech"], 7, 4.5, "hidden"],
-	"cafe": [["mauler", "striker", "ripper"], 6, 5.0, "hidden"],
-	"lockdown": [["mauler", "mauler", "striker", "ripper", "charger", "leech", "healer"], 12, 1.6, "hidden"],
-	"atrium": [["mauler", "striker", "ripper", "leech"], 7, 4.5, "hidden"],
-	"generator": [["ripper", "ripper", "leech", "mauler", "striker"], 8, 3.5, "hidden"],
-	"labs": [["mauler", "striker", "ripper", "leech", "healer"], 8, 4.0, "hidden"],
-	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 12, 2.0, "hidden"]
+	"landing": [["mauler", "mauler", "mauler", "striker"], 3, 7.0, "park", [1, 1]],
+	"villa": [["mauler", "mauler", "mauler", "striker"], 5, 8.0, "hidden", [2, 2]],
+	# (Where the squad holds a place - the dining room, the platform, the canteen, the hall
+	# of towers - they come faster than three guns put them down: it fills up.)
+	"mirror": [["mauler", "mauler", "striker", "ripper"], 8, 5.5, "hidden", [2, 3]],
+	"descent": [["mauler", "ripper"], 4, 8.0, "hidden", [2, 2]],
+	"hold": [["mauler", "mauler", "striker", "ripper", "charger", "leech"], 14, 5.5, "hidden", [3, 4]],
+	# (Where it is on its way they come in packs it can fight down and walk on from.
+	# The terminal had nobody coming at all: once its hall was cleared it stayed empty.)
+	"terminal": [["mauler", "mauler", "striker", "ripper", "leech"], 8, 9.0, "hidden", [2, 4]],
+	"admin": [["mauler", "mauler", "striker", "ripper"], 8, 9.0, "hidden", [2, 3]],
+	"security": [["mauler", "striker", "ripper", "leech"], 8, 9.0, "hidden", [2, 4]],
+	"cafe": [["mauler", "striker", "ripper"], 8, 9.0, "hidden", [2, 3]],
+	"lockdown": [["mauler", "mauler", "striker", "ripper", "charger", "leech", "healer"], 14, 5.5, "hidden", [3, 4]],
+	"atrium": [["mauler", "striker", "ripper", "leech"], 8, 9.0, "hidden", [2, 4]],
+	"generator": [["ripper", "ripper", "leech", "mauler", "striker"], 9, 8.0, "hidden", [2, 4]],
+	"labs": [["mauler", "striker", "ripper", "leech", "healer"], 9, 8.5, "hidden", [2, 4]],
+	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 12, 6.5, "hidden", [3, 4]]
 }
+const LONE := 0.5
+## How many may be alive at once in this mission whatever a stage and a level say (the
+## squad's guns and the answer to camping come on top): what the frame rate was measured
+## with.
+const CROWD_LIMIT := 24
 ## Who the plain infected of this mission were. Besides the looks they have everywhere, a
 ## share of them wears what the people here wore: "above" (the villa and the station) now
 ## and then somebody of the guard, a worker or a civilian; "below" (the facility, from the
@@ -1240,21 +1255,42 @@ func _park_spot() -> Vector3:
 		return Vector3.INF
 	return map.spawn_points[order[randi() % mini(3, order.size())]] + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-1.5, 1.5))
 
+## What the level makes of a stage's numbers (the rule "horde": 0.8 on LEICHT, 1.25 on
+## SCHWER, 1.5 on ALBTRAUM): so many more may be alive at once, and so much bigger is a
+## pack. (Game.alive_cap, which thins the crowd of the farm where the infected are
+## tougher, does not reach down here: they do not come through three doors but out of the
+## walls all around, and nothing piles up.)
+func _horde() -> float:
+	return float(game.rules.get("horde", 1.0))
+
+## How many may be alive at once in the stage that runs. (Whoever digs himself in gets a
+## few more: see HiveEntries.)
+func _crowd() -> int:
+	if not PRESSURE.has(stage):
+		return 0
+	return mini(CROWD_LIMIT, roundi(int(PRESSURE[stage][1]) * _horde())) + game.extra_guns() + entries.more()
+
 func _run_pressure(delta: float) -> void:
 	if not PRESSURE.has(stage) or intro_left > 0.0:
 		return
 	var plan: Array = PRESSURE[stage]
 	pressure_left -= delta
-	# (Whoever digs himself in gets them sooner, and a few more at once: see HiveEntries.)
-	if pressure_left > 0.0 or game.alive_count + entries.coming() >= int(plan[1]) + game.extra_guns() + entries.more():
+	var room: int = _crowd() - int(game.alive_count) - entries.coming()
+	if pressure_left > 0.0 or room <= 0:
 		return
+	# (Whoever digs himself in gets them sooner.)
 	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste()
 	var kinds: Array = plan[0]
 	var kind := str(kinds[randi() % kinds.size()])
-	# Most of them come through a way in near the squad - out of a ceiling, out of a wall -,
-	# also in plain sight; the others as they always did, from where nobody looks.
-	if entries.send(kind):
+	# Nearly all of them come through a way in near the squad - out of a ceiling, out of a
+	# wall -, also in plain sight, and a pack of them; the others as they always did, one
+	# at a time from where nobody looks.
+	var sizes: Array = plan[4]
+	var pack := mini(room, maxi(1, roundi(randf_range(float(sizes[0]) - 0.49, float(sizes[1]) + 0.49) * _horde())))
+	if entries.send(kind, pack, kinds):
 		return
+	if int(sizes[1]) > 1:
+		pressure_left *= LONE
 	var at := _park_spot() if str(plan[3]) == "park" or (map.level_of(game.player.global_position) == map.ground and not map.is_indoors(game.player.global_position)) else _hidden_spot(13.0, 30.0)
 	if at != Vector3.INF:
 		_spawn(kind, at)

@@ -2415,6 +2415,12 @@ func _run_hive_check() -> void:
 	var timing := "--hive-fps" in OS.get_cmdline_user_args()
 	if timing:
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+	# --hive-crowd=<n> (with --hive-fps): so many infected are on the squad in every view
+	# that is timed - what a hold costs.
+	var crowd := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hive-crowd="):
+			crowd = int(arg.trim_prefix("--hive-crowd="))
 	for view in hive_map.tour():
 		if part != "" and not str(view[0]).begins_with(part):
 			continue
@@ -2423,8 +2429,29 @@ func _run_hive_check() -> void:
 				continue
 			var line: Vector3 = (view[2] as Vector3) - ((view[1] as Vector3) + Vector3(0, 1.62, 0))
 			_place_player((view[1] as Vector3) + Vector3(0, 0.05, 0), rad_to_deg(atan2(-line.x, -line.z)), rad_to_deg(atan2(line.y, Vector2(line.x, line.z).length())))
-			await tick.call(1.7)
-			print("HIVE_FPS %s fps=%d draws=%d tris=%d" % [view[0], int(Engine.get_frames_per_second()), int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))])
+			if crowd > 0:
+				var ahead := Vector3(line.x, 0, line.z).normalized()
+				for k in range(crowd):
+					var spot: Vector3 = (view[1] as Vector3) + ahead * randf_range(4.0, 13.0) + ahead.cross(Vector3.UP) * randf_range(-5.0, 5.0)
+					var made: Infected = hive._place(["mauler", "mauler", "striker", "ripper", "charger", "leech"][k % 6], spot)
+					if made != null:
+						made.alert = true
+						made.fresh = 0.0 if "--hive-plain" in OS.get_cmdline_user_args() else HiveEntries.FRESH_SECONDS
+						hive.entries.fresh.append({"body": made, "dust": null})
+				hive.entries.on = true
+				hive.entries.map = hive_map
+				for k in range(34):
+					player.health = 100.0
+					hive.entries._wear(0.05)
+					await tick.call(0.05)
+			else:
+				await tick.call(1.7)
+			print("HIVE_FPS %s fps=%d draws=%d tris=%d alive=%d" % [view[0], int(Engine.get_frames_per_second()), int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), alive_count])
+			if crowd > 0:
+				for node in enemies.get_children():
+					node.queue_free()
+				alive_count = 0
+				hive.entries.fresh.clear()
 			continue
 		if view.size() > 3 and bool(view[3]):
 			player.position = (view[2] as Vector3) + Vector3(0, 0.05, 0)

@@ -6240,9 +6240,86 @@ func _hive(game: Node3D) -> void:
 		if game.alive_count >= 6:
 			_wipe_all(game)
 	var open_share: float = float(ways.came) / maxf(1.0, ways.came + ways.passed)
+	# (a way in pours: what came were packs, out of several ways in)
+	var mouths := {}
+	for index in ways.used:
+		mouths[index] = true
+	expect(ways.packs >= 4 and ways.biggest >= 3 and ways.came >= ways.packs * 2 and mouths.size() >= 3 and hive._crowd() == int(HiveDirector.PRESSURE.lockdown[1]) + game.extra_guns(), "A way in pours: in half a minute of the lockdown %d came in %d packs (the biggest %d) out of %d ways in, and %d may be alive at once" % [ways.came, ways.packs, ways.biggest, mouths.size(), hive._crowd()])
 	expect(ways.came >= 4 and warned >= 1 and open_share > 0.4 and ways.told.has("hole"), "While a stage runs, most of those who keep coming are announced at a way in and come through it - the first time the survivor is told what the noise means -; the others come as before, from where nobody looks (%d of %d)" % [ways.came, ways.came + ways.passed])
 	_wipe_all(game)
 	await frames(2)
+	# --- a pack: one behind the other, each a step beside the one before; and whoever is
+	# fresh out of a way in is quicker, takes less and deals less for a few seconds - and
+	# it shows
+	var pour_way := -1
+	for k in range(map.entries.size()):
+		if pour_way < 0 and str(map.entries[k].id).begins_with("ring_s_drop"):
+			pour_way = k
+	var pour: Dictionary = map.entries[pour_way]
+	face(game, (pour.land as Vector3) + Vector3(7, 0.05, 2), 0.0)
+	await frames(2)
+	var places := {}
+	var fanned: bool = ways.spot(pour, 0) == pour.land
+	for fan in range(1, 7):
+		var place: Vector3 = ways.spot(pour, fan)
+		places[place.snapped(Vector3.ONE * 0.05)] = true
+		fanned = fanned and (place == pour.land or is_equal_approx(place.distance_to(pour.land), HiveEntries.FAN))
+	ways.due.clear()
+	ways.came = 0
+	ways.packs = 0
+	var four: Array[String] = ["mauler", "striker", "mauler", "mauler"]
+	ways.announce(pour_way, "mauler", four)
+	var queued: bool = ways.coming() == 4 and is_equal_approx(float(ways.due[3].left) - float(ways.due[0].left), 3 * HiveEntries.GAP) and ways.rested[pour_way] > ways.clock + 3 * HiveEntries.GAP
+	var first_alone := false
+	for k in range(150):
+		await frames(1)
+		if ways.came == 1 and ways.coming() == 3:
+			first_alone = true
+	var fresh_ones := 0
+	var newcomer: Infected = null
+	for node in game.enemies.get_children():
+		if node is Infected and (node as Infected).fresh > 0.0 and not (node as Infected).dead:
+			fresh_ones += 1
+			newcomer = node
+	var harm_rule := float(game.rules.harm)
+	var bonus := false
+	var dusted := false
+	var worn := false
+	if newcomer != null:
+		newcomer.fresh = HiveEntries.FRESH_SECONDS
+		await frames(2)
+		var had: float = newcomer.health
+		newcomer.receive_hit(20.0, Vector3.FORWARD)
+		bonus = is_equal_approx(had - newcomer.health, 20.0 * HiveEntries.FRESH_WARD) and is_equal_approx(newcomer.harm(), harm_rule * HiveEntries.FRESH_HARM)
+		dusted = newcomer.model.mesh_instance.material_overlay != null and ways.films.has(newcomer.model.mesh_instance.material_overlay)
+		newcomer.fresh = 0.02
+		await frames(4)
+		had = newcomer.health
+		newcomer.receive_hit(20.0, Vector3.FORWARD)
+		worn = newcomer.fresh == 0.0 and is_equal_approx(had - newcomer.health, 20.0) and is_equal_approx(newcomer.harm(), harm_rule) and newcomer.model.mesh_instance.material_overlay == null
+	expect(fanned and places.size() >= 3 and queued and first_alone and ways.came == 4 and ways.packs == 1, "A pack comes through a way in one behind the other, %.1f s apart, each a step beside the one before (%d places around the landing), and the way in rests after the last of them" % [HiveEntries.GAP, places.size()])
+	expect(fresh_ones >= 1 and bonus and dusted and worn and HiveEntries.FRESH_PACE > 1.0, "Fresh out of a way in a body is quicker, takes %d %% less and deals %d %% less for %d seconds, under a film of dust that fades; then it is as any other" % [roundi((1.0 - HiveEntries.FRESH_WARD) * 100), roundi((1.0 - HiveEntries.FRESH_HARM) * 100), roundi(HiveEntries.FRESH_SECONDS)])
+	_wipe_all(game)
+	await frames(2)
+	# --- the two places that were empty: the terminal has somebody coming now, on to its
+	# gallery too; the canteen's ceiling opens all over
+	var on_deck := 0
+	var deck_reached := true
+	var term_ways := 0
+	var cafe_drops := 0
+	for way in map.entries:
+		if str(way.room) == "terminal":
+			term_ways += 1
+			if absf((way.land as Vector3).y - HiveMap.DECK) < 0.3:
+				on_deck += 1
+				deck_reached = deck_reached and not map.path_between(way.land, map.points.control).is_empty() and not map.path_between(way.land, map.points.terminal).is_empty()
+		elif str(way.room) == "cafeteria" and str(way.kind) == "drop":
+			cafe_drops += 1
+	var every_pack := true
+	for id: String in HiveDirector.PRESSURE:
+		var sizes: Array = HiveDirector.PRESSURE[id][4]
+		every_pack = every_pack and int(sizes[0]) >= 1 and int(sizes[1]) >= int(sizes[0]) and (id == "landing" or int(sizes[1]) >= 2)
+	expect(HiveDirector.PRESSURE.has("terminal") and term_ways >= 13 and on_deck >= 5 and deck_reached and cafe_drops >= 8 and every_pack, "The terminal has infected coming while it lasts, through %d ways in - %d of them come down on its gallery, from where they reach the control room and the hall -, and the canteen's ceiling has %d holes" % [term_ways, on_deck, cafe_drops])
 	# --- camping: staying put is noticed, and answered from the nearest ways in - the one
 	# in the survivor's own room among them -, sooner and with more
 	face(game, Vector3(27.5, HiveMap.UNDER + 0.05, -410.0), 0.0)
@@ -6342,7 +6419,7 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 		await get_tree().physics_frame
 		if hive.stage != last_stage:
 			stages.append("%s:%ds" % [last_stage, int(game.elapsed - stage_began)])
-			print("BOT_STAGE %s after %ds at t=%d kills=%d alive=%d" % [last_stage, int(game.elapsed - stage_began), int(game.elapsed), game.kills, game.alive_count])
+			print("BOT_STAGE %s after %ds at t=%d kills=%d alive=%d heals=%d" % [last_stage, int(game.elapsed - stage_began), int(game.elapsed), game.kills, game.alive_count, heals])
 			last_stage = hive.stage
 			stage_began = game.elapsed
 			waited = 0.0

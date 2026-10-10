@@ -17,15 +17,17 @@ extends Node
 ## Camping: a survivor who stays within CAMP_RADIUS metres for CAMP_AFTER seconds gets
 ## them from the ways in nearest to him - the one in his own room first -, and sooner.
 
-## The share of those who keep coming that take a way in when one fits. The others come
-## as they always did: from somewhere near that nobody of the squad sees.
-const SHARE := 0.75
-## Whoever comes through a way in is there at once, where one who came the old way had a
-## walk before him (and often found no place to come from at all): the next one is this
-## much longer in coming, so that a stage brings about as many as it always did.
-const TOLL := 1.5
+## The share of what a stage sends (HiveDirector.PRESSURE) that takes a way in when one
+## fits. The others come as they always did: one, from somewhere near that nobody sees.
+const SHARE := 0.88
+## A way in pours: what the director sends through one is a pack (as many as the stage
+## says, see HiveDirector.PRESSURE), one behind the other, GAP seconds apart - never two
+## in the same place at once: each comes down a step beside the one before (FAN metres
+## from the middle of the landing place, where the ground there is free).
+const GAP := 0.5
+const FAN := 0.62
 ## Not in the first seconds of a stage.
-const GRACE := 8.0
+const GRACE := 4.0
 ## A way in is in use when the place it leads to lies this far from the survivor: never
 ## on top of him, and near enough to matter (metres; REACH also bounds the way on foot).
 const KEEP := 4.5
@@ -34,14 +36,31 @@ const REACH := 30.0
 const MOST := 9
 ## Who can use them: everybody but the big ones and the soldiers.
 const KINDS := ["mauler", "striker", "ripper", "charger", "leech", "healer"]
+## Of these a pack has one at the most (two that burst side by side, or two that mend
+## each other, are more than a pack is meant to be): the others of it are plain infected.
+const RARE := ["charger", "leech", "healer"]
 ## Seconds of warning before somebody comes through.
 const WARN := 0.7
-## One way in is not used again for this long.
-const REST := 2.4
+## One way in is not used again for this long after the last of a pack.
+const REST := 1.6
+## Fresh out of a way in: for FRESH_SECONDS after it stands on the floor a body is this
+## much quicker (FRESH_PACE), takes this much of what hits it (FRESH_WARD) and deals this
+## much of what it usually deals (FRESH_HARM). It shows: the dust of the shaft still lies
+## on it (a pale film that fades, FRESH_FILM its strength at first) and falls off it.
+const FRESH_SECONDS := 4.0
+const FRESH_PACE := 1.25
+const FRESH_WARD := 0.75
+const FRESH_HARM := 0.85
+const FRESH_FILM := 0.5
+const FRESH_TINT := Color(0.82, 0.78, 0.7)
 ## How much more likely a way in is taken that lies behind the survivor's back, or
 ## beside him, than one he is looking towards.
 const BEHIND := 3.0
 const BESIDE := 2.0
+## Where a stage has its own way of coming: how much more likely a way in of a kind is
+## taken while it runs (the canteen is besieged from its ceiling above all, and in the
+## terminal they drop on to the gallery and at the foot of its stairs).
+const LIKES := {"lockdown": {"drop": 2.2}, "terminal": {"drop": 2.0}}
 ## Camping (see above). CAMP_FULL: seconds after CAMP_AFTER until it is answered in full.
 ## Then the time between two who come is CAMP_HASTE of what the stage says, CAMP_MORE more
 ## may be alive at once, only the CAMP_NEAREST ways in nearest to him are in use, and
@@ -89,8 +108,15 @@ var on := false
 var clock := 0.0
 ## The director's clock when it was last looked at (it starts again with every night).
 var seen := 0.0
-## Who has been announced and is not there yet: {entry, kind, left}.
+## Who has been announced and is not there yet: {entry, kind, left, fan}.
 var due: Array[Dictionary] = []
+## Who is fresh out of a way in: {body, dust} (see FRESH_SECONDS).
+var fresh: Array[Dictionary] = []
+var films: Array[StandardMaterial3D] = []
+var trails: Array[CPUParticles3D] = []
+## How many packs came this night, and the biggest of them (for the checks).
+var packs := 0
+var biggest := 0
 ## When each way in may be used again (seconds of `clock`).
 var rested := PackedFloat32Array()
 var last := -1
@@ -137,8 +163,11 @@ func begin() -> void:
 	camp_time = 0.0
 	came = 0
 	passed = 0
+	packs = 0
+	biggest = 0
 	used.clear()
 	told.clear()
+	_shed_all()
 	rested.resize(map.entries.size())
 	rested.fill(0.0)
 	# Everything hangs as it was built, and every window is whole again.
@@ -153,6 +182,7 @@ func end() -> void:
 	on = false
 	due.clear()
 	swings.clear()
+	_shed_all()
 
 func _process(delta: float) -> void:
 	# (The director says when a night begins; a night taken up again begins its clock anew.)
@@ -175,8 +205,9 @@ func _process(delta: float) -> void:
 		due.remove_at(index)
 		# (Not if the stage has moved on to one in which nobody comes.)
 		if HiveDirector.PRESSURE.has(director.stage) and director.intro_left <= 0.0:
-			come(int(job.entry), str(job.kind))
+			come(int(job.entry), str(job.kind), int(job.get("fan", 0)))
 	_swing(delta)
+	_wear(delta)
 
 # ---------------------------------------------------------------- camping
 
@@ -208,9 +239,10 @@ func coming() -> int:
 
 # ---------------------------------------------------------------- choosing
 
-## Somebody of `kind` is to come: through a way in, if one fits. False leaves it to the
-## director to bring him the old way.
-func send(kind: String) -> bool:
+## Somebody of `kind` is to come: through a way in, if one fits - and with him as many
+## of `others` as make a pack of `pack` (those of them that fit through). False leaves it
+## to the director to bring him the old way.
+func send(kind: String, pack: int = 1, others: Array = []) -> bool:
 	if not on or not KINDS.has(kind) or director.stage_time < GRACE:
 		return false
 	# (Under the open sky they come over the wall of the park, as they always did.)
@@ -224,17 +256,36 @@ func send(kind: String) -> bool:
 	if index < 0:
 		passed += 1
 		return false
-	announce(index, kind)
-	director.pressure_left *= TOLL
+	var kinds: Array[String] = [kind]
+	var fitting: Array = others.filter(func(other: Variant) -> bool: return KINDS.has(str(other)))
+	var rare := RARE.has(kind)
+	while kinds.size() < pack and not fitting.is_empty():
+		var next := str(fitting[randi() % fitting.size()])
+		if RARE.has(next):
+			next = "mauler" if rare else next
+			rare = true
+		kinds.append(next)
+	announce(index, kind, kinds)
 	return true
 
-## Announces somebody at a way in: the warning now, the body WARN seconds later.
-func announce(index: int, kind: String) -> void:
+## Announces somebody at a way in: the warning now, the body WARN seconds later - and
+## with `pack` (the kinds of all of them, the first included) the others behind him.
+func announce(index: int, kind: String, pack: Array[String] = []) -> void:
 	_tell(str(map.entries[index].kind))
-	due.append({"entry": index, "kind": kind, "left": WARN})
-	rested[index] = clock + REST * lerpf(1.0, 0.6, heat())
+	var all: Array[String] = pack
+	if all.is_empty():
+		all = [kind]
+	# (The first comes down in the middle, the others around it in turn; where that
+	# begins changes from pack to pack.)
+	var turn := randi() % 6
+	for k in range(all.size()):
+		due.append({"entry": index, "kind": all[k], "left": WARN + k * GAP, "fan": 0 if k == 0 else 1 + (turn + k) % 6})
+	var lasts := (all.size() - 1) * GAP
+	rested[index] = clock + lasts + REST * lerpf(1.0, 0.6, heat())
 	last = index
-	_warn(index)
+	packs += 1
+	biggest = maxi(biggest, all.size())
+	_warn(index, lasts)
 
 ## The ways in that are of use right now, nearest first: [metres to walk from there to the
 ## survivor, index]. Each leads to free ground from which he can be walked to.
@@ -274,6 +325,7 @@ func weights(options: Array, here: Vector3, facing: Vector3, room_id: String, ho
 		var side := ahead.dot(Vector2(to.x, to.z).normalized())
 		var weight := BEHIND if side < -0.25 else (BESIDE if side < 0.55 else 1.0)
 		weight *= clampf(1.25 - float(options[k][0]) / REACH, 0.25, 1.0)
+		weight *= float((LIKES.get(director.stage, {}) as Dictionary).get(str(entry.kind), 1.0))
 		if hot > 0.0:
 			weight *= lerpf(1.0, 3.0 if k < CAMP_NEAREST else 0.0, hot)
 			if room_id != "" and str(entry.room) == room_id:
@@ -322,7 +374,7 @@ func _tell(kind: String) -> void:
 		_:
 			game.hud.announce("SIE KOMMEN DURCH DECKEN UND WÄNDE", "Ein Gitter klappert, Staub fällt – einen Augenblick später sind sie da. Auch hinter dir.", 4.5)
 
-func _warn(index: int) -> void:
+func _warn(index: int, lasts: float = 0.0) -> void:
 	var entry: Dictionary = map.entries[index]
 	var at: Vector3 = entry.at
 	var out: Vector3 = entry.out
@@ -345,7 +397,7 @@ func _warn(index: int) -> void:
 			_sound("scrabble", at)
 			_puff(at - out * 0.3, Vector3.UP, 8)
 	if is_instance_valid(entry.node):
-		swings[index] = {"time": 0.0, "rattle": WARN + 0.1, "kicked": -1.0}
+		swings[index] = {"time": 0.0, "rattle": WARN + 0.1 + lasts, "kicked": -1.0}
 
 ## Moves what rattles and what has been thrown aside, until it hangs still again.
 func _swing(delta: float) -> void:
@@ -373,8 +425,27 @@ func _swing(delta: float) -> void:
 
 # ---------------------------------------------------------------- coming through
 
-## Somebody of `kind` comes through a way in, now. Returns him.
-func come(index: int, kind: String) -> Infected:
+## Where the `fan`-th of a pack comes down at a way in: 0 is the middle of its landing
+## place, 1 to 6 a step from it, around it in turn - where the ground there is free and
+## it is not back towards the wall the way in is in.
+func spot(entry: Dictionary, fan: int) -> Vector3:
+	var land: Vector3 = entry.land
+	if fan <= 0 or bool(entry.get("fixed", false)):
+		return land
+	var out: Vector3 = entry.out
+	var grid: AStarGrid2D = map.navigation[int(entry.level)]
+	for step in range(6):
+		var angle := (fan - 1 + step) * TAU / 6.0 + 0.4
+		var to := land + Vector3(cos(angle), 0, sin(angle)) * FAN
+		if out != Vector3.ZERO and (to - land).dot(out) < -0.2:
+			continue
+		var cell := Vector2i(roundi(to.x / CabinMap.CELL), roundi(to.z / CabinMap.CELL))
+		if grid.is_in_boundsv(cell) and not grid.is_point_solid(cell):
+			return to
+	return land
+
+## Somebody of `kind` comes through a way in, now. Returns him. `fan`: see spot().
+func come(index: int, kind: String, fan: int = 0) -> Infected:
 	var entry: Dictionary = map.entries[index]
 	if entry.land == Vector3.INF:
 		return null
@@ -383,7 +454,7 @@ func come(index: int, kind: String) -> Infected:
 		return null
 	came += 1
 	used.append(index)
-	var plan := _plan(entry, enemy)
+	var plan := _plan(entry, enemy, spot(entry, fan))
 	plan["index"] = index
 	enemy.set_meta("way", plan)
 	enemy.entering = self
@@ -429,10 +500,10 @@ func come(index: int, kind: String) -> Infected:
 
 ## The way of a body through a way in: where it starts, how long each part takes, how
 ## deep it crouches on the way.
-func _plan(entry: Dictionary, enemy: Infected) -> Dictionary:
+func _plan(entry: Dictionary, enemy: Infected, land: Vector3 = Vector3.INF) -> Dictionary:
 	var at: Vector3 = entry.at
 	var out: Vector3 = entry.out
-	var to: Vector3 = (entry.land as Vector3) + Vector3(0, 0.03, 0)
+	var to: Vector3 = ((entry.land as Vector3) if land == Vector3.INF else land) + Vector3(0, 0.03, 0)
 	var deep := float(entry.deep)
 	var hound := enemy.model is RipperVisual
 	var plan := {
@@ -572,6 +643,97 @@ func _let_go(enemy: Infected, plan: Dictionary) -> void:
 		enemy.cooldown = maxf(enemy.cooldown, 0.25)
 		# (The hound has just leapt: not again at once.)
 		enemy.special_cooldown = maxf(enemy.special_cooldown, 0.9)
+		_freshen(enemy)
+
+# ---------------------------------------------------------------- fresh out of a way in
+
+## The film of dust on a body, `share` of it left (a few steps of it, shared by all).
+func _film(share: float) -> StandardMaterial3D:
+	if films.is_empty():
+		for k in range(6):
+			var made := StandardMaterial3D.new()
+			made.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			made.albedo_color = Color(FRESH_TINT, FRESH_FILM * (k + 1) / 6.0)
+			made.roughness = 1.0
+			made.emission_enabled = true
+			made.emission = FRESH_TINT
+			made.emission_energy_multiplier = 0.12 * (k + 1) / 6.0
+			films.append(made)
+	return films[clampi(ceili(share * films.size()) - 1, 0, films.size() - 1)]
+
+## From now on, for FRESH_SECONDS, a body is fresh out of a way in (see Infected.fresh).
+func _freshen(enemy: Infected) -> void:
+	enemy.fresh = FRESH_SECONDS
+	var dust: CPUParticles3D = null
+	for trail in trails:
+		if not trail.has_meta("held"):
+			dust = trail
+			break
+	if dust == null and trails.size() < 24 and not game.fx.dust_pool.is_empty():
+		var like: CPUParticles3D = game.fx.dust_pool[0]
+		dust = CPUParticles3D.new()
+		dust.mesh = like.mesh
+		dust.color_ramp = like.color_ramp
+		dust.color = FRESH_TINT
+		dust.amount = 16
+		dust.lifetime = 0.9
+		dust.emitting = false
+		dust.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		dust.emission_box_extents = Vector3(0.24, 0.42, 0.24)
+		dust.direction = Vector3.DOWN
+		dust.spread = 40.0
+		dust.gravity = Vector3(0, -2.6, 0)
+		dust.initial_velocity_min = 0.1
+		dust.initial_velocity_max = 0.6
+		dust.scale_amount_min = 0.5
+		dust.scale_amount_max = 1.3
+		dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(dust)
+		trails.append(dust)
+	if dust != null:
+		dust.set_meta("held", true)
+		dust.global_position = enemy.global_position + Vector3(0, 1.05, 0)
+		dust.emitting = true
+	fresh.append({"body": enemy, "dust": dust})
+
+## Wears the freshness off: counts its seconds, thins the film, lets the dust follow.
+func _wear(delta: float) -> void:
+	var index := 0
+	while index < fresh.size():
+		var item: Dictionary = fresh[index]
+		var enemy: Infected = item.body if is_instance_valid(item.body) else null
+		var gone := enemy == null or enemy.dead
+		if not gone:
+			enemy.fresh = maxf(0.0, enemy.fresh - delta)
+			gone = enemy.fresh <= 0.0
+		if gone:
+			_shed(item)
+			fresh.remove_at(index)
+			continue
+		var share := enemy.fresh / FRESH_SECONDS
+		var skin: MeshInstance3D = enemy.model.mesh_instance
+		if is_instance_valid(skin) and not enemy.model.buffed:
+			skin.material_overlay = _film(share)
+		if item.dust != null:
+			(item.dust as CPUParticles3D).global_position = enemy.global_position + Vector3(0, 1.05, 0)
+			(item.dust as CPUParticles3D).emitting = share > 0.25
+		index += 1
+
+func _shed(item: Dictionary) -> void:
+	var enemy: Infected = item.body if is_instance_valid(item.body) else null
+	if enemy != null:
+		enemy.fresh = 0.0
+		var skin: MeshInstance3D = enemy.model.mesh_instance
+		if is_instance_valid(skin) and skin.material_overlay != null and films.has(skin.material_overlay):
+			skin.material_overlay = null
+	if item.dust != null:
+		(item.dust as CPUParticles3D).emitting = false
+		(item.dust as CPUParticles3D).remove_meta("held")
+
+func _shed_all() -> void:
+	for item in fresh:
+		_shed(item)
+	fresh.clear()
 
 ## How long a coming-through lasts from the moment the body appears (for the checks).
 func seconds(index: int) -> float:
