@@ -46,6 +46,13 @@ const OPERATOR_ENDLESS := {"first": 5, "every": 4, "two": 13, "three": 25}
 ## difficulty comes to, and what no difficulty and no modifier gets past.
 const MAX_ALIVE := 16
 const ALIVE_LIMIT := 24
+## The toughness of the infected (the rule "brood") up to which the yard takes the full
+## crowd. Measured with the bot: 22 at once that take 1.8 times their health flow through
+## the doors of the farm, 22 that take 2.2 times pile up in front of them. Where a level
+## makes them tougher than this, fewer are let in at once (see alive_cap) - as many come
+## in all as before, the round only lasts longer. (Thinning the crowd further - by the
+## square of what each takes more - was tried too: then SCHWER presses less than NORMAL.)
+const FULL_CROWD_BROOD := 1.8
 ## The endless mode past the end of ROUNDS: how much of the last round's numbers every
 ## further round adds.
 const ENDLESS_GROWTH := 0.08
@@ -145,6 +152,10 @@ var last_modifier := ""
 ## for a round by its modifier).
 var level := "normal"
 var rules: Dictionary = Profile.DIFFICULTIES["normal"]
+## What a level adds to the health of the infected (the rule "brood") counts. Off only in
+## the checks of the rules, which count damage and kills against the health in
+## Infected.TYPES; the bots and the co-op runs play real nights.
+var brood_on := true
 ## What the whole squad did in this match, for the leaderboard.
 var stats := {"kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0, "phantom": 0, "havoc": 0, "ghost": 0}
 ## Place of the last finished run on the leaderboard, 0 if it did not make the list.
@@ -621,7 +632,7 @@ func _process(delta: float) -> void:
 			begin_wave()
 	elif phase == "wave":
 		spawn_left -= delta
-		if not spawn_queue.is_empty() and spawn_left <= 0 and alive_count < mini(ALIVE_LIMIT, int(round(mini(MAX_ALIVE, 7 + wave) * float(rules.horde)))) + 3 * extra_guns():
+		if not spawn_queue.is_empty() and spawn_left <= 0 and alive_count < alive_cap():
 			spawn_enemy()
 			spawn_left = maxf(0.4, 1.5 - wave * 0.09) / (1.0 + 0.3 * extra_guns()) * mission.interval_factor()
 		if spawn_queue.is_empty() and alive_count == 0 and mission.round_clear():
@@ -658,6 +669,17 @@ func opening_note() -> String:
 	return "Vordertür, Hintertür, Seitentür, das Loch in der Küchenwand – und die Außentreppe zum Balkon."
 
 ## Everyone fighting besides the local player: teammates, or the co-op partner.
+## How many attackers may be in the yard at once in the round that runs: more with the
+## rounds, with a bigger squad and with what the level and the modifier make of the horde.
+## Where the infected are tougher than FULL_CROWD_BROOD the crowd may weigh no more than
+## the crowd of a plain round would at that toughness: it is as many fewer as each takes more.
+func alive_cap() -> int:
+	var crowd := mini(ALIVE_LIMIT, int(round(mini(MAX_ALIVE, 7 + wave) * float(rules.horde)))) + 3 * extra_guns()
+	var brood := float(rules.get("brood", 1.0)) if brood_on else 1.0
+	if brood > FULL_CROWD_BROOD:
+		crowd = mini(crowd, int(round((mini(MAX_ALIVE, 7 + wave) + 3 * extra_guns()) * FULL_CROWD_BROOD / brood)))
+	return crowd
+
 func extra_guns() -> int:
 	return team.size() + (1 if is_instance_valid(net.remote) else 0)
 

@@ -382,8 +382,8 @@ func _ready() -> void:
 	floor_snap_length = 0.3
 	# A modifier of the round may make everybody tougher.
 	max_health = (float(spec.health) + float(spec.health_per_round) * (wave - 1)) * float(game.rules.get("health", 1.0))
-	# A difficulty may make the horde alone tougher (Profile.ZOMBIE_TEST_HEALTH).
-	if not spec.get("human", false) and not kind in BROOD_APART:
+	# The horde is as tough as the level says (the rule "brood" in Profile.DIFFICULTIES).
+	if game.brood_on and not spec.get("human", false) and not kind in BROOD_APART:
 		max_health *= float(game.rules.get("brood", 1.0))
 	health = max_health
 	# A Crusher that turns up before the last round is not yet fully grown.

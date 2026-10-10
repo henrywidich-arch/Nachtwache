@@ -42,8 +42,11 @@ func run(game: Node3D) -> void:
 	game.operators_enabled = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	game.set_process(false)
-	# The rule checks below count exact kills and damage, so they run without the squad.
+	# The rule checks below count exact kills and damage, so they run without the squad -
+	# and against the health in Infected.TYPES, without what a level adds to it. (The checks
+	# of that toughness switch it on for themselves, see _toughness.)
 	game.team_enabled = false
+	game.brood_on = false
 	# --only=threats runs one of the later blocks on its own (handy while working on it);
 	# --only=operators,sandbox runs several, one after the other.
 	for arg in OS.get_cmdline_user_args():
@@ -2618,8 +2621,9 @@ func _threats(game: Node3D) -> void:
 	game.set_render_scale(1.0, false)
 	var first: float = game.default_render_scale()
 	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
-	await _zombie_test(game)
+	await _toughness(game)
 	await _hit_answer(game)
+	await _ding_answer(game)
 	await _second_exploder(game)
 	await _hive_staff(game)
 	game.team_enabled = true
@@ -2868,7 +2872,7 @@ func _hit_answer(game: Node3D) -> void:
 	var in_flesh: bool = target.health < 5000.0 and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) and int(sounds.answers.hit_kill) == int(heard.hit_kill)
 	var playing := false
 	for voice in sounds.voices:
-		playing = playing or (voice.playing and (sounds.clips.hit_body as Array).has(voice.stream) and voice.bus == "SFX")
+		playing = playing or (voice.playing and (sounds.clips[FieldAudio.DING] as Array).has(voice.stream) and voice.bus == "SFX")
 	player.shot_cooldown = 0.0
 	player.shoot()
 	var floored: bool = int(sounds.answers.hit_body) == int(heard.hit_body) + 1
@@ -2944,35 +2948,180 @@ func _hit_answer(game: Node3D) -> void:
 	_wipe_all(game)
 	await wait(0.5)
 
-## The difficulty "Zombie-Test": a night as on NORMAL, except that the horde takes more.
-func _zombie_test(game: Node3D) -> void:
-	var normal: Dictionary = Profile.DIFFICULTIES.normal
-	var test: Dictionary = Profile.DIFFICULTIES.zombie_test
-	var same := true
-	for key in normal:
-		if str(key) != "label":
-			same = same and test.has(key) and is_equal_approx(float(test[key]), float(normal[key]))
+## True if a voice is playing one of the takes of `kind` right now, dry, and at `pitch`.
+func _sounding(sounds: FieldAudio, kind: String, pitch: float = 0.0) -> bool:
+	for voice in sounds.voices:
+		if voice.playing and (sounds.clips[kind] as Array).has(voice.stream) and voice.bus == "SFX" and (pitch <= 0.0 or absf(voice.pitch_scale / pitch - 1.0) < 0.006):
+			return true
+	return false
+
+## The ding: a hit on an infected is answered with a bell that climbs from hit to hit while
+## they follow each other quickly; a head rings twice and higher; the kill brings the chord
+## the climb comes to rest on. Soldiers keep the fleshy answer, and the player's own files
+## come before all of it.
+func _ding_answer(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	var ding: String = FieldAudio.DING
+	var families := ["ding_glas", "ding_messing", "ding_tink", "ding_spiel"]
+	var built := true
+	for family in families:
+		for suffix in ["", "_head", "_kill"]:
+			var kind: String = str(family) + str(suffix)
+			var takes: Array = sounds.clips.get(kind, [])
+			built = built and bool(sounds.recorded.get(kind, false)) and takes.size() == (4 if str(suffix) == "" else 3) and FieldAudio.MIX.has(kind) and float(FieldAudio.MIX[kind][0]) <= -3.0 and float(FieldAudio.MIX[kind][1]) <= 0.006
+			for clip in takes:
+				var seconds: float = (clip as AudioStream).get_length()
+				built = built and seconds > 0.08 and seconds < (0.85 if str(suffix) == "_kill" else 0.6)
+	var ladder: Array = FieldAudio.LADDER
+	var top: int = ladder.size() - 1
+	var rising: bool = ladder.size() >= 4 and ladder.size() <= 7 and float(ladder[0]) == 0.0 and float(ladder[top]) <= 7.0
+	for i in range(1, ladder.size()):
+		rising = rising and float(ladder[i]) > float(ladder[i - 1]) and float(ladder[i]) - float(ladder[i - 1]) <= 2.0
+	expect(built and rising and families.has(ding) and FieldAudio.LADDER_PAUSE >= 0.3 and FieldAudio.LADDER_PAUSE <= 1.5, "Four families of dings are built, with takes for a hit, a head and a kill each, and one of them is played; the ladder climbs in small steps")
+	# Hit after hit on an infected: every ding a rung higher, and on the last rung it stays.
+	_wipe_all(game)
+	await wait(FieldAudio.LADDER_PAUSE + 0.4)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	player.ammo = 30
+	var target: Infected = game.spawn_enemy("mauler")
+	target.set_physics_process(false)
+	target.position = Vector3(0, 0.05, 25.0)
+	target.max_health = 5000.0
+	target.health = 5000.0
+	var spare: Infected = game.spawn_enemy("mauler")
+	spare.set_physics_process(false)
+	spare.position = Vector3(0, 0.05, 26.6)
+	spare.max_health = 5000.0
+	spare.health = 5000.0
+	await frames(3)
+	var heard: Dictionary = sounds.answers.duplicate()
+	var climbed := true
+	player.camera.rotation.x = -0.2
+	for i in range(ladder.size() + 2):
+		player.shot_cooldown = 0.0
+		player.shoot()
+		var rung: int = mini(i, top)
+		climbed = climbed and sounds.ladder_step == rung and is_equal_approx(sounds.rung(), pow(2.0, float(ladder[rung]) / 12.0)) and _sounding(sounds, ding, sounds.rung()) and sounds.dinged
+		await wait(FieldAudio.HIT_FLOOR + 0.06)
+	var counted: bool = int(sounds.answers.ding) == int(heard.ding) + ladder.size() + 2 and int(sounds.answers.hit_body) == int(heard.hit_body) + ladder.size() + 2 and int(sounds.answers.ding_head) == int(heard.ding_head) and int(sounds.answers.ding_kill) == int(heard.ding_kill) and not _sounding(sounds, "hit_body")
+	# After a pause the next one starts at the bottom again.
+	await wait(FieldAudio.LADDER_PAUSE + 0.2)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var again: bool = sounds.ladder_step == 0 and _sounding(sounds, ding, 1.0)
+	expect(climbed and counted and again and target.health < 5000.0 and is_equal_approx(sounds.rung(), 1.0), "A hit on an infected is answered with a ding, and hits that follow each other quickly climb the ladder rung by rung (%d rungs, %d semitones) and stay on the last; after a pause it starts at the bottom" % [ladder.size(), int(ladder[top])])
+	# A head: the take for a head, a rung higher. Then the hit that kills: the lower bell on
+	# the rung of the ding that killed - and the next hit starts at the bottom at once.
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	player.camera.rotation.x = 0.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var head: bool = int(sounds.answers.ding_head) == int(heard.ding_head) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) + 1 and sounds.ladder_step == 1 and _sounding(sounds, ding + "_head", pow(2.0, float(ladder[1]) / 12.0))
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	target.health = 1.0
+	player.camera.rotation.x = -0.2
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var killing: float = pow(2.0, float(ladder[2]) / 12.0)
+	var chord: bool = target.dead and int(sounds.answers.ding_kill) == int(heard.ding_kill) + 1 and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and _sounding(sounds, ding + "_kill", killing) and _sounding(sounds, ding, killing) and not _sounding(sounds, "hit_kill")
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var restarted: bool = spare.health < 5000.0 and sounds.ladder_step == 0 and is_equal_approx(sounds.rung(), 1.0)
+	expect(head and chord and restarted, "A head rings with its own take, a rung higher; the hit that kills brings the lower bell on the rung of its ding, and the next hit starts at the bottom")
+	# A soldier keeps the fleshy answer, for the hit and for the kill.
+	_take_off(game, spare)
+	await wait(FieldAudio.LADDER_PAUSE + 0.2)
+	var soldier := game.spawn_enemy("cru_assault") as CruSoldier
+	soldier.set_physics_process(false)
+	soldier.position = Vector3(0, 0.05, 25.0)
+	soldier.max_health = 5000.0
+	soldier.health = 5000.0
+	await frames(3)
+	heard = sounds.answers.duplicate()
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var fleshy: bool = soldier.health < 5000.0 and int(sounds.answers.ding) == int(heard.ding) and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and _sounding(sounds, "hit_body") and not sounds.dinged
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	soldier.health = 1.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	fleshy = fleshy and soldier.dead and int(sounds.answers.ding_kill) == int(heard.ding_kill) and int(sounds.answers.ding) == int(heard.ding) and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and _sounding(sounds, "hit_kill")
+	# Hit sounds of the player's own choosing come before the ding - and then the kill is
+	# answered as it was before there were dings.
+	await wait(FieldAudio.LADDER_PAUSE + 0.2)
+	var own: AudioStream = (sounds.clips.click as Array)[0]
+	sounds.own_hits = [own]
+	var last: Infected = game.spawn_enemy("mauler")
+	last.set_physics_process(false)
+	last.position = Vector3(0, 0.05, 25.0)
+	last.max_health = 5000.0
+	last.health = 5000.0
+	await frames(3)
+	heard = sounds.answers.duplicate()
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var theirs := false
+	for voice in sounds.voices:
+		theirs = theirs or (voice.playing and voice.stream == own and voice.bus == "SFX")
+	theirs = theirs and int(sounds.answers.ding) == int(heard.ding) and not sounds.dinged
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	last.health = 1.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	theirs = theirs and last.dead and int(sounds.answers.ding_kill) == int(heard.ding_kill) and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and _sounding(sounds, "hit_kill")
+	sounds.own_hits = []
+	expect(fleshy and theirs, "A soldier keeps the fleshy answer for the hit and for the kill; and where the player has hit sounds of his own, they come before the ding")
+	player.camera.rotation.x = 0.0
+	_wipe_all(game)
+	await wait(0.5)
+
+## How much the infected take: a ladder over the difficulties. What was tried as the
+## difficulty "Zombie-Test" is NORMAL's own now, the easier level asks less, each harder
+## one clearly more; and "Zombie-Test" itself is gone from the menu.
+func _toughness(game: Node3D) -> void:
+	var order: Array = Profile.ORDER
+	var climbs: bool = order == ["easy", "normal", "hard", "nightmare"] and Profile.DIFFICULTIES.size() == order.size()
+	var before := 1.0
+	var steps := ""
+	for level in order:
+		var brood: float = float((Profile.DIFFICULTIES[level] as Dictionary).get("brood", 0.0))
+		# Every step is felt (a quarter of the old health and more), and the hardest is no slog.
+		climbs = climbs and brood >= before + 0.25 and brood <= 3.0
+		before = brood
+		steps += " %.1f" % brood
+	expect(climbs and is_equal_approx(float(Profile.DIFFICULTIES.normal.brood), 1.8) and float(Profile.DIFFICULTIES.easy.brood) >= 1.25, "The toughness of the infected is a ladder over the difficulties (%s ): NORMAL has what Zombie-Test had, the easier level asks less, each harder one clearly more" % steps)
+	# "Zombie-Test" is gone from the menu; a profile that still has it selected comes up on
+	# NORMAL, and the lists of its best runs stay in the file as they were.
 	var book := Profile.new()
 	book.stored = false
-	book.difficulty = "nightmare"
-	book.next_difficulty()
-	var reached := book.difficulty == "zombie_test" and str(book.rules().label) == "ZOMBIE-TEST"
-	book.next_difficulty()
-	expect(same and test.size() == normal.size() + 1 and is_equal_approx(float(test.brood), Profile.ZOMBIE_TEST_HEALTH) and Profile.ZOMBIE_TEST_HEALTH >= 1.5 and reached and book.difficulty == "easy" and Profile.ORDER.size() == Profile.DIFFICULTIES.size(), "Zombie-Test is a difficulty of its own, chosen like the others: a night as on NORMAL in everything but what the infected take")
-	# Its nights are filed apart from those of every other difficulty, in each mode.
-	var lists := {}
-	for level in Profile.ORDER:
-		for play in ["story", "endless", "villa"]:
-			lists[Profile.board(str(level), str(play))] = true
-	book.record(Profile.board("zombie_test", "villa"), {"score": 900, "round": 3, "seconds": 300, "victory": false, "kills": 40})
-	book.record(Profile.board("zombie_test", "story"), {"score": 500, "round": 2, "seconds": 200, "victory": false, "kills": 20})
-	expect(lists.size() == Profile.ORDER.size() * 3 and book.best("zombie_test").size() == 1 and book.best("villa_zombie_test").size() == 1 and book.best("endless_zombie_test").is_empty() and book.best("normal").is_empty() and book.best("villa_normal").is_empty(), "Its runs get lists of their own: story, endless night and second mission")
-	# In a night: as many come, the horde takes more, Helix's people and the two giants do not.
+	var labels := ""
+	var round_trip := true
+	for i in range(order.size()):
+		labels += str(book.rules().label) + " "
+		round_trip = round_trip and order.has(book.difficulty)
+		book.next_difficulty()
+	var old := Profile.new()
+	old.stored = false
+	var its_runs := [{"score": 900.0, "round": 3.0, "seconds": 300.0, "victory": false, "kills": 40.0}]
+	var saved := {"difficulty": "zombie_test", "mission": 2.0, "mode": "endless", "totals": {"kills": 12.0},
+		"runs": {"zombie_test": its_runs, "villa_zombie_test": its_runs, "endless_zombie_test": its_runs, "normal": [{"score": 500.0, "round": 2.0, "seconds": 200.0, "victory": false, "kills": 20.0}], "nonsense": [1.0]}}
+	old.read(saved)
+	var came_up: bool = old.difficulty == "normal" and str(old.rules().label) == "NORMAL" and old.mission == 2 and old.mode == "endless" and int(old.totals.kills) == 12 and old.best("normal").size() == 1
+	old.record(Profile.board("normal", "story"), {"score": 700, "round": 2, "seconds": 250, "victory": false, "kills": 30})
+	var back: Dictionary = old.kept()
+	var lists: Dictionary = back.runs
+	expect(not order.has("zombie_test") and not Profile.DIFFICULTIES.has("zombie_test") and not labels.contains("ZOMBIE") and round_trip and book.difficulty == "normal" and Profile.RETIRED.has("zombie_test") and came_up and str(back.difficulty) == "normal" and lists.get("zombie_test") == its_runs and lists.get("villa_zombie_test") == its_runs and lists.get("endless_zombie_test") == its_runs and (lists.normal as Array).size() == 2 and not lists.has("nonsense"), "Zombie-Test is gone from the menu (%s); a saved profile that still has it comes up on NORMAL, and the lists of its runs stay in the file untouched" % labels.strip_edges())
+	# In a night: the horde takes what its level says; Helix's people and the fights of
+	# their own keep their health on every level.
 	var level_before: String = game.level
 	var took := {}
-	var hordes: Array = []
-	for level in ["normal", "zombie_test"]:
-		game.level = level
+	for level in ["plain"] + order:
+		game.brood_on = str(level) != "plain"
+		game.level = "normal" if str(level) == "plain" else str(level)
 		game._set_modifier("")
 		for kind in Infected.TYPES:
 			if str(kind) == "ripper" and not ResourceLoader.exists(RipperVisual.SCENE):
@@ -2987,33 +3136,50 @@ func _zombie_test(game: Node3D) -> void:
 			took["%s/%s" % [level, kind]] = one.max_health
 			one._retire()
 			one.queue_free()
-		game.spawn_queue.clear()
-		game.wave = 2
-		game.begin_wave()
-		var horde: Array = game.spawn_queue.duplicate()
-		horde.sort()
-		hordes.append(horde)
-		game.spawn_queue.clear()
-		game.mission.wave_kind = "classic"
-		game.phase = "preparing"
-		game.preparation_left = 9999.0
-		game.gas.clear()
-	game.level = level_before
-	game._set_modifier("")
 	var tougher := true
 	var untouched := true
+	var horde := 0
 	var apart := 0
 	for kind in Infected.TYPES:
-		if not took.has("normal/%s" % kind):
+		if not took.has("plain/%s" % kind):
 			continue
-		var plain: float = took["normal/%s" % kind]
-		var tested: float = took["zombie_test/%s" % kind]
-		if Infected.TYPES[kind].get("human", false) or str(kind) in Infected.BROOD_APART:
-			untouched = untouched and is_equal_approx(tested, plain)
-			apart += 1
-		else:
-			tougher = tougher and is_equal_approx(tested, plain * Profile.ZOMBIE_TEST_HEALTH)
-	expect(tougher and untouched and apart >= 13 and is_equal_approx(float(took["zombie_test/mauler"]), (95.0 + 7.0 * 3) * Profile.ZOMBIE_TEST_HEALTH) and hordes[0] == hordes[1] and (hordes[0] as Array).size() > 8, "On Zombie-Test as many come as on NORMAL and the infected take %.1f times as much; the C.R.U., the operators, the Crusher and the Stalker are as they were" % Profile.ZOMBIE_TEST_HEALTH)
+		var plain: float = took["plain/%s" % kind]
+		var own: bool = Infected.TYPES[kind].get("human", false) or str(kind) in Infected.BROOD_APART
+		horde += 0 if own else 1
+		apart += 1 if own else 0
+		for level in order:
+			var tested: float = took["%s/%s" % [level, kind]]
+			if own:
+				untouched = untouched and is_equal_approx(tested, plain)
+			else:
+				tougher = tougher and is_equal_approx(tested, plain * float(Profile.DIFFICULTIES[level].brood))
+	# A night that is played has it switched on by itself.
+	game.brood_on = true
+	game.level = "normal"
+	game._set_modifier("")
+	game.wave = 1
+	var met: Infected = game.spawn_enemy("mauler")
+	met.set_physics_process(false)
+	var standard: bool = is_equal_approx(met.max_health, 95.0 * float(Profile.DIFFICULTIES.normal.brood)) and is_equal_approx(met.health, met.max_health)
+	_take_off(game, met)
+	# The yard: where a level's infected are tougher than it takes at full crowd, fewer of
+	# them are let in at once - so few that the crowd weighs less, not more.
+	var caps := {}
+	game.wave = 9
+	for level in order:
+		game.level = str(level)
+		game._set_modifier("")
+		caps[level] = game.alive_cap()
+	game.brood_on = false
+	game.level = "hard"
+	game._set_modifier("")
+	var as_before: int = game.alive_cap()
+	var weight: float = int(caps.normal) * float(Profile.DIFFICULTIES.normal.brood)
+	var thinned: bool = int(caps.normal) == game.MAX_ALIVE and int(caps.easy) < int(caps.normal) and int(caps.hard) < int(caps.normal) and int(caps.nightmare) < int(caps.hard) and int(caps.nightmare) >= 6 and int(caps.hard) * float(Profile.DIFFICULTIES.hard.brood) <= weight and int(caps.nightmare) * float(Profile.DIFFICULTIES.nightmare.brood) <= int(caps.hard) * float(Profile.DIFFICULTIES.hard.brood) and as_before == 20 and float(Profile.DIFFICULTIES.normal.brood) <= game.FULL_CROWD_BROOD
+	game.level = level_before
+	game._set_modifier("")
+	expect(thinned, "The yard takes the full crowd on NORMAL (%d at once late in a night); where the infected are tougher, fewer are let in at once (SCHWER %d, ALBTRAUM %d instead of %d and more), and as many come in all" % [int(caps.normal), int(caps.hard), int(caps.nightmare), as_before])
+	expect(tougher and untouched and standard and horde >= 6 and apart >= 14 and Infected.BROOD_APART.has("crusher") and Infected.BROOD_APART.has("stalker") and Infected.BROOD_APART.has("prowler"), "In a night the horde (%d kinds) takes what its level says - a Mauler of the first round %.0f on NORMAL - while the C.R.U., the operators, the Crusher, the Stalker and the Prowler (%d kinds) keep their health on every level" % [horde, 95.0 * float(Profile.DIFFICULTIES.normal.brood), apart])
 	await frames(3)
 
 ## What came with v0.8: the UMP and the parts for it, ballistic plates, lamps on the C.R.U.
@@ -4538,7 +4704,7 @@ func coop(game: Node3D, as_host: bool) -> void:
 	print("%s_TASKS tasks=%d items=%d done=%d props=%d" % [tag, game.mission.tasks.size(), items_total, items_done, game.mission.props.size()])
 	# What this side heard of its own hits: never more ticks than shots fired here, never
 	# more answers to a kill than kills made here.
-	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills])
+	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d dings=%d ding_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills, int(game.sounds.answers.ding) + int(game.sounds.answers.ding_head), int(game.sounds.answers.ding_kill)])
 	# Both sides must name the same look for the same Charger, and both must have seen the
 	# puddle of the one the host set off.
 	var seen_looks: Array = []

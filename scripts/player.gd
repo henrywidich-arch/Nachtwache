@@ -1468,6 +1468,10 @@ func shoot() -> void:
 	for enemy in struck:
 		var entry: Dictionary = struck[enemy]
 		any_head = any_head or entry.headshot
+		# (What was hit is known on a guest's machine as well as on the host's: his copy of
+		# a soldier is a soldier too. Without this a guest never heard the answer for an
+		# infected.)
+		any_infected = any_infected or not enemy is CruSoldier
 		# A blast of shot from close by throws back whoever is still standing after it.
 		var push := 0.0
 		if data.has("push") and not bool(entry.get("through", false)):
@@ -1484,7 +1488,6 @@ func shoot() -> void:
 			game.blasting = false
 			game.piercing = 1.0
 			# (Felled, not merely gone: a Stalker that is shot at vanishes with its health.)
-			any_infected = any_infected or not enemy is CruSoldier
 			any_kill = any_kill or ((enemy as Infected).dead and (enemy as Infected).health <= 0.0)
 			if push >= PUSH_LEAST:
 				(enemy as Infected).blown(entry.direction, push)
