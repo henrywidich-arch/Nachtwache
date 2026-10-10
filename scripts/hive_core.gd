@@ -46,7 +46,7 @@ const MOODS := {
 	# The plant rooms: dim, warm, oily.
 	"plant": {"ambient": Color(0.56, 0.45, 0.32), "energy": 0.3, "fog": 0.004, "haze": 0.014, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.14, 0.08)},
 	# The research wing: a sick green.
-	"sick": {"ambient": Color(0.38, 0.56, 0.52), "energy": 0.36, "fog": 0.005, "haze": 0.01, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.2, 0.18)},
+	"sick": {"ambient": Color(0.38, 0.56, 0.52), "energy": 0.44, "fog": 0.005, "haze": 0.01, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.2, 0.18)},
 	# The containment hall: dark, with what glows in it.
 	"deep": {"ambient": Color(0.3, 0.36, 0.46), "energy": 0.2, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.12, 0.16)}
 }
@@ -408,6 +408,13 @@ func _build_surfaces() -> void:
 	stain.vertex_color_is_srgb = true
 	stain.roughness = 0.3
 	mats["stain"] = stain
+	# The skin of deep water seen from below: bright, from either side.
+	var skin := StandardMaterial3D.new()
+	skin.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	skin.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	skin.cull_mode = BaseMaterial3D.CULL_DISABLED
+	skin.albedo_color = Color(0.3, 0.8, 0.74, 0.4)
+	mats["skin"] = skin
 	# Water one wades through (see FLOOD): not see-through, so that the room is mirrored in it.
 	var swell := FastNoiseLite.new()
 	swell.seed = 77

@@ -35,6 +35,12 @@ var ride_way := 0.0
 ## What draws the plan of the Hive for the displays (a HiveDisplay).
 const PLAN_SCRIPT := preload("res://scripts/hive_display.gd")
 var plan: Node
+## What drips and what sparks share their looks.
+var drip_look: StandardMaterial3D
+var drip_mesh: QuadMesh
+var spark_look: StandardMaterial3D
+var spark_mesh: QuadMesh
+var spark_fade: GradientTexture1D
 
 func _ready() -> void:
 	var began := Time.get_ticks_msec()
@@ -919,7 +925,7 @@ func _train_ends(centre: Vector3) -> void:
 ## the cells of the plan on the displays (see HiveDisplay) agree on them.
 const GUIDE := {
 	"terminal": Color("c9a227"), "admin": Color("2f6fb0"), "security": Color("b8452f"), "cafe": Color("d8b13a"), "core": Color("cfe6ff"),
-	"med": Color("3fb8c8"), "tech": Color("d9772a"), "research": Color("2f8f8a"), "hall": Color("a8322c")
+	"med": Color("3fb8c8"), "tech": Color("d9772a"), "research": Color("2f8f8a"), "hall": Color("a8322c"), "flood": Color("3a8fd0")
 }
 
 ## True if nothing is cut into a side of a room between two places along it.
@@ -1816,20 +1822,26 @@ func _lay_research() -> void:
 	_room("decon", deep, Rect2(-4, -501, 8, 12), 4.2, "lab", {"look": {"light": Color("bfe8ff"), "strip_color": Color("7fe0ff")}})
 	_door("atrium", "decon", 0.0, 3.0, {"kind": "gate", "area": "decon", "name": "gate_decon"})
 	area = "research"
-	_room("lab_corridor", deep, Rect2(-4, -569, 8, 68), 5.0, "lab", {"lamps": "none"})
+	_room("lab_corridor", deep, Rect2(-4, -569, 8, 68), 5.0, "lab", {"lamps": "none", "look": {"tide": 1.6, "tide_sides": [EAST, WEST], "tide_span": [-569.0, -539.5]}})
 	_door("decon", "lab_corridor", 0.0, 3.0, {"kind": "gate", "area": "research", "name": "gate_research"})
 	_room("lab_a", deep, Rect2(-28, -519, 24, 18), 3.8, "lab")
 	_room("lab_b", deep, Rect2(-28, -537, 24, 18), 3.8, "lab")
 	_room("quarantine", deep, Rect2(-28, -565, 24, 28), 4.6, "lab", {"look": {"stripe": Color("b8452f"), "light": Color("ffd9c8")}})
 	_room("lab_c", deep, Rect2(4, -519, 24, 18), 3.8, "lab")
 	_room("cryo", deep, Rect2(4, -541, 24, 22), 3.8, "lab", {"look": {"light": Color("a8d8ff"), "energy": 1.2, "stripe": Color("2f6fb0")}})
-	_room("flooded", deep, Rect2(4, -569, 28, 28), 4.6, "tech", {"look": {"light": Color("9fc4ba"), "energy": 1.5, "flicker": 0.35}})
-	for entry in [["lab_a", -510.0], ["lab_b", -528.0], ["quarantine", -551.0], ["lab_c", -510.0], ["cryo", -530.0], ["flooded", -555.0]]:
+	# North of the cold store the wing stands under water: one laboratory is still full
+	# behind its glass, the glass of the next has burst into the corridor.
+	_room("sunken", deep, Rect2(4, -555, 28, 14), 4.6, "lab", {"nav": false, "lamps": "none", "look": {"panel": Color(0.56, 0.64, 0.62), "strip": false}})
+	_room("flooded", deep, Rect2(4, -569, 28, 14), 4.6, "lab", {"look": {"light": Color("9fd8cc"), "energy": 2.4, "flicker": 0.4, "dead": 0.3, "tide": 1.6, "panel": Color(0.66, 0.72, 0.68), "strip": false, "stripe": GUIDE.flood}})
+	for entry in [["lab_a", -510.0], ["lab_b", -528.0], ["quarantine", -551.0], ["lab_c", -510.0], ["cryo", -530.0]]:
 		_door("lab_corridor", str(entry[0]), float(entry[1]), 2.0, {"kind": "slide"})
+	_door("lab_corridor", "flooded", -562.0, 9.0, {"kind": "join"})
+	for at in [-551.5, -544.5]:
+		_pane("lab_corridor", EAST, at, 6.0, 0.6, 3.4, "glass", "sunken")
 	for entry in [["lab_a", WEST, -504.5, 5.0], ["lab_a", WEST, -515.0, 6.0], ["lab_b", WEST, -522.5, 5.0], ["lab_b", WEST, -533.0, 6.0], ["quarantine", WEST, -543.0, 8.0], ["quarantine", WEST, -559.0, 8.0], ["lab_c", EAST, -504.5, 5.0], ["lab_c", EAST, -515.0, 6.0], ["cryo", EAST, -524.0, 6.0], ["cryo", EAST, -536.0, 6.0]]:
 		_pane("lab_corridor", int(entry[1]), float(entry[2]), float(entry[3]), 0.9, 2.6, "glass", str(entry[0]))
 	# The corridor runs into the crossing without a wall between them.
-	_room("cross", deep, Rect2(-30, -577, 60, 8), 5.0, "panel", {"lamps": "none", "look": {"stripe": GUIDE.hall, "panel": Color(0.62, 0.62, 0.6)}})
+	_room("cross", deep, Rect2(-30, -577, 60, 8), 5.0, "panel", {"lamps": "none", "look": {"stripe": GUIDE.hall, "panel": Color(0.62, 0.62, 0.6), "tide": 1.6, "tide_span": [-10.0, 10.0]}})
 	_door("lab_corridor", "cross", 0.0, 8.0, {"kind": "join"})
 	_chunk("Kit", false)
 	# The sluice: nozzles and a grating.
@@ -1840,13 +1852,15 @@ func _lay_research() -> void:
 	_part("tread", Vector3(0, UNDER + 0.006, -495.0), Vector3(5.0, 0.012, 9.0), Color(0.3, 0.32, 0.34))
 	var corridor: Dictionary = room_of["lab_corridor"]
 	_wall_sign("FORSCHUNGSTRAKT  ·  SCHUTZSTUFE  3", _face_point(corridor, WEST, -503.0, 3.3, -0.05), 20, Color("b8452f"), PI / 2)
-	_passage("lab_corridor", {"step": 5.63, "light": Color("d6f5e6"), "energy": 2.3, "reach": 10.0, "dead": [7], "fail": [5], "lines": [[-0.9, GUIDE.research], [0.9, GUIDE.research]], "tray": -1})
+	# (Its bays are counted from the north: the first five stand in the water.)
+	_passage("lab_corridor", {"step": 5.63, "light": Color("d6f5e6"), "energy": 2.3, "reach": 10.0, "dead": [1, 3], "fail": [0, 2, 4, 8], "lines": [[-0.9, GUIDE.research], [0.9, GUIDE.research]], "tray": -1})
 	for z in [-506.0, -524.0]:
 		_floor_arrow(Vector3(0, UNDER, z), 0.0, GUIDE.research)
 	_display(Vector3(0, UNDER + 3.55, -512.47), 0.0, 3.0, "research", "hang", 0.3)
-	for entry in [[-510.0, "LABOR  A", "LABOR  C"], [-528.0, "LABOR  B", "KRYOLAGER"], [-553.0, "QUARANTÄNE", "NASSLABOR"]]:
-		_wall_sign(str(entry[1]), _face_point(corridor, WEST, float(entry[0]) + 2.0, 3.1, -0.05), 18, Color("1c555b"), PI / 2)
-		_wall_sign(str(entry[2]), _face_point(corridor, EAST, float(entry[0]) + 2.0, 3.1, -0.05), 18, Color("1c555b"), -PI / 2)
+	for entry in [[-510.0, "LABOR  A", "LABOR  C"], [-528.0, "LABOR  B", "KRYOLAGER"], [-553.0, "QUARANTÄNE", ""]]:
+		_wall_sign(str(entry[1]), _face_point(corridor, WEST, float(entry[0]) + 2.0, 3.1, -0.058), 18, Color("1c555b"), PI / 2)
+		if str(entry[2]) != "":
+			_wall_sign(str(entry[2]), _face_point(corridor, EAST, float(entry[0]) + 2.0, 3.1, -0.058), 18, Color("1c555b"), -PI / 2)
 	# --- the laboratories: benches in rows, the tables and microscopes of the house
 	for lab in [["lab_a", -17.0, -510.0], ["lab_b", -17.0, -528.0], ["lab_c", 15.0, -510.0]]:
 		var mid := Vector3(float(lab[1]), UNDER, float(lab[2]))
@@ -1890,17 +1904,8 @@ func _lay_research() -> void:
 	for i in range(8):
 		_cold_store(Vector3(8.0 + i * 0.9, UNDER, -540.45), 0.0, i + 12)
 	_stores(Vector3(14.0, UNDER, -528.0), 3)
-	# --- the wet laboratory: the water stands ankle-deep, the light is going
-	_chunk("Glass", false)
-	_part("water", Vector3(18.0, UNDER + 0.16, -555.0), Vector3(27.4, 0.04, 27.4), Color.WHITE)
+	_lay_flood()
 	_chunk("Kit", false)
-	for row in range(2):
-		for column in range(2):
-			_lab_bench(Vector3(12.0 + column * 12.0, UNDER, -549.0 - row * 10.0), 5.0, 0.0, row + column)
-	for spot in [Vector3(26.0, UNDER, -562.0), Vector3(9.0, UNDER, -565.0)]:
-		_stores(spot, 3)
-	_burst_tank(Vector3(30.2, UNDER, -548.0), "N-11")
-	_burst_tank(Vector3(30.2, UNDER, -552.0), "N-12")
 	# --- the crossing before the containment hall
 	_passage("cross", {"step": 5.96, "light": Color("ffd9c8"), "energy": 2.0, "reach": 10.0, "dead": [2, 7], "fail": [4], "tray": SOUTH})
 	for x in [-4.0, 4.0]:
@@ -1947,6 +1952,218 @@ func _lay_research() -> void:
 	_wall_sign("EINDÄMMUNGSHALLE", _face_point(hall, SOUTH, 0.0, 6.2, -0.05), 56, Color("cfe6ff"), PI)
 	_shared_dice()
 	_end_zone()
+
+## A sheet of standing water over a rectangle of a floor at `y`, `depth` metres deep. With
+## `shore` (a side) it runs out to nothing along that edge of the rectangle, as on a
+## beach. It is only there to be seen: everybody walks on the floor under it.
+func _flood(plan: Rect2, y: float, depth: float, shore: int = -1) -> void:
+	var kept := batch
+	_chunk("Water", false)
+	var high := y + depth
+	var low := y - 0.02
+	var north_west := Vector3(plan.position.x, low if shore == NORTH or shore == WEST else high, plan.position.y)
+	var south_west := Vector3(plan.position.x, low if shore == SOUTH or shore == WEST else high, plan.end.y)
+	var south_east := Vector3(plan.end.x, low if shore == SOUTH or shore == EAST else high, plan.end.y)
+	var north_east := Vector3(plan.end.x, low if shore == NORTH or shore == EAST else high, plan.position.y)
+	batch.quad(mats["flood"], north_west, south_west, south_east, north_east, Color.WHITE)
+	batch = kept
+
+## Water that drips from `pos` and falls `fall` metres.
+func _drips(pos: Vector3, fall: float, amount: int = 5) -> void:
+	if drip_look == null:
+		drip_look = StandardMaterial3D.new()
+		drip_look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		drip_look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		drip_look.albedo_color = Color(0.72, 0.9, 0.95, 0.5)
+		drip_mesh = QuadMesh.new()
+		drip_mesh.size = Vector2(0.014, 0.16)
+		drip_mesh.material = drip_look
+	var process := ParticleProcessMaterial.new()
+	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	process.emission_box_extents = Vector3(0.1, 0.0, 0.1)
+	process.direction = Vector3.DOWN
+	process.spread = 2.0
+	process.initial_velocity_min = 0.2
+	process.initial_velocity_max = 0.6
+	process.gravity = Vector3(0, -9.8, 0)
+	var drops := GPUParticles3D.new()
+	drops.name = "Drips"
+	drops.amount = amount
+	drops.lifetime = sqrt(2.0 * fall / 9.8)
+	drops.randomness = 1.0
+	drops.process_material = process
+	drops.draw_pass_1 = drip_mesh
+	drops.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
+	drops.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	drops.visibility_aabb = AABB(Vector3(-0.6, -fall - 0.4, -0.6), Vector3(1.2, fall + 0.8, 1.2))
+	drops.visibility_range_end = 45.0
+	drops.position = pos
+	add_child(drops)
+
+## Sparks from something that is still live: a burst of them every `every` seconds, and
+## a light that jumps.
+func _sparks(pos: Vector3, every: float = 2.7) -> void:
+	if spark_look == null:
+		spark_look = StandardMaterial3D.new()
+		spark_look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		spark_look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		spark_look.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		spark_look.vertex_color_use_as_albedo = true
+		spark_look.albedo_color = Color(3.0, 2.2, 1.0)
+		spark_mesh = QuadMesh.new()
+		spark_mesh.size = Vector2(0.022, 0.07)
+		spark_mesh.material = spark_look
+		# A spark is gone long before the next burst.
+		var fade := Gradient.new()
+		fade.offsets = PackedFloat32Array([0.0, 0.16, 0.3, 1.0])
+		fade.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 0.8, 0.45, 1), Color(1, 0.4, 0.1, 0), Color(1, 0.4, 0.1, 0)])
+		spark_fade = GradientTexture1D.new()
+		spark_fade.gradient = fade
+	var process := ParticleProcessMaterial.new()
+	process.direction = Vector3(0, -0.4, 0)
+	process.spread = 75.0
+	process.initial_velocity_min = 1.2
+	process.initial_velocity_max = 3.6
+	process.gravity = Vector3(0, -9.8, 0)
+	process.color_ramp = spark_fade
+	var sparks := GPUParticles3D.new()
+	sparks.name = "Sparks"
+	sparks.amount = 16
+	sparks.lifetime = every
+	sparks.explosiveness = 0.93
+	sparks.randomness = 0.6
+	sparks.process_material = process
+	sparks.draw_pass_1 = spark_mesh
+	sparks.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
+	sparks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sparks.visibility_aabb = AABB(Vector3(-2.5, -4.5, -2.5), Vector3(5, 5.5, 5))
+	sparks.visibility_range_end = 45.0
+	sparks.position = pos
+	add_child(sparks)
+	_light(pos + Vector3(0, -0.2, 0), Color(1.0, 0.72, 0.4), 1.5, 5.0, false, 1.0, 0.6, LAMP_FADE)
+
+## The flooded end of the research wing: water in the corridor from the cold store on, a
+## laboratory whose glass front has burst into it, and one that still stands full behind
+## its glass. (Built in the zone of the research wing, after its rooms.)
+func _lay_flood() -> void:
+	var depth := 0.3
+	var surface := UNDER + depth
+	var corridor: Dictionary = room_of["lab_corridor"]
+	# --- the water: it runs out on the floor of the corridor like on a beach, stands in
+	# the burst laboratory and in the crossing, and creeps under two doors
+	_flood(Rect2(-3.8, -547.0, 7.6, 9.0), UNDER, depth, SOUTH)
+	_flood(Rect2(-3.8, -568.8, 7.6, 21.8), UNDER, depth)
+	_flood(Rect2(3.8, -568.8, 28.0, 13.6), UNDER, depth)
+	_flood(Rect2(-8.0, -576.8, 16.0, 8.0), UNDER, depth)
+	_flood(Rect2(-17.0, -576.8, 9.0, 7.6), UNDER, depth, WEST)
+	_flood(Rect2(8.0, -576.8, 9.0, 7.6), UNDER, depth, EAST)
+	_flood(Rect2(-2.5, -577.25, 5.0, 0.45), UNDER, depth)
+	_flood(Rect2(-6.0, -585.0, 12.0, 7.75), UNDER, depth, NORTH)
+	_flood(Rect2(-4.25, -552.0, 0.45, 2.0), UNDER, depth)
+	_flood(Rect2(-8.5, -553.5, 4.25, 5.0), UNDER, depth, WEST)
+	# --- the burst front: two posts, a rail under the lintel, and what is left of the glass
+	for z in [-563.5, -560.5]:
+		_part("plate", Vector3(4.0, UNDER + 2.18, z), Vector3(0.3, 4.36, 0.14), Color("1c2023"))
+		_solid(Vector3(4.0, UNDER + 2.18, z), Vector3(0.3, 4.36, 0.14))
+	_part("plate", Vector3(4.0, UNDER + 4.48, -562.0), Vector3(0.36, 0.24, 9.0), Color("1c2023"))
+	_chunk("Shards", false)
+	for i in range(15):
+		var along := -566.3 + i * 0.62 + random.randf_range(-0.1, 0.1)
+		var long := random.randf_range(0.2, 1.1)
+		batch.triangle(mats["shard"], Vector3(4.0, UNDER + 4.36, along - 0.26), Vector3(4.0, UNDER + 4.36, along + 0.26), Vector3(4.0 + random.randf_range(-0.04, 0.04), UNDER + 4.36 - long, along + random.randf_range(-0.2, 0.2)))
+	for foot in [-566.4, -563.7, -563.3, -560.7, -560.3, -557.6]:
+		var lean := random.randf_range(-0.45, 0.45)
+		batch.triangle(mats["shard"], Vector3(4.0, surface - 0.05, foot - 0.3), Vector3(4.0, surface - 0.05, foot + 0.3), Vector3(4.0, surface + random.randf_range(0.3, 1.0), foot + lean))
+	_chunk("Kit", false)
+	# --- the laboratory the water came out of: benches standing in it, what floats
+	_lab_bench(Vector3(12.0, UNDER, -560.2), 5.0, 0.0, 1)
+	_lab_bench(Vector3(22.5, UNDER, -564.6), 5.0, 0.0, 2)
+	_lab_bench(Vector3(23.5, UNDER, -558.4), 5.0, 0.0, 3)
+	_burst_tank(Vector3(30.2, UNDER, -560.4), "N-11")
+	_burst_tank(Vector3(30.2, UNDER, -564.6), "N-12")
+	_chunk("Kit", false)
+	_lockers("flooded", NORTH, 6.0, 9.6, Color("9aa6a8"))
+	for spot in [Vector3(7.5, 0, -561.5), Vector3(1.2, 0, -563.0), Vector3(-1.6, 0, -556.0), Vector3(15.5, 0, -557.4), Vector3(2.0, 0, -572.5), Vector3(-5.0, 0, -574.0), Vector3(19.0, 0, -566.8), Vector3(0.6, 0, -549.5)]:
+		_papers(Transform3D(Basis(Vector3.UP, random.randf() * TAU), Vector3(spot.x, surface + 0.005, spot.z)), Vector3.ZERO, 6, 0.9)
+	for entry in [[Vector3(9.0, 0, -565.0), 0.4], [Vector3(-2.3, 0, -560.6), 1.9], [Vector3(17.2, 0, -561.8), 2.7], [Vector3(3.2, 0, -574.6), 0.9]]:
+		var at: Vector3 = entry[0]
+		_model("cardboard_box_01", Vector3(at.x, surface - 0.2, at.z), float(entry[1]), {"scale": 1.5, "solid": false, "far": 35.0})
+	for entry in [[Vector3(5.6, 0, -566.0), 0.3], [Vector3(-0.4, 0, -570.4), 2.2], [Vector3(27.0, 0, -561.5), 1.2]]:
+		var at: Vector3 = entry[0]
+		_model("plastic_crate_02", Vector3(at.x, surface - 0.13, at.z), float(entry[1]), {"scale": 1.5, "solid": false, "far": 35.0})
+	_office_chair(Vector3(6.4, UNDER, -558.4), 0.8, true)
+	_office_chair(Vector3(16.5, UNDER, -565.6), 2.4, true)
+	_stool(Vector3(14.2, UNDER, -562.9), 1.2, true)
+	_stool(Vector3(-0.8, UNDER, -566.2), 2.5, true)
+	# Two chem lights somebody threw in.
+	for entry in [[Vector3(10.6, 0, -557.2), 0.7], [Vector3(-1.8, 0, -571.6), 2.0]]:
+		var at: Vector3 = entry[0]
+		_glow_box(Vector3(at.x, surface + 0.02, at.z), Vector3(0.17, 0.026, 0.026), Color("7dff9a"), 4.6, Basis(Vector3.UP, float(entry[1])))
+		_light(Vector3(at.x, surface + 0.4, at.z), Color(0.45, 1.0, 0.6), 1.0, 5.0, false, 0.0, 0.8, LAMP_FADE)
+	# What still has power, and what comes through the ceiling.
+	_hose(Vector3(4.3, UNDER + 4.36, -558.4), Vector3(4.7, UNDER + 2.7, -558.8), 0.02, Color("0d0d0d"), 0.35)
+	_sparks(Vector3(4.7, UNDER + 2.68, -558.8))
+	_hose(Vector3(-1.4, UNDER + 4.86, -549.4), Vector3(-1.7, UNDER + 3.5, -549.0), 0.02, Color("0d0d0d"), 0.3)
+	_sparks(Vector3(-1.7, UNDER + 3.48, -549.0), 3.4)
+	for entry in [[Vector3(0.9, 4.95, -553.2), 5], [Vector3(-2.1, 4.95, -562.2), 6], [Vector3(1.6, 4.95, -566.6), 4], [Vector3(10.0, 4.55, -563.4), 6], [Vector3(21.0, 4.55, -559.6), 5], [Vector3(3.4, 4.95, -573.2), 5]]:
+		var at: Vector3 = entry[0]
+		_drips(Vector3(at.x, UNDER + at.y, at.z), at.y - depth, int(entry[1]))
+	# A pipe that has come apart in the north wall still runs.
+	_pipe(Vector3(18.0, UNDER + 3.5, -568.75), Vector3(18.0, UNDER + 3.5, -568.1), 0.1, Color("6d6f6c"), 10, "steel")
+	_drips(Vector3(18.0, UNDER + 3.42, -568.05), 3.1, 26)
+	_blot(Vector3(18.0, surface - 0.006, -567.6), 0.7, 0.5, Color(0.7, 0.85, 0.85, 0.22))
+	# --- the laboratory that is still full: water to above one's head behind the glass
+	var level := 2.5
+	_chunk("Glass", false)
+	for at in [-551.5, -544.5]:
+		_face_box(corridor, EAST, "stain", at - 2.95, at + 2.95, 0.62, level, 0.25, 0.27, Color(0.07, 0.5, 0.45, 0.2))
+		_face_glow(corridor, EAST, at - 2.95, at + 2.95, level - 0.012, level + 0.012, 0.24, 0.28, Color("bff5ec"), 2.6)
+	batch.quad(mats["skin"], Vector3(4.4, UNDER + level, -554.8), Vector3(4.4, UNDER + level, -541.2), Vector3(31.8, UNDER + level, -541.2), Vector3(31.8, UNDER + level, -554.8), Color.WHITE)
+	# A crack in the southern pane, and what comes through it.
+	for k in range(6):
+		var turn := k * 1.05 + random.randf_range(-0.3, 0.3)
+		var long := random.randf_range(0.25, 0.7)
+		batch.box(mats["shard"], Vector3(3.97, UNDER + 1.9 + sin(turn) * long * 0.5, -545.2 + cos(turn) * long * 0.5), Vector3(0.004, 0.012, long), Color.WHITE, Basis(Vector3.RIGHT, -turn))
+	_chunk("Kit", false)
+	_face_box(corridor, EAST, "stain", -545.5, -544.9, 0.3, 0.6, -0.066, -0.064, Color(0.05, 0.2, 0.18, 0.5))
+	_drips(Vector3(3.74, UNDER + 1.86, -545.2), 1.5, 7)
+	var murk := FogVolume.new()
+	murk.name = "Murk"
+	murk.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	murk.size = Vector3(27.2, level, 13.2)
+	var haze := FogMaterial.new()
+	haze.density = 0.15
+	haze.albedo = Color(0.25, 0.78, 0.72)
+	haze.emission = Color(0.008, 0.06, 0.055)
+	haze.edge_fade = 0.02
+	murk.material = haze
+	murk.position = Vector3(18.0, UNDER + level * 0.5, -548.0)
+	add_child(murk)
+	for x in [9.0, 18.5, 27.5]:
+		_light(Vector3(x, UNDER + 1.3, -548.0), Color(0.3, 0.95, 0.85), 2.4, 9.5, false, 0.12, 2.0, LAMP_FADE + 8.0)
+	_light(Vector3(14.0, UNDER + 4.0, -548.0), Color("cfe8e0"), 1.2, 8.0, false, 0.7, 0.5, LAMP_FADE)
+	_lab_bench(Vector3(10.5, UNDER, -550.6), 5.0, 0.0, 1)
+	_lab_bench(Vector3(20.0, UNDER, -545.4), 5.0, 0.0, 2)
+	_lab_bench(Vector3(26.5, UNDER, -551.0), 5.0, 0.0, 3)
+	_chunk("Kit", false)
+	_shelf(Vector3(16.0, UNDER, -541.5), PI, 6.0, 0.5, 2.2, 4, Color("5d6468"), 0.5)
+	# What the water carries: chairs that hang in it, boxes under its skin, a body.
+	_stool(Vector3(13.0, UNDER + 1.2, -548.6), 0.6, true)
+	_stool(Vector3(22.4, UNDER + 0.7, -550.2), 2.0, true)
+	_lab_chair(Vector3(7.4, UNDER + 1.5, -545.6), 1.3, true)
+	_lab_chair(Vector3(24.0, UNDER + 1.7, -546.4), 2.9, true)
+	for entry in [[Vector3(6.6, level - 0.24, -552.4), 0.5], [Vector3(11.8, level - 0.24, -544.4), 1.8], [Vector3(19.6, level - 0.24, -551.6), 2.6]]:
+		var at: Vector3 = entry[0]
+		_model("cardboard_box_01", Vector3(at.x, UNDER + at.y, at.z), float(entry[1]), {"scale": 1.5, "solid": false, "far": 35.0})
+	for entry in [[Vector3(8.0, 1.9, -547.0), 20.0], [Vector3(15.0, 1.1, -551.0), -35.0], [Vector3(17.5, 2.1, -545.0), 60.0], [Vector3(23.0, 1.4, -549.0), 15.0], [Vector3(11.0, 0.8, -546.5), -70.0]]:
+		var at: Vector3 = entry[0]
+		_papers(Transform3D(Basis.from_euler(Vector3(deg_to_rad(float(entry[1])), random.randf() * TAU, deg_to_rad(float(entry[1]) * 0.5))), Vector3(at.x, UNDER + at.y, at.z)), Vector3.ZERO, 4, 0.7)
+	if not Engine.is_editor_hint():
+		var body := LabSpecimen.create("normalzombie", "adrift", 0.9, 2.2, 0.0, 3.1)
+		body.position = Vector3(7.6, UNDER + 0.3, -549.2)
+		body.rotation.y = deg_to_rad(80.0)
+		add_child(body)
+	_sign_board("lab_corridor", EAST, -556.0, 3.6, [["NASSLABOR  ·  WASSEREINBRUCH", GUIDE.flood]], 2.9, 22)
 
 # ---------------------------------------------------------------- after the build
 
@@ -2015,7 +2232,11 @@ func tour() -> Array:
 		["67_lab_glass", Vector3(1.5, UNDER, -520.0), Vector3(-18, UNDER + 1.2, -529.0)],
 		["68_quarantine", Vector3(-6, UNDER, -551.0), Vector3(-26, UNDER + 1.4, -548.0)],
 		["69_cryo", Vector3(6, UNDER, -530.0), Vector3(26, UNDER + 1.2, -527.0)],
-		["70_flooded", Vector3(6, UNDER, -555.0), Vector3(28, UNDER + 1.0, -552.0)],
+		["70_flooded", Vector3(0.6, UNDER, -548.5), Vector3(3.2, UNDER + 1.0, -566.0)],
+		["70b_sunken", Vector3(-2.7, UNDER, -547.0), Vector3(12.0, UNDER + 1.6, -548.6)],
+		["70c_wet_lab", Vector3(5.6, UNDER, -562.0), Vector3(28.0, UNDER + 1.2, -562.6)],
+		["70d_shore", Vector3(0, UNDER, -532.5), Vector3(0, UNDER + 0.9, -560.0)],
+		["70e_front", Vector3(-2.8, UNDER, -565.5), Vector3(8.0, UNDER + 1.5, -560.0)],
 		["71_cross", Vector3(0, UNDER, -566.0), Vector3(0, UNDER + 1.8, -577.0)],
 		["71b_cross_east", Vector3(-20, UNDER, -573.0), Vector3(20, UNDER + 1.8, -573.4)],
 		["72_hall_in", Vector3(0, UNDER, -579.0), Vector3(0, UNDER + 5.0, -612.0)],
