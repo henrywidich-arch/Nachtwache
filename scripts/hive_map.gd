@@ -50,6 +50,8 @@ var alarm_lamps: Array[OmniLight3D] = []
 var alarm_on := false
 ## Keeps the red light on whatever happens (the pictures of a check: --hive-alarm).
 var alarm_hold := false
+## The places where a weapon cache can stand (built and run by HiveCaches).
+var caches: Array[Dictionary] = []
 ## How far each of the house's props has to be turned so that its front looks along +z.
 const PROP_TURN := {}
 
@@ -74,6 +76,8 @@ func _ready() -> void:
 		var from := Time.get_ticks_msec()
 		(part as Callable).call()
 		build_times[str((part as Callable).get_method())] = Time.get_ticks_msec() - from
+	# The furniture of the weapon caches, in the rooms off the way (see HiveCaches).
+	HiveCaches.furnish(self)
 	var mark := Time.get_ticks_msec()
 	_compile()
 	build_times["compile"] = Time.get_ticks_msec() - mark
