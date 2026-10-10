@@ -2,7 +2,8 @@ class_name ProwlerVisual
 extends RipperVisual
 ## The Prowler's body: the four-legged hunter of mission two. Like the hound it brings its
 ## own skeleton and clips (idle, stalk, trot, run, leap, slash_l, slash_r, slam, bite,
-## flinch, stagger, roar, death - made in Blender by tools/blender_rig_prowler.py).
+## flinch, stagger, roar, death, turn_l, turn_r, pivot_l, pivot_r, brake, shake - made in
+## Blender by tools/blender_rig_prowler.py).
 ## It is a RipperVisual so that everything that asks "has it arms to lose?" answers as it
 ## does for the hound.
 
@@ -24,6 +25,22 @@ const LEAP_OFF := 0.30
 const LEAP_DOWN := 0.80
 const LEAP_END := 1.1
 const ROAR_SECONDS := 1.9
+## Turning on the spot: the clips turn_l and turn_r are made for this many radians a second.
+const TURN_SPEED := 2.618
+## The half turn over the haunches: the clip's length, the seconds of it in which the body
+## comes round, and how far behind the middle of the body the point lies it turns about.
+const PIVOT_SECONDS := 0.5
+const PIVOT_TURN := 0.44
+const HAUNCH := 1.369 * SIZE
+const BRAKE_SECONDS := 0.45
+const SHAKE_SECONDS := 1.1
+## Seconds one gait takes to become another.
+const BLEND := 0.2
+## In a curve: how far the spine bends (radians, all of it), how far the head goes ahead
+## of that, and how far the body leans in.
+const BEND := 0.42
+const LEAD := 0.3
+const LEAN := 0.13
 const STAGGER_SECONDS := 1.0
 const FLINCH_SECONDS := 0.45
 const GLOW_CODE := """shader_type spatial;
@@ -47,6 +64,9 @@ static var prowler_scene: PackedScene
 var backwards := false
 ## How far the head is turned towards what it hunts (radians, to the left).
 var look_yaw := 0.0
+## How fast the body is turning (radians a second, to the left), told by whoever turns it.
+var turn_rate := 0.0
+var bend := 0.0
 var neck_bones: Array[int] = []
 var enraged := false
 var rage := 0.0
@@ -74,7 +94,7 @@ func _ready() -> void:
 	player = _find(imported, "AnimationPlayer") as AnimationPlayer
 	# Advanced by hand, like the other infected, so the flinch can be laid on top.
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
-	for clip in ["idle", "stalk", "trot", "run"]:
+	for clip in ["idle", "stalk", "trot", "run", "turn_l", "turn_r"]:
 		if player.has_animation(clip):
 			player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 	head_bone = skeleton.find_bone("Bone_019")
@@ -116,19 +136,31 @@ func animate(delta: float, speed: float) -> void:
 		elif speed > (TROT_FROM - 0.4 if gait == "trot" else TROT_FROM):
 			wanted = "trot"
 			rate = clampf(speed / TROT_SPEED, 0.6, 2.3)
-		elif speed > 0.15:
+		elif speed > 0.3:
 			wanted = "stalk"
 			rate = clampf(speed / STALK_SPEED, 0.5, 2.0)
+		elif absf(turn_rate) > (0.35 if gait.begins_with("turn") else 0.7):
+			# On the spot it steps round: the clip is made for TURN_SPEED, and played as fast as it turns.
+			wanted = "turn_l" if turn_rate > 0.0 else "turn_r"
+			rate = clampf(absf(turn_rate) / TURN_SPEED, 0.45, 1.9)
 		if wanted != gait:
 			gait = wanted
-			player.play(wanted, 0.16)
-		player.speed_scale = -rate if backwards and wanted != "idle" else rate
+			player.play(wanted, BLEND)
+		player.speed_scale = -rate if backwards and wanted in ["stalk", "trot"] else rate
 		phase += TAU * rate * delta / maxf(0.1, player.current_animation_length)
 	player.advance(delta)
-	if not dying and absf(look_yaw) > 0.02 and state == "move":
+	# Into a curve it bends: the spine along it, the head ahead of it, the body leaning in.
+	var curve := clampf(turn_rate / 2.6, -1.0, 1.0) * clampf(speed / 2.5, 0.0, 1.0) if state == "move" and not dying else 0.0
+	bend = lerpf(bend, curve, minf(1.0, delta * 7.0))
+	holder.rotation.z = -bend * LEAN
+	if absf(bend) > 0.01 and not spine_bones.is_empty():
+		for bone in spine_bones:
+			_nudge(bone, Vector3(0, bend * BEND / spine_bones.size(), 0))
+	var head_turn := (look_yaw if state == "move" else 0.0) + bend * LEAD
+	if not dying and absf(head_turn) > 0.02:
 		# The head keeps to what it hunts while the body goes round it.
 		for bone in neck_bones:
-			_nudge(bone, Vector3(0, look_yaw / neck_bones.size(), 0))
+			_nudge(bone, Vector3(0, head_turn / neck_bones.size(), 0))
 	if flinch > 0.01 and not spine_bones.is_empty():
 		# A bullet knocks the body sideways for a moment.
 		for bone in spine_bones:
@@ -138,6 +170,24 @@ func animate(delta: float, speed: float) -> void:
 		glow.set_shader_parameter("power", rage)
 		ember.light_energy = rage * (1.5 + 0.4 * sin(clock * 7.5))
 		steam.emitting = rage > 0.4 and not dying
+
+## A half turn over the haunches (see Prowler: the body is turned and carried round the
+## point between the hind paws while this plays).
+func pivot(left: bool) -> void:
+	if not dying:
+		_begin("pivot_l" if left else "pivot_r", 0.07, 1.0, 0.0, PIVOT_SECONDS, "stagger")
+
+## Out of the gallop: braced forelegs, haunches down.
+func brake() -> void:
+	if not dying:
+		_begin("brake", 0.09, 1.0, 0.0, BRAKE_SECONDS, "stagger")
+
+## It shakes itself. Returns how long.
+func shake() -> float:
+	if dying:
+		return 0.0
+	_begin("shake", 0.16, 1.0, 0.0, SHAKE_SECONDS, "stagger")
+	return busy_left
 
 func pick_attack() -> String:
 	return ["slash_l", "slash_r", "slash_l", "slash_r", "slam", "bite"].pick_random()

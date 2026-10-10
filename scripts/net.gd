@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.28"
+const VERSION := "0.30"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0

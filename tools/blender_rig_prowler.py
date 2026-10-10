@@ -15,7 +15,9 @@ the ground (two-bone IK), so that a paw that stands does not slide. One GLB come
 
 The animal looks along -Y in Blender (+Z in the game's file), its left side is +X.
 Ground speeds the gaits are made for (scripts/prowler_visual.gd carries the same numbers):
-stalk 1.2 m/s, trot 4.0 m/s, run 8.5 m/s.
+stalk 1.2 m/s, trot 4.0 m/s, run 8.5 m/s. Turning on the spot (turn_l, turn_r) is made for 150
+degrees a second; the half turn over the haunches (pivot_l, pivot_r) for a body that the game
+turns by 180 degrees in 0.44 s and carries round the point between its hind paws.
 """
 import bpy, sys, os, math
 import numpy as np
@@ -111,6 +113,7 @@ HIND = {
     "R": {"hip": B(18), "thigh": B(17), "shin": B(16), "meta": B(15), "foot": B(14)},
 }
 PIVOT = Vector((0.0, 0.1, 1.15))      # middle of the trunk: whole-body moves turn about it
+PAW = {}                              # FL, FR, HL, HR: where the paw rests (x, y), filled in by Rig
 
 
 def rx(deg):
@@ -161,6 +164,7 @@ class Leg:
         self.toe = 0.0                       # hind: the toes against the ground
         self.curl = 0.0                      # fore: the claws close
         self.knee = 0.0                      # the middle joint turns outwards
+        self.spin = 0.0                      # the paw turned on the ground (degrees, to the left)
 
 
 class Pose:
@@ -205,6 +209,10 @@ class Rig:
                 self.claw_axis[name] = (axis.normalized() if axis.length > 1e-5 else Vector((1.0, 0.0, 0.0)), side)
             self.hind[HIND[side]["thigh"]] = side
         self.over = 0.0
+        # where every paw rests on the ground (seen from above)
+        for side in ("L", "R"):
+            PAW["F" + side] = self.head[FORE[side]["hand"]].to_2d()
+            PAW["H" + side] = self.head[HIND[side]["foot"]].to_2d()
 
     def solve(self, P):
         G, pos = {}, {}
@@ -262,7 +270,7 @@ class Rig:
         gf = swing(gu @ f0, target - elbow) @ gu
         G[b] = gu
         preset[c["fore"]] = gf
-        preset[c["hand"]] = flat @ rx(L.heel)
+        preset[c["hand"]] = rz(L.spin) @ flat @ rx(L.heel)
 
     def ik_hind(self, side, P, b, G, pos, preset):
         c = HIND[side]
@@ -276,7 +284,7 @@ class Rig:
         carried = pos[ROOT] + G[ROOT] @ (ball0 + off - self.head[ROOT])
         ball = carried.lerp(ball0 + off, L.plant)
         flat = G[ROOT].slerp(Quaternion(), L.plant)
-        gm = flat @ rx(L.heel)
+        gm = rz(L.spin) @ flat @ rx(L.heel)
         hock = ball + gm @ (hock0 - ball0)
         k0 = knee0 - self.head[b]
         s0 = hock0 - knee0
@@ -291,7 +299,7 @@ class Rig:
         G[b] = gt
         preset[c["shin"]] = gs
         preset[c["meta"]] = gm
-        preset[c["foot"]] = flat @ rx(L.toe)
+        preset[c["foot"]] = rz(L.spin) @ flat @ rx(L.toe)
 
     def basis(self, G, pos):
         """What to key on every bone: its rotation in its own rest axes (and the root's place)."""
@@ -639,6 +647,133 @@ def clip_roar(P, t):
     P.tail[1][1] = 14 * math.sin(t * 9.0) * out
 
 
+def turned(P, name, angle, centre=(0.0, 0.0), lift=0.0):
+    """Puts a paw where its resting place lies once the ground has turned by angle (degrees, to the left)
+    about centre - and turns the paw with it, so that it does not twist on the ground."""
+    rest = PAW[name]
+    c = Vector(centre)
+    a = math.radians(angle)
+    v = rest - c
+    p = c + Vector((v.x * math.cos(a) - v.y * math.sin(a), v.x * math.sin(a) + v.y * math.cos(a)))
+    L = P.leg[name]
+    L.off = Vector(((p.x - rest.x) * (1.0 if name[1] == "L" else -1.0), p.y - rest.y, lift))
+    L.spin = angle
+    L.plant = 1.0
+
+
+TURN_T, TURN_RATE, TURN_DUTY = 0.4, 150.0, 0.56
+
+
+def clip_turn(P, u, side):
+    """Turning on the spot (side 1: to the left). The game turns the body; here the ground turns the other
+    way under the standing paws at an even pace, and the others step round. Diagonal pairs."""
+    sweep = TURN_RATE * TURN_DUTY * TURN_T
+    for name, ph in (("FL", 0.0), ("HR", 0.0), ("FR", 0.5), ("HL", 0.5)):
+        s = (u - ph) % 1.0
+        if s < TURN_DUTY:
+            turned(P, name, -side * sweep * (s / TURN_DUTY - 0.5))
+        else:
+            w = (s - TURN_DUTY) / (1.0 - TURN_DUTY)
+            turned(P, name, -side * sweep * (0.5 - sm(w)), lift=0.13 * math.sin(math.pi * w))
+            P.leg[name].heel = 28 * math.sin(math.pi * w)
+    P.d = Vector((0.0, 0.0, -0.03 + 0.012 * wave(2 * u, 0.2)))
+    P.roll = side * 2.5 + 1.2 * wave(u, 0.1)
+    P.spine[0][1] = -side * 3.0
+    P.spine[2][1] = side * 7.0
+    P.neck[0][1] = side * 9.0
+    P.head[1] = side * 7.0
+    P.head[0] = 4
+    P.jaw = 6
+    P.tail[0][1] = side * 14.0 + 5 * wave(u, 0.3)
+    P.tail[1][1] = side * 16.0 + 7 * wave(u, 0.45)
+
+
+PIVOT_T, PIVOT_TURN = 0.5, 0.44
+
+
+def clip_pivot(P, t, side):
+    """A half turn over the haunches (side 1: to the left): the forehand comes up and swings round, the hind
+    paws stand, hop after it and stand again. The game turns the body by psi and carries it round the
+    point between the hind paws."""
+    psi = 180.0 * sm(t / PIVOT_TURN)
+    centre = (0.0, PAW["HL"].y)
+    for name in ("HL", "HR"):
+        if psi < 50.0:
+            turned(P, name, -side * psi, centre)
+        elif psi < 130.0:
+            k = (psi - 50.0) / 80.0
+            turned(P, name, side * (-50.0 + 100.0 * sm(k)), centre, lift=0.16 * math.sin(math.pi * k))
+            P.leg[name].heel = 25 * math.sin(math.pi * k)
+        else:
+            turned(P, name, side * (180.0 - psi), centre)
+    up = key(t, [(0, 0), (0.10, 1), (0.34, 1), (0.47, 0)])
+    for name in ("FL", "FR"):
+        L = P.leg[name]
+        L.plant = 1.0 - key(t, [(0.02, 0), (0.08, 1), (0.38, 1), (0.47, 0)])
+        L.off = Vector((0.0, 0.28 * up, 0.42 * up))
+        L.heel = 35 * up
+        L.curl = 16 * up
+    lead = key(t, [(0, 0), (0.12, 1), (0.30, 0.6), (0.46, 0)])
+    P.pitch = 15 * up
+    P.roll = side * 6 * lead
+    P.d = Vector((0.0, 0.14 * up, -0.13 * up))
+    P.spine[1][1] = side * 8 * lead
+    P.spine[2][1] = side * 12 * lead
+    P.neck[0][1] = side * 14 * lead
+    P.head[1] = side * 10 * lead
+    P.jaw = 8
+    P.tail[0][1] = -side * 26 * lead
+    P.tail[1][1] = -side * 30 * lead
+    P.tail[0][0] = 10 * up
+
+
+BRAKE_T = 0.45
+
+
+def clip_brake(P, t):
+    """Out of the gallop: the forelegs braced ahead, the haunches down - it slides."""
+    k = key(t, [(0, 0), (0.10, 1), (0.30, 1), (0.45, 0)])
+    P.pitch = 9 * k
+    P.d = Vector((0.0, 0.16 * k, -0.20 * k))
+    for i in range(3):
+        P.spine[i][0] = -3 * k
+    for name in ("FL", "FR"):
+        P.leg[name].off = Vector((0.06 * k, -0.22 * k, 0.0))
+        P.leg[name].heel = -10 * k
+        P.leg[name].curl = 16 * k
+    for name in ("HL", "HR"):
+        P.leg[name].off = Vector((0.05 * k, -0.42 * k, 0.0))
+        P.leg[name].heel = -12 * k
+    P.neck[0][0] = 10 * k
+    P.head[0] = 6 * k
+    P.jaw = 8 + 10 * k
+    P.tail[0][0] = 22 * k
+    P.tail[1][0] = 14 * k
+
+
+SHAKE_T = 1.1
+
+
+def clip_shake(P, t):
+    """It shakes itself, from the head to the tail."""
+    env = key(t, [(0, 0), (0.14, 1), (0.78, 1), (1.05, 0)])
+
+    def osc(lag):
+        return math.sin(2.0 * math.pi * 7.5 * (t - lag)) * env
+    P.d = Vector((0.012 * osc(0.02), 0.0, -0.03 * env))
+    P.roll = 5 * osc(0.03)
+    P.spine[0][2] = 4 * osc(0.05)
+    P.spine[1][2] = 5 * osc(0.03)
+    P.spine[2][2] = 7 * osc(0.01)
+    P.neck[0][2] = 9 * osc(0.0)
+    P.neck[1][2] = 8 * osc(-0.01)
+    P.head[2] = 12 * osc(-0.02)
+    P.head[0] = -6 * env
+    P.jaw = 6 + 6 * env
+    P.tail[0][1] = 16 * osc(0.07)
+    P.tail[1][1] = 22 * osc(0.09)
+
+
 DEATH_T = 2.4
 
 
@@ -689,6 +824,12 @@ CLIPS = [
     ("stagger", clip_stagger, STAGGER_T, False),
     ("roar", clip_roar, ROAR_T, False),
     ("death", clip_death, DEATH_T, False),
+    ("turn_l", lambda P, u: clip_turn(P, u, 1.0), TURN_T, True),
+    ("turn_r", lambda P, u: clip_turn(P, u, -1.0), TURN_T, True),
+    ("pivot_l", lambda P, t: clip_pivot(P, t, 1.0), PIVOT_T, False),
+    ("pivot_r", lambda P, t: clip_pivot(P, t, -1.0), PIVOT_T, False),
+    ("brake", clip_brake, BRAKE_T, False),
+    ("shake", clip_shake, SHAKE_T, False),
 ]
 
 

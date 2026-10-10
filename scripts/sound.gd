@@ -103,6 +103,12 @@ const HIT_FLOOR := 0.055
 const KILL_FLOOR := 0.09
 const KILL_WINDOW := 0.7
 const KILL_DUCK := -2.0
+## Hit sounds of the player's own choosing. They are no part of the game and of its
+## repository: if these files lie in the project folder, a bullet of his that hits an
+## infected is answered with one of them instead of hit_body / hit_head (soldiers keep
+## the game's own answer). OWN_LEVEL: their volume in dB.
+const OWN_HITS := ["res://CombatArms_Zombie_Treffersounds/2_Treffer_Ding/MULTIDING1.wav", "res://CombatArms_Zombie_Treffersounds/2_Treffer_Ding/MULTIDING2.wav"]
+const OWN_LEVEL := -8.0
 
 var clips: Dictionary = {}
 var recorded: Dictionary = {}
@@ -135,6 +141,10 @@ var hit_landed := -10.0
 var hit_heard := -10.0
 var kill_heard := -10.0
 var answers := {"hit_body": 0, "hit_head": 0, "hit_kill": 0}
+## The player's own hit sounds that were found (see OWN_HITS), looked for once.
+var own_hits: Array = []
+var own_asked := false
+var own_last := -1
 
 func _ready() -> void:
 	rng.seed = 707
@@ -375,7 +385,8 @@ func play_sound(kind: String, volume: float = 0.0, pitch: float = 1.0) -> void:
 ## stands - it is the shooter's confirmation, and nobody else gets it. One call per shot,
 ## however many pellets landed. `killed`: the hit felled somebody, and the fuller answer
 ## comes on top.
-func confirm_hit(headshot: bool, killed: bool = false) -> void:
+## `infected`: what was hit is no soldier (see OWN_HITS).
+func confirm_hit(headshot: bool, killed: bool = false, infected: bool = false) -> void:
 	if hush:
 		return
 	var now := Time.get_ticks_msec() * 0.001
@@ -384,9 +395,39 @@ func confirm_hit(headshot: bool, killed: bool = false) -> void:
 		hit_heard = now
 		var kind := "hit_head" if headshot else "hit_body"
 		answers[kind] += 1
-		play_sound(kind, KILL_DUCK if killed else 0.0)
+		if not (infected and _own_hit(KILL_DUCK if killed else 0.0)):
+			play_sound(kind, KILL_DUCK if killed else 0.0)
 	if killed:
 		confirm_kill()
+
+## Plays one of the player's own hit sounds, not the same twice in a row; false if he
+## has none.
+func _own_hit(volume: float) -> bool:
+	if not own_asked:
+		own_asked = true
+		for path in OWN_HITS:
+			if ResourceLoader.exists(str(path)):
+				var stream := load(str(path)) as AudioStream
+				if stream != null:
+					own_hits.append(stream)
+	if own_hits.is_empty():
+		return false
+	var voice := _claim(voices, int(MIX["hit_body"][2]))
+	if voice == null:
+		return true
+	var index := rng.randi() % own_hits.size()
+	if own_hits.size() > 1 and index == own_last:
+		index = (index + 1) % own_hits.size()
+	own_last = index
+	if voice != menu_voice:
+		voice.bus = "SFX"
+	voice.stream = own_hits[index]
+	voice.volume_db = OWN_LEVEL + volume
+	voice.pitch_scale = 1.0
+	voice.set_meta("priority", int(MIX["hit_body"][2]))
+	voice.set_meta("started", Time.get_ticks_msec())
+	voice.play()
+	return true
 
 ## The fuller answer to a kill. The host of a co-op match decides what a guest's hit
 ## does: the guest gets this when the kill is reported to him, if a bullet of his has
