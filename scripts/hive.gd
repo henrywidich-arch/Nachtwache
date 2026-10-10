@@ -526,7 +526,7 @@ func _enter(id: String) -> void:
 			_use("generator", "generator", "[E] Notstrom einschalten")
 			talk("m2_atrium")
 			line("m2_generator")
-			_post(["ripper", "ripper", "leech", "mauler", "striker"], [_point("maint") + Vector3(6, 0, 0), _point("maint") + Vector3(14, 0, 0), _point("pump") + Vector3(0, 0, -4), _point("generator") + Vector3(-4, 0, 4), _point("generator") + Vector3(4, 0, 6)], false)
+			_post(["ripper", "ripper", "leech", "mauler", "striker"], [_point("maint") + Vector3(6, 0, 0), _point("maint") + Vector3(14, 0, 0), _point("pump") + Vector3(0, 0, -4), _point("generator") + Vector3(-4, 0, -4), _point("generator") + Vector3(4, 0, -6)], false)
 		"decon":
 			map.unlock("decon")
 			game.sounds.play_sound("beep")
