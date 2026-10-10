@@ -831,8 +831,13 @@ func _build_room(room: Dictionary) -> void:
 			_solid(Vector3(tile.get_center().x, y - 0.25, tile.get_center().y), Vector3(tile.size.x, 0.5, tile.size.y), false)
 	if room.get("ceiling", true):
 		var cover: Array = look.ceiling
-		_part(str(cover[0]), Vector3(middle.x, y + tall + 0.15, middle.y), Vector3(outer.size.x, 0.3, outer.size.y), cover[1])
-		_part_shape(Vector3(middle.x, y + tall + 0.15, middle.y), Vector3(outer.size.x, 0.3, outer.size.y))
+		# (`shafts`: rectangles left open in it - a way in from above, see HiveMap._way_drop.)
+		var slabs: Array = [outer] if (room.get("shafts", []) as Array).is_empty() else _tiles(outer, room.shafts)
+		for slab in slabs:
+			var plate: Rect2 = slab
+			var centre := Vector3(plate.get_center().x, y + tall + 0.15, plate.get_center().y)
+			_part(str(cover[0]), centre, Vector3(plate.size.x, 0.3, plate.size.y), cover[1])
+			_part_shape(centre, Vector3(plate.size.x, 0.3, plate.size.y))
 	if room.get("walls", true):
 		for side in range(4):
 			if not (room.bare as Array).has(side):
@@ -1076,11 +1081,15 @@ func _build_pane(pane: Dictionary) -> void:
 				_face_box(room, side, "plate", at - 0.025, at + 0.025, sill, head, middle - 0.04, middle + 0.04, trim)
 		"window":
 			# A cross of glazing bars; the glass itself stops nobody's shot.
-			_face_box(room, side, trim_mat, (a + b) * 0.5 - 0.025, (a + b) * 0.5 + 0.025, sill, head, middle - 0.03, middle + 0.03, trim)
+			# (`bare`: neither bars nor glass. A window somebody can come through has a sash of
+			# its own, which breaks - see HiveMap._way_window.)
+			var bare := bool(pane.get("bare", false))
 			var bars := maxi(1, roundi((head - sill) / 0.9))
-			for i in range(1, bars):
-				_face_box(room, side, trim_mat, a, b, sill + i * (head - sill) / bars - 0.02, sill + i * (head - sill) / bars + 0.02, middle - 0.03, middle + 0.03, trim)
-			if not bool(pane.get("broken", false)):
+			if not bare:
+				_face_box(room, side, trim_mat, (a + b) * 0.5 - 0.025, (a + b) * 0.5 + 0.025, sill, head, middle - 0.03, middle + 0.03, trim)
+				for i in range(1, bars):
+					_face_box(room, side, trim_mat, a, b, sill + i * (head - sill) / bars - 0.02, sill + i * (head - sill) / bars + 0.02, middle - 0.03, middle + 0.03, trim)
+			if not bare and not bool(pane.get("broken", false)):
 				_chunk("Glass", false)
 				batch.box(mats["pane"], _face_centre(room, side, a, b, sill, head, middle - 0.008, middle + 0.008), _face_size(side, a, b, sill, head, middle - 0.008, middle + 0.008), Color.WHITE)
 			_add_shape(rails, _face_centre(room, side, a, b, sill, head, middle - 0.05, middle + 0.05), _face_size(side, a, b, sill, head, middle - 0.05, middle + 0.05))

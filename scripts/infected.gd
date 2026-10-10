@@ -360,6 +360,9 @@ var shaken := 0.0
 var cling_cooldown := 0.0
 var cling_tick := 0.0
 var voices: Dictionary = {}
+## Set while it comes through a way in of the second mission (a ceiling, a hole in a
+## wall): that has the body until it stands on the floor. See HiveEntries.carry.
+var entering: HiveEntries = null
 var model: InfectedVisual
 var head_box: StaticBody3D
 
@@ -668,6 +671,8 @@ func show_cue(action: String, args: Array) -> void:
 # ---------------------------------------------------------------- behaviour
 
 func _physics_process(delta: float) -> void:
+	if entering != null and entering.carry(self, delta):
+		return
 	if dead:
 		if cloud != null:
 			_lift_cloud()
@@ -1359,7 +1364,8 @@ func _remove_after(seconds: float) -> void:
 	_retire()
 	var tween := create_tween()
 	tween.tween_interval(maxf(0.1, seconds - 1.2))
-	tween.tween_property(self, "position:y", position.y - 0.6, 1.2)
+	# (From wherever it lies by then: a body shot on its way out of a ceiling falls first.)
+	tween.tween_property(self, "position:y", -0.6, 1.2).as_relative()
 	tween.tween_callback(queue_free)
 
 # ---------------------------------------------------------------- co-op puppet
