@@ -1528,7 +1528,7 @@ func _lay_admin() -> void:
 	_chunk("Kit", false)
 	# --- the way in: two lanes through scanner arches, a booth between them, a belt for
 	# what people carried at either wall
-	_passage("checkpoint", {"step": 5.2, "ribs": false, "tray": -1, "energy": 2.4, "reach": 10.0})
+	_passage("checkpoint", {"step": 5.2, "ribs": false, "tray": -1, "energy": 3.2, "reach": 11.0})
 	for lane in [-2.9, 2.9]:
 		for edge in [-1.4, 1.4]:
 			var post := Vector3(lane + edge, UNDER, -350.0)
@@ -2094,6 +2094,8 @@ func _lay_research() -> void:
 	for z in [-506.0, -524.0]:
 		_floor_arrow(Vector3(0, UNDER, z), 0.0, GUIDE.research)
 	_display(Vector3(0, UNDER + 3.55, -512.47), 0.0, 3.0, "research", "hang", 0.3)
+	for tag in [[WEST, -510.0, "L-01", "LABOR  A"], [EAST, -510.0, "L-03", "LABOR  C"], [WEST, -528.0, "L-02", "LABOR  B"], [EAST, -530.0, "L-04", "KRYOLAGER"], [WEST, -551.0, "Q-01", "QUARANTÄNE"]]:
+		_door_tag("lab_corridor", int(tag[0]), float(tag[1]) + 1.55, str(tag[2]), str(tag[3]), Color("9fe8e0") if str(tag[2]) != "Q-01" else Color("ff8a7a"))
 	for entry in [[-510.0, "LABOR  A", "LABOR  C"], [-528.0, "LABOR  B", "KRYOLAGER"], [-553.0, "QUARANTÄNE", ""]]:
 		_wall_sign(str(entry[1]), _face_point(corridor, WEST, float(entry[0]) + 2.0, 3.1, -0.058), 18, Color("1c555b"), PI / 2)
 		if str(entry[2]) != "":
@@ -2740,7 +2742,7 @@ func tour() -> Array:
 		["52_staff", Vector3(-6, UNDER, -394.5), Vector3(-20, UNDER + 1.0, -404.0)],
 		["53_spine", Vector3(0, UNDER, -371.0), Vector3(0, UNDER + 1.6, -405.0)],
 		["54_canteen", Vector3(0, UNDER, -406.5), Vector3(8, UNDER + 1.6, -434.0)],
-		["55_canteen_back", Vector3(-22, UNDER, -433.0), Vector3(20, UNDER + 1.4, -408.0)],
+		["55_canteen_back", Vector3(-19.5, UNDER, -431.5), Vector3(20, UNDER + 1.4, -408.0)],
 		["56_kitchen", Vector3(25.5, UNDER, -409.0), Vector3(36, UNDER + 1.0, -421.0)],
 		["57_atrium_in", Vector3(0, UNDER, -447.0), Vector3(0, UNDER + 4.5, -470.0)],
 		["58_atrium_deck", Vector3(-21.5, DECK, -447.2), Vector3(6, UNDER + 2.0, -470.0)],
