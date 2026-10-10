@@ -2420,8 +2420,117 @@ func _threats(game: Node3D) -> void:
 	var first: float = game.default_render_scale()
 	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
 	await _zombie_test(game)
+	await _hit_answer(game)
 	game.team_enabled = true
 	game.start_run()
+
+## What a shooter hears when his own bullet lands: a tick for flesh, a brighter one for a
+## head, a fuller one on top for a kill - one answer per shot, and none for anybody else.
+func _hit_answer(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	var built := true
+	var brief := true
+	for kind in ["hit_body", "hit_head", "hit_kill"]:
+		built = built and bool(sounds.recorded.get(kind, false)) and (sounds.clips[kind] as Array).size() >= 3 and float(FieldAudio.MIX[kind][0]) <= 0.0 and float(FieldAudio.MIX[kind][0]) >= -9.0 and float(FieldAudio.MIX[kind][1]) > 0.0
+		for clip in sounds.clips[kind]:
+			brief = brief and (clip as AudioStream).get_length() < 0.3
+	expect(built and brief and (sounds.clips.hit_body as Array).size() == 4 and FieldAudio.HIT_FLOOR >= 0.03 and FieldAudio.HIT_FLOOR <= 0.09, "The answers to a hit are built: several takes each for flesh, a head and a kill, none longer than three tenths of a second")
+	_wipe_all(game)
+	await wait(0.5)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	player.ammo = 30
+	var target: Infected = game.spawn_enemy("mauler")
+	target.set_physics_process(false)
+	target.position = Vector3(0, 0.05, 25.0)
+	target.max_health = 5000.0
+	target.health = 5000.0
+	await frames(3)
+	# In the chest, and again in the same instant: one tick.
+	var heard: Dictionary = sounds.answers.duplicate()
+	player.camera.rotation.x = -0.2
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var in_flesh: bool = target.health < 5000.0 and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) and int(sounds.answers.hit_kill) == int(heard.hit_kill)
+	var playing := false
+	for voice in sounds.voices:
+		playing = playing or (voice.playing and (sounds.clips.hit_body as Array).has(voice.stream) and voice.bus == "Field")
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var floored: bool = int(sounds.answers.hit_body) == int(heard.hit_body) + 1
+	await wait(FieldAudio.HIT_FLOOR + 0.08)
+	# In the head.
+	player.camera.rotation.x = 0.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var in_head: bool = int(sounds.answers.hit_head) == int(heard.hit_head) + 1 and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and int(sounds.answers.hit_kill) == int(heard.hit_kill)
+	expect(in_flesh and playing and floored and in_head, "A bullet that lands is answered at once and flat, in flesh with one tick and in a head with another; two in the same instant are one")
+	# Somebody else's hit is his own business, and so is a blow or a blast.
+	var ticks: int = int(sounds.answers.hit_body) + int(sounds.answers.hit_head)
+	target.receive_hit(30.0, Vector3.FORWARD, true, game.net.remote if is_instance_valid(game.net.remote) else target)
+	game.explode(target.global_position + Vector3(0, 0.5, 0), 3.0, 0.0, 40.0, "blast")
+	game.hud.kill_feed("PARTNER · MAULER", 100, false, true)
+	game.hud.kill_feed("MAULER", 100, false)
+	var others: bool = int(sounds.answers.hit_body) + int(sounds.answers.hit_head) == ticks and int(sounds.answers.hit_kill) == int(heard.hit_kill)
+	# The hit that kills.
+	await wait(FieldAudio.HIT_FLOOR + 0.08)
+	target.health = 1.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var felled: bool = target.dead and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) + 2
+	# A kill that a guest of a co-op match is told of: answered if his bullet has only just landed.
+	await wait(FieldAudio.KILL_FLOOR + 0.05)
+	sounds.confirm_kill()
+	var told: bool = int(sounds.answers.hit_kill) == int(heard.hit_kill) + 2
+	sounds.hit_landed -= FieldAudio.KILL_WINDOW + 0.1
+	await wait(FieldAudio.KILL_FLOOR + 0.05)
+	sounds.confirm_kill()
+	expect(others and felled and told and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 2, "Nobody hears another's hit, nor a blast; the hit that kills gets the fuller answer, and a guest gets it when the host reports his kill")
+	# A blast of shot is one tick, however many pellets land; and a bullet that goes through
+	# three and fells them all is one tick and one answer to the kills.
+	await wait(0.6)
+	player.unlock("shotgun")
+	player.equip_weapon("shotgun", true)
+	player.ammo = 6
+	var sturdy: Infected = game.spawn_enemy("mauler")
+	sturdy.set_physics_process(false)
+	sturdy.position = Vector3(0, 0.05, 24.5)
+	sturdy.max_health = 5000.0
+	sturdy.health = 5000.0
+	await frames(3)
+	heard = sounds.answers.duplicate()
+	player.camera.rotation.x = -0.2
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var pellets: bool = sturdy.health < 5000.0 - 2.5 * float(Survivor.WEAPONS.shotgun.damage) and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) and int(sounds.answers.hit_kill) == int(heard.hit_kill)
+	sturdy.receive_hit(99999.0, Vector3.FORWARD)
+	await wait(0.6)
+	player.unlock("sniper")
+	player.equip_weapon("sniper", true)
+	player.ammo = 5
+	var row: Array = []
+	for i in range(3):
+		var one: Infected = game.spawn_enemy("mauler")
+		one.set_physics_process(false)
+		one.position = Vector3(0, 0.05, 24.3 + i * 0.9)
+		one.health = 1.0
+		row.append(one)
+	await frames(3)
+	heard = sounds.answers.duplicate()
+	player.camera.rotation.x = -0.2
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var fallen := 0
+	for one in row:
+		if (one as Infected).dead:
+			fallen += 1
+	expect(pellets and fallen == 3 and int(sounds.answers.hit_body) + int(sounds.answers.hit_head) == int(heard.hit_body) + int(heard.hit_head) + 1 and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1, "A blast of shot is one tick, and one bullet through three that fells them all (%d) is one tick and one answer: nothing piles up" % fallen)
+	player.camera.rotation.x = 0.0
+	player.equip_weapon("rifle", true)
+	_wipe_all(game)
+	await wait(0.5)
 
 ## The difficulty "Zombie-Test": a night as on NORMAL, except that the horde takes more.
 func _zombie_test(game: Node3D) -> void:
@@ -3493,6 +3602,9 @@ func coop(game: Node3D, as_host: bool) -> void:
 			if item.done:
 				items_done += 1
 	print("%s_TASKS tasks=%d items=%d done=%d props=%d" % [tag, game.mission.tasks.size(), items_total, items_done, game.mission.props.size()])
+	# What this side heard of its own hits: never more ticks than shots fired here, never
+	# more answers to a kill than kills made here.
+	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills])
 	var partner_at := Vector3.ZERO
 	var partner_health := -1.0
 	if is_instance_valid(game.net.remote):

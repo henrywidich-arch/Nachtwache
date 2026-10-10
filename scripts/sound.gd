@@ -35,7 +35,15 @@ const MIX := {
 	"ring": [-4.0, 0.0, 2], "glitch": [-6.0, 0.06, 1],
 	# The M32: its drum swung open, a shell pushed home, the frame shut, the turn of the drum
 	# after a shot, and its shell in flight (heard from the shell itself, see play_on).
-	"m32_open": [-6.0, 0.03, 1], "m32_shell": [-6.0, 0.05, 1], "m32_close": [-5.0, 0.04, 1], "m32_turn": [-9.0, 0.06, 1], "shell_flight": [-6.0, 0.06, 1]
+	"m32_open": [-6.0, 0.03, 1], "m32_shell": [-6.0, 0.05, 1], "m32_close": [-5.0, 0.04, 1], "m32_turn": [-9.0, 0.06, 1], "shell_flight": [-6.0, 0.06, 1],
+	# What a shooter hears when his own bullet lands (see confirm_hit; built by
+	# tools/make_hit_sounds.js): in flesh, in a head, and the fuller answer to a kill. Their
+	# files peak at -1.5 dB and are over in a tenth to a quarter of a second, so these levels
+	# put a tick about as high as the crack of a rifle (the AK's shot peaks at -3 dB in the
+	# mix, the G36's at -5) and well above every shot between 1 and 5 kHz, where it is heard.
+	"hit_body": [-4.5, 0.06, 1], "hit_head": [-3.5, 0.045, 1], "hit_kill": [-3.5, 0.06, 1],
+	# The second exploding infected going off: wet and low, in place of the Charger's bang.
+	"boomer_burst": [0.0, 0.07, 2]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -62,7 +70,8 @@ const STAND_INS := {
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
 	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90",
 	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click",
-	"m32_open": "click", "m32_shell": "click", "m32_close": "click", "m32_turn": "click", "shell_flight": "wind"
+	"m32_open": "click", "m32_shell": "click", "m32_close": "click", "m32_turn": "click", "shell_flight": "wind",
+	"hit_body": "hit", "hit_head": "hit", "hit_kill": "squish", "boomer_burst": "squish"
 }
 
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):
@@ -70,6 +79,16 @@ const STAND_INS := {
 const VOLUMES := {"Master": 1.0, "Music": 0.6, "SFX": 1.0, "Voice": 1.0}
 ## How much lower the voice on a taken-over radio channel speaks (see play_voice).
 const FAKE_PITCH := 0.955
+## The answer to a hit (see confirm_hit). HIT_FLOOR: the least seconds between two ticks,
+## so that a fast gun does not turn them into one noise (the minigun fires every 0.05 s:
+## every other hit of it is answered). KILL_FLOOR: the same for the answer to a kill - a
+## blast of shot that fells three is one kill to the ear. KILL_WINDOW: how long after a
+## hit of his a guest's kill still counts as that bullet's. KILL_DUCK: how far the tick
+## steps back (dB) under the answer to a kill.
+const HIT_FLOOR := 0.055
+const KILL_FLOOR := 0.09
+const KILL_WINDOW := 0.7
+const KILL_DUCK := -2.0
 
 var clips: Dictionary = {}
 var recorded: Dictionary = {}
@@ -95,6 +114,13 @@ var fake_clock := 0.0
 var mend_left := 0.0
 ## Recorded lines that were already played: path -> stream.
 var speech: Dictionary = {}
+## The answers to hits: when a bullet of this player last landed, when a tick and when the
+## answer to a kill was last heard (seconds since the game started), and how often each
+## has been played (the checks count them).
+var hit_landed := -10.0
+var hit_heard := -10.0
+var kill_heard := -10.0
+var answers := {"hit_body": 0, "hit_head": 0, "hit_kill": 0}
 
 func _ready() -> void:
 	rng.seed = 707
@@ -328,6 +354,35 @@ func play_sound(kind: String, volume: float = 0.0, pitch: float = 1.0) -> void:
 	var voice := _claim(voices, int(MIX[kind][2]))
 	if voice != null:
 		_start(voice, kind, volume, pitch)
+
+## A bullet of the player of this machine has hit an enemy, and he hears it: a short tick
+## of wet flesh, brighter and harder for a head. It does not come from where the enemy
+## stands - it is the shooter's confirmation, and nobody else gets it. One call per shot,
+## however many pellets landed. `killed`: the hit felled somebody, and the fuller answer
+## comes on top.
+func confirm_hit(headshot: bool, killed: bool = false) -> void:
+	if hush:
+		return
+	var now := Time.get_ticks_msec() * 0.001
+	hit_landed = now
+	if now - hit_heard >= HIT_FLOOR:
+		hit_heard = now
+		var kind := "hit_head" if headshot else "hit_body"
+		answers[kind] += 1
+		play_sound(kind, KILL_DUCK if killed else 0.0)
+	if killed:
+		confirm_kill()
+
+## The fuller answer to a kill. The host of a co-op match decides what a guest's hit
+## does: the guest gets this when the kill is reported to him, if a bullet of his has
+## only just landed (a kill by a grenade or by fire is not answered).
+func confirm_kill() -> void:
+	var now := Time.get_ticks_msec() * 0.001
+	if hush or now - hit_landed > KILL_WINDOW or now - kill_heard < KILL_FLOOR:
+		return
+	kill_heard = now
+	answers.hit_kill += 1
+	play_sound("hit_kill")
 
 ## Plays a sound at a place in the world so its direction and distance can be heard.
 func play_at(kind: String, where: Vector3, volume: float = 0.0, pitch: float = 1.0) -> void:

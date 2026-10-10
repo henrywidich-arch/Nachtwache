@@ -509,10 +509,13 @@ func loadout() -> void:
 		loadout_box.add_child(row)
 	loadout_left = 2.4
 
-func hit_marker(headshot: bool) -> void:
+## The cross that shows a hit. `answered`: whoever calls plays the sound of it himself
+## (a bullet's hit has its own answer, see FieldAudio.confirm_hit).
+func hit_marker(headshot: bool, answered: bool = false) -> void:
 	hit_left = 0.17
 	hit_is_head = headshot
-	game.sounds.play_sound("headshot" if headshot else "hit")
+	if not answered:
+		game.sounds.play_sound("headshot" if headshot else "hit")
 
 func announce(title: String, detail: String = "", duration: float = 3.0) -> void:
 	banner_label.text = title
@@ -579,6 +582,10 @@ func kill_feed(what: String, points: int, headshot: bool, dim: bool = false) -> 
 	var text := what if points == 0 else "%s  +%d" % [what, points]
 	if headshot:
 		text = "KOPFSCHUSS · " + text
+	# A guest of a co-op match learns here that his own hit has killed (the host decides
+	# it): the fuller answer follows the tick he heard when he fired.
+	if not dim and points > 0 and game.net.joined:
+		game.sounds.confirm_kill()
 	var entry := label(text, 13 if dim else 17, MUTED if dim else (ORANGE if headshot else (MINT if points == 0 else IVORY)), true)
 	entry.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	feed.add_child(entry)
