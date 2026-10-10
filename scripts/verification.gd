@@ -2625,6 +2625,7 @@ func _threats(game: Node3D) -> void:
 	await _hit_answer(game)
 	await _ding_answer(game)
 	await _second_exploder(game)
+	await _crusher_shell(game)
 	await _hive_staff(game)
 	game.team_enabled = true
 	game.start_run()
@@ -2727,6 +2728,143 @@ func _take_off(game: Node3D, enemy: Infected) -> void:
 	enemy._retire()
 	enemy.queue_free()
 	game.alive_count = maxi(0, game.alive_count - 1)
+
+## The Crusher's shell: once the giant has been hurt it comes by the clock - a warning, the
+## shell, a pause - cuts whatever strikes it to a quarter, lets nothing hold it up, makes
+## it faster, lies over its body for everybody to see, and answers a hit with a dull knock.
+func _crusher_shell(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	_wipe_all(game)
+	await wait(0.6)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	var built := true
+	for kind in ["crusher_shell_tell", "crusher_shell_on", "crusher_shell_off", "hit_shell"]:
+		built = built and bool(sounds.recorded.get(kind, false))
+	var round_now: int = game.wave
+	game.wave = game.ROUNDS.size()
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.set_physics_process(false)
+	giant.position = Vector3(0, 0.05, 33.0)
+	var body: InfectedVisual = giant.model
+	# Unhurt it has no shell, and its clock stands.
+	giant._harden(30.0)
+	var waits: bool = giant.shell == "" and not giant.shell_armed and not giant.hardened()
+	# Hurt, it warns - and is still as open as ever for that second.
+	giant.receive_hit(giant.max_health * (Infected.SHELL_FIRST + 0.02), Vector3.BACK)
+	giant._harden(0.01)
+	var armed: bool = giant.shell_armed and giant.shell == ""
+	giant._harden(2.0)
+	var warns: bool = giant.shell == "tell" and not giant.hardened() and body.shell_state == "tell"
+	var health: float = giant.health
+	giant.receive_hit(100.0, Vector3.BACK)
+	var open: bool = is_equal_approx(giant.health, health - 100.0)
+	for i in range(6):
+		body.animate(0.1, 0.0)
+	var creeps: bool = body.shell > 0.02 and body.shell < 0.7 and body.mesh_instance.material_overlay == body.shell_skin
+	# Then it is shut: a quarter of a bullet gets through, a quarter of the fire, and neither
+	# a blow nor a flashbang holds it up.
+	giant._harden(Infected.SHELL_TELL + 0.01)
+	var shut: bool = giant.hardened() and is_equal_approx(giant.shell_left, Infected.SHELL_SECONDS)
+	health = giant.health
+	giant.receive_hit(100.0, Vector3.BACK)
+	var bullet: bool = is_equal_approx(giant.health, health - 100.0 * Infected.SHELL_SHARE)
+	health = giant.health
+	giant.ignite(1.0)
+	giant._burn(Infected.BURN_TICK)
+	var fire: bool = is_equal_approx(giant.health, health - Infected.BURN_DPS * Infected.BURN_TICK * Infected.SHELL_SHARE)
+	giant.burn_left = 0.0
+	giant.cue("burn", [false])
+	giant.held_left = 0.0
+	giant.stun(4.0)
+	giant.shove(Vector3.BACK, 5.0, 1.0, 0.0)
+	var unmoved: bool = giant.held_left <= 0.0
+	for i in range(4):
+		body.animate(0.1, 0.0)
+	var eye: MeshInstance3D = body.eyes.get_child(0) as MeshInstance3D
+	var shows: bool = body.shell > 0.95 and body.mesh_instance.material_overlay == body.shell_skin and body.shell_lamp.visible and body.shell_lamp.light_energy > 1.0 and eye.material_override == InfectedVisual.shell_eye
+	# A Medic's sheen waits under it.
+	body.set_buffed(true)
+	var over_sheen: bool = body.mesh_instance.material_overlay == body.shell_skin
+	# The shooter hears and sees that his bullet is wasted; the bar of the boss says why.
+	player.camera.look_at(giant.global_position + Vector3(0, 1.2, 0))
+	await frames(4)
+	var dings: int = int(sounds.answers.ding) + int(sounds.answers.ding_head)
+	var dulls: int = sounds.dulls
+	health = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var shot_shut: float = health - giant.health
+	var dull: bool = sounds.dulls == dulls + 1 and int(sounds.answers.ding) + int(sounds.answers.ding_head) == dings and game.hud.hit_is_dull and shot_shut > 0.0
+	await frames(3)
+	var named: bool = (game.hud.boss_box.get_child(0) as Label).text.ends_with("GEHÄRTET")
+	# It opens again, and the next shell is a pause away.
+	giant._harden(Infected.SHELL_SECONDS + 0.01)
+	var opens: bool = giant.shell == "" and not giant.hardened() and giant.shell_left >= Infected.SHELL_PAUSE.x - Infected.SHELL_TELL - 0.01 and giant.shell_left <= Infected.SHELL_PAUSE.y - Infected.SHELL_TELL
+	for i in range(8):
+		body.animate(0.1, 0.0)
+	var bare: bool = body.shell <= 0.01 and body.mesh_instance.material_overlay == InfectedVisual.sheen and not body.shell_lamp.visible and eye.material_override == InfectedVisual.buff_eye
+	body.set_buffed(false)
+	bare = bare and body.mesh_instance.material_overlay == null and eye.material_override == InfectedVisual.eye_materials["crusher"]
+	await wait(0.2)
+	health = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var shot_open: float = health - giant.health
+	var rings: bool = sounds.dulls == dulls + 1 and int(sounds.answers.ding) + int(sounds.answers.ding_head) == dings + 1 and not game.hud.hit_is_dull and is_equal_approx(shot_shut, shot_open * Infected.SHELL_SHARE)
+	expect(built and waits and armed and warns and open and creeps and shut and opens, "The Crusher's shell comes by the clock once it has lost a tenth of its health: a second of warning in which it is still open, %.0f seconds shut, %.0f to %.0f open" % [Infected.SHELL_SECONDS, Infected.SHELL_PAUSE.x, Infected.SHELL_PAUSE.y])
+	expect(bullet and fire and unmoved, "Behind its shell a quarter of everything gets through - bullets and fire alike - and neither a blow nor a flashbang holds it up")
+	expect(shows and over_sheen and bare, "The shell shows: amber plates over the whole body, eyes of the same colour and a light around it - over a Medic's sheen, and gone when it opens")
+	expect(dull and named and rings, "A bullet on the shell is answered with a dull knock and a mark of its own, and the boss's bar says GEHÄRTET; on the open Crusher it dings again (%.1f against %.1f)" % [shot_shut, shot_open])
+	# It is faster behind its shell.
+	face(game, Vector3(0, 0.05, 6.0), PI)
+	giant.special_cooldown = 99.0
+	giant.set_shell("")
+	giant.set_physics_process(true)
+	await wait(0.8)
+	var slow: float = Vector2(giant.velocity.x, giant.velocity.z).length()
+	giant.set_shell("on")
+	await wait(0.5)
+	var fast: float = Vector2(giant.velocity.x, giant.velocity.z).length()
+	giant.set_physics_process(false)
+	# The test room shuts and opens it at a click.
+	game.sandbox.crusher_state("shell", false)
+	var room_open: bool = not giant.hardened() and not game.sandbox.crusher_shows("shell")
+	game.sandbox.crusher_state("shell", true)
+	expect(slow > 1.0 and fast > slow * 1.1 and fast < slow * 1.3 and room_open and giant.hardened() and game.sandbox.crusher_shows("shell"), "Behind its shell the Crusher walks a fifth faster (%.2f against %.2f m/s), and the test room shuts and opens the shell at a click" % [fast, slow])
+	_take_off(game, giant)
+	game.boss = null
+	# How much longer it lasts under steady fire: half as long again at the most, never twice.
+	var lasts: Array = []
+	for dps in [110.0, 240.0]:
+		for shelled in [false, true]:
+			var sum := 0.0
+			for run in range(6):
+				var dummy: Infected = game.spawn_enemy("crusher")
+				dummy.set_physics_process(false)
+				dummy.position = Vector3(0, 0.05, 36.0)
+				var seconds := 0.0
+				# (Down to its last breath, not beyond: no cloud, no points.)
+				while dummy.health > 30.0 and seconds < 200.0:
+					seconds += 0.05
+					if shelled:
+						dummy._harden(0.05)
+					dummy.receive_hit(float(dps) * 0.05, Vector3.BACK)
+				sum += seconds
+				_take_off(game, dummy)
+			lasts.append(sum / 6.0)
+	await wait(0.3)
+	_wipe_all(game)
+	game.fx.clear()
+	game.boss = null
+	game.wave = round_now
+	var slower: float = float(lasts[1]) / float(lasts[0])
+	var slower_fast: float = float(lasts[3]) / float(lasts[2])
+	expect(slower > 1.2 and slower < 1.6 and slower_fast > 1.15 and slower_fast < 1.6, "Under steady fire a grown Crusher lasts %.1f s in place of %.1f (%.2f times as long), under heavy fire %.1f in place of %.1f (%.2f): longer, not twice as long" % [lasts[1], lasts[0], slower, lasts[3], lasts[2], slower_fast])
 
 ## The second exploding infected: a Charger in another body, with a burst of its own -
 ## low, wide, the colour of blood orange, and a puddle that lies there for a while.

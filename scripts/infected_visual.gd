@@ -272,6 +272,38 @@ static var sheen: ShaderMaterial
 static var buff_eye: StandardMaterial3D
 static var buff_glow: StandardMaterial3D
 static var charger_mesh: ArrayMesh
+## The Crusher's shell: plates the colour of amber lie over its blue skin and glow at
+## their seams and edges, the eyes burn in the same colour, and it lights the ground
+## around it - so that it reads at night as well as in the light of the facility.
+## SHELL_PLATES: how many plates lie across the skin's texture.
+const SHELL_COLOR := Color(1.0, 0.52, 0.08)
+const SHELL_PLATES := 60.0
+const SHELL_CODE := """shader_type spatial;
+render_mode blend_mix, depth_draw_never, shadows_disabled;
+uniform vec3 tint : source_color = vec3(1.0, 0.52, 0.08);
+uniform float plates = 60.0;
+uniform float amount = 0.0;
+uniform float flare = 0.0;
+float plate(vec2 p) {
+	// How far from the middle of its six-sided plate a point lies: 0.5 at the seam.
+	const vec2 s = vec2(1.0, 1.7320508);
+	vec4 c = floor(vec4(p, p - vec2(0.5, 1.0)) / s.xyxy) + 0.5;
+	vec4 h = vec4(p - c.xy * s, p - (c.zw + 0.5) * s);
+	vec2 q = abs(dot(h.xy, h.xy) < dot(h.zw, h.zw) ? h.xy : h.zw);
+	return max(dot(q, s * 0.5), q.x);
+}
+void fragment() {
+	float rim = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), 2.5);
+	float seam = smoothstep(0.38, 0.49, plate(UV * plates));
+	ALBEDO = tint * 0.3;
+	METALLIC = 0.5;
+	ROUGHNESS = 0.4;
+	EMISSION = tint * (0.2 + seam * 1.3 + rim * 1.0 + flare * 2.6) * amount;
+	ALPHA = clamp(amount * (0.88 + seam * 0.12), 0.0, 1.0);
+}
+"""
+static var shell_code: Shader
+static var shell_eye: StandardMaterial3D
 
 var kind := "mauler_hazmat"
 var config: Dictionary
@@ -304,6 +336,15 @@ var swell := 0.0
 var duck := 0.0
 var buffed := false
 var buff_marks: Array[Node3D] = []
+## The Crusher's shell as it is shown: its state ("", "tell" or "on"), how much of it lies
+## over the skin (0 to 1), the seconds it has been in that state, and the flare that
+## answers a hit on it.
+var shell_state := ""
+var shell := 0.0
+var shell_for := 0.0
+var shell_flare := 0.0
+var shell_skin: ShaderMaterial
+var shell_lamp: OmniLight3D
 
 func _ready() -> void:
 	config = KINDS[kind]
@@ -963,11 +1004,7 @@ func set_buffed(on: bool) -> void:
 		buff_glow.billboard_keep_scale = true
 		buff_glow.albedo_texture = soft
 		buff_glow.albedo_color = Color(BUFF_COLOR.r, BUFF_COLOR.g, BUFF_COLOR.b, 0.32)
-	mesh_instance.material_overlay = sheen if on else null
-	for eye in eyes.get_children():
-		if eye is MeshInstance3D and eye_materials.has(kind):
-			(eye as MeshInstance3D).material_override = buff_eye if on else eye_materials[kind]
-			(eye as MeshInstance3D).scale = Vector3.ONE * (1.6 if on else 1.0)
+	_dress()
 	for mark in buff_marks:
 		mark.queue_free()
 	buff_marks.clear()
@@ -988,6 +1025,69 @@ func set_buffed(on: bool) -> void:
 			holder_bone.add_child(glow)
 			buff_marks.append(holder_bone)
 
+## What lies over the skin and burns in the eyes: the Crusher's shell before a Medic's sheen.
+func _dress() -> void:
+	var shelled := shell_skin != null and (shell_state != "" or shell > 0.01)
+	mesh_instance.material_overlay = shell_skin if shelled else (sheen if buffed else null)
+	var hard := shell_state == "on"
+	for eye in eyes.get_children():
+		if eye is MeshInstance3D and eye_materials.has(kind):
+			(eye as MeshInstance3D).material_override = shell_eye if hard else (buff_eye if buffed else eye_materials[kind])
+			(eye as MeshInstance3D).scale = Vector3.ONE * (2.2 if hard else (1.6 if buffed else 1.0))
+
+## Shows the Crusher's shell: "" takes it away, "tell" lets it creep over the skin in
+## fits and starts, "on" shuts it with a flare.
+func set_shell(state: String) -> void:
+	if state == shell_state or mesh_instance == null:
+		return
+	shell_state = state
+	shell_for = 0.0
+	if state == "on":
+		shell_flare = 1.0
+	if shell_skin == null:
+		if shell_code == null:
+			shell_code = Shader.new()
+			shell_code.code = SHELL_CODE
+			shell_eye = StandardMaterial3D.new()
+			shell_eye.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			shell_eye.albedo_color = Color(1.0, 0.8, 0.45)
+			shell_eye.emission_enabled = true
+			shell_eye.emission = SHELL_COLOR
+			shell_eye.emission_energy_multiplier = 7.0
+		shell_skin = ShaderMaterial.new()
+		shell_skin.shader = shell_code
+		shell_skin.set_shader_parameter("plates", SHELL_PLATES)
+		shell_lamp = OmniLight3D.new()
+		shell_lamp.light_color = SHELL_COLOR
+		shell_lamp.omni_range = 6.0
+		shell_lamp.shadow_enabled = false
+		shell_lamp.light_energy = 0.0
+		shell_lamp.position = Vector3(0, float(config.height) * 0.55, -0.5)
+		add_child(shell_lamp)
+	_dress()
+
+## The shell grows, flickers and fades, frame by frame.
+func _shell_step(delta: float) -> void:
+	shell_for += delta
+	var goal := 0.0
+	var pace := 2.4
+	if shell_state == "on":
+		goal = 1.0
+		pace = 7.0
+	elif shell_state == "tell":
+		# It comes in fits and starts, more of it each time.
+		goal = clampf(0.15 + shell_for * 0.5, 0.0, 0.62) * (0.6 + 0.4 * sin(clock * 34.0) * sin(clock * 11.0))
+		pace = 9.0
+	var shown := shell > 0.01
+	shell = move_toward(shell, goal, delta * pace)
+	shell_flare = maxf(0.0, shell_flare - delta * 3.2)
+	shell_skin.set_shader_parameter("amount", shell)
+	shell_skin.set_shader_parameter("flare", shell_flare)
+	shell_lamp.light_energy = shell * 1.7 + shell_flare * 2.2
+	shell_lamp.visible = shell > 0.01
+	if shown != (shell > 0.01):
+		_dress()
+
 # ---------------------------------------------------------------- animation
 
 func _clip(clip_name: String) -> Dictionary:
@@ -999,6 +1099,8 @@ func animate(delta: float, speed: float) -> void:
 	clock += delta
 	flinch = maxf(0.0, flinch - delta * 4.5)
 	travel = 0.0
+	if shell_skin != null:
+		_shell_step(delta)
 	if dying:
 		death_time += delta
 		if dissolving:
@@ -1103,6 +1205,10 @@ func _travel_at(clip_name: String, seconds: float) -> float:
 
 ## A bullet jerks the upper body; `strength` is 0..1.
 func hit(from_side: float, strength: float = 1.0) -> void:
+	if shell_state == "on":
+		# It glances off the shell: a flare where a body would flinch.
+		shell_flare = maxf(shell_flare, 0.55)
+		return
 	flinch = clampf(maxf(flinch, 0.45 + strength * 0.55), 0.0, 1.0)
 	flinch_side = from_side
 
@@ -1179,6 +1285,7 @@ func die(clip_name: String) -> void:
 
 ## Sinks to its knees and shrinks away; used by the Crusher inside its acid cloud.
 func dissolve() -> void:
+	set_shell("")
 	dying = true
 	dissolving = true
 	state = "dead"

@@ -494,6 +494,9 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_map_tour")
+	elif "--crusher-states" in args:
+		check_mode = true
+		call_deferred("_run_crusher_states")
 	elif "--mp-host-test" in args or "--mp-join-test" in args:
 		check_mode = true
 		call_deferred("_run_mp_test", "--mp-host-test" in args)
@@ -2435,6 +2438,8 @@ func _run_hive_check() -> void:
 		print("HIVE_VIEW %s draws=%d tris=%d fps=%d" % [view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), int(Engine.get_frames_per_second())])
 	get_tree().quit()
 
+const CRUSHER_SHOTS := ["plain", "tell", "shell"]
+
 func _run_sandbox_check() -> void:
 	var folder := _capture_dir()
 	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
@@ -2476,6 +2481,35 @@ func _run_sandbox_check() -> void:
 	resume_run()
 	print("SANDBOX alive=%d wave=%d credits=%d daylight=%s" % [sandbox.alive(), wave, credits, str(sandbox.daylight)])
 	print("SANDBOX_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Pictures of the Crusher's states, as the player sees them in the test room - by day and
+## in the night of the farm: plain, with the shell creeping over it, behind its shell.
+##   hid.sh "--crusher-states" <capture folder>
+func _run_crusher_states() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.5)
+	start_run(true)
+	await tick.call(1.0)
+	hud.banner_left = 0
+	hud.radio_left = 0
+	sandbox.frozen = true
+	var giant: Infected = sandbox.spawn("crusher")[0]
+	# Close enough to fill the picture.
+	var toward := (player.global_position - giant.global_position).normalized()
+	player.global_position = giant.global_position + Vector3(toward.x, 0, toward.z).normalized() * 3.4
+	player.camera.look_at(giant.global_position + Vector3(0, 1.75, 0))
+	for light in ["day", "night"]:
+		sandbox.set_daylight(light == "day")
+		await tick.call(0.8)
+		for state in CRUSHER_SHOTS:
+			giant.set_shell("on" if state in ["shell", "both"] else ("tell" if state == "tell" else ""))
+			await tick.call(0.55 if state == "tell" else 1.2)
+			hud.banner_left = 0
+			hud.radio_left = 0
+			await _capture(folder, "crusher_%s_%s.png" % [light, state])
+	print("CRUSHER_STATES_CAPTURE_COMPLETE shell=%s" % giant.shell)
 	get_tree().quit()
 
 ## Pictures of the shop's counter and of the workbench: every list, a weapon picked, the
