@@ -4,18 +4,19 @@ extends Node3D
 ## falls (see mode). In both a round may bring a modifier (MODIFIERS).
 
 ## Who attacks in a plain round. Strikers join in round five, the Crusher closes the night.
+## (Few Strikers, and not too many Chargers: a yard full of growths and blasts is no fun.)
 ## The mission director turns some rounds into hordes or mutant packs and adds tasks.
 const ROUNDS := [
 	{"mauler": 7, "charger": 1},
 	{"mauler": 9, "charger": 2},
 	{"mauler": 10, "charger": 2, "ripper": 2},
 	{"mauler": 12, "charger": 3, "ripper": 3, "leech": 2, "healer": 1},
-	{"mauler": 12, "charger": 3, "striker": 2, "ripper": 2, "leech": 2, "healer": 1},
-	{"mauler": 13, "charger": 4, "striker": 3, "ripper": 3, "leech": 3, "healer": 1, "crusher": 1},
-	{"mauler": 14, "charger": 4, "striker": 4, "ripper": 4, "leech": 3, "healer": 1},
-	{"mauler": 16, "charger": 5, "striker": 4, "ripper": 4, "leech": 4, "healer": 2, "crusher": 1},
-	{"mauler": 17, "charger": 5, "striker": 5, "ripper": 5, "leech": 4, "healer": 2},
-	{"mauler": 19, "charger": 6, "striker": 6, "ripper": 6, "leech": 5, "healer": 2, "crusher": 1}
+	{"mauler": 13, "charger": 3, "striker": 1, "ripper": 2, "leech": 2, "healer": 1},
+	{"mauler": 15, "charger": 3, "striker": 2, "ripper": 3, "leech": 3, "healer": 1, "crusher": 1},
+	{"mauler": 15, "charger": 4, "striker": 3, "ripper": 4, "leech": 3, "healer": 1},
+	{"mauler": 18, "charger": 4, "striker": 3, "ripper": 4, "leech": 4, "healer": 2, "crusher": 1},
+	{"mauler": 18, "charger": 5, "striker": 4, "ripper": 5, "leech": 4, "healer": 2},
+	{"mauler": 22, "charger": 5, "striker": 4, "ripper": 6, "leech": 5, "healer": 2, "crusher": 1}
 ]
 ## Shares of the window's pixels the 3D picture can be drawn with (menu: 3D).
 const RENDER_SCALES := [1.0, 0.85, 0.7, 0.6, 0.5, 0.4]
