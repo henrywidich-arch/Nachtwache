@@ -3,8 +3,9 @@ extends RefCounted
 ## The workbenches and the equipment stations of the second mission.
 ##
 ## Most weapons of that mission are found in caches off the way (HiveCaches), and the four
-## supply points lie far apart. So there are small stations in between, where a stretch is
-## long without one or a cluster of caches lies behind the squad:
+## supply points lie far apart. So there are a few stops in between - where a place is
+## held next, where a defeat is taken up again and no supply point follows, and before the
+## last fight. A stop is a workbench and an equipment station together:
 ##   a workbench    improves the weapons that are carried (the workbench's own screen), and
 ##   an equipment station sells attachments, gear, what is used up and what the squad
 ##                  wears (the shop's lists TABS) - no weapons, and no tree of abilities is
@@ -38,27 +39,28 @@ const GAP := 0.08
 ## The places: a name, the room, the side of the room they stand against, what stands
 ## there - each a look and where along that wall its middle is - and, where the wall one
 ## sees is not the room's own, how far before that it stands.
-##   depot      behind the two caches of the depot, at the far end of the station (the wall
-##              there is the tunnel's, which reaches into the room)
-##   terminal   where the train arrives and a defeat is taken up again, beside the gate and
-##              the wall terminal with the plan of the facility
-##   security   in the security centre, which the way through the administration leads to
-##   spine      behind the caches of the administration, before the canteen is held
-##   maint      in the plant corridor, between the generator and the pump room's cache
+##   spine      behind the caches of the administration, the stop before the canteen is held
 ##   labs_...   at the head of the laboratory corridor, where a defeat is taken up again
 ##              and no supply point follows any more (between its windows: the rack in the
 ##              pier beside laboratory A, the bay before the cryo store)
 ##   cross      the last stop before the hall of towers
+## They come at a distance: together with the supply points, a workbench and a counter
+## that sells about every hundred metres of the squad's way, never two of a kind nearer
+## than MIN_APART on foot, and one of each within BEFORE_FIGHT of every place that is held
+## (tools/station_stock.gd lists them all; Verification._hive_stations holds it to that).
+## There were seven such places once (v0.44): the ones that doubled a supply point one
+## room on - in the depot, in the terminal hall, in the security centre, in the plant
+## corridor - are gone again.
 const SITES := [
-	["depot", "depot", HiveCore.NORTH, [["cabinet", 47.5]], 0.63],
-	["terminal", "terminal", HiveCore.NORTH, [["bay", 14.0], ["rack", 16.9]]],
-	["security", "security", HiveCore.WEST, [["cabinet", -377.9]]],
-	["spine", "spine", HiveCore.WEST, [["bench", -390.4]]],
-	["maint", "maint", HiveCore.NORTH, [["bay", 39.4]]],
+	["spine", "spine", HiveCore.WEST, [["cabinet", -393.6], ["bench", -390.4]]],
 	["labs_gear", "lab_corridor", HiveCore.WEST, [["rack", -507.95]]],
 	["labs_bench", "lab_corridor", HiveCore.EAST, [["bay", -519.5]]],
 	["cross", "cross", HiveCore.NORTH, [["cabinet", -17.4], ["bench", -14.2]]]
 ]
+## How far apart on foot two workbenches, or two counters that sell, are at the least, and
+## how near the last of each is to a place that is held.
+const MIN_APART := 40.0
+const BEFORE_FIGHT := 50.0
 
 static func size_of(map: HiveMap, look: String) -> Vector3:
 	return map._model_size(str(LOOKS[look].model))
