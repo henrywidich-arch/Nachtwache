@@ -21,7 +21,8 @@ func run() -> void:
 	var body := beast.model as ProwlerVisual
 	var at := beast.position
 	# [file, clip, seconds into it, ground speed for a gait]
-	var shots := [
+	var look_only := "--prowler-look" in OS.get_cmdline_user_args()
+	var shots := [] if look_only else [
 		["idle", "idle", 0.6, 0.0], ["stalk", "stalk", 0.5, 1.0], ["trot", "trot", 0.33, 3.3], ["run_a", "run", 0.31, 7.0], ["run_b", "run", 0.47, 7.0],
 		["leap_crouch", "leap", 0.24, 0.0], ["leap_air", "leap", 0.55, 0.0], ["leap_land", "leap", 0.9, 0.0], ["slash", "slash_l", 0.31, 0.0], ["slam", "slam", 0.47, 0.0],
 		["bite", "bite", 0.24, 0.0], ["stagger", "stagger", 0.3, 0.0], ["roar", "roar", 0.95, 0.0]
@@ -36,6 +37,10 @@ func run() -> void:
 	_pose(body, "roar", 0.95, 0.0)
 	await game._capture_from(folder, "prowler_rage.png", at + Vector3(1.9, 1.1, -3.4), at + Vector3(0, 0.7, 0), 45)
 	await game._capture_from(folder, "prowler_rage_side.png", at + Vector3(4.4, 1.15, -0.2), at + Vector3(0, 0.62, -0.1), 45)
+	if look_only:
+		print("PROWLER_CAPTURE_COMPLETE")
+		get_tree().quit()
+		return
 	body.set_enraged(false)
 	body.die("death")
 	for i in range(140):

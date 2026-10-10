@@ -39,6 +39,8 @@ const FLEE_SECONDS := 7.0
 const RAGE_PACE := 1.12
 const RAGE_HASTE := 0.72
 const RAGE_HARM := 1.25
+## Above this speed its bounds are heard.
+const RUN_HEARD := 4.5
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
 const WAIT := Vector2(1.8, 3.4)
 
@@ -290,6 +292,8 @@ func _physics_process(delta: float) -> void:
 				if stuck_for > 0.3:
 					stuck_for = 0.0
 					orbit = -orbit
+					# No room to go round: then it does not wait long.
+					attack_left = minf(attack_left, 1.2)
 			else:
 				stuck_for = 0.0
 			var clear := same_floor and _clear_line(target, true)
@@ -367,6 +371,12 @@ func _physics_process(delta: float) -> void:
 	var aside := wrapf(atan2(-toward.x, -toward.z) - model.rotation.y, -PI, PI)
 	body.look_yaw = lerpf(body.look_yaw, clampf(aside, -1.0, 1.0) if mode in ["circle", "close", "rush"] else 0.0, minf(1.0, delta * 6.0))
 	model.animate(delta, flat_speed)
+	# Its gallop is heard: one beat for every bound.
+	var bound := int(model.phase / TAU)
+	if bound != last_step:
+		last_step = bound
+		if flat_speed > RUN_HEARD and is_on_floor():
+			game.sounds.play_at("thud", global_position, -11.0, 1.7)
 	growl_left -= delta
 	if growl_left <= 0.0 and mode != "flee":
 		growl_left = randf_range(3.0, 6.5)

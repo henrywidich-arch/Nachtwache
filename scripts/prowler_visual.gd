@@ -34,10 +34,10 @@ uniform vec3 glow : source_color = vec3(1.0, 0.22, 0.04);
 void fragment() {
 	vec3 c = texture(skin, UV).rgb;
 	// The dark red of the veins in the pale hide.
-	float vein = smoothstep(0.05, 0.2, c.r - 0.5 * (c.g + c.b)) * smoothstep(0.75, 0.3, c.g);
-	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 2.6);
-	float beat = 0.72 + 0.28 * sin(TIME * 7.5 + UV.y * 9.0);
-	ALBEDO = glow * (vein * 2.2 * beat + rim * 0.55) * power;
+	float vein = smoothstep(0.17, 0.3, c.r - 0.5 * (c.g + c.b)) * smoothstep(0.7, 0.3, c.g);
+	float rim = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
+	float beat = 0.7 + 0.3 * sin(TIME * 7.5 + UV.y * 9.0);
+	ALBEDO = glow * (vein * 3.0 * beat + rim * 0.3 + 0.03) * power;
 }
 """
 

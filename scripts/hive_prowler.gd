@@ -19,9 +19,9 @@ const AWAY := ["landing", "villa", "mirror", "nadja", "deal", "board", "ride", "
 const STAGE_QUIET := 12.0
 ## Seconds between two visits, picked anew each time, and by how much of that every
 ## visit made shortens the wait (down to GAP_LEAST of it).
-const GAP := Vector2(50.0, 105.0)
-const GAP_BOLDER := 0.08
-const GAP_LEAST := 0.55
+const GAP := Vector2(65.0, 140.0)
+const GAP_BOLDER := 0.07
+const GAP_LEAST := 0.6
 ## The wait before its first visit, once the squad is on the way down.
 const FIRST_GAP := Vector2(4.0, 12.0)
 ## Its call is heard this many seconds before it is there.
@@ -37,10 +37,13 @@ const BOLD_MOST := 5
 ## The last fight (stage "hall"): its health, less by WEAR for every visit on which the
 ## squad drove it off by force (at most WEAR_MOST of them), and how many seconds into
 ## the stage its call is heard.
-const END_HEALTH := 6000.0
+const END_HEALTH := 4800.0
 const WEAR := 0.05
 const WEAR_MOST := 5
 const END_AFTER := 5.0
+## While the last fight is on, the horde comes slower: this share of every second is
+## added to the director's wait for its next one.
+const END_HUSH := 0.6
 
 var director: HiveDirector
 var game: Node3D
@@ -60,6 +63,8 @@ var killed := false
 var told_squad := false
 var told_command := false
 var search_for := 0.0
+## How near it came to the survivor on this visit (for the logs of automatic runs).
+var nearest := 99.0
 
 ## True when it may come: the stage is one of its own and has run for a while.
 static func comes_in(stage: String, stage_time: float) -> bool:
@@ -135,12 +140,29 @@ func _process(delta: float) -> void:
 			_arrive(false)
 		return
 	if wait_left <= 0.0:
-		lair = director._hidden_spot(LAIR.x, LAIR.y)
+		lair = _behind(LAIR.x, LAIR.y)
 		if lair == Vector3.INF:
 			# Nowhere to come from here: a little later, a little further on.
 			wait_left = 3.0
 		else:
 			_call()
+
+## A place out of sight to come from: of a few, the one most behind the survivor's back.
+func _behind(nearest: float, furthest: float) -> Vector3:
+	var here: Vector3 = game.player.global_position
+	var ahead: Vector3 = -game.player.camera.global_basis.z
+	var best := Vector3.INF
+	var best_side := 2.0
+	for attempt in range(3):
+		var spot := director._hidden_spot(nearest, furthest)
+		if spot == Vector3.INF:
+			continue
+		var to := spot - here
+		var side := Vector2(ahead.x, ahead.z).normalized().dot(Vector2(to.x, to.z).normalized())
+		if side < best_side:
+			best_side = side
+			best = spot
+	return best
 
 ## The sound the squad learns to fear: from where it will come, a moment before it does.
 func _call() -> void:
@@ -152,7 +174,7 @@ func _end_fight(delta: float) -> void:
 		return
 	if call_left < 0.0:
 		search_for += delta
-		lair = director._hidden_spot(13.0, 28.0)
+		lair = _behind(13.0, 28.0)
 		if lair == Vector3.INF and search_for > 3.0:
 			# The hall hides nothing: then it comes in plain view.
 			lair = _open_spot(16.0, 26.0)
@@ -177,6 +199,11 @@ func _open_spot(nearest: float, furthest: float) -> Vector3:
 
 func _arrive(for_good: bool) -> void:
 	call_left = -1.0
+	# The squad has moved on since the call and would see it appear: then from somewhere else.
+	if director._sees(game.player.camera.global_position, lair + Vector3(0, 1.3, 0)):
+		var other := _behind(LAIR.x, LAIR.y)
+		if other != Vector3.INF:
+			lair = other
 	beast = Prowler.new()
 	beast.game = game
 	beast.wave = maxi(1, game.wave)
@@ -193,6 +220,7 @@ func _arrive(for_good: bool) -> void:
 	var tough := float(game.rules.get("health", 1.0))
 	last = for_good
 	present_for = 0.0
+	nearest = 99.0
 	if for_good:
 		beast.max_health = end_health(wounds) * tough
 		beast.health = beast.max_health
@@ -221,9 +249,11 @@ func _way_out() -> Vector3:
 
 func _attend(delta: float, stage: String) -> void:
 	present_for += delta
+	nearest = minf(nearest, beast.global_position.distance_to(game.player.global_position))
 	# The bar is its own while it is there, whoever else turns up.
 	game.boss = beast
 	if last:
+		director.pressure_left += delta * END_HUSH
 		if stage != "hall":
 			# The lift is there: it lets go one last time.
 			beast.break_off(false)
@@ -233,7 +263,7 @@ func _attend(delta: float, stage: String) -> void:
 ## The visit is over: it runs (`hurt`: because it had taken enough), or it is dead.
 func _close(hurt: bool, died: bool) -> void:
 	if game.check_mode:
-		print("PROWLER_GONE n=%d stage=%s after=%.1f hurt=%s died=%s landed=%d" % [visits, director.stage, present_for, str(hurt), str(died), beast.landed if is_instance_valid(beast) else -1])
+		print("PROWLER_GONE n=%d stage=%s after=%.1f hurt=%s died=%s landed=%d nearest=%.1f" % [visits, director.stage, present_for, str(hurt), str(died), beast.landed if is_instance_valid(beast) else -1, nearest])
 	beast = null
 	if not last:
 		visits += 1
