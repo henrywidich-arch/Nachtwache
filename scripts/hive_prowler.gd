@@ -54,13 +54,13 @@ const LAIR := Vector2(13.0, 26.0)
 const WAY_OUT := Vector2(18.0, 36.0)
 ## What it takes on a visit before it breaks off, and the seconds it stays at most:
 ## x on its first visit, y more with every visit after that (up to BOLD_MOST of them).
-const NERVE := Vector2(2200.0, 600.0)
-const STAY := Vector2(26.0, 5.0)
+const NERVE := Vector2(3000.0, 800.0)
+const STAY := Vector2(32.0, 6.0)
 const BOLD_MOST := 4
 ## The last fight (stage "hall"): its health, less by WEAR for every visit on which the
 ## squad drove it off by force (at most WEAR_MOST of them), and how many seconds into
 ## the stage its call is heard.
-const END_HEALTH := 4800.0
+const END_HEALTH := 6000.0
 const WEAR := 0.06
 const WEAR_MOST := 4
 const END_AFTER := 5.0
@@ -260,7 +260,9 @@ func _arrive(for_good: bool) -> void:
 	beast.herald = visits == 0 and not for_good and not shown
 	shown = true
 	beast.bold = mini(visits, BOLD_MOST)
-	var tough := float(game.rules.get("health", 1.0))
+	# The level makes it tougher and quicker of mind (its "tactics": 0.75, 1, 1.2, 1.4).
+	beast.level = float(game.rules.get("tactics", 1.0))
+	var tough := float(game.rules.get("health", 1.0)) * beast.level
 	last = for_good
 	present_for = 0.0
 	nearest = 99.0

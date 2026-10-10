@@ -19,7 +19,9 @@ const GALLOP_SPEED := 8.5 * SIZE
 const TROT_FROM := 1.9
 const RUN_FROM := 4.9
 ## The one-shot clips: [seconds, when the blow lands].
-const BLOWS := {"slash_l": [0.7, 0.31], "slash_r": [0.7, 0.31], "slam": [0.9, 0.47], "bite": [0.6, 0.24]}
+const BLOWS := {"slash_l": [0.7, 0.31], "slash_r": [0.7, 0.31], "slam": [0.9, 0.47], "bite": [0.6, 0.24], "sweep": [0.9, 0.5]}
+## Raking the ground before the charge.
+const WIND_SECONDS := 0.7
 ## The leap: crouch until LEAP_OFF, in the air until LEAP_DOWN, landed at LEAP_END.
 const LEAP_OFF := 0.30
 const LEAP_DOWN := 0.80
@@ -67,6 +69,9 @@ var look_yaw := 0.0
 ## How fast the body is turning (radians a second, to the left), told by whoever turns it.
 var turn_rate := 0.0
 var bend := 0.0
+## It holds somebody down and tears at him; it charges (the gallop with the head down).
+var pinning := false
+var charging := false
 var neck_bones: Array[int] = []
 var enraged := false
 var rage := 0.0
@@ -94,7 +99,7 @@ func _ready() -> void:
 	player = _find(imported, "AnimationPlayer") as AnimationPlayer
 	# Advanced by hand, like the other infected, so the flinch can be laid on top.
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
-	for clip in ["idle", "stalk", "trot", "run", "turn_l", "turn_r"]:
+	for clip in ["idle", "stalk", "trot", "run", "turn_l", "turn_r", "pin", "charge"]:
 		if player.has_animation(clip):
 			player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 	head_bone = skeleton.find_bone("Bone_019")
@@ -130,7 +135,12 @@ func animate(delta: float, speed: float) -> void:
 		var wanted := "idle"
 		var rate := 1.0
 		# A gait once taken is kept a little longer, so that it does not flicker between two.
-		if speed > (RUN_FROM - 0.6 if gait == "run" else RUN_FROM) and not backwards:
+		if pinning:
+			wanted = "pin"
+		elif charging and speed > 2.0:
+			wanted = "charge"
+			rate = clampf(speed / GALLOP_SPEED, 0.9, 1.9)
+		elif speed > (RUN_FROM - 0.6 if gait == "run" else RUN_FROM) and not backwards:
 			wanted = "run"
 			rate = clampf(speed / GALLOP_SPEED, 0.7, 1.45)
 		elif speed > (TROT_FROM - 0.4 if gait == "trot" else TROT_FROM):
@@ -176,6 +186,11 @@ func animate(delta: float, speed: float) -> void:
 func pivot(left: bool) -> void:
 	if not dying:
 		_begin("pivot_l" if left else "pivot_r", 0.07, 1.0, 0.0, PIVOT_SECONDS, "stagger")
+
+## Before the charge: back on its haunches, a forepaw rakes the ground.
+func wind() -> void:
+	if not dying:
+		_begin("charge_wind", 0.1, 1.0, 0.0, WIND_SECONDS, "stagger")
 
 ## Out of the gallop: braced forelegs, haunches down.
 func brake() -> void:

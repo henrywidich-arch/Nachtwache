@@ -18,7 +18,7 @@ const LEAP_REACH := Vector2(4.5, 11.0)
 const LEAP_CROUCH := 0.30
 const LEAP_AIR := 0.50
 const LEAP_LAND := 0.30
-const LEAP_HARM := 18.0
+const LEAP_HARM := 21.0
 ## A leap ends this far in front of where its prey will be.
 const LEAP_STOP := 1.3
 ## Springing back after a blow.
@@ -69,6 +69,39 @@ const BRAKE_ABOVE := 4.2
 const TURN_REST := 1.6
 ## How often it shakes itself when it has been knocked off its feet.
 const SHAKE_CHANCE := 0.6
+## The pounce that pins: a leap that lands on somebody who stands apart (nobody else
+## within PIN_APART) holds him down. It tears at him every PIN_TICK seconds until it has
+## taken PIN_BREAK (times the level) while it does, has been shaken off ([E]), or
+## PIN_SECONDS are over. Then not again for PIN_REST seconds.
+const PIN_HARM := 5.0
+const PIN_TICK := 0.5
+const PIN_SECONDS := 5.0
+const PIN_BREAK := 400.0
+const PIN_REST := 10.0
+const PIN_APART := 4.0
+## How far in front of him it stands while it holds him.
+const PIN_STAND := 1.6
+## The charge: at a squad of which two or more stand within CLUMP metres of each other.
+## It rakes the ground and bellows first; then it goes straight, CHARGE_PACE fast, and
+## whoever is within CHARGE_WIDTH of its way is hurt and thrown aside.
+const CLUMP := 3.6
+const CHARGE_RANGE := Vector2(7.0, 18.0)
+const CHARGE_PACE := 12.5
+const CHARGE_WIDTH := 1.7
+const CHARGE_HARM := 18.0
+const CHARGE_THROW := 9.0
+const CHARGE_REST := 12.0
+## The sweep: with two or more in front of it, both claws across everybody within reach.
+const SWEEP_REACH := 3.4
+const SWEEP_HARM := 15.0
+const SWEEP_THROW := 6.0
+## Hit this hard within a moment on its way in (less on a higher level), it breaks the
+## run off and gets out of the line of fire; not more often than every EVADE_REST seconds.
+const EVADE_BURST := 170.0
+const EVADE_REST := 5.0
+const EVADE_REACH := Vector2(5.0, 11.0)
+## Every step of boldness adds this share to what its blows do.
+const BOLD_HARM := 0.1
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
 const WAIT := Vector2(1.8, 3.4)
 
@@ -126,6 +159,25 @@ var landed := 0
 var blows_left := 0
 var stuck_for := 0.0
 var swap_left := 0.0
+## How well it fights on this level (the level's "tactics"; who sends it says so).
+var level := 1.0
+var pin_hurt := 0.0
+var pin_left := 0.0
+var pin_tick := 0.0
+var pin_cooldown := 4.0
+var pin_dir := Vector3.FORWARD
+var charge_cooldown := 5.0
+var charge_dir := Vector3.FORWARD
+var charge_left := 0.0
+var charge_hit: Array[Node3D] = []
+## The blow that is on is the sweep.
+var sweeping := false
+var evade_cooldown := 0.0
+var evade_to := Vector3.ZERO
+## Who hit it last.
+var shooter: Node3D
+## Seconds it gallops instead of trots while it goes round its prey.
+var dash_left := 0.0
 ## Seconds until it comes in again, and how long it has not seen its prey.
 var attack_left := 1.0
 var blind_for := 0.0
@@ -241,7 +293,7 @@ func soak() -> void:
 	pass
 
 func _haste() -> float:
-	return maxf(HASTE_LEAST, (RAGE_HASTE if enraged else 1.0) * (1.0 - BOLD_HASTE * bold))
+	return maxf(HASTE_LEAST, (RAGE_HASTE if enraged else 1.0) * (1.0 - BOLD_HASTE * bold) / maxf(0.5, level))
 
 func _set_mode(next: String) -> void:
 	mode = next
@@ -249,6 +301,12 @@ func _set_mode(next: String) -> void:
 	match next:
 		"circle":
 			blind_for = 0.0
+			# Round to where its prey is not looking.
+			if is_instance_valid(prey):
+				var to_prey := Vector3(prey.global_position.x - global_position.x, 0, prey.global_position.z - global_position.z).normalized()
+				var round := _facing_of(prey).dot(Vector3(-to_prey.z, 0, to_prey.x))
+				if absf(round) > 0.15:
+					orbit = -signf(round)
 		"rush":
 			mode_left = 3.5
 			blows_left = 2 if (enraged or bold >= 3) and randf() < 0.5 else 1
@@ -267,19 +325,279 @@ func _set_mode(next: String) -> void:
 			far_mark = -1.0
 			far_left = 4.0
 
-func _pick_prey() -> void:
-	swap_left = randf_range(6.0, 11.0)
-	var options: Array = []
+## Everybody of the squad it could go for.
+func _squad() -> Array[Node3D]:
+	var out: Array[Node3D] = []
 	for body in game.survivors:
 		var survivor := body as Node3D
 		if is_instance_valid(survivor) and survivor.has_method("is_targetable") and survivor.call("is_targetable") and survivor != game.story.nadja:
-			options.append(survivor)
-	if options.is_empty():
-		prey = game.nearest_survivor(global_position, prey)
-	elif options.has(game.player) and randf() < 0.55:
-		prey = game.player
+			out.append(survivor)
+	return out
+
+func _count_near(at: Vector3, reach: float) -> int:
+	var count := 0
+	for survivor in _squad():
+		if Vector2(survivor.global_position.x - at.x, survivor.global_position.z - at.z).length() < reach and absf(survivor.global_position.y - at.y) < 1.6:
+			count += 1
+	return count
+
+## Which way somebody looks (the survivor: where his eyes are turned).
+func _facing_of(body: Node3D) -> Vector3:
+	if body == game.player:
+		var ahead: Vector3 = -game.player.camera.global_basis.z
+		return Vector3(ahead.x, 0, ahead.z).normalized()
+	return Vector3(-sin(body.rotation.y), 0, -cos(body.rotation.y))
+
+## How much somebody invites it: who stands apart, is hurt, is reloading or looks the
+## other way is worth more; who is far off is worth less.
+func worth(body: Node3D) -> float:
+	var apart := 99.0
+	for other in _squad():
+		if other != body:
+			apart = minf(apart, other.global_position.distance_to(body.global_position))
+	var to_me := global_position - body.global_position
+	var value := clampf(apart / 8.0, 0.0, 1.0) * 2.0 - to_me.length() / 25.0
+	if "health" in body:
+		value += clampf(1.0 - float(body.get("health")) / maxf(1.0, float(body.get("max_health")) if "max_health" in body else 100.0), 0.0, 1.0) * 1.5
+	if "reload_left" in body and float(body.get("reload_left")) > 0.0:
+		value += 1.2
+	value += maxf(0.0, -_facing_of(body).dot(Vector3(to_me.x, 0, to_me.z).normalized()))
+	return value + (0.3 if body == game.player else 0.0)
+
+## It picks its prey: the one worth most, with a little chance in it.
+func _pick_prey() -> void:
+	swap_left = randf_range(5.0, 9.0)
+	var best: Node3D = null
+	var best_worth := -99.0
+	for survivor in _squad():
+		var value := worth(survivor) + randf() * 0.6
+		if value > best_worth:
+			best_worth = value
+			best = survivor
+	prey = best if best != null else game.nearest_survivor(global_position, prey)
+
+## What its blows do: the level, its rage, and a tenth more with every step of boldness.
+func _harm() -> float:
+	return harm() * (RAGE_HARM if enraged else 1.0) * (1.0 + BOLD_HARM * bold)
+
+## Throws somebody aside (a body that walks takes the push as its own speed for a moment).
+func _throw(body: Node3D, way: Vector3, pace: float) -> void:
+	if body is CharacterBody3D:
+		(body as CharacterBody3D).velocity += Vector3(way.x, 0, way.z).normalized() * pace + Vector3(0, 2.0, 0)
+
+func _line(from: Vector3, to: Vector3) -> bool:
+	return get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, 1)).is_empty()
+
+# ---------------------------------------------------------------- the pin
+
+## A leap that lands on somebody may hold him down: when he stands apart, and sometimes anyway.
+func _may_pin() -> bool:
+	return pin_cooldown <= 0.0 and clung_to == null and is_instance_valid(prey) and not ("clung_by" in prey and prey.get("clung_by") != null) and (_count_near(prey.global_position, PIN_APART) <= 1 or randf() < 0.35)
+
+func _start_pin() -> void:
+	mode = "pin"
+	leap = ""
+	clung_to = prey
+	if "clung_by" in prey:
+		prey.set("clung_by", self)
+	shaken = 0.0
+	pin_hurt = 0.0
+	pin_left = PIN_SECONDS
+	pin_tick = PIN_TICK
+	# It stands over him where he looks: whoever lies under it sees what has him.
+	pin_dir = _facing_of(prey)
+	add_collision_exception_with(prey)
+	velocity = Vector3.ZERO
+	gait_pace = 0.0
+	(model as ProwlerVisual).pinning = true
+	game.sounds.play_at("prowler_growl", mouth(), 4.0, 1.2)
+	if prey == game.player:
+		game.hud.flash(Color(0.4, 0.0, 0.0), 0.5)
+
+## One press of [E] by the survivor it holds down (the game has counted it already).
+func shake() -> void:
+	if clung_to != null and not dead and shaken >= 1.0:
+		release(true)
+
+## It lets go. thrown: shaken off or shot off - it reels back.
+func release(thrown: bool) -> void:
+	var victim := clung_to
+	clung_to = null
+	(model as ProwlerVisual).pinning = false
+	if is_instance_valid(victim):
+		if "clung_by" in victim and victim.get("clung_by") == self:
+			victim.set("clung_by", null)
+		remove_collision_exception_with(victim)
+	pin_cooldown = PIN_REST
+	if dead or mode != "pin":
+		return
+	if thrown:
+		stagger_cooldown = 0.0
+		_reel(true, pin_dir)
 	else:
-		prey = options.pick_random()
+		_set_mode("back")
+
+# ---------------------------------------------------------------- the charge
+
+func _may_charge(target: Vector3, distance: float) -> bool:
+	if charge_cooldown > 0.0 or distance < CHARGE_RANGE.x or distance > CHARGE_RANGE.y or not is_on_floor() or _count_near(target, CLUMP) < 2:
+		return false
+	var way := Vector3(target.x - global_position.x, 0, target.z - global_position.z).normalized()
+	return _has_room(target) and _has_room(target + way * 4.0) and _clear_line(target + way * 4.0, true)
+
+## It sinks back, rakes the ground and bellows: then straight through them.
+func _start_charge(target: Vector3) -> void:
+	var centre := Vector3.ZERO
+	var count := 0
+	for survivor in _squad():
+		if survivor.global_position.distance_to(target) < CLUMP:
+			centre += survivor.global_position
+			count += 1
+	centre = centre / count if count > 0 else target
+	var way := Vector3(centre.x - global_position.x, 0, centre.z - global_position.z)
+	charge_dir = way.normalized()
+	charge_left = (way.length() + 5.0) / CHARGE_PACE
+	charge_hit.clear()
+	charge_cooldown = CHARGE_REST * _haste()
+	attack_left = randf_range(WAIT.x, WAIT.y) * _haste()
+	mode = "wind"
+	mode_left = ProwlerVisual.WIND_SECONDS
+	gait_pace = 0.0
+	(model as ProwlerVisual).wind()
+	game.sounds.play_at("prowler_roar", mouth(), 0.0, 1.4)
+
+# ---------------------------------------------------------------- out of the line of fire
+
+## Hit hard on its way in: it breaks the run off, makes for a place the one who shoots
+## cannot see (a pillar, a tower, a corner) and comes again from another side.
+func _evade() -> void:
+	evade_cooldown = EVADE_REST
+	attack_clock = -1.0
+	var from: Vector3 = (shooter.global_position if is_instance_valid(shooter) else game.player.global_position) + Vector3(0, 1.5, 0)
+	var line := Vector3(from.x - global_position.x, 0, from.z - global_position.z).normalized()
+	var best := Vector3.INF
+	var best_worth := 0.0
+	for attempt in range(12):
+		var turn := randf() * TAU
+		var way := Vector3(cos(turn), 0, sin(turn))
+		var spot := global_position + way * randf_range(EVADE_REACH.x, EVADE_REACH.y)
+		if not _has_room(spot) or not _line(global_position + Vector3(0, 0.6, 0), spot + Vector3(0, 0.6, 0)):
+			continue
+		var value := (3.0 if not _line(from, spot + Vector3(0, 0.8, 0)) else 0.0) + absf(line.cross(way).y) + randf() * 0.4
+		if value > best_worth:
+			best_worth = value
+			best = spot
+	orbit = -orbit
+	if best == Vector3.INF or best_worth < 3.0:
+		# Nothing to get behind: then across their front at a gallop, and round the other way.
+		dash_left = 1.6
+		_set_mode("circle")
+		return
+	evade_to = best
+	mode = "evade"
+	mode_left = 2.2
+	repath_left = 0.0
+
+## The frames in which the pin, the charge or the way out of the fire are in charge of the body.
+func _special(delta: float, toward: Vector3) -> void:
+	var body := model as ProwlerVisual
+	var go := Vector3.ZERO
+	var pace := 0.0
+	var look := toward
+	match mode:
+		"pin":
+			if not is_instance_valid(clung_to) or not clung_to.call("is_targetable"):
+				release(false)
+				return
+			pin_left -= delta
+			global_position = clung_to.global_position + pin_dir * PIN_STAND
+			velocity = Vector3.ZERO
+			if clung_to is CharacterBody3D:
+				(clung_to as CharacterBody3D).velocity = Vector3.ZERO
+			model.rotation.y = atan2(pin_dir.x, pin_dir.z)
+			shaken = maxf(0.0, shaken - delta * SHAKE_FADE)
+			pin_tick -= delta
+			if pin_tick <= 0.0:
+				pin_tick = PIN_TICK
+				clung_to.call("receive_damage", PIN_HARM * _harm(), global_position, "", "special")
+				game.sounds.play_at("prowler_strike", mouth(), -3.0, 1.2)
+				if clung_to == game.player:
+					game.player.shake_from(global_position, 0.35, 4.0)
+			_look(Vector3.ZERO, delta, 0.0, 0.0)
+			body.turn_rate = 0.0
+			model.animate(delta, 0.0)
+			if pin_left <= 0.0 and clung_to != null:
+				release(false)
+			return
+		"wind":
+			look = charge_dir
+			if mode_left <= 0.0:
+				mode = "charge"
+				mode_left = charge_left
+				gait_pace = CHARGE_PACE * 0.5
+				body.charging = true
+				# Nobody stops it: it goes through the squad and the horde, not round them.
+				collision_mask = 1 | 16
+		"charge":
+			go = charge_dir
+			pace = CHARGE_PACE
+			look = charge_dir
+			for survivor in _squad():
+				var off := survivor.global_position - global_position
+				var along := off.dot(charge_dir)
+				var beside := Vector3(off.x, 0, off.z) - charge_dir * along
+				if not charge_hit.has(survivor) and along > -0.6 and along < 2.3 and beside.length() < CHARGE_WIDTH and absf(off.y) < 1.6:
+					charge_hit.append(survivor)
+					landed += 1
+					survivor.call("receive_damage", CHARGE_HARM * _harm(), global_position, "", "special")
+					_throw(survivor, beside if beside.length() > 0.15 else Vector3(-charge_dir.z, 0, charge_dir.x), CHARGE_THROW)
+					game.sounds.play_at("thud", survivor.global_position, 2.0)
+					if survivor == game.player:
+						game.player.shake_from(global_position, 0.7, 6.0)
+			var real := get_real_velocity()
+			if mode_left <= 0.0 or (mode_left < charge_left - 0.35 and Vector2(real.x, real.z).length() < 3.0):
+				body.charging = false
+				collision_mask = 1 | 2 | 4 | 16
+				_set_mode("circle")
+		"evade":
+			go = _steer(evade_to, delta)
+			pace = speed
+			look = go if go != Vector3.ZERO else toward
+			if go == Vector3.ZERO or mode_left <= 0.0 or global_position.distance_to(evade_to) < 1.3:
+				attack_left = randf_range(0.5, 1.1)
+				_set_mode("close")
+	gait_pace = move_toward(gait_pace, pace, (ACCEL * 1.5 if pace > gait_pace else BRAKING) * delta)
+	if go != Vector3.ZERO:
+		heading = go
+	velocity.x = heading.x * gait_pace
+	velocity.z = heading.z * gait_pace
+	velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
+	move_and_slide()
+	_look(look, delta, 10.0, gait_pace)
+	body.backwards = false
+	body.look_yaw = 0.0
+	var gone := get_real_velocity()
+	model.animate(delta, Vector2(gone.x, gone.z).length())
+
+## The blow lands: on its prey - or, with both claws wide, on everybody in front of it.
+func _land_blow(distance: float, same_floor: bool, target: Vector3) -> void:
+	if not sweeping:
+		if distance < attack_reach and same_floor and _clear_line(target):
+			prey.receive_damage(attack_damage * _harm(), global_position, "", Skills.kind_of(self))
+			landed += 1
+			if prey == game.player:
+				game.player.shake_from(global_position, 0.45, 6.0)
+		return
+	sweeping = false
+	for survivor in _squad():
+		var off := survivor.global_position - global_position
+		var flat := Vector3(off.x, 0, off.z)
+		if flat.length() < SWEEP_REACH and absf(off.y) < 1.6 and facing().dot(flat.normalized()) > -0.1 and _clear_line(survivor.global_position):
+			landed += 1
+			survivor.call("receive_damage", SWEEP_HARM * _harm(), global_position, "", "special")
+			_throw(survivor, flat, SWEEP_THROW)
+			if survivor == game.player:
+				game.player.shake_from(global_position, 0.6, 6.0)
 
 func _physics_process(delta: float) -> void:
 	if dead:
@@ -327,6 +645,13 @@ func _physics_process(delta: float) -> void:
 	if tight and mode in ["close", "circle", "rush"]:
 		_set_mode("lurk")
 	turn_wait -= delta
+	pin_cooldown -= delta
+	charge_cooldown -= delta
+	evade_cooldown -= delta
+	dash_left -= delta
+	if mode in ["pin", "wind", "charge", "evade"]:
+		_special(delta, toward)
+		return
 	match mode:
 		"brake":
 			# Out of the gallop: it slides, haunches down, before it comes round.
@@ -437,8 +762,11 @@ func _physics_process(delta: float) -> void:
 			# Round its prey at a distance, never still.
 			var tangent := Vector3(-toward.z, 0, toward.x) * orbit
 			direction = (tangent + toward * clampf((distance - (RING.x + RING.y) * 0.5) / 2.0, -1.0, 1.0)).normalized()
-			pace = PROWL_PACE * (1.25 if enraged else 1.0)
+			pace = sprint if dash_left > 0.0 else PROWL_PACE * (1.25 if enraged else 1.0)
 			look = direction
+			# Behind its prey's back it does not wait as long.
+			if _facing_of(prey).dot(toward) > 0.2:
+				attack_left -= delta
 			if flat_speed < pace * 0.3:
 				# A wall: the other way round.
 				stuck_for += delta
@@ -456,7 +784,9 @@ func _physics_process(delta: float) -> void:
 			if distance > RING.y + 6.0 or blind_for > 0.5:
 				_set_mode("close")
 			elif attack_left <= 0.0 and clear:
-				if special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target):
+				if _may_charge(target, distance):
+					_start_charge(target)
+				elif special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target):
 					_start_leap()
 				else:
 					_set_mode("rush")
@@ -478,11 +808,7 @@ func _physics_process(delta: float) -> void:
 				pace = 2.4
 			if not struck and attack_clock >= strike_time:
 				struck = true
-				if distance < attack_reach and same_floor and _clear_line(target):
-					prey.receive_damage(attack_damage * float(game.rules.harm), global_position, "", Skills.kind_of(self))
-					landed += 1
-					if prey == game.player:
-						game.player.shake_from(global_position, 0.45, 6.0)
+				_land_blow(distance, same_floor, target)
 			if attack_clock >= attack_length:
 				attack_clock = -1.0
 				cooldown = 0.12
@@ -587,6 +913,13 @@ func _strike() -> void:
 	var clip := model.pick_attack()
 	var haste := _haste()
 	var swift := RAGE_SWIFT if enraged else 1.0
+	# Two or more in front of it: both claws, across all of them.
+	sweeping = _count_near(global_position + facing() * 1.6, SWEEP_REACH - 0.6) >= 2
+	if sweeping:
+		_begin_attack("sweep", ProwlerVisual.BLOWS.sweep[0] * swift, ProwlerVisual.BLOWS.sweep[1] * swift, SWEEP_REACH, SWEEP_HARM)
+		mode = "strike"
+		attack_left = randf_range(WAIT.x, WAIT.y) * haste
+		return
 	_begin_attack(clip, float(spec.attack_time) * swift, float(spec.strike_at) * swift, float(spec.reach) * 1.2, float(spec.damage) * (1.3 if clip == "slam" else 1.0) * (RAGE_HARM if enraged else 1.0))
 	mode = "strike"
 	attack_left = randf_range(WAIT.x, WAIT.y) * haste
@@ -625,10 +958,13 @@ func _leap(delta: float, target: Vector3, toward: Vector3, distance: float) -> v
 			if not leap_hit and chest.distance_to(global_position + Vector3(0, 0.7, 0) + facing() * 0.9) < 1.5:
 				leap_hit = true
 				landed += 1
-				prey.receive_damage(LEAP_HARM * (RAGE_HARM if enraged else 1.0) * float(game.rules.harm), global_position, "", Skills.kind_of(self))
+				prey.receive_damage(LEAP_HARM * _harm(), global_position, "", Skills.kind_of(self))
 				game.sounds.play_at("prowler_strike", mouth(), 2.0)
 				velocity.x *= 0.2
 				velocity.z *= 0.2
+				if _may_pin():
+					_start_pin()
+					return
 			if (leap_left > 0.12 and is_on_floor()) or leap_left > LEAP_AIR + 0.5:
 				leap = "land"
 				leap_left = LEAP_LAND
@@ -655,6 +991,12 @@ func _leap(delta: float, target: Vector3, toward: Vector3, distance: float) -> v
 func receive_hit(amount: float, direction: Vector3, headshot: bool = false, source: Node = null) -> void:
 	if dead or leaving:
 		return
+	shooter = source as Node3D if source is Node3D else game.player
+	if mode == "pin":
+		# Shot off its prey.
+		pin_hurt += amount
+		if pin_hurt >= PIN_BREAK * level:
+			release(true)
 	var side := 1.0 if facing().cross(direction).y > 0.0 else -1.0
 	var shock := amount * (HEAD_SHOCK if headshot else 1.0)
 	burst += shock
@@ -677,11 +1019,20 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		cue("pain")
 	if stagger_cooldown <= 0.0 and leap != "air" and (shock >= SHOCK or burst >= SHOCK_BURST):
 		_reel(shock >= HEAVY_SHOCK, direction)
+	elif mode in ["close", "circle", "rush"] and evade_cooldown <= 0.0 and burst >= EVADE_BURST / maxf(0.5, level):
+		# It does not stand and take a magazine in the face.
+		_evade()
 
 ## Off balance: it stands and shakes itself, and whatever it was about to do is over.
 func _reel(heavy: bool, direction: Vector3) -> void:
 	if dead or leaving:
 		return
+	if clung_to != null:
+		release(false)
+	if (model as ProwlerVisual).charging:
+		(model as ProwlerVisual).charging = false
+		collision_mask = 1 | 2 | 4 | 16
+	sweeping = false
 	cue("stagger", ["stumble" if heavy else "flinch"])
 	held_left = model.busy_left
 	shake_next = heavy and randf() < SHAKE_CHANCE
@@ -731,6 +1082,9 @@ func enrage() -> void:
 func break_off(hurt: bool) -> void:
 	if dead or leaving:
 		return
+	if clung_to != null:
+		release(false)
+	(model as ProwlerVisual).charging = false
 	leaving = true
 	absent = true
 	broke_hurt = hurt
