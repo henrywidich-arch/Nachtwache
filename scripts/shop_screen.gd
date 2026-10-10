@@ -145,8 +145,7 @@ func _list() -> Array:
 		out.append({"trees": true})
 		var mine: String = game.skills.chosen
 		if Skills.TREES.has(mine):
-			out.append({"head": "%s   ·   %d von %d Punkten vergeben
-Seine Waffe gibt es ab %d Punkten darin." % [Skills.TREES[mine].focus, game.skills.spent(mine), Skills.points(game.profile.totals), Skills.WEAPON_NEEDS]})
+			out.append({"head": "%s   ·   %d von %d Punkten vergeben\nSeine Waffe gibt es ab %d Punkten darin." % [Skills.TREES[mine].focus, game.skills.spent(mine), Skills.points(game.profile.totals), Skills.WEAPON_NEEDS]})
 		else:
 			out.append({"head": "Noch kein Weg aktiv. Die Waffe eines Wegs gibt es ab %d Punkten darin." % Skills.WEAPON_NEEDS})
 	elif tab == "team":

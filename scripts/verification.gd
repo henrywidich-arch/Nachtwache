@@ -5999,6 +5999,13 @@ func _breacher(game: Node3D) -> void:
 	game.blast(chest, 6.5, 0.0, 280.0)
 	var bare: float = whole - giant.health
 	expect(held and breaks and open and is_equal_approx(dulled, 280.0 * Infected.SHELL_SHARE) and is_equal_approx(cracked, 280.0 * 0.75) and is_equal_approx(bare, 280.0) and game.shell_gain == 1.0, "Behind its shell the Crusher takes a quarter of a blast (%.0f) - of a breacher's with the last ability three quarters (%.0f), and of his heavy gear as well; the carbine rings off as ever, and an open Crusher takes what it always took (%.0f)" % [dulled, cracked, bare])
+	# --- the Prowler: what staggers it and what shoots it off somebody is a matter of weight
+	# (Prowler.HEAVY_SHOCK, PIN_BREAK); a breacher's shell has that weight as far as its
+	# blast reaches, where anybody else's has it only near the middle.
+	skills.ranks = full
+	var shell_hit: float = float(Throwable.BLAST[2]) * (1.0 + skills.value("damage_heavy")) * (1.0 + skills.value("blast_power"))
+	var edge := 1.0 - 0.6
+	expect(is_equal_approx(shell_hit, 280.0 * 1.24 * 1.3) and float(Throwable.BLAST[2]) * edge < Prowler.HEAVY_SHOCK and shell_hit * edge >= Prowler.HEAVY_SHOCK and float(Throwable.BLAST[2]) < Prowler.PIN_BREAK and shell_hit >= Prowler.PIN_BREAK, "A breacher's shell from the launcher (%.0f at its middle, %.0f at its rim) still staggers the Prowler at the rim of its blast and shoots it off whoever it has pinned with one hit; anybody else's (%.0f, %.0f) does neither there" % [shell_hit, shell_hit * edge, float(Throwable.BLAST[2]), float(Throwable.BLAST[2]) * edge])
 	_wipe(game)
 	skills.reset()
 	player.inventory.erase("launcher")
