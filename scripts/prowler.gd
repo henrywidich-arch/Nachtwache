@@ -47,11 +47,34 @@ const BOLD_HASTE := 0.06
 const HASTE_LEAST := 0.6
 ## Above this speed its bounds are heard.
 const RUN_HEARD := 4.5
+## Its prey has gone where it has no room: so long it prowls in front of that (on a visit;
+## then it goes), at this pace, and only where the passage is at least this wide.
+const LURK_SECONDS := Vector2(6.0, 9.0)
+const LURK_PACE := 1.5
+const LURK_WIDE := 2.5
+## From how far it shows itself (and roars) on its first visit.
+const HERALD_RANGE := 18.0
+## It has weight. How fast it gathers speed and loses it (m/s2), and how many degrees a
+## second it comes round: on the spot, at a trot, at a gallop.
+const ACCEL := 26.0
+const BRAKING := 34.0
+const TURN_STAND := 230.0
+const TURN_TROT := 260.0
+const TURN_RUN := 170.0
+## What lies further behind it than this many degrees it does not swing round to: it
+## comes round over its haunches (and slides to a stand first if it is faster than
+## BRAKE_ABOVE). Not more often than every TURN_REST seconds.
+const PIVOT_FROM := 125.0
+const BRAKE_ABOVE := 4.2
+const TURN_REST := 1.6
+## How often it shakes itself when it has been knocked off its feet.
+const SHAKE_CHANCE := 0.6
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
 const WAIT := Vector2(1.8, 3.4)
 
 ## close: on its way to its prey. circle: round it. rush: in for a blow. strike: the blow.
 ## back: out of reach again. leap, reel (knocked off balance or roaring), flee.
+## lurk: its prey is where it has no room, and it waits in front of that.
 var mode := "close"
 var mode_left := 0.0
 ## Which way round it goes.
@@ -69,6 +92,33 @@ var flee_unseen := 0.0
 ## Asked for a place to run to when it breaks off (the director of the mission has one
 ## that nobody of the squad can see).
 var lair: Callable
+## Asked whether it may go for somebody from where it stands (from, to): he is on open
+## ground and the way to him is wide. Without it (the test room) it goes anywhere.
+var roomy: Callable
+## Asked how wide the passage is at a place, in metres.
+var width: Callable
+## Its prey is where it does not follow (asked a few times a second).
+var tight := false
+var tight_left := 0.0
+## Seconds it has spent waiting in front of something tight since it came.
+var lurked := 0.0
+## (How much longer it waits there is Infected.lurk_left.)
+## It has not shown itself yet: at the first sight of its prey it stands and roars.
+var herald := false
+## How fast it goes at this moment, and where to (speed is gathered and lost, see ACCEL).
+var gait_pace := 0.0
+var heading := Vector3.ZERO
+## How fast it turns (radians a second, to the left), smoothed.
+var turning := 0.0
+## The half turn over its haunches that is on: since when, which way, from which angle,
+## about which point, and what it goes on with afterwards.
+var pivot_clock := 0.0
+var pivot_side := 1.0
+var pivot_from := 0.0
+var pivot_hip := Vector3.ZERO
+var pivot_next := "close"
+var turn_wait := 0.0
+var shake_next := false
 ## It was put into the world past the count of the round (see _die).
 var uncounted := false
 ## Blows and leaps that hit somebody since it came.
@@ -204,6 +254,13 @@ func _set_mode(next: String) -> void:
 			blows_left = 2 if (enraged or bold >= 3) and randf() < 0.5 else 1
 		"back":
 			mode_left = BACK_SECONDS
+		"brake":
+			mode_left = ProwlerVisual.BRAKE_SECONDS - 0.08
+		"lurk":
+			# (Coming back to it out of a half turn, its wait goes on.)
+			if lurk_left <= 0.0:
+				lurk_left = randf_range(LURK_SECONDS.x, LURK_SECONDS.y)
+				game.sounds.play_at(str(voices.voice), mouth(), 2.0)
 		"close":
 			mode_left = 0.0
 			repath_left = 0.0
@@ -262,7 +319,73 @@ func _physics_process(delta: float) -> void:
 	var pace := 0.0
 	var look := toward
 	var back := false
+	# Where its prey is now: somewhere it has room to hunt, or not.
+	tight_left -= delta
+	if tight_left <= 0.0:
+		tight_left = 0.4
+		tight = roomy.is_valid() and not roomy.call(global_position, target)
+	if tight and mode in ["close", "circle", "rush"]:
+		_set_mode("lurk")
+	turn_wait -= delta
 	match mode:
+		"brake":
+			# Out of the gallop: it slides, haunches down, before it comes round.
+			gait_pace = move_toward(gait_pace, 0.0, BRAKING * 0.7 * delta)
+			velocity.x = heading.x * gait_pace
+			velocity.z = heading.z * gait_pace
+			velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
+			move_and_slide()
+			_look(Vector3.ZERO, delta, 0.0, 0.0)
+			model.animate(delta, 0.0)
+			if mode_left <= 0.0 or gait_pace < 0.8:
+				_pivot()
+			return
+		"pivot":
+			# The half turn: the body comes round about the point between its hind paws.
+			pivot_clock += delta
+			model.rotation.y = pivot_from + pivot_side * PI * smoothstep(0.0, ProwlerVisual.PIVOT_TURN, pivot_clock)
+			var spot := pivot_hip + facing() * ProwlerVisual.HAUNCH
+			velocity.x = (spot.x - global_position.x) / maxf(delta, 0.001)
+			velocity.z = (spot.z - global_position.z) / maxf(delta, 0.001)
+			velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
+			move_and_slide()
+			_look(Vector3.ZERO, delta, 0.0, 0.0)
+			body.turn_rate = 0.0
+			model.animate(delta, 0.0)
+			if pivot_clock >= ProwlerVisual.PIVOT_SECONDS:
+				gait_pace = 0.0
+				turning = 0.0
+				_set_mode(pivot_next if pivot_next in ["close", "circle", "lurk", "rush"] and not leaving else ("flee" if leaving else "close"))
+				if leaving:
+					mode = "flee"
+			return
+		"lurk":
+			# It prowls where it is, to and fro across the way to its prey, its head on them.
+			lurked += delta
+			lurk_left -= delta
+			var side := Vector3(-toward.z, 0, toward.x) * orbit
+			if width.is_valid() and float(width.call(global_position + side * 2.0)) < LURK_WIDE:
+				orbit = -orbit
+				side = -side
+				if float(width.call(global_position + side * 2.0)) < LURK_WIDE:
+					side = Vector3.ZERO
+			direction = side
+			pace = LURK_PACE if side != Vector3.ZERO else 0.0
+			look = (side + toward * 0.5).normalized() if side != Vector3.ZERO else toward
+			if pace > 0.0 and flat_speed < pace * 0.3:
+				stuck_for += delta
+				if stuck_for > 0.5:
+					stuck_for = 0.0
+					orbit = -orbit
+			else:
+				stuck_for = 0.0
+			if not tight:
+				lurk_left = 0.0
+				_set_mode("close")
+			elif lurk_left <= 0.0 and nerve > 0.0:
+				# They do not come out: then another time. (Nobody drove it off.)
+				break_off(false)
+				return
 		"flee":
 			direction = _steer(flee_to, delta)
 			pace = sprint
@@ -273,7 +396,8 @@ func _physics_process(delta: float) -> void:
 				return
 		"leap":
 			_leap(delta, target, toward, distance)
-			_look(toward, delta, 12.0 if leap == "crouch" else 0.0)
+			_look(toward, delta, 12.0 if leap == "crouch" else 0.0, 0.0)
+			gait_pace = 0.0
 			body.backwards = false
 			body.look_yaw = 0.0
 			model.animate(delta, 0.0)
@@ -281,7 +405,11 @@ func _physics_process(delta: float) -> void:
 		"reel":
 			# Knocked off balance, or roaring: it stands where it is.
 			held_left -= delta
-			if held_left <= 0.0:
+			if held_left <= 0.0 and shake_next:
+				# Back on its feet, it shakes the blow off.
+				shake_next = false
+				held_left = body.shake() * 0.85
+			elif held_left <= 0.0:
 				_set_mode("back" if distance < RING.x else "circle")
 		"close":
 			# A way that leads nowhere (a door has shut between them): on a visit it gives up.
@@ -293,9 +421,13 @@ func _physics_process(delta: float) -> void:
 					return
 				far_mark = distance
 			var clear := same_floor and _clear_line(target, true)
-			if clear and distance < RING.y:
+			if herald and clear and distance < HERALD_RANGE:
+				# Its first visit: it stands in the open and lets them hear who has come.
+				herald = false
+				roar()
+			elif clear and distance < RING.y:
 				_set_mode("circle")
-			elif clear and special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and randf() < delta * 2.5:
+			elif clear and special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target) and randf() < delta * 2.5:
 				_start_leap()
 			else:
 				direction = _steer(target, delta)
@@ -324,7 +456,7 @@ func _physics_process(delta: float) -> void:
 			if distance > RING.y + 6.0 or blind_for > 0.5:
 				_set_mode("close")
 			elif attack_left <= 0.0 and clear:
-				if special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor():
+				if special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target):
 					_start_leap()
 				else:
 					_set_mode("rush")
@@ -367,6 +499,19 @@ func _physics_process(delta: float) -> void:
 			if mode_left <= 0.0 or (mode_left < BACK_SECONDS - 0.15 and flat_speed < pace * 0.3):
 				orbit = 1.0 if randf() < 0.5 else -1.0
 				_set_mode("circle")
+	# What it wants lies behind it: it comes round over its haunches, out of a gallop after a slide.
+	if direction != Vector3.ZERO and not back and turn_wait <= 0.0 and is_on_floor() and mode in ["close", "rush", "lurk", "flee"]:
+		var behind := wrapf(atan2(-direction.x, -direction.z) - model.rotation.y, -PI, PI)
+		if absf(behind) > deg_to_rad(PIVOT_FROM):
+			turn_wait = TURN_REST
+			pivot_next = mode
+			pivot_side = 1.0 if behind > 0.0 else -1.0
+			if gait_pace > BRAKE_ABOVE:
+				body.brake()
+				_set_mode("brake")
+			else:
+				_pivot()
+			return
 	# Snagged on a corner on its way: a step aside, and a new way.
 	if mode in ["close", "rush", "flee"]:
 		if pace > 2.0 and flat_speed < pace * 0.25:
@@ -379,18 +524,26 @@ func _physics_process(delta: float) -> void:
 		else:
 			stuck_for = 0.0
 	knock = knock.move_toward(Vector3.ZERO, delta * 16.0)
-	velocity.x = direction.x * pace + knock.x
-	velocity.z = direction.z * pace + knock.z
+	# It has weight: it gathers speed and loses it, and goes slower as long as it does not
+	# face where it is going.
+	var wanted := pace
+	if pace > 0.0 and not back and mode in ["close", "rush", "flee"]:
+		wanted *= clampf(facing().dot(direction) * 0.5 + 0.6, 0.35, 1.0)
+	gait_pace = move_toward(gait_pace, wanted, (ACCEL if wanted > gait_pace else BRAKING) * delta)
+	if direction != Vector3.ZERO:
+		heading = direction
+	velocity.x = heading.x * gait_pace + knock.x
+	velocity.z = heading.z * gait_pace + knock.z
 	if not is_on_floor():
 		velocity.y -= delta * GRAVITY
 	else:
 		velocity.y = 0
 	move_and_slide()
-	_look(look, delta, 9.0)
+	_look(look, delta, 9.0, flat_speed)
 	body.backwards = back
 	# Its head stays on its prey while the body goes its own way.
 	var aside := wrapf(atan2(-toward.x, -toward.z) - model.rotation.y, -PI, PI)
-	body.look_yaw = lerpf(body.look_yaw, clampf(aside, -1.0, 1.0) if mode in ["circle", "close", "rush"] else 0.0, minf(1.0, delta * 6.0))
+	body.look_yaw = lerpf(body.look_yaw, clampf(aside, -1.0, 1.0) if mode in ["circle", "close", "rush", "lurk"] else 0.0, minf(1.0, delta * 6.0))
 	model.animate(delta, flat_speed)
 	# Its gallop is heard: one beat for every bound.
 	var bound := int(model.phase / TAU)
@@ -403,9 +556,28 @@ func _physics_process(delta: float) -> void:
 		growl_left = randf_range(3.0, 6.5)
 		game.sounds.play_at(str(voices.voice), mouth())
 
-func _look(look: Vector3, delta: float, rate: float) -> void:
+## True where it has room to come down or to walk (always, when nobody tells it how wide a place is).
+func _has_room(at: Vector3) -> bool:
+	return not width.is_valid() or float(width.call(at)) >= LURK_WIDE
+
+## Starts the half turn over the haunches, to the side pivot_side.
+func _pivot() -> void:
+	mode = "pivot"
+	pivot_clock = 0.0
+	pivot_from = model.rotation.y
+	pivot_hip = global_position - facing() * ProwlerVisual.HAUNCH
+	attack_clock = -1.0
+	(model as ProwlerVisual).pivot(pivot_side > 0.0)
+
+## Turns the body towards `look` - no faster than an animal of its weight comes round at
+## the speed it goes - and takes the head's hit zone and the flanks along.
+func _look(look: Vector3, delta: float, rate: float, going: float) -> void:
+	var before := model.rotation.y
 	if rate > 0.0 and look.length() > 0.1:
-		model.rotation.y = lerp_angle(model.rotation.y, atan2(-look.x, -look.z), minf(delta * rate, 1.0))
+		var most := deg_to_rad(TURN_STAND if going < 1.0 else (TURN_TROT if going < 5.0 else TURN_RUN)) * delta
+		model.rotation.y += clampf(wrapf(atan2(-look.x, -look.z) - model.rotation.y, -PI, PI) * minf(delta * rate, 1.0), -most, most)
+	turning = lerpf(turning, wrapf(model.rotation.y - before, -PI, PI) / maxf(delta, 0.001), minf(1.0, delta * 10.0))
+	(model as ProwlerVisual).turn_rate = turning
 	head_box.global_position = model.head_position()
 	var ahead := facing()
 	for flank in flanks:
@@ -512,6 +684,7 @@ func _reel(heavy: bool, direction: Vector3) -> void:
 		return
 	cue("stagger", ["stumble" if heavy else "flinch"])
 	held_left = model.busy_left
+	shake_next = heavy and randf() < SHAKE_CHANCE
 	stagger_cooldown = held_left + REEL_REST
 	burst = 0.0
 	attack_clock = -1.0

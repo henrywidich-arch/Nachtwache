@@ -206,7 +206,19 @@ const LINES := {
 	"m2_p_join": ["phantom", ["Change of plan. We are coming with you. The doctor owes us a conversation."]],
 	"m2_g_list": ["ghost", ["They are shooting at us as well. She has taken us off her list."]],
 	"m2_h_tunnel": ["havoc", ["East tunnel is still ours! Barely! Hurry it up down there!"]],
-	"m2_p_alive": ["phantom", ["Still breathing, Fireteam? I am almost impressed."]]
+	"m2_p_alive": ["phantom", ["Still breathing, Fireteam? I am almost impressed."]],
+	# The talk at the station in which it is settled who goes on with the survivor: the
+	# squad (a), or two of the operators (b; c when Phantom is the one of them who stays).
+	# Whoever stays or goes says why. The squad's part of it is among the calls (BARKS).
+	"m2_a_havoc": ["havoc", ["Her bought soldiers will come down that tunnel. I want them to meet me first! I have been saving something special!"]],
+	"m2_a_ghost": ["ghost", ["And I stay on this relay. If I leave it, she takes your radio back within the hour."]],
+	"m2_a_coleman": ["coleman", ["Those three, holding your way out. I will believe it when I see it. Go, Fireteam."]],
+	"m2_b_phantom": ["phantom", ["We walked those halls for two years. You will not find her without us. And she knows it."]],
+	"m2_b_ghost": ["ghost", ["Every door down there answers to her now. I can make some of them answer to me."]],
+	"m2_b_havoc": ["havoc", ["And the doors that stay shut, I open my way! You will want me down there!"]],
+	"m2_b_coleman": ["coleman", ["Helix hunters at your side... It is your call, and I do not like it. Viper, keep that station for me."]],
+	"m2_c_havoc": ["havoc", ["Change of plan! Ghost and me, we are coming along! Somebody has to make the noise down there!"]],
+	"m2_c_phantom": ["phantom", ["Somebody with a brain has to hold this tunnel. That would be me. Go on, you two. Do not embarrass me."]]
 }
 ## cue -> {speaker -> [variants]}
 const BARKS := {
@@ -290,6 +302,14 @@ const BARKS := {
 	"m2_stand": {"viper": ["This is it. Call the lift, and hold."], "scorpion": ["A last stand. I love a last stand."], "raven": ["Nobody dies in this hall. Not us."]},
 	"m2_down": {"scorpion": ["Going down. Again."], "viper": ["Everybody in."], "raven": ["Deeper, then."]},
 	"m2_stay": {"viper": ["We hold the tunnel. Go with them, and watch your back."], "scorpion": ["With them? Seriously? ... Fine. Keep them away from my shotgun."], "raven": ["If they turn on you, shout. I will hear it."]},
+	# What the squad says when it is settled who goes on from the station: it goes itself
+	# (a), or it stays and two of the operators go (b). One cue for each of the three.
+	"m2_a_viper": {"viper": ["Then it is settled. We came for the doctor. We finish it ourselves."]},
+	"m2_a_scorpion": {"scorpion": ["Fine by me. I would rather have those three behind a tunnel than behind my back."]},
+	"m2_a_raven": {"raven": ["She lied to us for a whole night. I want to see her face when we walk in."]},
+	"m2_b_viper": {"viper": ["Then my team holds this station. If the platform falls, that train has nowhere to come back to. Go. Bring her out."]},
+	"m2_b_scorpion": {"scorpion": ["One tunnel, one shotgun, and everything has to come through the same hole? I have had worse nights. Go on."]},
+	"m2_b_raven": {"raven": ["I stay on the relay. I watched what he did to it. If her voice comes back on your radio, I cut it out again."]},
 	"praise": {"viper": ["Good shot.", "Clean work.", "Textbook."], "scorpion": ["Ha! Nice one!", "Now that was pretty!", "Save some for me!"], "raven": ["Not bad.", "You shoot like me.", "Good. Again."], "phantom": ["Good shot. I saw nothing, of course.", "Not bad. For Fireteam.", "Tidy. I approve."], "havoc": ["Ha! Beautiful!", "Now that is shooting!", "Do that again! Do that again!"], "ghost": ["Good shot.", "Clean.", "I could not have done it quieter."]},
 	"leader_down": {"viper": ["Leader is down! Cover me, I am going in!", "Hold on! I am coming to you!"], "scorpion": ["Boss is down! Move, move!", "Hang on! I have got you!"], "raven": ["You are down. I am coming.", "Do not die. That is an order."], "phantom": ["Your leader is down. Typical. Cover me.", "Stay where you are. I will fetch you."], "havoc": ["Boss is down! Clear a path!", "Hey! Get up! We are not done!"], "ghost": ["Leader is down. Covering.", "Stay still. I am coming."]},
 	"horde": {"viper": ["Too many! Fall back to a wall!", "Pack on us! Short bursts!"], "scorpion": ["Whole pack! This is what I came for!", "So many! I need more shells!"], "raven": ["They are everywhere.", "Stand close. Back to back."], "phantom": ["Rather a lot of them. Do keep firing.", "A whole pack. How generous."], "havoc": ["Look at them all! Christmas came early!", "So many! I did not bring enough! I lied, I did!"], "ghost": ["Too many to count. Start anywhere.", "Pack. Close."]},

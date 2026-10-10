@@ -30,7 +30,8 @@ const AK_MOUNT := Vector3(0, -0.07, 0.08)
 ## Places are in metres from the middle of the pistol grip (the model's SPEC.json): the
 ## muzzle and half the barrel's width; rail: the top of what a sight is clamped to, optic:
 ## how far forward a sight sits there, irons: how high the iron sights stand; where the
-## second hand holds; the cocking handle; the way the magazine comes out and where its
+## second hand holds (hands: "grip" if it closes round a foregrip there instead of lying
+## under a handguard); the cocking handle; the way the magazine comes out and where its
 ## foot is.
 const GUNS := {
 	"ump": {
@@ -64,6 +65,16 @@ const GUNS := {
 		"support": Vector3(0, 0.0792, -0.3323), "handle": Vector3(0, 0.1249, -0.2339),
 		"magazine_out": Vector3(0, -0.9687, -0.2483), "magazine_foot": Vector3(0.0002, -0.08, -0.1577)
 	},
+	# The MP7 (tools/blender_make_mp7.py): its magazine sits in the pistol grip and comes out
+	# of its foot; the left hand holds the foregrip (hands: "grip"). No iron sights: irons is
+	# the top of the rail, which a sight clamps to. magazine_out is shorter than on the
+	# others: the short magazine needs only 16 cm to clear the grip, and stays in the picture.
+	"mp7": {
+		"scene": "res://assets/models/mp7.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.1238, -0.315), "bore": 0.0115,
+		"rail": 0.1814, "optic": -0.045, "irons": 0.1814, "hands": "grip",
+		"support": Vector3(0, 0.035, -0.2142), "handle": Vector3(0, 0.1694, 0.1022),
+		"magazine_out": Vector3(0, -0.6477, 0.0545), "magazine_foot": Vector3(0, -0.0448, 0.0014)
+	},
 	# The machine gun: fed from a box that hangs under it on the left, which comes off
 	# sideways; the cocking handle is on the right.
 	"mg": {
@@ -71,6 +82,17 @@ const GUNS := {
 		"rail": 0.17, "optic": -0.15, "irons": 0.1897, "metal": 0.85, "rough": 0.5,
 		"support": Vector3(0, 0.0907, -0.3539), "handle": Vector3(0.0377, 0.1327, -0.1011),
 		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.008, -0.053, -0.18)
+	},
+	# The M21E, the second machine gun (its id is mg2; tools/blender_make_mg2.py): the gun and
+	# its drum are two models of the user's, each with its own textures. The drum sits in the
+	# magazine well in front of the trigger guard and hangs to the left; it comes off
+	# downwards. Aimed over the notch of its rear sight and its hooded front post (irons: the
+	# tip of the post).
+	"mg2": {
+		"scene": "res://assets/models/mg2.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1165, -0.7094), "bore": 0.0133,
+		"rail": 0.1519, "optic": -0.15, "irons": 0.1754,
+		"support": Vector3(0, 0.1093, -0.4104), "handle": Vector3(-0.03, 0.133, -0.52),
+		"magazine_out": Vector3(-0.2, -0.98, 0.0), "magazine_foot": Vector3(-0.0452, -0.1678, -0.1602)
 	}
 }
 ## The reflex sight is the user's model of a holographic sight: a hood with a tunnel to
@@ -120,6 +142,13 @@ const VIEWS := {
 	"mg": {
 		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.1047, -0.207), "muzzle": Vector3(0.0005, 0.0367, -0.5833),
+		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The M21E (build_gun): the eye on the line over its rear sight and the tip of its front
+	# post, 14 cm behind the rear sight.
+	"mg2": {
+		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.0879, -0.225), "aim_angles": Vector3(1.715, 0.0, 0.0), "muzzle": Vector3(0, 0.0315, -0.6244),
 		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	"p90": {
@@ -210,6 +239,14 @@ const VIEWS := {
 		"hip": Vector3(0.115, -0.148, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.0612, -0.19), "aim_angles": Vector3(-0.73, 0.0, 0.0), "muzzle": Vector3(0, 0.0064, -0.5453),
 		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The MP7 (build_gun): no iron sights, so aimed along the top of its rail, 2.5 cm above it
+	# and 16 cm behind its end. For a reload it is raised high and rolled far over to the
+	# left, so that the foot of the grip and the magazine that comes out of it can be seen.
+	"mp7": {
+		"hip": Vector3(0.12, -0.16, -0.42), "hip_angles": Vector3(0.5, 6.5, -2.5),
+		"aim": Vector3(0.0, -0.1264, -0.3254), "muzzle": Vector3(0, 0.0438, -0.235),
+		"reload_low": Vector3(-0.1, 0.17, -0.02), "reload_turn": Vector3(0.25, 0.25, -1.1)
 	}
 }
 ## Weapons that come as finished models. mount: where the model's origin (the middle of
@@ -603,17 +640,19 @@ static func build_gun(id: String) -> Node3D:
 		for surface in range(mesh.mesh.get_surface_count()):
 			var source := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
 			# The gun brings its own textures; the magazine is plain and gets the grain of
-			# the other models.
+			# the other models. A magazine with textures of its own (the drum of the M21E)
+			# keeps them: each textured material of the model becomes one of the view.
 			if source.albedo_texture != null:
-				if not gun_materials.has(id):
-					gun_materials[id] = tune(source.duplicate() as BaseMaterial3D)
+				var slot := id + "/" + source.resource_name
+				if not gun_materials.has(slot):
+					gun_materials[slot] = tune(source.duplicate() as BaseMaterial3D)
 					# A gun whose paint came out like polished chrome is taken down a little.
 					if gun.has("metal"):
-						(gun_materials[id] as BaseMaterial3D).metallic = float(gun.metal)
+						(gun_materials[slot] as BaseMaterial3D).metallic = float(gun.metal)
 					if gun.has("rough"):
-						(gun_materials[id] as BaseMaterial3D).roughness_texture = null
-						(gun_materials[id] as BaseMaterial3D).roughness = float(gun.rough)
-				mesh.set_surface_override_material(surface, gun_materials[id])
+						(gun_materials[slot] as BaseMaterial3D).roughness_texture = null
+						(gun_materials[slot] as BaseMaterial3D).roughness = float(gun.rough)
+				mesh.set_surface_override_material(surface, gun_materials[slot])
 			else:
 				mesh.set_surface_override_material(surface, shotgun_material(source, true, id + "/"))
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -630,7 +669,11 @@ static func build_gun(id: String) -> Node3D:
 	hand.name = "Support"
 	view.add_child(hand)
 	var support := MeshBatch.new()
-	_cradle_hand(support, mount + (gun.support as Vector3), Vector3(-0.13, -0.27, 0.17))
+	# hands: "grip" closes the hand round a foregrip instead of laying it under the handguard.
+	if str(gun.get("hands", "")) == "grip":
+		_grip_hand(support, mount + (gun.support as Vector3), -1.0, false, Vector3(-0.15, -0.24, 0.2))
+	else:
+		_cradle_hand(support, mount + (gun.support as Vector3), Vector3(-0.13, -0.27, 0.17))
 	for mesh in support.commit(hand, "Hand", false):
 		mesh.layers = 2
 	_gun_mods(view, id)

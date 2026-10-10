@@ -23,6 +23,7 @@ const MIX := {
 	"shotgun": [2.0, 0.04, 1], "autoshotgun": [0.0, 0.04, 1], "shotgun_pump": [-4.5, 0.04, 1], "shell_in": [-7.0, 0.06, 1],
 	"pistol": [-4.0, 0.05, 0], "revolver": [0.0, 0.04, 1], "sniper": [3.0, 0.03, 1], "launcher": [0.0, 0.05, 1], "minigun": [-6.0, 0.06, 0], "minigun_spin": [-10.0, 0.0, 1],
 	"heli": [0.0, 0.0, 2], "beep": [-8.0, 0.0, 1], "ump": [-3.0, 0.04, 0], "ump_sil": [-4.0, 0.04, 0], "ak": [-1.0, 0.04, 0], "ak_sil": [-4.0, 0.04, 0], "mg": [-1.0, 0.05, 0],
+	"mg2": [-1.0, 0.05, 0],
 	"bot_hurt_male": [-7.0, 0.06, 1], "bot_hurt_female": [-7.0, 0.06, 1],
 	"gore_burst": [4.0, 0.08, 2], "splat": [-6.0, 0.15, 0], "gib": [-9.0, 0.15, 0], "headpop": [-2.0, 0.1, 1], "bodyfall": [-8.0, 0.12, 0],
 	"dog_growl": [-7.0, 0.1, 0], "dog_bark": [-2.0, 0.08, 1], "dog_bite": [-2.0, 0.08, 1], "dog_death": [-4.0, 0.08, 1], "dog_howl": [-1.0, 0.05, 1],
@@ -32,6 +33,10 @@ const MIX := {
 	"melee": [-2.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
 	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0],
 	"g36_mag_out": [-7.0, 0.04, 1], "g36_mag_in": [-7.0, 0.04, 1], "g36_bolt": [-7.0, 0.04, 1],
+	# The MP7 fires 950 times a minute and its file is a sharp one: at this level its
+	# sustained fire is as loud to the ear as that of the other small guns (between the UMP
+	# and the P90), not as loud as the AK's.
+	"mp7": [-5.5, 0.05, 0], "mp7_sil": [-5.0, 0.04, 0],
 	"ring": [-4.0, 0.0, 2], "glitch": [-6.0, 0.06, 1],
 	# The M32: its drum swung open, a shell pushed home, the frame shut, the turn of the drum
 	# after a shot, and its shell in flight (heard from the shell itself, see play_on).
@@ -66,6 +71,7 @@ const STAND_INS := {
 	"growl_female": "growl", "pain": "growl", "death": "growl",
 	"shotgun": "shot", "autoshotgun": "shot", "shotgun_pump": "click", "shell_in": "click", "bot_hurt_male": "hurt", "bot_hurt_female": "hurt",
 	"ump": "shot", "ump_sil": "p90", "ak": "shot", "ak_sil": "p90", "mg": "shot", "pistol": "p90", "revolver": "shot", "sniper": "shot", "launcher": "thud", "minigun": "p90", "minigun_spin": "wind", "heli": "wind", "beep": "radio",
+	"mg2": "shot",
 	"gore_burst": "squish", "splat": "squish", "gib": "squish", "headpop": "pop", "bodyfall": "thud",
 	"dog_growl": "growl", "dog_bark": "growl", "dog_bite": "squish", "dog_death": "growl", "dog_howl": "screech",
 	"striker_attack": "screech", "striker_death": "screech", "striker_idle": "screech",
@@ -74,6 +80,7 @@ const STAND_INS := {
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
 	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90",
 	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click",
+	"mp7": "p90", "mp7_sil": "p90",
 	"m32_open": "click", "m32_shell": "click", "m32_close": "click", "m32_turn": "click", "shell_flight": "wind",
 	"hit_body": "hit", "hit_head": "hit", "hit_kill": "squish", "boomer_burst": "squish"
 }
@@ -96,6 +103,12 @@ const HIT_FLOOR := 0.055
 const KILL_FLOOR := 0.09
 const KILL_WINDOW := 0.7
 const KILL_DUCK := -2.0
+## Hit sounds of the player's own choosing. They are no part of the game and of its
+## repository: if these files lie in the project folder, a bullet of his that hits an
+## infected is answered with one of them instead of hit_body / hit_head (soldiers keep
+## the game's own answer). OWN_LEVEL: their volume in dB.
+const OWN_HITS := ["res://CombatArms_Zombie_Treffersounds/2_Treffer_Ding/MULTIDING1.wav", "res://CombatArms_Zombie_Treffersounds/2_Treffer_Ding/MULTIDING2.wav"]
+const OWN_LEVEL := -8.0
 
 var clips: Dictionary = {}
 var recorded: Dictionary = {}
@@ -128,6 +141,10 @@ var hit_landed := -10.0
 var hit_heard := -10.0
 var kill_heard := -10.0
 var answers := {"hit_body": 0, "hit_head": 0, "hit_kill": 0}
+## The player's own hit sounds that were found (see OWN_HITS), looked for once.
+var own_hits: Array = []
+var own_asked := false
+var own_last := -1
 
 func _ready() -> void:
 	rng.seed = 707
@@ -368,7 +385,8 @@ func play_sound(kind: String, volume: float = 0.0, pitch: float = 1.0) -> void:
 ## stands - it is the shooter's confirmation, and nobody else gets it. One call per shot,
 ## however many pellets landed. `killed`: the hit felled somebody, and the fuller answer
 ## comes on top.
-func confirm_hit(headshot: bool, killed: bool = false) -> void:
+## `infected`: what was hit is no soldier (see OWN_HITS).
+func confirm_hit(headshot: bool, killed: bool = false, infected: bool = false) -> void:
 	if hush:
 		return
 	var now := Time.get_ticks_msec() * 0.001
@@ -377,9 +395,39 @@ func confirm_hit(headshot: bool, killed: bool = false) -> void:
 		hit_heard = now
 		var kind := "hit_head" if headshot else "hit_body"
 		answers[kind] += 1
-		play_sound(kind, KILL_DUCK if killed else 0.0)
+		if not (infected and _own_hit(KILL_DUCK if killed else 0.0)):
+			play_sound(kind, KILL_DUCK if killed else 0.0)
 	if killed:
 		confirm_kill()
+
+## Plays one of the player's own hit sounds, not the same twice in a row; false if he
+## has none.
+func _own_hit(volume: float) -> bool:
+	if not own_asked:
+		own_asked = true
+		for path in OWN_HITS:
+			if ResourceLoader.exists(str(path)):
+				var stream := load(str(path)) as AudioStream
+				if stream != null:
+					own_hits.append(stream)
+	if own_hits.is_empty():
+		return false
+	var voice := _claim(voices, int(MIX["hit_body"][2]))
+	if voice == null:
+		return true
+	var index := rng.randi() % own_hits.size()
+	if own_hits.size() > 1 and index == own_last:
+		index = (index + 1) % own_hits.size()
+	own_last = index
+	if voice != menu_voice:
+		voice.bus = "SFX"
+	voice.stream = own_hits[index]
+	voice.volume_db = OWN_LEVEL + volume
+	voice.pitch_scale = 1.0
+	voice.set_meta("priority", int(MIX["hit_body"][2]))
+	voice.set_meta("started", Time.get_ticks_msec())
+	voice.play()
+	return true
 
 ## The fuller answer to a kill. The host of a co-op match decides what a guest's hit
 ## does: the guest gets this when the kill is reported to him, if a bullet of his has

@@ -520,10 +520,12 @@ func _villa_outside() -> void:
 	# A band between the storeys and pilasters on the corners.
 	for wall in [["salon", SOUTH, -24.4, -7.0], ["hall", SOUTH, -7.0, 7.0], ["galerie", SOUTH, 7.0, 24.4], ["salon", WEST, 8.0, 22.4], ["library", WEST, -4.4, 8.0], ["library", NORTH, -24.4, -10.0], ["dining", NORTH, -10.0, 10.0], ["kitchen", NORTH, 10.0, 24.4], ["kitchen", EAST, -4.4, 8.0], ["galerie", EAST, 8.0, 22.4]]:
 		var room: Dictionary = room_of[wall[0]]
-		_face_box(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), 4.55, 4.85, HALF + 0.25, HALF + 0.37, TRIM)
-		_face_box(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), 0.0, 0.7, HALF + 0.25, HALF + 0.33, TRIM.darkened(0.2))
+		# (They follow the wall: the plinth stops at every door and where the annex stands,
+		# instead of running on through the doorways.)
+		_face_run(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), 4.55, 4.85, HALF + 0.25, HALF + 0.37, TRIM, true)
+		_face_run(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), 0.0, 0.7, HALF + 0.25, HALF + 0.33, TRIM.darkened(0.2), true)
 		# A frieze under the cornice and a row of dentils in it.
-		_face_box(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), EAVES - 1.0, EAVES - 0.39, HALF + 0.22, HALF + 0.3, TRIM.darkened(0.05))
+		_face_run(room, int(wall[1]), "plaster", float(wall[2]), float(wall[3]), EAVES - 1.0, EAVES - 0.39, HALF + 0.22, HALF + 0.3, TRIM.darkened(0.05), true)
 		var teeth := maxi(1, roundi((float(wall[3]) - float(wall[2])) / 0.5))
 		for i in range(teeth):
 			var tooth := float(wall[2]) + (i + 0.5) * (float(wall[3]) - float(wall[2])) / teeth
@@ -757,7 +759,7 @@ func _dress_villa() -> void:
 	_model("WoodenTable_02", Vector3(-13.2, 0, 5.4), 0.0, {"height": 0.5})
 	_model("sofa_02", Vector3(11.0, 0, 11.4), PI, {})
 	_model("sofa_02", Vector3(20.4, 0, 11.4), PI, {})
-	_plant(Vector3(8.0, 0, 21.0), 1.6)
+	_plant(Vector3(8.0, 0, 18.4), 1.6)
 	_plant(Vector3(23.0, 0, 9.0), 1.6)
 	# --- the post of the guards under the gallery: a table with their radio, what they had left
 	_table(Vector3(-5.2, 0, 9.4), Vector3(1.8, 0.78, 0.8), Color(0.24, 0.26, 0.2))
@@ -1462,7 +1464,12 @@ func _train_car(centre: Vector3, open: int) -> void:
 			_part("plain", centre + Vector3(mid, 0.14, z + side * 0.072), Vector3(long, 0.2, 0.004), dark)
 			_part("plate", centre + Vector3(mid, 2.3, z), Vector3(long, 0.6, 0.14), yellow.darkened(0.1))
 			for post in range(4):
-				_part("plate", centre + Vector3(x0 + post * long / 3.0, 1.5, z), Vector3(0.14, 1.0, 0.14), dark)
+				# (The one beside the doorway stands behind its frame and not in it. The end of the
+				# pane stays inside the post.)
+				var post_x := x0 + post * long / 3.0
+				if absf(post_x) < 1.25:
+					post_x += half * 0.06
+				_part("plate", centre + Vector3(post_x, 1.5, z), Vector3(0.14, 1.0, 0.14), dark)
 			_chunk("Glass", false)
 			batch.box(mats["pane"], centre + Vector3(mid, 1.5, z), Vector3(long, 1.0, 0.03), Color.WHITE)
 			_chunk("Car")
@@ -1583,9 +1590,12 @@ func _passage(room_id: String, options: Dictionary = {}) -> void:
 	if bool(options.get("ribs", true)):
 		for i in range(1, count):
 			var at := from + i * bay
+			# (The ribs themselves are set when the room is built, where its walls are whole
+			# then: a room declared later may still cut a door into them. See HiveCore._build_room.)
+			if not room.has("ribs"):
+				room["ribs"] = []
 			for side in sides:
-				if _wall_free(room, side, at - 0.3, at + 0.3):
-					_face_box(room, side, "plate", at - 0.16, at + 0.16, 0.0, tall, -0.2, -0.05, steel)
+				(room.ribs as Array).append([side, at])
 			_part("plate", spot.call(at, 0.0, tall - 0.16), box.call(0.3, 0.32, wide), steel)
 	var color: Color = options.get("light", Color("d6e8ff"))
 	var energy := float(options.get("energy", 2.4))
@@ -4500,6 +4510,18 @@ func tour() -> Array:
 		["42c_freight", Vector3(16.0, UNDER, -330.5), Vector3(30.0, UNDER + 1.2, -321.0)],
 		["43b_control_wall", Vector3(30.6, DECK, -340.4), Vector3(30.0, DECK + 1.8, -345.0)],
 		["43c_control_below", Vector3(9.0, UNDER, -329.5), Vector3(31.0, DECK + 1.6, -341.0)],
+		["90_door_front", Vector3(0.9, 0, 25.6), Vector3(0.0, 0.7, 22.2)],
+		["91_door_salon_a", Vector3(-10.2, 0, 25.0), Vector3(-12.0, 0.8, 22.0)],
+		["92_door_salon_b", Vector3(-17.6, 0, 25.2), Vector3(-19.5, 0.8, 22.0)],
+		["93_door_galerie_a", Vector3(10.2, 0, 25.0), Vector3(12.0, 0.8, 22.0)],
+		["94_door_galerie_b", Vector3(17.6, 0, 25.2), Vector3(19.5, 0.8, 22.0)],
+		["95_door_library", Vector3(-15.4, 0, -7.4), Vector3(-17.0, 0.8, -4.0)],
+		["96_door_kitchen", Vector3(27.4, 0, 3.4), Vector3(24.0, 0.8, 2.0)],
+		["97_door_mirror_back", Vector3(1.2, 0, -7.6), Vector3(0.0, 0.6, -4.2)],
+		["98_door_from_salon", Vector3(-12.0, 0, 19.0), Vector3(-12.0, 0.5, 22.6)],
+		["99_door_gate_hall", Vector3(2.2, UNDER, -572.0), Vector3(0.0, UNDER + 1.6, -577.0)],
+		["99b_door_hall_galerie", Vector3(4.0, 0, 20.5), Vector3(9.0, 1.0, 20.7)],
+		["99c_door_car", Vector3(-2.4, UNDER, -52.6), Vector3(0.6, UNDER + 1.5, -55.0)],
 		["44_checkpoint", Vector3(0, UNDER, -346.5), Vector3(0, UNDER + 1.6, -366.0)],
 		["45_guard", Vector3(7.5, UNDER, -358.5), Vector3(14.0, UNDER + 1.2, -353.0)],
 		["46_ring_east", Vector3(-40, UNDER, -365.0), Vector3(40, UNDER + 1.6, -365.0)],

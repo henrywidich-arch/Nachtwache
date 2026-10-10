@@ -386,7 +386,7 @@ func _ready() -> void:
 		var prowler_check := ProwlerCheck.new()
 		prowler_check.game = self
 		add_child(prowler_check)
-		prowler_check.call_deferred("run_hive" if "--prowler-hive" in args else "run")
+		prowler_check.call_deferred("run_map" if "--prowler-map" in args else ("run_moves" if "--prowler-moves" in args else ("run_hive" if "--prowler-hive" in args else "run")))
 	elif "--ripper-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -3566,8 +3566,9 @@ func _run_ump_check() -> void:
 	print("UMP_CAPTURE_COMPLETE")
 	get_tree().quit()
 
-## Screenshots of a gun that takes parts (--gun=ak or ump): from the hip and aimed with
-## each sight, by day-bright light and at night, and its magazine change.
+## Screenshots of a gun (--gun=ak, ump, mp7, mg2 ...): from the hip and aimed, with each
+## sight if it takes parts, its magazine change, and what the shop shows of it. At night as
+## in a mission; with --gun-day by the daylight of the test room, to see the model itself.
 func _run_gun_check() -> void:
 	var folder := _capture_dir()
 	var id := "ak"
@@ -3581,6 +3582,8 @@ func _run_gun_check() -> void:
 	hud.radio_left = 0
 	mission.plain()
 	preparation_left = 9999.0
+	if "--gun-day" in OS.get_cmdline_user_args():
+		cabin.set_daylight(true)
 	_place_player(Vector3(0, 0.05, 12.5), 180)
 	player.unlock(id)
 	# Something to aim at: three infected standing still at 12, 20 and 30 metres.
@@ -3616,15 +3619,28 @@ func _run_gun_check() -> void:
 		await _capture(folder, "%s_5_reload_%d.png" % [id, i + 1])
 	await get_tree().create_timer(0.9 * pace).timeout
 	print("SHOT gun=%s ammo=%d sound=%s parts=%s" % [id, player.ammo, str(player.gun().sound), str(player.inventory[id].get("fitted", {}))])
-	# What the shop says about it, and its parts in the list of parts.
-	credits = 1500
+	# What the shop says about it: on the list it is sold on, as somebody sees it who has
+	# not got it yet (in a round that has it), and its parts in the list of parts.
+	var tab := str(Survivor.WEAPONS[id].get("group", "weapons"))
+	wave = maxi(wave, int(Survivor.WEAPONS[id].get("from_round", 0)))
+	credits = 3000
+	if id != "rifle":
+		player.equip_weapon("rifle", true)
+		player.drop_weapon(id)
 	_place_player((cabin.points.shop as Vector3) + Vector3(0, 0.05, 0.6), 0)
 	await get_tree().create_timer(0.3).timeout
 	open_shop()
-	for tab in ["weapons", "mods"]:
-		hud._open_tab(tab)
-		await get_tree().create_timer(0.4).timeout
-		await _capture(folder, "%s_6_shop_%s.png" % [id, tab])
+	hud._open_tab(tab)
+	hud.counter.pick("weapon", id)
+	await get_tree().create_timer(0.9).timeout
+	await _capture(folder, "%s_6_shop_%s.png" % [id, tab])
+	if Survivor.ATTACHMENTS.has(id):
+		buy_weapon(id)
+		hud._open_tab("mods")
+		hud.counter.pick("part", id, "reddot")
+		await get_tree().create_timer(0.9).timeout
+		await _capture(folder, "%s_6_shop_mods.png" % id)
+	print("SHOP gun=%s tab=%s credits=%d owned=%s" % [id, tab, credits, str(player.inventory.has(id))])
 	print("GUN_CAPTURE_COMPLETE")
 	get_tree().quit()
 
