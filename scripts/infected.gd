@@ -186,6 +186,8 @@ const CHARGER_BLAST := 4.3
 ## Infected that are fights of their own: what a difficulty does to the health of the horde
 ## (the rule "brood", see Profile) leaves them as they are.
 const BROOD_APART := ["crusher", "stalker"]
+## Looks of the plain infected that are women: they get the female voices.
+const FEMALE_LOOKS := ["mauler_female", "hive_lab"]
 ## The Medic's gas: how far it reaches at most, the health it gives back per second to
 ## an infected it has strengthened, the share of a hit that still gets through to them,
 ## and how close the Medic comes to its prey before it stops and lets the gas work.
@@ -397,7 +399,7 @@ func _ready() -> void:
 		voices[role] = str(spec[role])
 	if kind == "stalker":
 		haunt_left = {"watch": randf_range(5.0, 9.0), "dash": 6.0, "hunt": 45.0}.get(haunt, 7.0)
-	if look == "mauler_female":
+	if look in FEMALE_LOOKS:
 		voices = {"voice": "growl_female", "idle": "growl_female", "strike": "growl_female", "pain": "pain_female", "death": "death_female"}
 	# The head gets its own hit zone that follows the animated skull, so hunched and
 	# oversized infected can be shot where their head really is.

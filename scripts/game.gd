@@ -653,6 +653,9 @@ func start_run(test: bool = false) -> void:
 	# The second mission is played alone with the squad for now: a co-op night is the farm.
 	var second: bool = profile.mission == 2 and not test and not net.active
 	use_map(second)
+	if second:
+		# The staff of the Hive: prepared the first time a night begins there, not before.
+		InfectedVisual.warm_up(self, 2)
 	# The host of a co-op match has already told a guest which difficulty is played.
 	if not net.joined:
 		level = profile.difficulty

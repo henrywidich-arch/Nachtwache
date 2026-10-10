@@ -68,6 +68,16 @@ const PRESSURE := {
 	"labs": [["mauler", "striker", "ripper", "leech", "healer"], 8, 4.0, "hidden"],
 	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 12, 2.0, "hidden"]
 }
+## Who the plain infected of this mission were. Besides the looks they have everywhere, a
+## share of them wears what the people here wore: "above" (the villa and the station) now
+## and then somebody of the guard, a worker or a civilian; "below" (the facility, from the
+## terminal on) mostly its staff - scientists, laboratory people, nurses, workers, guards.
+## Each: the looks (a look listed twice turns up twice as often), and the share of the
+## plain infected that wear one of them.
+const STAFF := {
+	"above": [["hive_security", "hive_worker", "hive_civilian"], 0.3],
+	"below": [["hive_scientist", "hive_scientist2", "hive_lab", "hive_nurse", "hive_worker", "hive_security", "hive_civilian"], 0.75]
+}
 const HOLD_STATION := 80.0
 const HOLD_CAFE := 70.0
 const HOLD_HALL := 60.0
@@ -743,8 +753,17 @@ func _clear_enemies() -> void:
 
 # ---------------------------------------------------------------- enemies
 
+## The look of an infected of the stage that runs: for a plain one, as often as STAFF
+## says, one of the people who worked here; otherwise "" - one of the looks its kind has
+## everywhere. The special kinds keep theirs.
+func look_for(kind: String) -> String:
+	if kind != "mauler":
+		return ""
+	var staff: Array = STAFF["below" if ORDER.find(stage) >= ORDER.find("terminal") else "above"]
+	return str((staff[0] as Array).pick_random()) if randf() < float(staff[1]) else ""
+
 func _spawn(kind: String, at: Vector3) -> Infected:
-	var enemy: Infected = game.spawn_enemy(kind)
+	var enemy: Infected = game.spawn_enemy(kind, look_for(kind))
 	if not is_instance_valid(enemy):
 		return null
 	enemy.position = at + Vector3(0, 0.08, 0)

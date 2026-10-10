@@ -2422,8 +2422,102 @@ func _threats(game: Node3D) -> void:
 	await _zombie_test(game)
 	await _hit_answer(game)
 	await _second_exploder(game)
+	await _hive_staff(game)
 	game.team_enabled = true
 	game.start_run()
+
+## The plain infected of the second mission: many of them wear what the Hive's people wore -
+## a few at the villa and the station, most of them in the facility. The farm knows none.
+func _hive_staff(game: Node3D) -> void:
+	var hive: HiveDirector = game.hive
+	var staff_above: Array = HiveDirector.STAFF.above[0]
+	var staff_below: Array = HiveDirector.STAFF.below[0]
+	# Every look named is a body of its own, built like the plain ones.
+	var known := true
+	var plain: Dictionary = InfectedVisual.KINDS.normalzombie
+	for look in staff_above + staff_below:
+		var build: Dictionary = InfectedVisual.KINDS.get(str(look), {})
+		known = known and not build.is_empty() and str(build.set) == "zombie" and int(build.get("mission", 1)) == 2 and (build.moves as Dictionary).hash() == (plain.moves as Dictionary).hash() and absf(float(build.height) - 1.76) < 0.06 and not (Infected.TYPES.mauler.visuals as Array).has(look)
+	var late := 0
+	for kind in InfectedVisual.KINDS:
+		if int((InfectedVisual.KINDS[kind] as Dictionary).get("mission", 1)) == 2:
+			late += 1
+	expect(known and late == 7 and staff_below.size() == 7 and staff_above.size() == 3 and staff_below.has("hive_scientist") and staff_below.has("hive_lab") and staff_below.has("hive_nurse") and not staff_above.has("hive_scientist") and float(HiveDirector.STAFF.above[1]) < 0.5 and float(HiveDirector.STAFF.below[1]) > 0.5 and float(HiveDirector.STAFF.below[1]) < 1.0, "The Hive's staff: seven looks for the plain infected of the second mission, built like the plain ones, prepared when a night there begins")
+	# How often the director hands them out, stage by stage; the special kinds keep their looks.
+	var stage_before: String = hive.stage
+	var shares := {}
+	var strays := 0
+	var specials := 0
+	for stage in ["landing", "villa", "station", "hold", "terminal", "lockdown", "labs", "hall"]:
+		hive.stage = stage
+		var facility: bool = HiveDirector.ORDER.find(stage) >= HiveDirector.ORDER.find("terminal")
+		var worn := 0
+		for i in range(1000):
+			var look: String = hive.look_for("mauler")
+			if look != "":
+				worn += 1
+				if not (staff_below if facility else staff_above).has(look):
+					strays += 1
+		shares[stage] = worn / 1000.0
+		for kind in ["striker", "ripper", "leech", "charger", "healer", "crusher", "stalker", "cru_assault"]:
+			if hive.look_for(kind) != "":
+				specials += 1
+	var seldom := true
+	var mostly := true
+	for stage in shares:
+		if HiveDirector.ORDER.find(stage) >= HiveDirector.ORDER.find("terminal"):
+			mostly = mostly and absf(float(shares[stage]) - float(HiveDirector.STAFF.below[1])) < 0.1
+		else:
+			seldom = seldom and absf(float(shares[stage]) - float(HiveDirector.STAFF.above[1])) < 0.1
+	expect(seldom and mostly and strays == 0 and specials == 0, "At the villa and the station now and then one of the plain infected is a guard, a worker or a civilian (%.0f %%); in the facility most are its staff (%.0f %%); the special kinds keep their looks" % [float(shares.villa) * 100.0, float(shares.labs) * 100.0])
+	# What the director spawns in the facility: Maulers in every number, in the staff's clothes.
+	_wipe_all(game)
+	await wait(0.5)
+	hive.stage = "labs"
+	game.wave = 8
+	var seen := {}
+	var maulers := true
+	var woman := true
+	for i in range(40):
+		var one: Infected = hive._spawn("mauler", Vector3(0, 0.05, 30.0 + i * 0.1))
+		one.set_physics_process(false)
+		seen[one.model.kind] = int(seen.get(one.model.kind, 0)) + 1
+		maulers = maulers and one.kind == "mauler" and one.spec == Infected.TYPES.mauler and is_equal_approx(one.max_health, 95.0 + 7.0 * 7.0) and one.model.skeleton.get_bone_count() >= 22 and not one.alert
+		if one.model.kind == "hive_lab":
+			woman = woman and str(one.voices.death) == "death_female"
+		elif one.model.kind != "mauler_female":
+			woman = woman and str(one.voices.death) == "death"
+		_take_off(game, one)
+	var in_staff := 0
+	for look in seen:
+		if staff_below.has(look):
+			in_staff += int(seen[look])
+	# One of them falls like any Mauler.
+	var fallen: Infected = hive._spawn("mauler", Vector3(0, 0.05, 30.0))
+	var tries := 0
+	while not staff_below.has(fallen.model.kind) and tries < 40:
+		_take_off(game, fallen)
+		fallen = hive._spawn("mauler", Vector3(0, 0.05, 30.0))
+		tries += 1
+	fallen.set_physics_process(false)
+	await frames(3)
+	var kills_then: int = game.kills
+	fallen.receive_hit(9999.0, Vector3.FORWARD, true)
+	await frames(3)
+	var lies: bool = staff_below.has(fallen.model.kind) and fallen.dead and game.kills == kills_then + 1 and fallen.model.dying and fallen.model.player.current_animation.begins_with("death")
+	hive.stage = stage_before
+	expect(maulers and woman and in_staff >= 16 and seen.size() >= 5 and lies, "In the facility the director's plain infected are Maulers in every number, %d of 40 in the clothes of the staff (%d looks seen); the woman of the laboratory has a woman's voice, and one of them falls like any other" % [in_staff, seen.size()])
+	# On the farm nothing changes: a Mauler there wears one of the five looks it always had.
+	var old: Array = Infected.TYPES.mauler.visuals
+	var farm := true
+	for i in range(40):
+		var one: Infected = game.spawn_enemy("mauler")
+		one.set_physics_process(false)
+		farm = farm and old.has(one.model.kind)
+		_take_off(game, one)
+	expect(farm and old == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"], "On the farm the plain infected look as they always did")
+	_wipe_all(game)
+	await wait(0.5)
 
 ## Takes an enemy off the field without a death: nothing bursts, nobody is paid.
 func _take_off(game: Node3D, enemy: Infected) -> void:

@@ -74,10 +74,34 @@ func _run() -> void:
 	for i in range(6):
 		await process_frame
 	if warm:
-		# what the game does once before its first round: every kind gets its clips baked
+		# what the game does once before its first round: every kind gets its clips baked and its maps loaded.
+		# One line per kind: how long it took and what it added to the memory of the graphics card (run it windowed:
+		# headless there is no graphics card to ask). --kinds=a,b warms only those.
 		var started := Time.get_ticks_msec()
-		InfectedVisual.warm_up(stage)
-		print("CHECKWARM %d kinds, %d ms" % [InfectedVisual.KINDS.size(), Time.get_ticks_msec() - started])
+		var textures_at_start := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED)
+		for kind_name in InfectedVisual.KINDS:
+			if not kinds.is_empty() and not kinds.has(kind_name):
+				continue
+			var before := Time.get_ticks_msec()
+			var textures := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED)
+			var probe := InfectedVisual.new()
+			probe.kind = kind_name
+			stage.add_child(probe)
+			probe.free()
+			var took := Time.get_ticks_msec() - before
+			# What its own maps weigh on the graphics card (a model's scene may have brought them along already, so
+			# the counter above need not move): size and format of each as it was imported.
+			var maps := ""
+			var weight := 0
+			if (InfectedVisual.KINDS[kind_name] as Dictionary).has("maps"):
+				for part in ["diffuse.jpg", "normal.png", "roughness.png", "metallic.png"]:
+					var picture := (load(str(InfectedVisual.KINDS[kind_name].maps) + part) as Texture2D).get_image()
+					weight += picture.get_data().size()
+					maps += " %s %d/%s" % [str(part).get_basename(), picture.get_width(), ["L8", "LA8", "R8", "RG8", "RGB8", "RGBA8"][picture.get_format()] if picture.get_format() < 6 else ("DXT1" if picture.get_format() == Image.FORMAT_DXT1 else ("DXT5" if picture.get_format() == Image.FORMAT_DXT5 else ("RGTC_R" if picture.get_format() == Image.FORMAT_RGTC_R else ("RGTC_RG" if picture.get_format() == Image.FORMAT_RGTC_RG else ("BPTC" if picture.get_format() == Image.FORMAT_BPTC_RGBA else str(picture.get_format()))))))]
+			print("CHECKWARM %-16s %4d ms, textures +%5.1f MB, its maps %5.1f MB:%s" % [kind_name, took, (RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED) - textures) / 1048576.0, weight / 1048576.0, maps])
+		if kinds.is_empty():
+			InfectedVisual.warm_up(stage)
+		print("CHECKWARM %d kinds, %d ms, textures +%.1f MB (all textures %.1f MB, buffers %.1f MB, video memory %.1f MB)" % [InfectedVisual.KINDS.size() if kinds.is_empty() else kinds.size(), Time.get_ticks_msec() - started, (RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED) - textures_at_start) / 1048576.0, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TEXTURE_MEM_USED) / 1048576.0, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_BUFFER_MEM_USED) / 1048576.0, RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_VIDEO_MEM_USED) / 1048576.0])
 		print("CHECK_COMPLETE")
 		quit()
 		return
