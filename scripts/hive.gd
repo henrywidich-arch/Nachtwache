@@ -194,6 +194,8 @@ var stalker_sent := false
 var prowl: HiveProwler
 ## The ways in through ceilings, walls and windows, and who comes through them (a node of its own).
 var entries: HiveEntries
+## The weapon caches off the way, and what was found in them (a node of its own).
+var caches: HiveCaches
 var board_time := 0.0
 
 func _ready() -> void:
@@ -204,6 +206,9 @@ func _ready() -> void:
 	entries = HiveEntries.new()
 	entries.director = self
 	add_child(entries)
+	caches = HiveCaches.new()
+	caches.director = self
+	add_child(caches)
 
 # ---------------------------------------------------------------- begin and end
 
@@ -240,6 +245,7 @@ func begin() -> void:
 	resume_at = ""
 	checkpoint = from
 	prowl.begin(from)
+	caches.begin(from)
 	var start: Dictionary = CHECKPOINTS[from]
 	map.lock_all()
 	for id in start.open:
@@ -272,6 +278,7 @@ func end() -> void:
 		return
 	on = false
 	prowl.end()
+	caches.end()
 	_end_intro()
 	for puppet in puppets:
 		if is_instance_valid(puppet.node):
@@ -461,6 +468,8 @@ func _checkpoint(id: String, bonus: int) -> void:
 	game.score += int(round(400 * float(game.rules.score)))
 	game.sounds.play_sound("clear")
 	game.hud.announce("KONTROLLPUNKT", "+%d Vorrat  ·  Trupp versorgt  ·  halbe Munition zurück" % bonus, 5)
+	# (What was found in the caches by now is kept for a defeat taken up again from here.)
+	caches.keep(id)
 
 func _enter(id: String) -> void:
 	stage = id
@@ -761,12 +770,13 @@ func _use(point: String, key: String, text: String) -> void:
 func prompt() -> String:
 	if use_at != Vector3.INF and game.player.global_position.distance_to(use_at) < 2.6:
 		return use_text
-	return ""
+	# (What the stage wants used comes first; then a weapon cache one stands before.)
+	return caches.prompt()
 
 ## [E] was pressed. True if that was for the mission.
 func use() -> bool:
-	if prompt() == "":
-		return false
+	if use_at == Vector3.INF or game.player.global_position.distance_to(use_at) >= 2.6:
+		return caches.use()
 	var key := use_key
 	use_at = Vector3.INF
 	use_key = ""
@@ -1541,6 +1551,8 @@ func summary() -> Array[String]:
 		out.append("%s   %d %%" % [progress_text, int(progress * 100.0)])
 	if stage == "station" and _guards_left() > 0:
 		out.append("Wachen auf dem Bahnsteig:  %d" % _guards_left())
+	# (Side goals: a cache that is being opened, the nearest one the survivor knows of.)
+	out.append_array(caches.summary())
 	return out
 
 func markers() -> Array:

@@ -476,6 +476,12 @@ func _draw_reticle() -> void:
 			if at.x > reticle.size.x - Minimap.SIZE - 110.0:
 				at.y = maxf(at.y, Minimap.SIZE + 50.0)
 			var tint := Color(0.36, 0.86, 1.0, 0.92)
+			# A side goal (a weapon cache of the second mission): smaller, hollow, in its own colour.
+			if marker.get("side", false):
+				tint = Color(0.5, 0.95, 0.72, 0.8)
+				reticle.draw_polyline(PackedVector2Array([at + Vector2(0, -6), at + Vector2(6, 0), at + Vector2(0, 6), at + Vector2(-6, 0), at + Vector2(0, -6)]), tint, 1.6, true)
+				reticle.draw_string(ThemeDB.fallback_font, at + Vector2(-70, 21), "%s  %d m" % [marker.text, int(view.global_position.distance_to(spot))], HORIZONTAL_ALIGNMENT_CENTER, 140, 11, tint)
+				continue
 			reticle.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -9), at + Vector2(9, 0), at + Vector2(0, 9), at + Vector2(-9, 0)]), tint)
 			reticle.draw_string(ThemeDB.fallback_font, at + Vector2(-70, 27), "%s  %d m" % [marker.text, int(view.global_position.distance_to(spot))], HORIZONTAL_ALIGNMENT_CENTER, 140, 13, tint)
 	if hurt_left > 0:

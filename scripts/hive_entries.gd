@@ -227,7 +227,8 @@ func _process(delta: float) -> void:
 			continue
 		due.remove_at(index)
 		# (Not if the stage has moved on to one in which nobody comes.)
-		if HiveDirector.PRESSURE.has(director.stage) and director.intro_left <= 0.0:
+		# (Those who answer a weapon cache that is being opened come in any stage: HiveCaches.)
+		if (HiveDirector.PRESSURE.has(director.stage) or job.has("cache")) and director.intro_left <= 0.0:
 			come(int(job.entry), str(job.kind), int(job.get("fan", 0)))
 	_swing(delta)
 	_wear(delta)

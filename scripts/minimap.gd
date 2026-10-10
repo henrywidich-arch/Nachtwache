@@ -20,6 +20,7 @@ const SPECIAL := Color("ffc34d")
 const SOLDIER := Color("5fd0f0")
 const FRIEND := Color("7fe3b4")
 const TASK := Color("fff0b8")
+const SIDE := Color("7ff2b8")
 const WALL := Color(0.7, 0.78, 0.84, 0.62)
 ## How much of that colour closed ground has where no open ground is beside it.
 const FILL := 0.14
@@ -140,6 +141,12 @@ func marks() -> Array:
 	var yaw: float = player.rotation.y
 	var level: int = cabin.level_of(here)
 	for marker in game.markers():
+		# A side goal (a weapon cache) is a small hollow mark, and none at the rim.
+		if marker.get("side", false):
+			var side := _mark(marker.pos, here, yaw, SIDE, 3.6, "lozenge", cabin.level_of(marker.pos) == level)
+			if not side.rim:
+				out.append(side)
+			continue
 		out.append(_mark(marker.pos, here, yaw, TASK, 4.2, "diamond", cabin.level_of(marker.pos) == level))
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
@@ -220,6 +227,8 @@ func _draw_face() -> void:
 		match str(mark.shape):
 			"diamond":
 				face.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -size), at + Vector2(size, 0), at + Vector2(0, size), at + Vector2(-size, 0)]), color)
+			"lozenge":
+				face.draw_polyline(PackedVector2Array([at + Vector2(0, -size), at + Vector2(size, 0), at + Vector2(0, size), at + Vector2(-size, 0), at + Vector2(0, -size)]), color, 1.5, true)
 			"square":
 				face.draw_rect(Rect2(at - Vector2(size, size), Vector2(size, size) * 2.0), color)
 			"ring":
