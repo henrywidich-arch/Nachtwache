@@ -29,6 +29,12 @@ extends Node
 ## checkpoint: the same places, the caches opened by then still open, and the found
 ## weapons he carried then in his hands again.
 ##
+## Now and then a found weapon is a RARE one (RARE_PLAIN, RARE_SEALED): it has something
+## of its own that the workbench's levels come on top of, and one that takes attachments
+## may come with some fitted (rare_of). Gold shows it - in its cache, in what [E] offers,
+## in the banner, as a star before its name - and it stays rare for the night (its record
+## carries it: Survivor.rare). No display and no terminal tells of one: it is a find.
+##
 ## The furniture of every place is built once with the map (furnish, called by HiveMap);
 ## this node, a child of the director, deals the night and runs it.
 ##   --caches-check --capture-dir=<folder>   pictures of all of it (see _pictures)
@@ -66,6 +72,37 @@ const PLAIN_WORTH := [[0, 260], [200, 330], [270, 460], [440, 660]]
 const SEALED_WORTH := [[270, 360], [340, 460], [490, 810], [790, 99999]]
 ## Score for a sealed cache that was opened (times the level's factor).
 const SEALED_SCORE := 150
+## A found weapon is a RARE one now and then: in this share of the plain caches, and of
+## the sealed ones. A rare weapon has something of its own that the workbench's levels
+## come on top of (one of RARE_LINES: the share, and how it is said), a weapon that takes
+## attachments may come with some fitted instead or as well - and it stays rare for the
+## night, wherever it lies in between.
+const RARE_PLAIN := 0.125
+const RARE_SEALED := 0.25
+const RARE_LINES := {
+	"damage": [0.12, "+%d %% Schaden"],
+	"reload": [0.15, "lädt %d %% schneller nach"],
+	"steady": [0.15, "%d %% weniger Rückstoß und Streuung"],
+	"mags": [0.2, "+%d %% Magazin"],
+	"reserve": [0.25, "+%d %% Reservemunition"]
+}
+## Which of them a weapon can have: what matters for it (any other weapon: its damage).
+const RARE_FITS := {
+	"g36": ["damage", "steady", "mags"], "p90": ["damage", "reload", "steady"], "mp7": ["damage", "mags", "steady"], "badger": ["damage", "mags", "reload"],
+	"m14": ["damage", "reload", "steady"], "shotgun": ["damage", "reload"], "revolver": ["damage", "reload"], "autoshotgun": ["damage", "mags", "reload"],
+	"sniper": ["damage", "reload"], "svd": ["damage", "mags", "steady"], "launcher": ["reload", "reserve"],
+	"mg": ["damage", "reload", "steady"], "mg2": ["damage", "reload", "steady"], "minigun": ["damage", "steady", "reserve"]
+}
+## Of the rare weapons that take attachments (Survivor.ATTACHMENTS): the share that comes
+## with some fitted, of those the share that has a part in a second slot too, and the
+## share that has parts and nothing else. A sight is the red dot more often than not.
+const RARE_PARTS := 0.6
+const RARE_SECOND := 0.4
+const RARE_BARE := 0.3
+const RARE_DOT := 0.7
+## What a rare weapon is worth more than a plain one when it is traded in at a locker.
+const RARE_WORTH := 1.3
+const GOLD := Color(1.0, 0.8, 0.28)
 ## The colours of a cache's lamp and of its words.
 const MINT := Color(0.5, 0.95, 0.72)
 const RED := Color(1.0, 0.3, 0.22)
@@ -251,6 +288,99 @@ static func deal(seed_value: int, places: Array) -> Dictionary:
 			out[index] = pick
 	return out
 
+# ---------------------------------------------------------------- rare weapons
+
+## What makes one weapon a rare one: {line of RARE_LINES: share} and/or {"parts": [...]}
+## (attachments it comes with, one for a slot, only for a weapon that takes them).
+static func rare_of(rng: RandomNumberGenerator, id: String) -> Dictionary:
+	var out: Dictionary = {}
+	var parts: Array[String] = []
+	if Survivor.ATTACHMENTS.has(id) and rng.randf() < RARE_PARTS:
+		var by_slot: Dictionary = {}
+		for part: String in Survivor.ATTACHMENTS[id]:
+			var slot := str(Survivor.ATTACHMENTS[id][part].slot)
+			if not by_slot.has(slot):
+				by_slot[slot] = []
+			(by_slot[slot] as Array).append(part)
+		var slots: Array = by_slot.keys()
+		slots.sort()
+		var first := rng.randi() % slots.size()
+		for k in range(slots.size()):
+			if k != first and rng.randf() >= RARE_SECOND:
+				continue
+			var choice: Array = by_slot[slots[k]]
+			var pick := str(choice[rng.randi() % choice.size()])
+			if choice.has("reddot") and rng.randf() < RARE_DOT:
+				pick = "reddot"
+			parts.append(pick)
+	if parts.is_empty() or rng.randf() >= RARE_BARE:
+		var lines: Array = RARE_FITS.get(id, ["damage"])
+		var line := str(lines[rng.randi() % lines.size()])
+		out[line] = float(RARE_LINES[line][0])
+	if not parts.is_empty():
+		out["parts"] = parts
+	return out
+
+## Which of the caches a night was dealt (see deal) hold a rare weapon, and what makes it
+## one: index of the place -> what rare_of gives.
+static func deal_rare(seed_value: int, places: Array, dealt: Dictionary) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash([seed_value, "rare"])
+	var order: Array = dealt.keys()
+	order.sort()
+	var out: Dictionary = {}
+	for index: int in order:
+		if rng.randf() < (RARE_SEALED if bool(places[index].sealed) else RARE_PLAIN):
+			out[index] = rare_of(rng, str(dealt[index]))
+	return out
+
+## What a rare weapon has of its own, in words: "+12 % Schaden · mit Rotpunktvisier".
+static func rare_words(id: String, rare: Dictionary) -> String:
+	var said: Array[String] = []
+	for line: String in RARE_LINES:
+		if rare.has(line):
+			said.append(str(RARE_LINES[line][1]) % int(round(float(rare[line]) * 100.0)))
+	var parts: Array[String] = []
+	for part: String in rare.get("parts", []):
+		parts.append(str(Survivor.ATTACHMENTS[id][part].label).capitalize())
+	if not parts.is_empty():
+		said.append("mit " + " und ".join(PackedStringArray(parts)))
+	return "  ·  ".join(PackedStringArray(said))
+
+static func rare_title(id: String, rare: Dictionary) -> String:
+	return "★  SELTEN  ·  " + rare_words(id, rare)
+
+## The numbers a weapon is judged by in the shop (ShopScreen.figures), as a rare one has them.
+static func rare_figures(numbers: Dictionary, rare: Dictionary) -> Dictionary:
+	var out := numbers.duplicate()
+	out.harm = float(out.harm) * (1.0 + float(rare.get("damage", 0.0)))
+	out.magazine = int(round(int(out.magazine) * (1.0 + float(rare.get("mags", 0.0)))))
+	out.reserve = int(round(int(out.reserve) * (1.0 + float(rare.get("reserve", 0.0)))))
+	out.reload = float(out.reload) * (1.0 - float(rare.get("reload", 0.0)))
+	out.tight = 1.0 - (1.0 - float(out.tight)) * (1.0 - float(rare.get("steady", 0.0)))
+	return out
+
+## Makes a weapon the survivor carries the rare one it is: what it has of its own goes
+## into its record, its parts are fitted, and it is loaded as such a one is.
+func make_rare(id: String, rare: Dictionary) -> void:
+	var player: Survivor = game.player
+	if not player.inventory.has(id) or rare.is_empty():
+		return
+	var record: Dictionary = player.inventory[id]
+	record["rare"] = rare.duplicate(true)
+	record.erase("tuned")
+	for part: String in rare.get("parts", []):
+		if Survivor.ATTACHMENTS.has(id) and Survivor.ATTACHMENTS[id].has(part) and str((record.get("fitted", {}) as Dictionary).get(str(Survivor.ATTACHMENTS[id][part].slot), "")) != part:
+			player.fit(id, part)
+	record.ammo = player.magazine_of(id)
+	record.reserve = player.reserve_cap(id)
+	if id == player.current_weapon:
+		player._show_parts()
+
+## What makes the weapon in a cache a rare one ({} for a plain one, or for none).
+func _rare_in(site: Dictionary) -> Dictionary:
+	return (site.record as Dictionary).get("rare", {}) if str(site.holds) != "" else {}
+
 # ---------------------------------------------------------------- a night begins and ends
 
 ## A night begins at a checkpoint (the director says so). At "landing" it is a new night;
@@ -275,11 +405,13 @@ func begin(from: String) -> void:
 	look_left = 0.0
 	_quiet()
 	var dealt := deal(night, sites)
+	var rares := deal_rare(night, sites, dealt)
 	for index in range(sites.size()):
 		var site := sites[index]
 		site.holds = str(dealt.get(index, ""))
 		site.state = "shut" if dealt.has(index) else "none"
-		site.record = {}
+		# (A rare one: what makes it so waits in the cache with it.)
+		site.record = {"rare": rares[index]} if rares.has(index) else {}
 		site.left = _seconds(site)
 		site.known = false
 		site.near = false
@@ -307,14 +439,18 @@ func keep(id: String) -> void:
 	for site in sites:
 		states[str(site.id)] = {"state": site.state, "holds": site.holds, "record": (site.record as Dictionary).duplicate(true), "left": site.left, "known": site.known}
 	var found: Array[String] = []
+	var rares: Dictionary = {}
 	for weapon in found_only():
 		if game.player.inventory.has(weapon):
 			found.append(weapon)
+			# (A rare one stays rare, with the parts it came with.)
+			if game.player.inventory[weapon].has("rare"):
+				rares[weapon] = (game.player.inventory[weapon].rare as Dictionary).duplicate(true)
 	var read: Array[int] = []
 	for index in range(boards.size()):
 		if bool(boards[index].read):
 			read.append(index)
-	kept[id] = {"night": night, "sites": states, "found": found, "origin": origin.duplicate(), "read": read, "told": told.duplicate()}
+	kept[id] = {"night": night, "sites": states, "found": found, "rares": rares, "origin": origin.duplicate(), "read": read, "told": told.duplicate()}
 
 ## The night as it was at a checkpoint: the caches as they stood then, and the found
 ## weapons the survivor carried then in his hands again, with a full load. (Whatever he
@@ -351,6 +487,7 @@ func _take_up(saved: Dictionary) -> void:
 				sites[back].state = "open"
 			continue
 		player.unlock(weapon)
+		make_rare(weapon, (saved.get("rares", {}) as Dictionary).get(weapon, {}))
 		if old != "":
 			player.drop_weapon(old)
 	if player.inventory.has(first):
@@ -452,6 +589,9 @@ func prompt() -> String:
 	if player.inventory.has(id):
 		return "[E] Munition für %s mitnehmen" % label
 	var old := player.to_replace(id)
+	var rare := _rare_in(site)
+	if not rare.is_empty():
+		return "[E] ★ SELTEN: %s nehmen  ·  %s%s" % [label, rare_words(id, rare), "" if old == "" else "  ·  %s bleibt hier" % Survivor.WEAPONS[old].label]
 	return "[E] %s nehmen" % label if old == "" else "[E] %s nehmen  ·  %s bleibt hier" % [label, Survivor.WEAPONS[old].label]
 
 ## [E] was pressed. True if that was for a cache.
@@ -494,9 +634,13 @@ func _take(index: int) -> void:
 	var old := player.to_replace(id)
 	var was: Dictionary = site.record
 	player.unlock(id)
-	if not was.is_empty():
+	var rare: Dictionary = was.get("rare", {})
+	if was.has("ammo"):
+		# (One that was laid down here: it comes back as it was.)
 		player.inventory[id] = was.duplicate(true)
 		player._show_parts()
+	else:
+		make_rare(id, rare)
 	origin[id] = index
 	if old != "":
 		site.holds = old
@@ -512,7 +656,11 @@ func _take(index: int) -> void:
 	var note := "Gehört dir für diese Nacht – Munition, Werkbank und Aufsätze wie bei jeder anderen."
 	if old != "":
 		note = "%s bleibt im Lager und kann zurückgetauscht werden." % Survivor.WEAPONS[old].label
-	game.hud.announce("%s  ·  GEFUNDEN" % label, note, 4.0)
+	if not rare.is_empty():
+		game.sounds.play_sound("clear", -4.0, 1.3)
+		game.hud.announce("★  %s  ·  SELTEN" % label, "%s.  Bleibt so für diese Nacht – die Werkbank kommt obendrauf." % rare_words(id, rare), 6.0)
+	else:
+		game.hud.announce("%s  ·  GEFUNDEN" % label, note, 4.0)
 	_show(index)
 	_post_hints()
 
@@ -523,6 +671,12 @@ func _opened(index: int) -> void:
 	site.near = false
 	opened += 1
 	var label := str(Survivor.WEAPONS[str(site.holds)].label) if str(site.holds) != "" else ""
+	if not _rare_in(site).is_empty():
+		# (A find: one hears it, and the banner says so whatever the cache was.)
+		label = "★ SELTEN: " + label
+		game.sounds.play_sound("clear", -6.0, 1.5)
+		if not bool(site.sealed):
+			game.hud.announce("%s  ·  OFFEN" % LOOKS[site.look].word, "%s liegt bereit." % label, 3.5)
 	if bool(site.sealed):
 		game.sounds.play_at("shutter_open", site.at, 0.0, 1.5)
 		game.stats.objectives += 1
@@ -659,7 +813,7 @@ func summary() -> Array[String]:
 			best = index
 	if best >= 0 and out.is_empty():
 		var site := sites[best]
-		var what := str(LOOKS[site.look].word) if str(site.state) == "shut" else "%s LIEGT BEREIT" % Survivor.WEAPONS[str(site.holds)].label
+		var what := str(LOOKS[site.look].word) if str(site.state) == "shut" else "%s%s LIEGT BEREIT" % ["" if _rare_in(site).is_empty() else "★ ", Survivor.WEAPONS[str(site.holds)].label]
 		out.append("◇  NEBENZIEL  ·  WAFFENLAGER  ·  %s  ·  %s  ·  %d m" % [site.title, what, int(best_gap)])
 	return out
 
@@ -735,18 +889,22 @@ func _show(index: int, instant: bool = false) -> void:
 	elif not moving.has(index):
 		moving.append(index)
 	var live := _wanted(site)
-	var tone := (RED if sealed else MINT) if state == "shut" else (AMBER if state == "opening" else GREEN)
+	var shown := ""
+	if state == "open" or (bool(LOOKS[site.look].shows) and state in ["shut", "opening"]):
+		shown = str(site.holds)
+	# A rare weapon shows wherever it is seen: gold on it, and - once the cache is open -
+	# on the cache's lamp and in its words.
+	var rare := shown != "" and not _rare_in(site).is_empty()
+	var tone := (RED if sealed else MINT) if state == "shut" else (AMBER if state == "opening" else (GOLD if rare else GREEN))
 	(site.tag as Label3D).visible = live
 	(site.tag as Label3D).modulate = tone
+	(site.tag as Label3D).text = ("★ SELTEN  ·  " if rare else "") + str(LOOKS[site.look].word)
 	(site.glow as OmniLight3D).visible = live
 	(site.glow as OmniLight3D).light_color = tone
 	_tint(site, tone if live else Color(0.05, 0.055, 0.06))
 	if site.tool != null:
 		(site.tool as Node3D).visible = state == "opening"
-	var shown := ""
-	if state == "open" or (bool(LOOKS[site.look].shows) and state in ["shut", "opening"]):
-		shown = str(site.holds)
-	_stock(site, shown)
+	_stock(site, shown, rare)
 
 func _tint(site: Dictionary, color: Color) -> void:
 	(site.lamp as StandardMaterial3D).albedo_color = color
@@ -757,18 +915,55 @@ func _pose(site: Dictionary) -> void:
 		(door[0] as Node3D).basis = Basis(door[1], float(door[2]) * share)
 
 ## The weapon that is seen in a cache ("" for none).
-func _stock(site: Dictionary, id: String) -> void:
-	if str(site.shown) == id:
+func _stock(site: Dictionary, id: String, rare: bool = false) -> void:
+	var key := id + ("*" if rare else "")
+	if str(site.shown) == key:
 		return
-	site.shown = id
+	site.shown = key
 	var rack: Node3D = site.rack
 	for child in rack.get_children():
 		rack.remove_child(child)
 		child.queue_free()
-	(site.shine as OmniLight3D).visible = id != "" and Survivor.WEAPONS.has(id)
+	var shine: OmniLight3D = site.shine
+	shine.visible = id != "" and Survivor.WEAPONS.has(id)
+	shine.light_color = GOLD if rare else Color(1.0, 0.95, 0.86)
+	shine.light_energy = 2.6 if rare else 1.2
+	# (What glints about a rare one: a few sparks of gold that rise from it.)
+	var glint: CPUParticles3D = site.get("glint")
+	if rare and glint == null:
+		glint = CPUParticles3D.new()
+		glint.name = "Glint"
+		glint.amount = 9
+		glint.lifetime = 1.5
+		glint.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		glint.emission_sphere_radius = 0.32
+		glint.direction = Vector3.UP
+		glint.spread = 25.0
+		glint.gravity = Vector3(0, 0.2, 0)
+		glint.initial_velocity_min = 0.05
+		glint.initial_velocity_max = 0.18
+		var grain := BoxMesh.new()
+		grain.size = Vector3.ONE * 0.016
+		var gold := StandardMaterial3D.new()
+		gold.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		gold.albedo_color = Color(1.0, 0.86, 0.4)
+		grain.material = gold
+		glint.mesh = grain
+		glint.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glint.position = rack.position + {"up": Vector3(0, 0.6, 0.05), "flat": Vector3(0, 0.12, 0), "side": Vector3(0, 0.05, 0.05)}[str(site.hang)]
+		(site.node as Node3D).add_child(glint)
+		site["glint"] = glint
+	if glint != null:
+		glint.emitting = rare
+		glint.visible = rare
 	if id == "" or not Survivor.WEAPONS.has(id):
 		return
 	var model := WeaponView.display(id)
+	# (With the parts a rare one comes with.)
+	for part: String in (_rare_in(site).get("parts", []) if rare else []):
+		var piece := model.find_child("Mod_" + part, true, false) as Node3D
+		if piece != null:
+			piece.show()
 	var size: Vector3 = model.get_meta("size", Vector3(0.1, 0.2, 0.8))
 	var fit := minf(1.0, float(site.space) / maxf(0.1, size.z))
 	match str(site.hang):
@@ -1308,8 +1503,9 @@ static func _build(map: HiveMap, site: Dictionary) -> void:
 # ---------------------------------------------------------------- pictures
 
 ## For the pictures and the checks: every place holds something, as a night could deal
-## it at the most (`weapons`: place -> weapon instead of what the depth would give).
-func fill_all(weapons: Dictionary = {}) -> void:
+## it at the most (`weapons`: place -> weapon instead of what the depth would give;
+## `rares`: place -> what makes its weapon a rare one, see rare_of).
+func fill_all(weapons: Dictionary = {}, rares: Dictionary = {}) -> void:
 	var pool := found_only()
 	for index in range(sites.size()):
 		var site := sites[index]
@@ -1321,7 +1517,7 @@ func fill_all(weapons: Dictionary = {}) -> void:
 				pick = id
 		site.holds = pick if pick != "" else "p90"
 		site.state = "shut"
-		site.record = {}
+		site.record = {"rare": (rares[str(site.id)] as Dictionary).duplicate(true)} if rares.has(str(site.id)) else {}
 		site.left = _seconds(site)
 		site.known = false
 		site.near = false
@@ -1339,6 +1535,7 @@ func _index_of(id: String) -> int:
 ## comes for it (seal_...), the side goal on the HUD and on the map in the corner, a
 ## display and a terminal that tell of caches, and the lockers' short list.
 ## --caches-part=<text>[,<more>]: only the places whose name contains one of them.
+## --caches-rare: the pictures of a rare weapon instead (see _rare_pictures).
 func _pictures() -> void:
 	var folder: String = game._capture_dir()
 	var part := ""
@@ -1371,6 +1568,11 @@ func _pictures() -> void:
 	fill_all({"depot": "mg", "server": "minigun", "archiv": "svd", "labor_a": "launcher", "salon": "shotgun", "werkstatt": "mp7", "depot_kiste": "m14"})
 	set_process(false)
 	game.hud.play_ui.hide()
+	if "--caches-rare" in OS.get_cmdline_user_args():
+		await _rare_pictures(folder)
+		print("CACHES_CHECK COMPLETE rare")
+		get_tree().quit()
+		return
 	for index in range(sites.size()):
 		var site := sites[index]
 		print("CACHE %d %s look=%s room=%s at=%s stand=%s holds=%s" % [index, site.id, site.look, site.room, str((site.at as Vector3).snappedf(0.01)), str((site.stand as Vector3).snappedf(0.01)), site.holds])
@@ -1496,3 +1698,56 @@ func _pictures() -> void:
 			await game._capture(folder, "shop_%s.png" % tab)
 	print("CACHES_CHECK COMPLETE sites=%d" % sites.size())
 	get_tree().quit()
+
+## --caches-check --caches-rare: a rare weapon behind the bars of a cage, one found in a
+## locker with what [E] offers, the banner when it is taken, its name on the HUD, and
+## its numbers at the workbench and at a weapon locker.
+func _rare_pictures(folder: String) -> void:
+	fill_all({"scanner": "g36", "server": "minigun"}, {"scanner": {"damage": 0.12, "parts": ["reddot", "silencer"]}, "server": {"steady": 0.15}})
+	game.hud.play_ui.show()
+	set_process(true)
+	game.credits = 2000
+	game.wave = 6
+	var cage := sites[_index_of("server")]
+	var frame: Transform3D = cage.frame
+	await game._shot_at(folder, "rare_1_cage.png", frame * Vector3(0.8, 0, 2.9), cage.at, 1.0)
+	var index := _index_of("scanner")
+	var site := sites[index]
+	site.known = true
+	frame = site.frame
+	game._place_player(frame * Vector3(0.5, 0.05, 2.0), 0.0)
+	var line: Vector3 = (site.at as Vector3) - (game.player.global_position + Vector3(0, 1.6, 0))
+	game.player.rotation.y = atan2(-line.x, -line.z)
+	game.player.camera.rotation.x = -0.2
+	use()
+	await get_tree().create_timer(4.2).timeout
+	game.hud.banner_left = 0
+	await game._capture(folder, "rare_2_found.png")
+	use()
+	await get_tree().create_timer(0.9).timeout
+	await game._capture(folder, "rare_3_taken.png")
+	game.hud.banner_left = 0
+	game.player.rotation.y += 1.2
+	game.player.camera.rotation.x = 0.0
+	await get_tree().create_timer(0.7).timeout
+	await game._capture(folder, "rare_4_hud.png")
+	var middle: Vector3 = map.points.supply_checkpoint
+	for station in map.stations:
+		var pos: Vector3 = station.pos
+		if str(station.kind) == "upgrade" and pos.distance_to(middle) < 12.0:
+			game._place_player(pos + pos.direction_to(Vector3(middle.x, pos.y, middle.z)) + Vector3(0, 0.05, 0), 0.0)
+	await get_tree().create_timer(0.4).timeout
+	game.open_bench()
+	game.hud.counter.pick("bench", "g36")
+	await get_tree().create_timer(0.9).timeout
+	await game._capture(folder, "rare_5_bench.png")
+	game.resume_run()
+	for station in map.stations:
+		if str(station.kind) == "shop" and (station.pos as Vector3).distance_to(middle) < 12.0:
+			game._place_player((station.view.position as Vector3) - Vector3(0, 1.5, 0), 0.0)
+	await get_tree().create_timer(0.4).timeout
+	game.open_shop()
+	game.hud._open_tab("weapons")
+	game.hud.counter.pick("weapon", "g36")
+	await get_tree().create_timer(0.9).timeout
+	await game._capture(folder, "rare_6_locker.png")

@@ -2011,7 +2011,8 @@ func open_shop() -> void:
 
 ## What a weapon the survivor carries is worth when it is traded in for another one.
 func trade_in(id: String) -> int:
-	return price(int(round(int(Survivor.WEAPONS[id].price) * TRADE_IN)))
+	# (A rare one, found in a cache of the second mission, is worth a little more.)
+	return price(int(round(int(Survivor.WEAPONS[id].price) * TRADE_IN * (HiveCaches.RARE_WORTH if player.inventory.has(id) and player.inventory[id].has("rare") else 1.0))))
 
 ## The weapon that goes when `id` is bought: `instead_of` if that is one of those that can
 ## make room (Survivor.replaceable), otherwise the one Survivor.to_replace names; "" if

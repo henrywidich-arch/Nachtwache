@@ -7452,6 +7452,8 @@ func _hive_caches(game: Node3D) -> void:
 	hive.set_process(false)
 	var fresh: bool = hive.checkpoint == "landing" and caches.kept.is_empty() and player.inventory.size() == 1 and player.inventory.has("rifle") and caches.night != night_was
 	expect(found_after and kept_ok and places_ok and fresh, "A defeat taken up again at a checkpoint is the same night: the caches opened before that checkpoint stay open and the weapons found by then are in the survivor's hands again, what was found after it lies in its cache again - and a new night is dealt anew")
+	# --- rare weapons: how often, what they have of their own, and that they stay rare
+	await _hive_rare(game)
 	# --- none of them stands on the main way, and each can be walked to
 	for id in map.areas:
 		map.unlock(str(id), true)
@@ -7489,6 +7491,136 @@ func _hive_caches(game: Node3D) -> void:
 	expect(way.size() > 400 and nearest >= 5.0 and in_way_rooms <= 1 and cut_off == "", "No cache stands on the main way - the nearest (%s) is %.1f m beside it, at the dead end of a gallery; no other is in a room the way leads through - and every one can be walked to%s" % [nearest_id, nearest, "" if cut_off == "" else " (not: %s)" % cut_off])
 	hive.prowl.set_process(true)
 	hive.set_process(true)
+
+## Rare weapons in the caches of the second mission (HiveCaches.rare_of): how often there
+## is one, what makes it one, and that it stays one.
+func _hive_rare(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	var map := game.cabin as HiveMap
+	var caches: HiveCaches = hive.caches
+	var sites: Array[Dictionary] = map.caches
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	# --- how often: over six hundred nights dealt from fixed seeds
+	var drawn := {"plain": 0, "sealed": 0}
+	var rare_ones := {"plain": 0, "sealed": 0}
+	var nights_without := 0
+	var most := 0
+	var faults := 0
+	var with_parts := 0
+	var with_both := 0
+	var bare := 0
+	var lines_seen := {}
+	for night in range(1, 601):
+		var dealt: Dictionary = HiveCaches.deal(night, sites)
+		var rares: Dictionary = HiveCaches.deal_rare(night, sites, dealt)
+		nights_without += 1 if rares.is_empty() else 0
+		most = maxi(most, rares.size())
+		for index: int in dealt:
+			drawn["sealed" if bool(sites[index].sealed) else "plain"] += 1
+		for index: int in rares:
+			rare_ones["sealed" if bool(sites[index].sealed) else "plain"] += 1
+			var weapon := str(dealt[index])
+			var rare: Dictionary = rares[index]
+			var parts: Array = rare.get("parts", [])
+			var own := 0
+			for line: String in HiveCaches.RARE_LINES:
+				if rare.has(line):
+					own += 1
+					lines_seen[line] = true
+					faults += 0 if (HiveCaches.RARE_FITS.get(weapon, ["damage"]) as Array).has(line) and is_equal_approx(float(rare[line]), float(HiveCaches.RARE_LINES[line][0])) else 1
+			var slots := {}
+			for part: String in parts:
+				# Only a part that weapon takes, and one for a slot.
+				if not Survivor.ATTACHMENTS.has(weapon) or not Survivor.ATTACHMENTS[weapon].has(part) or slots.has(str(Survivor.ATTACHMENTS[weapon][part].slot)):
+					faults += 1
+				else:
+					slots[str(Survivor.ATTACHMENTS[weapon][part].slot)] = true
+			faults += 0 if own <= 1 and (own == 1 or not parts.is_empty()) and not HiveCaches.sells(weapon) else 1
+			with_parts += 1 if not parts.is_empty() else 0
+			with_both += 1 if not parts.is_empty() and own == 1 else 0
+			bare += 1 if not parts.is_empty() and own == 0 else 0
+	var plain_share := float(rare_ones.plain) / maxf(1.0, drawn.plain)
+	var sealed_share := float(rare_ones.sealed) / maxf(1.0, drawn.sealed)
+	var a_night := float(int(rare_ones.plain) + int(rare_ones.sealed)) / 600.0
+	var same_again: bool = HiveCaches.deal_rare(7, sites, HiveCaches.deal(7, sites)) == HiveCaches.deal_rare(7, sites, HiveCaches.deal(7, sites))
+	expect(absf(plain_share - HiveCaches.RARE_PLAIN) < 0.03 and absf(sealed_share - HiveCaches.RARE_SEALED) < 0.04 and a_night > 1.0 and a_night < 2.8 and nights_without > 18 and nights_without < 150 and most <= 7 and faults == 0 and with_parts > 20 and with_both > 5 and bare > 5 and lines_seen.size() == HiveCaches.RARE_LINES.size() and same_again, "A found weapon is a rare one now and then: in %.1f %% of the plain caches and %.1f %% of the sealed ones over six hundred nights (%.1f a night, none in %d of them), each with one thing of its own that fits the weapon, attachments only on a weapon that takes them and one for a slot (%d with parts, %d of them with both), and a night is dealt the same again" % [plain_share * 100.0, sealed_share * 100.0, a_night, nights_without, with_parts, with_both])
+	# --- a rare one arrives better than a plain one of its kind, and the workbench comes on top
+	for id in map.areas:
+		map.unlock(str(id), true)
+	_wipe_all(game)
+	player.unlock("g36")
+	var plain_harm: float = player.damage_of("g36")
+	var plain_shot: float = float(player.gun().damage)
+	var plain_kick: float = float(player.gun().kick)
+	var plain_worth: int = game.trade_in("g36")
+	player.equip_weapon("rifle", true)
+	player.drop_weapon("g36")
+	player.unlock("revolver")
+	var plain_reload: float = player.reload_of("revolver")
+	player.equip_weapon("rifle", true)
+	player.drop_weapon("revolver")
+	caches.fill_all({"scanner": "g36", "werkstatt": "revolver", "depot_kiste": "m14", "buero": "mg"}, {"scanner": {"damage": 0.12, "parts": ["reddot"]}, "werkstatt": {"reload": 0.15}, "depot_kiste": {"mags": 0.2, "steady": 0.15}})
+	var locker: Dictionary = sites[caches._index_of("scanner")]
+	face(game, (locker.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	game.interact_blocked_until = 0
+	game.interact()
+	for k in range(8):
+		caches._process(0.5)
+	var offer := hive.prompt()
+	var glints: bool = (locker.tag as Label3D).text.contains("SELTEN") and (locker.shine as OmniLight3D).light_color.is_equal_approx(HiveCaches.GOLD) and is_instance_valid(locker.get("glint")) and (locker.glint as CPUParticles3D).emitting
+	game.interact()
+	var record: Dictionary = player.inventory.get("g36", {})
+	var better: bool = record.has("rare") and is_equal_approx(player.damage_of("g36"), plain_harm * 1.12) and is_equal_approx(float(player.gun().damage), plain_shot * 1.12) and is_equal_approx(float(player.gun().kick), plain_kick) and player.fitted("sight") == "reddot" and player.owns_part("g36", "reddot") and player.fitted("muzzle") == "" and float(player.gun().get("zoom", 0.0)) == 40.0 and player.weapon_label().begins_with("★") and player.ammo == player.magazine_size() and game.trade_in("g36") > plain_worth
+	player.raise("g36", "damage")
+	var on_top: bool = is_equal_approx(player.damage_of("g36"), plain_harm * 1.12 + float(Survivor.UPGRADES.damage.step)) and is_equal_approx(float(player.gun().damage), plain_shot * 1.12)
+	# (What the lockers say of it, and that what they sell is never a rare one.)
+	face(game, beside(game, "shop", map.points.supply_station, 1), 0.0)
+	game.credits = 5000
+	game.open_shop()
+	hud._open_tab("weapons")
+	hud.counter.pick("weapon", "g36")
+	var said := ""
+	for node in hud.counter.detail.find_children("*", "Label", true, false):
+		said += (node as Label).text + " | "
+	var shop_numbers: Dictionary = HiveCaches.rare_figures(ShopScreen.figures("g36"), record.get("rare", {}))
+	var bought: bool = game.buy_weapon("pistol") and not player.inventory.pistol.has("rare") and game.sell_weapon("pistol")
+	game.resume_run()
+	var shed: Dictionary = sites[caches._index_of("werkstatt")]
+	face(game, (shed.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	game.interact()
+	for k in range(8):
+		caches._process(0.5)
+	game.interact()
+	var no_parts: bool = player.inventory.has("revolver") and player.inventory.revolver.has("rare") and not player.inventory.revolver.has("fitted") and is_equal_approx(player.reload_of("revolver"), plain_reload - float(Survivor.WEAPONS.revolver.reload_time) * 0.15) and is_equal_approx(player.damage_of("revolver"), float(Survivor.WEAPONS.revolver.damage))
+	var shown: bool = said.contains("SELTEN") and said.contains("12 % Schaden") and said.contains("Rotpunktvisier") and float(shop_numbers.harm) > float(ShopScreen.figures("g36").harm) and hud.counter.line_effect("g36", "damage").contains(ShopScreen._plain(plain_harm * 1.12 + float(Survivor.UPGRADES.damage.step)))
+	expect(offer.contains("SELTEN") and offer.contains("12 % Schaden") and offer.contains("Rotpunktvisier") and glints and better and on_top and no_parts and bought and shown, "A rare weapon is seen as one in its cache and in what [E] offers, and arrives better than a plain one of its kind - a G36 that hits 12 % harder with a red dot fitted, a Magnum that reloads 15 % quicker and has no parts, as it takes none -, the workbench's levels come on top, the lockers show what it has and pay more for it, and what they sell is never rare")
+	# --- it stays rare: laid down in a cache and taken back, and after a checkpoint
+	var crate: Dictionary = sites[caches._index_of("depot_kiste")]
+	face(game, (crate.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	game.interact()
+	for k in range(8):
+		caches._process(0.5)
+	game.interact()
+	var m14_mag: int = player.magazine_of("m14") if player.inventory.has("m14") else 0
+	var laid_down: bool = player.inventory.has("m14") and not player.inventory.has("g36") and str(crate.holds) == "g36" and (crate.record as Dictionary).has("rare") and m14_mag == 24 and player.ammo == 24 and hive.prompt().contains("SELTEN")
+	game.interact()
+	var taken_back: bool = player.inventory.has("g36") and player.inventory.g36.has("rare") and is_equal_approx(player.damage_of("g36"), plain_harm * 1.12 + float(Survivor.UPGRADES.damage.step)) and player.fitted("sight") == "reddot" and str(crate.holds) == "m14" and float((crate.record as Dictionary).get("rare", {}).get("mags", 0.0)) == 0.2
+	player.inventory.g36.reserve = 0
+	player.reserve = player.max_reserve()
+	var refilled: bool = player.inventory.g36.has("rare") and player.reserve == player.reserve_cap("g36")
+	hive._checkpoint("descent", 0)
+	game.retry_checkpoint()
+	await frames(3)
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	_wipe_all(game)
+	sites = map.caches
+	crate = sites[caches._index_of("depot_kiste")]
+	var after: bool = hive.checkpoint == "descent" and player.inventory.has("g36") and player.inventory.g36.has("rare") and is_equal_approx(player.damage_of("g36"), plain_harm * 1.12) and player.owns_part("g36", "reddot") and str((player.inventory.g36.get("fitted", {}) as Dictionary).get("sight", "")) == "reddot" and player.inventory.has("revolver") and is_equal_approx(player.reload_of("revolver"), plain_reload - float(Survivor.WEAPONS.revolver.reload_time) * 0.15) and str(crate.holds) == "m14" and (crate.record as Dictionary).has("rare")
+	expect(laid_down and taken_back and refilled and after, "A rare weapon stays rare for the night: laid down in a cache for another and taken back it is what it was, with its level and its sight; its ammunition is bought like any other's; and after a defeat taken up again at a checkpoint the ones found before it are rare again, with the parts they came with, and the one left in a cache lies there as it was")
 
 ## The bot of --bot-check on the map of the second mission (--bot-mode=villa): it follows
 ## the marker along the map's paths, shoots what it sees, uses what the mission wants

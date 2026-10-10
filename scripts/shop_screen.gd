@@ -483,6 +483,8 @@ func _detail_weapon(id: String) -> void:
 	var kind := Survivor.kind_of(id)
 	var note := str(SurvivalHUD.SHOP_NOTES.get(id, ""))
 	_words(note)
+	if owned and player.inventory[id].has("rare"):
+		_words(HiveCaches.rare_title(id, player.inventory[id].rare), 14, HiveCaches.GOLD)
 	# --- the numbers, beside those of the weapon it would take the place of
 	var goes: String = "" if owned else game.outgoing(id, swap)
 	var versus := goes
@@ -490,12 +492,15 @@ func _detail_weapon(id: String) -> void:
 		var same: Array = player.carried(kind)
 		versus = "" if same.is_empty() else str(same[0])
 	var mine := figures(id)
+	# (A rare weapon he carries is shown with what it has of its own: HiveCaches.)
+	if owned and player.inventory[id].has("rare"):
+		mine = HiveCaches.rare_figures(mine, player.inventory[id].rare)
 	var theirs: Dictionary = figures(versus) if versus != "" else {}
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 14)
 	grid.add_theme_constant_override("v_separation", 1)
-	var harm_text := "%d × %d" % [int(data.pellets), int(data.damage)] if data.has("pellets") else ("%d / s" % int(round(mine.harm)) if data.has("flame") else str(int(round(mine.harm))))
+	var harm_text := "%d × %d" % [int(data.pellets), int(round(mine.harm / int(data.pellets)))] if data.has("pellets") else ("%d / s" % int(round(mine.harm)) if data.has("flame") else str(int(round(mine.harm))))
 	var rate_text := "Einzelschuss" if data.get("semi", false) else ("Dauerstrahl" if data.has("flame") else "%d / min" % (int(round(mine.rate / 10.0)) * 10))
 	_figure(grid, "SCHADEN", sqrt(mine.harm / 520.0), harm_text, "" if theirs.is_empty() else _signed(mine.harm - theirs.harm), 0.0 if theirs.is_empty() else mine.harm - theirs.harm)
 	_figure(grid, "FEUERRATE", mine.rate / 1200.0, rate_text, "" if theirs.is_empty() else _signed(mine.rate - theirs.rate), 0.0 if theirs.is_empty() else mine.rate - theirs.rate)
@@ -633,20 +638,20 @@ func line_effect(id: String, line: String) -> String:
 			var now: float = player.damage_of(id)
 			if data.has("grenade"):
 				return "Explosion  +%d %%" % int(round(Survivor.UPGRADE_SHARE * have * 100.0)) + ("" if full else "   →   +%d %%" % int(round(Survivor.UPGRADE_SHARE * (have + 1) * 100.0)))
-			var next: float = float(data.damage) * (1.0 + Survivor.UPGRADE_SHARE * (have + 1)) if data.has("flame") else float(data.damage) + step * (have + 1) / int(data.get("pellets", 1))
+			var next: float = float(data.damage) * (1.0 + Survivor.UPGRADE_SHARE * (have + 1)) if data.has("flame") else float(data.damage) * (1.0 + player.rare(id, "damage")) + step * (have + 1) / int(data.get("pellets", 1))
 			return ("Schaden  %s" % _plain(now)) + ("" if full else "   →   %s" % _plain(next))
 		"mags":
-			return "Magazin  %d" % player.magazine_of(id) + ("" if full else "   →   %d" % (int(data.magazine) * 3 / 2))
+			return "Magazin  %d" % player.magazine_of(id) + ("" if full else "   →   %d" % (player.magazine_of(id) * 3 / 2))
 		"pouch":
-			var base: float = int(data.reserve_max) * (1.0 + float(game.skills.deeper(id)))
+			var base: float = int(data.reserve_max) * (1.0 + float(game.skills.deeper(id)) + player.rare(id, "reserve"))
 			return "Reserve  %d" % player.reserve_cap(id) + ("" if full else "   →   %d" % int(round(base + int(data.reserve_max) * step * (have + 1))))
 		"drill":
-			var quick: float = float(data.reload_time) * (1.0 - minf(0.6, float(game.skills.quicker(id)) + step * (have + 1)))
+			var quick: float = float(data.reload_time) * (1.0 - minf(0.6, float(game.skills.quicker(id)) + step * (have + 1) + player.rare(id, "reload")))
 			if data.has("drum"):
 				return "Pro Granate  %s s" % _plain(player.reload_of(id)) + ("" if full else "   →   %s s" % _plain(quick))
 			return "Nachladen  %s s" % _plain(player.reload_of(id)) + ("" if full else "   →   %s s" % _plain(quick))
 		"brace":
-			return "Rückstoß  %d %%" % int(round((1.0 - step * have) * 100.0)) + ("" if full else "   →   %d %%" % int(round((1.0 - step * (have + 1)) * 100.0)))
+			return "Rückstoß  %d %%" % int(round((1.0 - step * have) * (1.0 - player.rare(id, "steady")) * 100.0)) + ("" if full else "   →   %d %%" % int(round((1.0 - step * (have + 1)) * (1.0 - player.rare(id, "steady")) * 100.0)))
 	return ""
 
 static func _plain(amount: float) -> String:
@@ -658,6 +663,9 @@ func _detail_bench(id: String) -> void:
 	stage.show()
 	stage.show_weapon(id, _parts_on(id))
 	_headline(str(data.label), "IN DER HAND" if id == player.current_weapon else "", SurvivalHUD.MINT)
+	# (A rare weapon, found in a cache of the second mission: what it has of its own.)
+	if player.inventory[id].has("rare"):
+		_words(HiveCaches.rare_title(id, player.inventory[id].rare), 14, HiveCaches.GOLD)
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 16)
