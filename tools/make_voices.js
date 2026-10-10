@@ -57,7 +57,7 @@ const TRIM = 'silenceremove=start_periods=1:start_threshold=-46dB:start_silence=
 // The voices of 2026-10-10 are denser than the ones before them: at the same peak a line
 // is that much louder. This many dB bring each back to how loud its lines were in the game
 // (measured: the median over the lines both voices have recorded).
-const LEVEL = { viper: -4.0 };
+const LEVEL = { viper: -4.0, scorpion: -3.0, raven: -3.0 };
 // A pause inside a line may last this long; a longer one is cut down to it. The voice
 // generator now and then leaves seconds of dead air in the middle of a sentence.
 const PAUSE = 0.9;
