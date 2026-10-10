@@ -4587,6 +4587,69 @@ func _hall_voices() -> void:
 	for at: Vector3 in [Vector3(-7.2, UNDER + 3.2, -595.0), Vector3(24.0, UNDER + 3.2, -612.0)]:
 		sound.call("now_and_then", "knock", at, -6.0, 9.0, 26.0, 24.0, 0.07)
 
+## The ways in of the tower hall. The hold is in its middle, with towers all around: they
+## come out of the foot of the outer walls on three sides, down from the galleries and
+## from the bridge, up out of the cable trenches beside the nave - and out of the tower
+## that is torn open already. (Called by _lay_entries; the kinds are HiveEntries'.)
+func _hall_ways() -> void:
+	# Six holes at the foot of the outer walls, between the pilasters.
+	_way_hole("containment", WEST, -600.0)
+	_way_hole("containment", WEST, -608.0, "vent")
+	_way_hole("containment", EAST, -599.25, "vent")
+	_way_hole("containment", EAST, -614.0)
+	_way_hole("containment", NORTH, -18.0)
+	_way_hole("containment", NORTH, 20.0, "vent")
+	# Over the railing of a gallery, and off the bridge before the lift.
+	var deck_y := UNDER + 7.6
+	_hall_way_drop(Vector3(-27.9, deck_y, -614.0), Vector3(1, 0, 0))
+	_hall_way_drop(Vector3(27.9, deck_y, -588.6), Vector3(-1, 0, 0))
+	_hall_way_drop(Vector3(11.5, deck_y, -624.85), Vector3(0, 0, 1))
+	_hall_way_drop(Vector3(-12.0, deck_y, -624.85), Vector3(0, 0, 1))
+	# Up out of the cable trenches at two corners of the clearing.
+	_hall_way_hatch(-4.55, -609.0, 1)
+	_hall_way_hatch(4.55, -598.3, 3)
+	# Out of the torn tower: over the lip of its foot, as the first one did.
+	_begin_zone("hall")
+	_chunk("Ways", false)
+	var wall := Transform3D(Basis(Vector3.UP, -PI / 2), Vector3(-13.57, UNDER, HALL_MIDDLE.z - 0.3))
+	var sheet := _way_flap(Transform3D(wall.basis * Basis(Vector3.UP, PI), wall * Vector3(0, 1.4, -0.05)), 0.9, 0.8, Color("1c2023"), 0, random.randf_range(70.0, 84.0))
+	_way("duct", "containment", wall * Vector3(0, 1.5, 0), -wall.basis.z, wall * Vector3(0, 0, -2.0), {"node": sheet, "deep": 0.9})
+	_end_zone()
+
+## A way down from a gallery of the hall or from its bridge: over the rim of its floor at
+## `edge`, `into` the hall, down on to the floor below. A length of grating hangs loose
+## under the rim and rattles before somebody comes.
+func _hall_way_drop(edge: Vector3, into: Vector3) -> void:
+	_begin_zone("hall")
+	_chunk("Ways", false)
+	var at := edge + into * 0.35 + Vector3(0, 1.15, 0)
+	var land := Vector3(at.x + into.x * 0.4, UNDER, at.z + into.z * 0.4)
+	var grille := _way_flap(Transform3D(Basis(Vector3.UP, atan2(into.x, into.z)), edge + into * 0.02 + Vector3(0, -0.14, 0)), 1.3, 0.9, Color("2a2d2f"), 5, random.randf_range(62.0, 80.0))
+	_blot(land + Vector3(random.randf_range(-0.3, 0.3), 0, random.randf_range(-0.3, 0.3)), random.randf_range(0.4, 0.6), random.randf_range(0.26, 0.4))
+	_way("drop", "containment", at, Vector3.ZERO, land, {"node": grille, "fixed": true})
+	_end_zone()
+
+## A way up out of a cable trench of the hall: a length of its grating thrown open over
+## the dark, a steel rim around it that nobody walks over. `turn` (0..3) is the side they
+## climb out to (1 east, 3 west).
+func _hall_way_hatch(x: float, z: float, turn: int) -> void:
+	_begin_zone("hall")
+	_chunk("Ways", false)
+	var facing := Basis(Vector3.UP, turn * PI / 2)
+	var frame := Transform3D(facing, Vector3(x, UNDER, z))
+	var wide := 1.0
+	var rim := 0.14
+	var half := wide * 0.5
+	for k in range(4):
+		var side := Basis(Vector3.UP, k * PI / 2)
+		batch.box(mats["plate"], frame * (side * Vector3(0, rim * 0.5, half - 0.04)), Vector3(wide if k % 2 == 0 else wide - 0.16, rim, 0.08), Color("23282b"), facing * side)
+	_glow_box(frame * Vector3(0, rim - 0.05, 0), Vector3(wide - 0.16, 0.004, wide - 0.16), Color.BLACK, 0.0, facing)
+	_solid(Vector3(x, UNDER + 0.2, z), Vector3(wide, 0.4, wide), true, turn * PI / 2)
+	var lid := _way_flap(Transform3D(facing, frame * Vector3(0, rim + 0.02, -(half - 0.02))), wide, wide, Color("3a3f42"), 6, -random.randf_range(100.0, 112.0))
+	_smear(frame * Vector3(0, 0, half + 0.1), frame * Vector3(random.randf_range(-0.4, 0.4), 0, half + 1.7), 0.3)
+	_way("cellar", "containment", frame * Vector3(0, rim, half), facing.z, frame * Vector3(0, 0, half + 0.8), {"node": lid, "deep": 1.5})
+	_end_zone()
+
 # ---------------------------------------------------------------- terminals in the walls
 
 ## A terminal let into a wall of a room, `a` along that wall: a niche with a steel collar,
@@ -5294,14 +5357,7 @@ func _lay_entries() -> void:
 	_way_drop("cross", -7.9, -575.5, 0)
 	_way_drop("cross", 7.9, -575.5, 0)
 	_way_drop("cross", 27.0, -575.5, 0)
-	# (The hall is being rebuilt. Its ways in are kept simple until it stands: six holes at
-	# the foot of its outer walls - two west, two east, two north -, each one line to move.)
-	_way_hole("containment", WEST, -600.0)
-	_way_hole("containment", WEST, -612.0, "vent")
-	_way_hole("containment", EAST, -594.0, "vent")
-	_way_hole("containment", EAST, -614.0)
-	_way_hole("containment", NORTH, -18.0)
-	_way_hole("containment", NORTH, 20.0, "vent")
+	_hall_ways()
 	_shared_dice()
 
 # ---------------------------------------------------------------- after the build
@@ -5429,7 +5485,7 @@ func tour() -> Array:
 		["72m_hall_back", Vector3(0, UNDER, -627.0), Vector3(0, UNDER + 4.0, -580.0)],
 		["72n_hall_watch", Vector3(8.6, UNDER, -603.5), Vector3(13.0, UNDER + 2.4, -603.5)],
 		["72o_hall_across", Vector3(20.0, UNDER, -599.25), Vector3(-20.0, UNDER + 3.0, -599.25)],
-		["72p_hall_air", Vector3(-9.0, UNDER + 9.0, -579.5), Vector3(5.0, UNDER + 1.0, -615.0), true],
+		["72p_hall_air", Vector3(0.0, UNDER + 9.6, -578.2), Vector3(0.0, UNDER + 0.5, -612.0), true],
 		["75_lab_tables", Vector3(-9.0, UNDER, -514.5), Vector3(-22.0, UNDER + 1.0, -508.5)],
 		["76_work_place", Vector3(-21.0, UNDER, -511.5), Vector3(-27.4, UNDER + 1.1, -514.6)],
 		["77_microscope", Vector3(-20.7, UNDER, -513.5), Vector3(-21.6, UNDER + 1.2, -515.0)],
