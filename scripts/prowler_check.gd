@@ -201,6 +201,57 @@ func run_hive() -> void:
 	print("PROWLER_CAPTURE_COMPLETE")
 	get_tree().quit()
 
+## What it can do since it learnt more (`--prowler-check --prowler-attacks`): the clips of
+## the pin, the charge and the sweep at a telling moment, the pin seen by who lies under it,
+## and half a minute against a survivor who stands still: which of its ways it used.
+func run_attacks() -> void:
+	var folder: String = game._capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	game.start_run()
+	game.set_process(false)
+	game.hud.banner_left = 0
+	game.hud.radio_left = 0
+	game._place_player(Vector3(-1.5, 0.05, 13.0), 180)
+	var beast := game.spawn_enemy("prowler") as Prowler
+	beast.position = Vector3(-0.5, 0.05, 17.5)
+	beast.set_physics_process(false)
+	beast.model.rotation.y = 0.0
+	var body := beast.model as ProwlerVisual
+	var at := beast.position
+	for shot: Array in [["pin", "pin", 0.25], ["wind", "wind", 0.3], ["charge", "charge", 0.2], ["sweep_a", "sweep", 0.34], ["sweep_b", "sweep", 0.52]]:
+		body.pinning = str(shot[1]) == "pin"
+		body.charging = str(shot[1]) == "charge"
+		_pose(body, str(shot[1]), float(shot[2]), 9.0 if str(shot[1]) == "charge" else 0.0)
+		await game._capture_from(folder, "attacks_%s.png" % shot[0], at + Vector3(2.8, 1.5, -3.4), at + Vector3(0, 0.6, 0), 45)
+	beast._retire()
+	beast.queue_free()
+	var hunter := game.spawn_enemy("prowler") as Prowler
+	hunter.position = Vector3(-1.5, 0.05, 24.0)
+	hunter.pin_cooldown = 0.0
+	var used := {}
+	var pinned := 0.0
+	var shot_pin := false
+	var hurt := 0.0
+	var clock := 0.0
+	while clock < 30.0 and is_instance_valid(hunter):
+		await get_tree().physics_frame
+		var step := get_physics_process_delta_time()
+		clock += step
+		hurt += 100.0 - game.player.health
+		game.player.health = 100.0
+		game.player.down = false
+		used[hunter.mode] = true
+		if hunter.mode == "pin":
+			pinned += step
+			if not shot_pin and pinned > 0.6:
+				shot_pin = true
+				await game._capture(folder, "attacks_pinned_view.png")
+			if pinned > 2.0:
+				hunter.receive_hit(Prowler.PIN_BREAK * hunter.level + 1.0, Vector3.BACK, false)
+	print("PROWLER_ATTACKS used=%s pinned=%.1fs hurt=%d landed=%d" % [str(used.keys()), pinned, int(hurt), hunter.landed if is_instance_valid(hunter) else -1])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
 ## How it turns (`--prowler-check --prowler-moves`): the clips of turning, braking and
 ## shaking at a telling moment, then a quarter of a minute of it at work with its prey
 ## behind it at the start, and in numbers how often it came round over its haunches,
@@ -313,8 +364,12 @@ func _pose(body: ProwlerVisual, clip: String, seconds: float, speed: float) -> v
 		"idle", "stalk", "trot", "run":
 			body.animate(0.0, speed)
 			body.player.seek(0.0, true)
-		"turn":
-			pass
+		"turn", "pin", "charge":
+			body.animate(0.0, speed)
+		"wind":
+			body.wind()
+		"sweep":
+			body.attack(0.9, 0.5, "sweep")
 		"pivot":
 			body.pivot(true)
 		"brake":

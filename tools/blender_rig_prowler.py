@@ -774,6 +774,91 @@ def clip_shake(P, t):
     P.tail[1][1] = 22 * osc(0.09)
 
 
+PIN_T = 0.9
+
+
+def clip_pin(P, u):
+    """Over its prey: the forepaws hold it down, the head tears at it (two bites to the loop)."""
+    bite = wave(2 * u)
+    P.pitch = -9 + 2 * bite
+    P.d = Vector((0.0, -0.10, -0.10 + 0.02 * bite))
+    P.spine[2][0] = -6
+    for name in ("FL", "FR"):
+        P.leg[name].off = Vector((-0.25, -0.05, 0.0))
+        P.leg[name].curl = 18 + 8 * bite
+    for name in ("HL", "HR"):
+        P.leg[name].heel = -8
+    P.neck[0][0] = -16 - 6 * bite
+    P.neck[1][0] = -12 - 5 * bite
+    P.head[0] = -10 - 8 * bite
+    P.head[2] = 12 * wave(4 * u)
+    P.head[1] = 8 * wave(4 * u, 0.2)
+    P.jaw = 22 + 18 * bite
+    P.tail[0][0] = 18
+    P.tail[1][1] = 16 * wave(u)
+
+
+WIND_T = 0.7
+
+
+def clip_charge_wind(P, t):
+    """Before the charge: back on its haunches, the head low, and a forepaw rakes the ground twice."""
+    k = key(t, [(0, 0), (0.18, 1), (0.6, 1), (0.7, 0.6)])
+    P.d = Vector((0.0, 0.16 * k, -0.14 * k))
+    P.pitch = -6 * k
+    for i in range(3):
+        P.spine[i][0] = -3 * k
+    P.neck[0][0] = -14 * k
+    P.head[0] = -10 * k
+    P.jaw = 8 + 22 * k
+    L = P.leg["FR"]
+    for a, b in ((0.14, 0.36), (0.40, 0.62)):
+        if a < t < b:
+            w = (t - a) / (b - a)
+            L.off = Vector((0.0, -0.22 + 0.46 * w, 0.14 * math.sin(math.pi * w) * (1.0 - w)))
+            L.curl = 20 * w
+    P.tail[0][0] = 26 * k
+    P.tail[1][0] = 16 * k
+
+
+def clip_charge(P, u):
+    """The gallop of the charge: the same bounds, the head down between the shoulders, the jaws open."""
+    clip_run(P, u)
+    P.neck[0][0] -= 16
+    P.neck[1][0] -= 8
+    P.head[0] -= 10
+    P.jaw = 26
+
+
+SWEEP_T, SWEEP_AT = 0.9, 0.5
+
+
+def clip_sweep(P, t):
+    """Reared up with both claws wide to its right - then across everything in front of it."""
+    up = key(t, [(0, 0), (0.22, 1), (0.40, 1), (0.54, 0.25), (0.9, 0)])
+    hit = key(t, [(0.40, 0), (0.52, 1), (0.64, 0.8), (0.9, 0)])
+    yaw = key(t, [(0, 0), (0.28, -22), (0.42, -22), (0.56, 28), (0.9, 0)])
+    P.pitch = 18 * up - 5 * hit
+    P.yaw = 0.45 * yaw
+    P.roll = -0.2 * yaw
+    P.d = Vector((0.0, 0.18 * up - 0.16 * hit, 0.04 * up - 0.10 * hit))
+    P.spine[1][1] = 0.25 * yaw
+    P.spine[2][1] = 0.4 * yaw
+    for name in ("FL", "FR"):
+        L = P.leg[name]
+        L.plant = 1.0 - key(t, [(0.03, 0), (0.10, 1), (0.58, 1), (0.70, 0)])
+        L.off = Vector((0.26 * up, 0.05 * up - 0.22 * hit, 0.50 * up + 0.10 * hit))
+        L.heel = -30 * up + 26 * hit
+        L.curl = -24 * up + 12 * hit
+    for name in ("HL", "HR"):
+        P.leg[name].heel = -8 * up
+    P.neck[0][1] = 0.3 * yaw
+    P.head[0] = 6 * up - 4 * hit
+    P.jaw = 8 + 26 * key(t, [(0.08, 0), (0.26, 1), (0.56, 1), (0.74, 0)])
+    P.tail[0][1] = -0.8 * yaw
+    P.tail[1][1] = -1.0 * yaw
+
+
 DEATH_T = 2.4
 
 
@@ -830,6 +915,10 @@ CLIPS = [
     ("pivot_r", lambda P, t: clip_pivot(P, t, -1.0), PIVOT_T, False),
     ("brake", clip_brake, BRAKE_T, False),
     ("shake", clip_shake, SHAKE_T, False),
+    ("pin", clip_pin, PIN_T, True),
+    ("charge_wind", clip_charge_wind, WIND_T, False),
+    ("charge", clip_charge, RUN_T, True),
+    ("sweep", clip_sweep, SWEEP_T, False),
 ]
 
 
