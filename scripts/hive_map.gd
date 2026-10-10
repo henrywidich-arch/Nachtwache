@@ -1765,6 +1765,12 @@ func _lay_station() -> void:
 			var z := float(face[0]) + float(face[1]) * 0.44
 			_part("plate", Vector3(x, UNDER + 3.6, z), Vector3(0.3, 0.16, 0.08), Color("1b1c1b"))
 			_glow_box(Vector3(x, UNDER + 3.6, z + float(face[1]) * 0.05), Vector3(0.24, 0.1, 0.03), Color("ffbf70"), 4.5)
+	# Ribs on the long walls under the beams, where nothing hangs or opens.
+	for x in [-32.0, -24.0, -8.0, 16.0, 24.0]:
+		_part("formwork", Vector3(x, UNDER + 3.46, -35.33), Vector3(0.5, 6.92, 0.26), Color(0.7, 0.7, 0.68))
+		_solid(Vector3(x, UNDER + 3.46, -35.33), Vector3(0.5, 6.92, 0.26), false)
+	for x in [-16.0, -8.0, 0.0, 8.0, 16.0]:
+		_part("formwork", Vector3(x, UNDER + 2.91, -61.67), Vector3(0.5, 8.02, 0.26), Color(0.7, 0.7, 0.68))
 	var platform: Dictionary = room_of["platform"]
 	var sodium := Color("ffbf70")
 	# --- light: lamps on a rail down the middle of the hall, each with its pool and dark
@@ -1833,6 +1839,8 @@ func _lay_station() -> void:
 		_bench(Vector3(x, UNDER, -40.74), 0.0, 2.4)
 		_bench(Vector3(x, UNDER, -41.26), PI, 2.4)
 	_belt_posts(Vector3(-1.9, UNDER, -51.0), Vector3(-1.9, UNDER, -54.0))
+	for x in [-9.0, 9.0]:
+		_floor_text("HINTER  DER  LINIE  BLEIBEN", Vector3(x, UNDER, -53.55), 34, Color("c9a227"))
 	_belt_posts(Vector3(1.9, UNDER, -51.0), Vector3(1.9, UNDER, -54.0))
 	# --- freight: beside the flat car, along the east wall, in the corner by the signal box.
 	_pallet(Vector3(-16.6, UNDER, -53.0), 0.04, 0, 1.3)
@@ -3060,6 +3068,16 @@ func _arrive_terminal() -> void:
 	_plant(Vector3(-39.0, UNDER, -334.6), 1.4)
 	_luggage(Vector3(-36.9, UNDER, -330.2), 4, 0.9)
 	_stencil("terminal", WEST, -331.0, 3.3, "WARTEBEREICH", 100, Color(0.16, 0.18, 0.2))
+	_light_box("terminal", WEST, -333.4, 2.1, 1.7, 1.0, [["HELIX", 80], ["Forschung für morgen.", 22]], Color("d6e8ff"), 0.6, 0.0)
+	_light_box("terminal", WEST, -328.6, 2.1, 1.7, 1.0, [["SEKTOR B", 56], ["Ihr Arbeitsplatz. Ihr Zuhause.", 18]], Color("ffe2b0"), 0.6, 0.6)
+	# --- the gallery: where it leads, what was left on it, and who was dragged along it.
+	_wall_sign("LEITSTAND", Vector3(-14.0, DECK + 2.3, -344.74), 90, Color(0.16, 0.18, 0.2))
+	_bench(Vector3(-8.0, DECK, -344.42), 0.0, 2.4)
+	_crate(Vector3(-37.6, DECK, -343.6), Vector3(1.0, 0.8, 0.9), Color("4d5a46"), 0.2)
+	_crate(Vector3(-36.4, DECK, -344.1), Vector3(0.8, 0.6, 0.8), Color("5a4a36"), -0.1)
+	_smear(Vector3(6.0, DECK, -343.4), Vector3(20.6, DECK, -343.0), 0.3)
+	_blot(Vector3(21.2, DECK, -343.0), 0.8, 0.5)
+	_office_chair(Vector3(12.4, DECK, -344.0), 1.3, true)
 	# --- freight: what came off the flat car, and the store by the east end of the line.
 	_pallet(Vector3(-16.4, UNDER, -321.4), 0.03, 1, 1.2)
 	_pallet(Vector3(-14.7, UNDER, -321.35), -0.04, 0, 1.5)
