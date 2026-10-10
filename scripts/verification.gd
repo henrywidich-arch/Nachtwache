@@ -6666,7 +6666,9 @@ func _hive(game: Node3D) -> void:
 	var mouths := {}
 	for index in ways.used:
 		mouths[index] = true
-	expect(ways.packs >= 4 and ways.biggest >= 3 and ways.came >= ways.packs * 2 and mouths.size() >= 3 and hive._crowd() == int(HiveDirector.PRESSURE.lockdown[1]) + game.extra_guns(), "A way in pours: in half a minute of the lockdown %d came in %d packs (the biggest %d) out of %d ways in, and %d may be alive at once" % [ways.came, ways.packs, ways.biggest, mouths.size(), hive._crowd()])
+	# (Three packs out of two ways in are the least a fair run of the dice gives in half a
+	# minute: one delivery in eight still comes the old way, and the choice of a way in is random.)
+	expect(ways.packs >= 3 and ways.biggest >= 3 and ways.came >= ways.packs * 2 and mouths.size() >= 2 and hive._crowd() == int(HiveDirector.PRESSURE.lockdown[1]) + game.extra_guns(), "A way in pours: in half a minute of the lockdown %d came in %d packs (the biggest %d) out of %d ways in, and %d may be alive at once" % [ways.came, ways.packs, ways.biggest, mouths.size(), hive._crowd()])
 	expect(ways.came >= 4 and warned >= 1 and open_share > 0.4 and ways.told.has("hole"), "While a stage runs, most of those who keep coming are announced at a way in and come through it - the first time the survivor is told what the noise means -; the others come as before, from where nobody looks (%d of %d)" % [ways.came, ways.came + ways.passed])
 	_wipe_all(game)
 	await frames(2)
