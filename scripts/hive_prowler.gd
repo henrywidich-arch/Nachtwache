@@ -67,6 +67,8 @@ const END_AFTER := 5.0
 ## While the last fight is on, the horde comes slower: this share of every second is
 ## added to the director's wait for its next one.
 const END_HUSH := 0.6
+## How often it may spit in the last fight (on a visit: Prowler.SPIT_MOST).
+const END_SPITS := 4
 ## Nearer than this to the survivor it has to have come for a visit to count as one.
 const REACHED := 10.0
 
@@ -270,6 +272,7 @@ func _arrive(for_good: bool) -> void:
 		beast.max_health = end_health(wounds) * tough
 		beast.health = beast.max_health
 		beast.nerve = 0.0
+		beast.spit_most = END_SPITS
 		beast.enrage()
 		game.hud.announce("DER PROWLER RAST", "Diesmal geht er nicht mehr. Bringt ihn zu Fall!", 4.5)
 	else:
