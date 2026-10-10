@@ -2739,10 +2739,6 @@ func _second_exploder(game: Node3D) -> void:
 func _hit_answer(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var sounds: FieldAudio = game.sounds
-	# (The checks hear the game's own answers. A machine may have hit sounds of its owner's
-	# choosing in the project folder, see FieldAudio.OWN_HITS: for the checks there are none.)
-	sounds.own_asked = true
-	sounds.own_hits = []
 	var built := true
 	var brief := true
 	for kind in ["hit_body", "hit_head", "hit_kill"]:
