@@ -968,6 +968,9 @@ func _villa_rich() -> void:
 	# --- more that is heavy: cabinets against the flanks of the stairs, a commode between the
 	# garden doors of the salon, plinths in the gallery
 	_model("GothicCabinet_01", Vector3(-4.28, 0, 15.4), PI / 2, {})
+	# --- two horses of stone beside the way in, where the moon falls on them
+	for edge in [-1.0, 1.0]:
+		_plinth(Vector3(float(edge) * 3.1, 0, 20.9), 1.0, "horse_statue_01", 1.3, PI, 0.9)
 	# --- up on the gallery: a runner, a console with candles between the doors that stay shut
 	_carpet(Vector3(0, STOREY_VILLA + 0.018, 10.2), Vector2(10.4, 1.5), Color(0.42, 0.08, 0.08))
 	_against("gallery", NORTH, 0.0, "ClassicConsole_01")
@@ -1220,9 +1223,17 @@ func _dress_grounds(basin: Vector3) -> void:
 		_park_bench(basin + Vector3(cos(turn) * 11.4, 0, sin(turn) * 11.4), atan2(-cos(turn), -sin(turn)))
 	for side in [-1.0, 1.0]:
 		_plinth(Vector3(float(side) * 19.5, 0, 41.0), 1.5, "marble_bust_01", 1.1, -float(side) * PI / 2, 0.7)
+	# --- small lamps at the foot of the hedge around the round: a chain of lights in the fog
+	for arc in [[-45.0, 45.0], [135.0, 225.0]]:
+		for i in range(7):
+			var turn := deg_to_rad(lerpf(float(arc[0]), float(arc[1]), i / 6.0))
+			var foot := basin + Vector3(cos(turn) * 12.85, 0, sin(turn) * 12.85)
+			batch.cylinder(mats["metal"], foot + Vector3(0, -0.01, 0), 0.05, 0.04, 0.4, Color("15171a"), 6)
+			_glow_box(foot + Vector3(0, 0.43, 0), Vector3(0.11, 0.1, 0.11), Color("ffd08a"), 5.5)
+			_round_solid(foot, 0.07, 0.5)
 	# --- yew along the drive between the gate and the landing ground
-	for z in [80.0, 84.5]:
-		_topiary(Vector3(-5.2, 0, float(z)), 3.4, 0.9)
+	# (None at (-5.2, 80): it would stand in the picture of the camera that watches the landing.)
+	_topiary(Vector3(-5.2, 0, 84.5), 3.4, 0.9)
 	_topiary(Vector3(5.2, 0, 80.0), 3.4, 0.9)
 	_guard_post(Vector3(8.4, 0, 84.8))
 	# --- flares the guards threw where the wall came down: two still burn with a light, the
