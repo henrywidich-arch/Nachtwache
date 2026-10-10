@@ -6718,22 +6718,43 @@ func _hive(game: Node3D) -> void:
 			other_ways.append("%s: stands %s reaches %s nearer %s after %d steps (meant %.2f s)" % [way.id, str(stands), str(reaches), str(nearer), steps, ways.seconds(way_index)])
 		_wipe_all(game)
 		await frames(2)
-	# (The cavity belongs to its room, and no path of the squad leads into it: it is
-	# walked into by whoever wants to, as far as the slab; the trench is no ground at all.)
+	# (The cavity belongs to its room and is ground like any other as far as its slab:
+	# whoever stands in it is found there. Behind the slab, where they wait, nobody gets;
+	# the trench is no ground at all.)
 	var nook_room := ""
-	var nook_closed := false
+	var nook_open := false
+	var behind_closed := false
 	var pit_closed := false
+	var cornered := false
+	var torn_way := {}
+	for way in map.entries:
+		if torn_way.is_empty() and str(way.id).begins_with("ring_s_breach"):
+			torn_way = way
 	for host in map.rooms:
-		if str(host.id) == "ring_s" and host.has("nooks"):
+		if str(host.id) == "ring_s" and host.has("nooks") and not torn_way.is_empty():
 			var nook: Rect2 = host.nooks[0]
-			var inside := Vector3(nook.get_center().x, HiveMap.UNDER + 0.1, nook.get_center().y)
-			nook_room = str(map.room_at(inside).get("id", ""))
-			nook_closed = map.navigation[int(host.level)].is_point_solid(Vector2i(roundi(inside.x / CabinMap.CELL), roundi(inside.z / CabinMap.CELL))) and bool(map.is_indoors(inside))
+			var nook_inside := Vector3(nook.get_center().x, HiveMap.UNDER + 0.1, nook.get_center().y)
+			var nook_wait: Vector3 = (torn_way.path as PackedVector3Array)[0]
+			var nook_grid: AStarGrid2D = map.navigation[int(host.level)]
+			nook_room = str(map.room_at(nook_inside).get("id", ""))
+			nook_open = not nook_grid.is_point_solid(Vector2i(roundi(nook_inside.x / CabinMap.CELL), roundi(nook_inside.z / CabinMap.CELL))) and bool(map.is_indoors(nook_inside)) and not map.path_between(nook_inside, torn_way.land).is_empty()
+			behind_closed = nook_grid.is_point_solid(Vector2i(roundi(nook_wait.x / CabinMap.CELL), roundi(nook_wait.z / CabinMap.CELL)))
+			face(game, nook_inside, 0.0)
+			await frames(2)
+			var nook_hunter: Infected = hive._place("mauler", (torn_way.land as Vector3) + (torn_way.out as Vector3) * 3.0)
+			if nook_hunter != null:
+				nook_hunter.alert = true
+				for k in range(420):
+					await frames(1)
+					if not cornered and is_instance_valid(nook_hunter) and nook_hunter.global_position.distance_to(player.global_position) < 1.8:
+						cornered = true
+			_wipe_all(game)
+			await frames(2)
 		if str(host.id) == "maint" and host.has("pits"):
 			var pit: Rect2 = host.pits[0]
 			pit_closed = map.navigation[int(host.level)].is_point_solid(Vector2i(roundi(pit.get_center().x / CabinMap.CELL), roundi(pit.get_center().y / CabinMap.CELL)))
 	expect(other_ways.is_empty() and out_of_sight and int(way_looks.get("breach", 0)) >= 6 and int(way_looks.get("gate", 0)) >= 5 and int(way_looks.get("fall", 0)) >= 2 and int(way_looks.get("trench", 0)) >= 5 and int(way_looks.get("pipes", 0)) >= 6, "A way in has other looks too - %d walls torn open into a dark cavity (they come round a slab at its back, out of sight, and walk out), %d doors forced half open, %d ceilings come down, %d trenches under gratings, %d burst pipe chases -, and a body comes through each as it is meant to%s" % [int(way_looks.get("breach", 0)), int(way_looks.get("gate", 0)), int(way_looks.get("fall", 0)), int(way_looks.get("trench", 0)), int(way_looks.get("pipes", 0)), "" if other_ways.is_empty() else ": " + "; ".join(PackedStringArray(other_ways))])
-	expect(nook_room == "ring_s" and nook_closed and pit_closed, "A cavity behind a torn wall counts as its room and is closed to the path finding of the squad, like the trench in a floor (%s)" % nook_room)
+	expect(nook_room == "ring_s" and nook_open and behind_closed and cornered and pit_closed, "A cavity behind a torn wall counts as its room and is ground like any other as far as its slab - an infected finds whoever stands in it -; behind the slab and over a trench nobody walks (%s, open %s, behind closed %s, found %s, trench closed %s)" % [nook_room, str(nook_open), str(behind_closed), str(cornered), str(pit_closed)])
 	# --- camping: staying put is noticed, and answered from the nearest ways in - the one
 	# in the survivor's own room among them -, sooner and with more
 	face(game, Vector3(27.5, HiveMap.UNDER + 0.05, -410.0), 0.0)

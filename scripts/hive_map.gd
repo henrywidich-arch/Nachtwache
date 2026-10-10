@@ -5357,11 +5357,15 @@ func _way_breach(room_id: String, side: int, a: float, turn: float = 1.0) -> voi
 	if not room.has("nooks"):
 		room["nooks"] = []
 	(room.nooks as Array).append(_way_rect(frame, -span, span, HALF, HALF + slab))
+	# As far as the slab it is ground like any other - for the squad, and for whoever is
+	# after somebody who stands in it: nobody is safe in there. (Painted into the path
+	# grid by _settle_ways: the tear through the wall, and the floor behind it.)
+	var ground := [_way_rect(frame, -half + 0.4, half - 0.4, -0.7, HALF + 0.5), _way_rect(frame, -span + 0.45, span - 0.45, HALF + 0.3, HALF + slab - 0.56)]
 	var path := PackedVector3Array([
 		frame * Vector3(-turn * 0.7, 0, HALF + slab + 1.25), frame * Vector3(turn * (span - gap * 0.5), 0, HALF + slab + 0.95),
 		frame * Vector3(turn * (span - gap * 0.5 - 0.05), 0, HALF + slab - 0.75), frame * Vector3(turn * 0.25, 0, 0.1)
 	])
-	_way("walk", room_id, frame.origin, -frame.basis.z, frame * Vector3(0, 0, -1.7), {"node": flap, "look": "breach", "path": path, "pace": 4.4, "pocket": [span + 0.3, deep + 0.6], "mouth": [half + 0.1, tall]})
+	_way("walk", room_id, frame.origin, -frame.basis.z, frame * Vector3(0, 0, -1.7), {"node": flap, "look": "breach", "path": path, "pace": 4.4, "pocket": [span + 0.3, deep + 0.6], "mouth": [half + 0.1, tall], "ground": ground})
 	_end_zone()
 
 ## The door of a lift or of a service shaft in a wall, forced half open: one leaf jammed
@@ -5473,7 +5477,7 @@ func _way_fall(room_id: String, side: int, a: float) -> void:
 	var lean := Basis(Vector3.RIGHT, -slope)
 	var centre := Vector3(0, top * 0.5, (head + foot) * 0.5) - lean * Vector3(0, 0.11, 0)
 	# (Concrete, whatever the room is clad in: what came down is its roof.)
-	var slab_tint := Color(0.34, 0.335, 0.32)
+	var slab_tint := Color(0.5, 0.49, 0.47)
 	batch.box(mats["beton"], frame * centre, Vector3(2.0, 0.22, long), slab_tint, basis * lean)
 	_add_shape(body, frame * centre, Vector3(2.0, 0.22, long), basis * lean)
 	for step in [[-0.7, 0.9, 1.18], [-1.6, 0.9, 0.68], [-2.45, 0.8, 0.24]]:
@@ -5549,8 +5553,12 @@ func _way_trench(room_id: String, x: float, z: float, turn: int = 0) -> void:
 	_way("cellar", room_id, rim, facing.z, rim + facing.z * 0.95, {"node": flap, "deep": deep, "look": "trench", "swing": [5.0, -14.0], "pit": pit})
 	_end_zone()
 
-## Moves every way in's landing place to free ground of the path grid.
+## Moves every way in's landing place to free ground of the path grid. (Before that, what
+## a way in adds to the ground one can walk on is opened in the grid: see _way_breach.)
 func _settle_ways() -> void:
+	for entry in entries:
+		for rect: Rect2 in entry.get("ground", []):
+			_paint(level_of((entry.at as Vector3) + Vector3(0, 0.3, 0)), rect, false)
 	for entry in entries:
 		var wish: Vector3 = entry.wish
 		if bool(entry.get("fixed", false)):
