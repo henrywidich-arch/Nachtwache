@@ -714,6 +714,24 @@ func _dress_villa() -> void:
 			["galerie", NORTH, 15.0, 2.3], ["galerie", NORTH, 18.7, 2.3], ["galerie", WEST, 16.6, 2.3], ["library", NORTH, -15.0, 2.3], ["dining", SOUTH, -3.2, 2.3], ["dining", SOUTH, 3.2, 2.3], ["dining", NORTH, -4.4, 2.3]]:
 		_sconce(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]))
 	_fireplace("library", EAST, 5.6)
+	# --- more places to sit: a second round in the salon, two chairs at the library's fire,
+	# benches before the pictures
+	_carpet(Vector3(-11.6, 0, 13.6), Vector2(5.4, 4.6), Color(0.3, 0.1, 0.1))
+	_model("sofa_02", Vector3(-11.6, 0, 11.7), 0.0, {})
+	_model("ArmChair_01", Vector3(-13.8, 0, 14.2), PI / 2, {})
+	_model("ArmChair_01", Vector3(-9.4, 0, 14.2), -PI / 2, {})
+	_model("WoodenTable_02", Vector3(-11.6, 0, 13.9), 0.0, {"height": 0.5})
+	_model("antique_ceramic_vase_01", Vector3(-11.6, 0.5, 13.9), 0.0, {"height": 0.4, "solid": false, "far": 30.0})
+	_against("salon", EAST, 10.4, "GothicCommode_01")
+	_plant(Vector3(-23.0, 0, 21.0), 1.6)
+	_plant(Vector3(-8.0, 0, 9.0), 1.5)
+	_model("ArmChair_01", Vector3(-12.6, 0, 4.2), PI / 2, {})
+	_model("ArmChair_01", Vector3(-12.6, 0, 6.6), PI / 2, {})
+	_model("WoodenTable_02", Vector3(-13.2, 0, 5.4), 0.0, {"height": 0.5})
+	_model("sofa_02", Vector3(11.0, 0, 11.4), PI, {})
+	_model("sofa_02", Vector3(20.4, 0, 11.4), PI, {})
+	_plant(Vector3(8.0, 0, 21.0), 1.6)
+	_plant(Vector3(23.0, 0, 9.0), 1.6)
 	# --- the post of the guards under the gallery: a table with their radio, what they had left
 	_table(Vector3(-5.2, 0, 9.4), Vector3(1.8, 0.78, 0.8), Color(0.24, 0.26, 0.2))
 	_model("vintage_radio_transceiver", Vector3(-5.6, 0.78, 9.3), 0.2, {"width": 0.6, "solid": false, "far": 30.0})
@@ -2715,7 +2733,7 @@ func tour() -> Array:
 		["08_gallery", Vector3(0, STOREY_VILLA, 10), Vector3(0, 1.5, 20)],
 		["09_salon", Vector3(-9, 0, 20.5), Vector3(-22, 1.2, 13)],
 		["10_galerie", Vector3(9, 0, 20.5), Vector3(22, 1.4, 12)],
-		["11_library", Vector3(-11.5, 0, 6.5), Vector3(-23, 1.5, -2)],
+		["11_library", Vector3(-11.4, 0, 0.2), Vector3(-22, 1.3, 5.5)],
 		["12_dining", Vector3(-8, 0, 6.6), Vector3(6, 1.2, -3.5)],
 		["13_dining_mirror", Vector3(0, 0, 6.5), Vector3(0, 1.6, -3.8)],
 		["14_kitchen", Vector3(11.5, 0, 6.5), Vector3(22, 1.2, -3)],
