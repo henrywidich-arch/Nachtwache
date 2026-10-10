@@ -1450,6 +1450,7 @@ func shoot() -> void:
 			game.fx.tracer(muzzle, endpoint)
 	var any_head := false
 	var any_kill := false
+	var any_infected := false
 	for enemy in struck:
 		var entry: Dictionary = struck[enemy]
 		any_head = any_head or entry.headshot
@@ -1469,6 +1470,7 @@ func shoot() -> void:
 			game.blasting = false
 			game.piercing = 1.0
 			# (Felled, not merely gone: a Stalker that is shot at vanishes with its health.)
+			any_infected = any_infected or not enemy is CruSoldier
 			any_kill = any_kill or ((enemy as Infected).dead and (enemy as Infected).health <= 0.0)
 			if push >= PUSH_LEAST:
 				(enemy as Infected).blown(entry.direction, push)
@@ -1476,7 +1478,7 @@ func shoot() -> void:
 		game.hud.hit_marker(any_head, true)
 		# The shooter hears his hit: one answer for the whole shot, whatever it struck. (A
 		# guest of a co-op match learns of a kill from the host, see SurvivalHUD.kill_feed.)
-		game.sounds.confirm_hit(any_head, any_kill)
+		game.sounds.confirm_hit(any_head, any_kill, any_infected)
 	# A suppressed shot gives nobody the direction it came from.
 	if not data.get("quiet", false):
 		game.alarm(origin, -camera.global_basis.z)
