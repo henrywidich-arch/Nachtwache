@@ -115,7 +115,10 @@ func _process(_delta: float) -> void:
 		set_process(false)
 		return
 	frames += 1
-	if frames < 3:
+	# (The first tries follow each other closely; should the window not be drawing just
+	# then - the player has switched away while the map was built - it is asked again
+	# every half second or so, for some minutes.)
+	if frames < (3 if tries < 6 else 40):
 		return
 	frames = 0
 	tries += 1
@@ -125,7 +128,7 @@ func _process(_delta: float) -> void:
 		picture.generate_mipmaps()
 		material.set_shader_parameter("sheet", ImageTexture.create_from_image(picture))
 		done = true
-	elif tries < 20:
+	elif tries < 400:
 		stage.render_target_update_mode = SubViewport.UPDATE_ONCE
 		return
 	else:
