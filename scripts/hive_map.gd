@@ -1649,6 +1649,8 @@ func _lay_admin() -> void:
 	_machine("office", EAST, -374.5)
 	_board("office", EAST, -388.0, 2.6)
 	_board("office", WEST, -378.0, 2.2, true)
+	_door_tag("office", NORTH, -32.45, "A-05", "ARCHIV", blue.lightened(0.45))
+	_door_tag("office", NORTH, -21.55, "A-06", "PERSONAL", blue.lightened(0.45))
 	_face_box(office, WEST, "plate", -372.6, -369.9, 1.25, 2.55, -0.06, -0.04, Color("0c0e0f"))
 	_screen(Transform3D(Basis(Vector3.UP, PI / 2), _face_point(office, WEST, -371.25, 1.9, -0.066)), Vector3.ZERO, Vector2(2.5, 1.1), 2, 0.4)
 	_plant(Vector3(-17.0, UNDER, -370.1), 1.4)
@@ -1692,6 +1694,7 @@ func _lay_admin() -> void:
 	_desk(Vector3(27.0, UNDER, -374.0), -PI / 2, 5)
 	_lockers("security", WEST, -384.0, -380.0, Color("3d4a54"))
 	_lockers("security", EAST, -383.8, -380.2, Color("2c3236"))
+	_door_tag("security", EAST, -375.45, "S-02", "SERVER", red.lightened(0.45))
 	_display(_face_point(security, WEST, -374.4, 1.98, 0.0), _model_yaw(WEST), 2.6, "security")
 	_office_chair(Vector3(22.6, UNDER, -379.6), 1.1, true)
 	_blot(Vector3(19.6, UNDER, -379.0), 1.0, 0.7)
@@ -1844,6 +1847,8 @@ func _lay_canteen() -> void:
 	_sign_board("cafeteria", NORTH, 0.0, 4.15, [["▲   ZENTRALRAUM  B2  ·  FORSCHUNG", white], ["◄   LAGER", GUIDE.cafe], ["KÜCHE  ·  AUSGABE   ►", GUIDE.cafe]], 5.6, 30)
 	_display(_face_point(cafe, NORTH, -7.0, 2.0, 0.0), _model_yaw(NORTH), 3.2, "cafe")
 	_stencil("cafeteria", SOUTH, -12.0, 3.6, "KANTINE", 200)
+	_door_tag("cafeteria", EAST, -407.45, "K-01", "KÜCHE", Color("f0d68a"))
+	_door_tag("cafeteria", WEST, -415.2, "K-02", "LAGER", Color("f0d68a"))
 	_stencil("cafeteria", SOUTH, 12.5, 3.6, "B2 · 04", 200)
 	# --- machines along the west wall, a bucket somebody left
 	for z in [-426.4, -428.4, -430.4]:
@@ -2541,6 +2546,13 @@ func _dress_atrium() -> void:
 		for k in [-0.7, 0.7]:
 			_model("potted_plant_04", at + Vector3(0, 0.4, k), random.randf() * TAU, {"height": 1.2, "solid": false, "far": 40.0})
 		_bench(at + Vector3(-signf(spot.x) * 1.0, 0, 0), -signf(spot.x) * PI / 2, 2.4)
+	_door_tag("atrium", WEST, -467.45, "M-01", "KRANKENSTATION", cyan.lightened(0.3))
+	_door_tag("atrium", EAST, -466.9, "T-01", "TECHNIK", orange.lightened(0.3))
+	# Cover the C.R.U. left behind when it took the hall.
+	_barricade(Vector3(-9.6, UNDER, -464.4), PI / 2, 4.0)
+	_barricade(Vector3(10.6, UNDER, -473.8), PI / 2, 4.0)
+	_blot(Vector3(-11.0, UNDER, -466.0), 1.1, 0.8)
+	_blot(Vector3(4.0, UNDER, -474.0), 1.4, 1.0, Color(0.02, 0.02, 0.02, 0.66))
 	_stencil("atrium", WEST, -467.0, 8.6, "B2", 400)
 	_stencil("atrium", EAST, -467.0, 8.6, "B2", 400)
 	_haze(Vector3(0, UNDER + 6.0, -467.0), Vector3(13.0, 12.0, 13.0), 0.03, Color(0.7, 0.88, 1.0), true)
