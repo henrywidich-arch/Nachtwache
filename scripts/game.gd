@@ -4155,6 +4155,33 @@ func _run_trees_check() -> void:
 	hud.refresh_counter()
 	await tick.call(0.4)
 	await _capture(folder, "trees_shop_breacher.png")
+	# The same at the first weapon locker of the second mission: its short list, the three
+	# weapons of the trees among it, and the tree changed on the spot.
+	resume_run()
+	return_to_menu()
+	await tick.call(0.3)
+	profile.mission = 2
+	start_run()
+	hive.set_process(false)
+	preparation_left = 9999.0
+	hud.banner_left = 0
+	hud.radio_left = 0
+	credits = 6000
+	for station in cabin.stations:
+		if station.kind == "shop":
+			var locker: Vector3 = station.pos
+			var room: Vector3 = cabin.points.supply_lz
+			_place_player(locker + locker.direction_to(Vector3(room.x, locker.y, room.z)) + Vector3(0, 0.05, 0), 0)
+			break
+	await tick.call(0.5)
+	open_shop()
+	hud._open_tab("class")
+	await tick.call(0.4)
+	await _capture(folder, "trees_locker_breacher.png")
+	choose_tree("sweeper")
+	hud.refresh_counter()
+	await tick.call(0.4)
+	await _capture(folder, "trees_locker_sweeper.png")
 	print("TREES_CAPTURE_COMPLETE")
 	get_tree().quit()
 

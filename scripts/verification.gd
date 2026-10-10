@@ -7196,6 +7196,20 @@ func _hive_caches(game: Node3D) -> void:
 			note = note or str(entry.get("head", "")).contains("Waffenlagern")
 	var refused: bool = not game.buy_weapon("g36") and not game.buy_weapon("minigun") and not player.inventory.has("g36")
 	var plain: bool = game.buy_weapon("ak") and player.inventory.has("ak") and game.buy_weapon("pistol")
+	# (The trees of abilities at a locker: the weapon of a tree under the rule it always had -
+	# three points, the tree in force -, the tree in force changed on the spot, and what he
+	# carries of the other tree stays his until he trades it in.)
+	var ranks_then: Dictionary = game.skills.ranks.duplicate()
+	var tree_then: String = game.skills.chosen
+	game.skills.ranks = {"sweeper_damage": 3, "breacher_heavy": 3, "hunter_damage": 2}
+	game.skills.chosen = "sweeper"
+	var own_tree: bool = game.may_switch_tree() and not game.buy_weapon("fifty") and not game.buy_weapon("nitro") and game.buy_weapon("flamer") and player.inventory.has("flamer")
+	var changed: bool = game.choose_tree("breacher") and player.inventory.has("flamer") and player.current_weapon == "flamer" and game.skills.weapon_barred("flamer") == "SÄUBERER nicht aktiv" and not game.buy_weapon("nitro")
+	var other_tree: bool = game.buy_weapon("fifty") and player.inventory.has("fifty") and game.choose_tree("hunter") and game.skills.weapon_barred("nitro") == "3 Punkte in JÄGER" and not game.buy_weapon("nitro")
+	game.skills.ranks = ranks_then
+	game.skills.chosen = tree_then
+	game.profile.skill_tree = tree_then
+	expect(own_tree and changed and other_tree, "At a locker of the second mission the weapon of a tree is sold under the rule it always had; the tree in force is changed there on the spot, the weapon of the tree left behind stays in his hands, and the locker sells that of the new one")
 	game.resume_run()
 	var short := listed.size() == HiveCaches.STANDARD.size()
 	for id in listed:
