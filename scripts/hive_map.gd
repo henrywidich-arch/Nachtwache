@@ -2275,7 +2275,7 @@ func _lay_station() -> void:
 		_pendant(Vector3(-36.0 + i * 8.0, UNDER + 6.82, -45.0), 1.5, sodium, 9.0 if how == "fail" else (6.0 if how == "dark" else 17.0), 10.5, 56.0, 0.85 if how == "fail" else 0.03)
 	# (What the lamps throw up at the beams and the walls: without it nobody could fight here.)
 	for x in [-32.0, -16.0, 0.0, 16.0, 32.0]:
-		_light(Vector3(x, UNDER + 5.4, -45.0), sodium, 3.0, 18.0, false, 0.0, 0.25, LAMP_FADE + 12.0)
+		_light(Vector3(x, UNDER + 5.4, -45.0), sodium, 3.4, 18.0, false, 0.0, 0.25, LAMP_FADE + 12.0)
 	for x in [-32.0, -16.0, 16.0, 32.0]:
 		_part("plate", Vector3(x, UNDER + 3.1, -49.44), Vector3(0.3, 0.16, 0.08), Color("1b1c1b"))
 		_glow_box(Vector3(x, UNDER + 3.1, -49.49), Vector3(0.24, 0.1, 0.03), sodium, 5.0)
