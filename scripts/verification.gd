@@ -5900,6 +5900,24 @@ func _hive(game: Node3D) -> void:
 	var voices: Vector2i = map.sound.call("count")
 	expect(alarm_off and alarm_seen and alarm_gone and not map.alarm_on, "The lockdown's red light and its horn come with the lock of the canteen and go when it opens")
 	expect(wet and map.room_of.has("flooded") and map.drip_mesh != null and map.spark_mesh != null and voices.x >= 12 and voices.x == voices.y, "Water stands in the laboratory corridor under drips and sparks, and every voice of the map has its sound (%d of %d)" % [voices.y, voices.x])
+	# --- the tower hall: the house's towers in ranks with room for the Prowler between
+	# them, one torn open; and the terminals in the walls of the facility - two films for all
+	# their screens, and none of them played in a run without a window
+	var hall_room: Dictionary = map.room_of.get("containment", {})
+	var towers_all := 0
+	for tower_kind in map.tower_count:
+		towers_all += int(map.tower_count[tower_kind])
+	var hall_ground: float = hive.prowl.open_ground(map.points.hall_end)
+	var hall_wide: float = hive.prowl.width_of(map.points.hall_end)
+	var hall_ways: bool = not map.path_between(map.points.hall_end, map.points.lift).is_empty() and not map.path_between(map.points.hall_end, map.points.hall_end + Vector3(-26.0, 0, 22.0)).is_empty()
+	expect(not hall_room.is_empty() and float(hall_room.height) >= 14.0 and int(map.tower_count.get("shaft", 0)) == 4 and int(map.tower_count.get("burst", 0)) == 1 and int(map.tower_count.get("cage", 0)) >= 8 and int(map.tower_count.get("tank", 0)) >= 8 and hall_ground >= HiveProwler.ROOM_MIN and hall_wide >= HiveProwler.WIDE and hall_ways and map.hall_life != null, "The containment hall is the tower hall: %d towers and pumps in ranks, one of them torn open, ways from its middle to the lift and into its corners, and room for the Prowler in its middle (%d m2, %.1f m wide)" % [towers_all, int(hall_ground), hall_wide])
+	var term_screens: int = map.terminals.call("count")
+	var term_films: Vector2i = map.terminals.call("players")
+	var term_shared: bool = map.terminals.call("shared")
+	var term_both: bool = int(map.terminals.call("count", "specimen")) >= 5 and int(map.terminals.call("count", "crucible")) >= 5
+	var term_still: bool = DisplayServer.get_name() != "headless" or (term_films == Vector2i.ZERO and not bool(map.terminals.get("films")))
+	var term_tags: int = map.find_children("*TerminalTag*", "Label3D", true, false).size()
+	expect(term_screens >= 12 and term_screens == map.terminal_places.size() and term_tags == term_screens - 1 and term_both and term_shared and term_films.x <= 2 and term_still, "Terminals in the walls of the facility: %d screens show two loops, every loop on one surface for all its screens, and no film is played in a run without a window (%d players)" % [term_screens, term_films.x])
 	# --- and back to the farm
 	game.return_to_menu()
 	await frames(3)
