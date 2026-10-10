@@ -943,7 +943,7 @@ func _post_hints() -> void:
 			spots.append([HiveDisplay.middle(int(entry[0]), int(entry[1])) + Vector2(0, -HiveDisplay.RADIUS * 0.62), 15.0, 0.25])
 		if not spots.is_empty():
 			# (What the mark means, in the row of the plan that explains its signs.)
-			spots.append([Vector2(596, 836), 9.0, 1.0])
+			spots.append([Vector2(578, 836), 9.0, 1.0])
 		for spot: Array in spots:
 			var at: Vector2 = spot[0]
 			var half := float(spot[1])
@@ -951,11 +951,11 @@ func _post_hints() -> void:
 				var point := at + corner * half
 				vertices.append(Vector3((point.x / HiveDisplay.PLAN.x - 0.5) * wide, (0.5 - point.y / HiveDisplay.PLAN.y) * tall, 0))
 				uvs.append(patch)
-				colors.append(Color(MINT.r, MINT.g, MINT.b, float(spot[2])))
+				colors.append(Color(0.25, 1.0, 0.6, float(spot[2])))
 		var marks: MeshInstance3D = board.marks
 		var words: Label3D = board.words
 		words.visible = not spots.is_empty()
-		words.position = Vector3((672.0 / HiveDisplay.PLAN.x - 0.5) * wide, (0.5 - 836.0 / HiveDisplay.PLAN.y) * tall, 0.006)
+		words.position = Vector3((684.0 / HiveDisplay.PLAN.x - 0.5) * wide, (0.5 - 836.0 / HiveDisplay.PLAN.y) * tall, 0.006)
 		if spots.is_empty():
 			marks.mesh = null
 			continue
@@ -1338,7 +1338,7 @@ func _index_of(id: String) -> int:
 ## one of each look open with its weapon (look_...), a sealed one being opened with what
 ## comes for it (seal_...), the side goal on the HUD and on the map in the corner, a
 ## display and a terminal that tell of caches, and the lockers' short list.
-## --caches-part=<text>: only the places whose name contains it.
+## --caches-part=<text>[,<more>]: only the places whose name contains one of them.
 func _pictures() -> void:
 	var folder: String = game._capture_dir()
 	var part := ""
@@ -1374,13 +1374,27 @@ func _pictures() -> void:
 	for index in range(sites.size()):
 		var site := sites[index]
 		print("CACHE %d %s look=%s room=%s at=%s stand=%s holds=%s" % [index, site.id, site.look, site.room, str((site.at as Vector3).snappedf(0.01)), str((site.stand as Vector3).snappedf(0.01)), site.holds])
-		if part != "" and not str(site.id).contains(part):
+		var asked := part == ""
+		for text in part.split(",", false):
+			asked = asked or str(site.id).contains(text)
+		if not asked:
 			continue
 		var frame: Transform3D = site.frame
-		# (From inside its room, however narrow that is.)
-		var inner: Rect2 = map.room_of[str(site.room)].inner
-		var deep: float = (inner.size.y if int(site.side) in [HiveCore.NORTH, HiveCore.SOUTH] else inner.size.x) - 0.8
-		await game._shot_at(folder, "cache_%02d_%s.png" % [index, site.id], frame * Vector3(1.5 if deep > 3.4 else 2.1, 0, minf(3.9, deep)), site.at, 0.45)
+		# From before it, a little to the side - or, where no ground is there (a gallery),
+		# from the way that leads to it, a few steps before it.
+		var from: Vector3 = frame * Vector3(1.5, 0, 3.9)
+		var cell := Vector2i(roundi(from.x / CabinMap.CELL), roundi(from.z / CabinMap.CELL))
+		var grid: AStarGrid2D = map.navigation[int(site.level)]
+		if not grid.is_in_boundsv(cell) or grid.is_point_solid(cell) or str(map.room_at(from + Vector3(0, 0.3, 0)).get("id", "")) != str(site.room):
+			var anchor: Vector3 = map.points.terminal if int(site.level) >= map.deep else (map.points.platform if int(site.level) == map.under else map.points.hall)
+			var path := map.path_between(anchor, site.stand)
+			var walked := 0.0
+			for k in range(path.size() - 1, 0, -1):
+				walked += path[k].distance_to(path[k - 1])
+				if walked >= 3.8:
+					from = path[k - 1]
+					break
+		await game._shot_at(folder, "cache_%02d_%s.png" % [index, site.id], from, site.at, 0.45)
 	if part == "":
 		# One of each look, open, with what it holds.
 		for id: String in ["werkstatt", "depot_kiste", "salon", "archiv", "server", "labor_a"]:
