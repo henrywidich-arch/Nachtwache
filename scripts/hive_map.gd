@@ -32,6 +32,9 @@ var ride_lamps: Array[MeshInstance3D] = []
 var riding := false
 var ride_speed := 0.0
 var ride_way := 0.0
+## What draws the plan of the Hive for the displays (a HiveDisplay).
+const PLAN_SCRIPT := preload("res://scripts/hive_display.gd")
+var plan: Node
 
 func _ready() -> void:
 	var began := Time.get_ticks_msec()
@@ -47,6 +50,8 @@ func _ready() -> void:
 	var shop_sign := Label3D.new()
 	shop_sign.name = "WeaponShopLabel"
 	add_child(shop_sign)
+	plan = PLAN_SCRIPT.new()
+	add_child(plan)
 	build_times["setup"] = Time.get_ticks_msec() - began
 	for part in [_lay_grounds, _lay_villa, _lay_descent, _lay_station, _lay_terminal, _lay_admin, _lay_canteen, _lay_atrium, _lay_research]:
 		var from := Time.get_ticks_msec()
@@ -81,21 +86,23 @@ func _build_styles() -> void:
 			"family": "bunker", "dress": "concrete", "floor": ["betonfloor", Color(0.72, 0.72, 0.72)], "ceiling": ["beton", Color(0.58, 0.58, 0.58)], "core": ["formwork", Color(0.76, 0.76, 0.74)],
 			"lamp": "cage", "lamp_gap": 5.5, "light": Color("ffe7c0"), "energy": 2.1, "reach": 9.5
 		},
+		# The facility: cream panels in dark steel over a dark lower row, a polished dark floor
+		# that the lamps stand in. (Of the tubes of a room only every second one is a light.)
 		"panel": {
-			"family": "tech", "dress": "panel", "floor": ["granite", Color(0.6, 0.62, 0.66)], "ceiling": ["plate", Color("25282b")], "core": ["plate", Color("1f2326")],
-			"lamp": "tube", "lamp_gap": 5.5, "light": Color("d6e8ff"), "energy": 2.3, "reach": 9.5
+			"family": "tech", "dress": "panel", "floor": ["gloss", Color(0.62, 0.64, 0.68)], "ceiling": ["plate", Color("25282b")], "core": ["plate", Color("1f2326")], "panel": Color(0.82, 0.8, 0.74),
+			"lamp": "tube", "lamp_gap": 4.8, "lamp_every": 2, "light": Color("d6e8ff"), "energy": 2.6, "reach": 10.5
 		},
 		"office": {
-			"family": "tech", "dress": "panel", "floor": ["darkfloor", Color(0.5, 0.56, 0.68)], "ceiling": ["cladding", Color(0.44, 0.46, 0.47)], "core": ["plate", Color("23272a")], "panel": Color(0.78, 0.78, 0.74), "strip": false,
-			"lamp": "tube", "lamp_gap": 5.5, "light": Color("e6ecf2"), "energy": 2.2, "reach": 9.5
+			"family": "tech", "dress": "panel", "floor": ["darkfloor", Color(0.46, 0.52, 0.64)], "ceiling": ["cladding", Color(0.44, 0.46, 0.47)], "core": ["plate", Color("23272a")], "panel": Color(0.8, 0.79, 0.74), "wainscot": Color(0.3, 0.33, 0.37), "strip": false,
+			"lamp": "tube", "lamp_gap": 4.8, "lamp_every": 2, "light": Color("e6ecf2"), "energy": 2.5, "reach": 10.5
 		},
 		"lab": {
-			"family": "tech", "dress": "panel", "floor": ["granite", Color(0.66, 0.7, 0.72)], "ceiling": ["cladding", Color(0.42, 0.45, 0.47)], "core": ["plate", Color("1f2326")], "panel": Color(0.86, 0.89, 0.9), "stripe": Color("2f8f8a"), "strip_color": Color("9fe8e0"),
-			"lamp": "tube", "lamp_gap": 5.5, "light": Color("dff2ff"), "energy": 2.3, "reach": 9.5
+			"family": "tech", "dress": "panel", "floor": ["gloss", Color(0.66, 0.72, 0.72)], "ceiling": ["cladding", Color(0.42, 0.45, 0.47)], "core": ["plate", Color("1f2326")], "panel": Color(0.84, 0.88, 0.86), "wainscot": Color(0.22, 0.3, 0.3), "stripe": Color("2f8f8a"), "strip_color": Color("9fe8e0"),
+			"lamp": "tube", "lamp_gap": 4.8, "lamp_every": 2, "light": Color("d6f5e6"), "energy": 2.5, "reach": 10.5
 		},
 		"canteen": {
-			"family": "tech", "dress": "tiles", "floor": ["tiles", Color(0.74, 0.76, 0.76)], "ceiling": ["cladding", Color(0.46, 0.48, 0.49)], "core": ["cladding", Color(0.72, 0.74, 0.74)], "tile": Color(0.9, 0.92, 0.9),
-			"lamp": "tube", "lamp_gap": 6.0, "light": Color("eaf0f2"), "energy": 2.4, "reach": 10.0
+			"family": "tech", "dress": "tiles", "floor": ["tiles", Color(0.7, 0.72, 0.72)], "ceiling": ["cladding", Color(0.4, 0.42, 0.43)], "core": ["cladding", Color(0.72, 0.74, 0.74)], "tile": Color(0.9, 0.92, 0.9),
+			"lamp": "tube", "lamp_gap": 5.0, "lamp_every": 3, "light": Color("eaf0f2"), "energy": 3.0, "reach": 13.0
 		},
 		"tech": {
 			"family": "bunker", "dress": "tech", "floor": ["darkfloor", Color(0.56, 0.56, 0.56)], "ceiling": ["beton", Color(0.36, 0.36, 0.36)], "core": ["beton", Color(0.5, 0.5, 0.5)],
@@ -103,11 +110,11 @@ func _build_styles() -> void:
 		},
 		"station": {
 			"family": "bunker", "dress": "concrete", "floor": ["betonfloor", Color(0.7, 0.7, 0.7)], "ceiling": ["beton", Color(0.46, 0.46, 0.46)], "core": ["formwork", Color(0.74, 0.74, 0.72)], "stripe": Color("b8961e"),
-			"lamp": "hang", "lamp_gap": 9.0, "lamp_height": 5.6, "light": Color("ffe9c8"), "energy": 2.0, "reach": 15.0
+			"lamp": "hang", "lamp_gap": 9.0, "lamp_every": 2, "lamp_height": 5.6, "light": Color("ffbf70"), "energy": 2.3, "reach": 16.0
 		},
 		"bighall": {
-			"family": "tech", "dress": "panel", "floor": ["granite", Color(0.58, 0.6, 0.64)], "ceiling": ["plate", Color("202326")], "core": ["plate", Color("1f2326")],
-			"lamp": "hang", "lamp_gap": 10.0, "lamp_height": 6.4, "light": Color("dfeaff"), "energy": 2.2, "reach": 17.0
+			"family": "tech", "dress": "panel", "floor": ["gloss", Color(0.56, 0.58, 0.62)], "ceiling": ["plate", Color("202326")], "core": ["plate", Color("1f2326")], "panel": Color(0.8, 0.79, 0.74),
+			"lamp": "hang", "lamp_gap": 10.0, "lamp_every": 2, "lamp_height": 6.4, "light": Color("dfeaff"), "energy": 2.3, "reach": 18.0
 		},
 		"car": {"family": "tech", "dress": "", "floor": ["tread", Color.WHITE], "ceiling": ["plate", Color.WHITE], "core": ["plate", Color.WHITE], "lamp": "none"}
 	}
@@ -906,6 +913,277 @@ func _train_ends(centre: Vector3) -> void:
 		_crate(flat + spot, Vector3(random.randf_range(1.2, 1.8), random.randf_range(1.0, 1.5), random.randf_range(1.2, 1.7)), _vary(Color("56624a"), 0.05), random.randf() * 0.3, false)
 	_add_shape(body, flat + Vector3(0, 0.8, 0), Vector3(10.6, 2.4, 3.4))
 
+# ---------------------------------------------------------------- passages and signs
+
+## The colours that lead through the facility: lines on the floor, bands on the walls and
+## the cells of the plan on the displays (see HiveDisplay) agree on them.
+const GUIDE := {
+	"terminal": Color("c9a227"), "admin": Color("2f6fb0"), "security": Color("b8452f"), "cafe": Color("d8b13a"), "core": Color("cfe6ff"),
+	"med": Color("3fb8c8"), "tech": Color("d9772a"), "research": Color("2f8f8a"), "hall": Color("a8322c")
+}
+
+## True if nothing is cut into a side of a room between two places along it.
+func _wall_free(room: Dictionary, side: int, a: float, b: float) -> bool:
+	for gap in room.open[side]:
+		if b > float(gap[0]) - 0.12 and a < float(gap[1]) + 0.12:
+			return false
+	return true
+
+## Gives a passage its rhythm: ribs on both walls with a beam under the ceiling between
+## its bays, a light coffer in every bay, lines on the floor and a tray of cables under
+## the ceiling. Options: step (the length of a bay), light / energy / reach / flicker (of
+## its lamps), lit (every so many coffers one is a lamp that lights; the others only
+## glow), dead (the bays whose coffer is dark), fail (the bays whose lamp is giving up),
+## lines ([place across the passage, colour, width]), tray (the side its cables run
+## along; -1 for none), ribs (false for none), glow (the name of a lamp glass of its own).
+func _passage(room_id: String, options: Dictionary = {}) -> void:
+	var room: Dictionary = room_of[room_id]
+	var inner: Rect2 = room.inner
+	var along_x := inner.size.x >= inner.size.y
+	var from := inner.position.x if along_x else inner.position.y
+	var to := inner.end.x if along_x else inner.end.y
+	var wide := inner.size.y if along_x else inner.size.x
+	var mid := inner.get_center().y if along_x else inner.get_center().x
+	var y := float(room.y)
+	var tall := float(room.height)
+	var count := maxi(1, roundi((to - from) / float(options.get("step", 6.0))))
+	var bay := (to - from) / count
+	var steel := Color("1c2023")
+	var sides := [NORTH, SOUTH] if along_x else [WEST, EAST]
+	# A place in the passage: along it, across it (from its middle), above its floor.
+	var spot := func(along: float, across: float, height: float) -> Vector3:
+		return Vector3(along, y + height, mid + across) if along_x else Vector3(mid + across, y + height, along)
+	var box := func(long: float, high: float, across: float) -> Vector3:
+		return Vector3(long, high, across) if along_x else Vector3(across, high, long)
+	if bool(options.get("ribs", true)):
+		for i in range(1, count):
+			var at := from + i * bay
+			for side in sides:
+				if _wall_free(room, side, at - 0.3, at + 0.3):
+					_face_box(room, side, "plate", at - 0.16, at + 0.16, 0.0, tall, -0.2, -0.05, steel)
+			_part("plate", spot.call(at, 0.0, tall - 0.16), box.call(0.3, 0.32, wide), steel)
+	var color: Color = options.get("light", Color("d6e8ff"))
+	var energy := float(options.get("energy", 2.4))
+	var reach := float(options.get("reach", maxf(9.0, bay * 1.6)))
+	var lit := maxi(1, int(options.get("lit", 1)))
+	var dead: Array = options.get("dead", [])
+	var fail: Array = options.get("fail", [])
+	var long := minf(2.4, bay - 1.4)
+	var across := clampf(wide * 0.3, 1.0, 2.4)
+	var kept := glow_key
+	if options.has("glow"):
+		_own_glow(str(options.glow))
+		glow_key = str(options.glow)
+	for i in range(count):
+		var at := from + (i + 0.5) * bay
+		_part("plate", spot.call(at, 0.0, tall - 0.05), box.call(long + 0.24, 0.1, across + 0.24), Color("0e1012"))
+		for edge in [-1.0, 1.0]:
+			var tube: Vector3 = spot.call(at, edge * across * 0.28, tall - 0.115)
+			if dead.has(i):
+				_part("plain", tube, box.call(long, 0.03, 0.14), Color("34383a"))
+			else:
+				_glow_box(tube, box.call(long, 0.03, 0.14), color, 2.4 if fail.has(i) else 5.5)
+		if not dead.has(i) and (i % lit == 0 or fail.has(i)):
+			var lamp := _light(spot.call(at, 0.0, tall - minf(1.0, tall * 0.2)), color, energy * (0.75 if fail.has(i) else 1.0), reach, false, 0.8 if fail.has(i) else float(options.get("flicker", 0.0)), 0.35, LAMP_FADE)
+			lamp.omni_attenuation = 0.9
+	glow_key = kept
+	for line in options.get("lines", []):
+		_stripe(spot.call(from + 0.1, float(line[0]), 0.0), spot.call(to - 0.1, float(line[0]), 0.0), float(line[2]) if line.size() > 2 else 0.12, line[1])
+	var tray := int(options.get("tray", sides[0]))
+	if tray >= 0:
+		var off := (1.0 if tray == sides[1] else -1.0) * (wide * 0.5 - 0.55)
+		_part("plate", spot.call((from + to) * 0.5, off, tall - 0.63), box.call(to - from, 0.05, 0.46), Color("2b2f31"))
+		for k in range(3):
+			_pipe(spot.call(from, off + (k - 1) * 0.13, tall - 0.56), spot.call(to, off + (k - 1) * 0.13, tall - 0.56), 0.035, [Color("17191b"), Color("5d2f22"), Color("2b3a4a")][k], 6)
+		for i in range(count):
+			_part("plate", spot.call(from + (i + 0.5) * bay + long * 0.5 + 0.5, off, tall - 0.33), box.call(0.04, 0.55, 0.5), Color("2b2f31"))
+
+## Big stencilled lettering on a side of a room, its middle `high` above the floor.
+func _stencil(room_id: String, side: int, a: float, high: float, text: String, size: int = 150, color: Color = Color(0.11, 0.13, 0.14)) -> Label3D:
+	return _wall_sign(text, _face_point(room_of[room_id], side, a, high, -0.058), size, color, _model_yaw(side))
+
+## Lettering painted on a floor; `yaw` 0 is read by somebody who looks north.
+func _floor_text(text: String, pos: Vector3, size: int, color: Color, yaw: float = 0.0) -> Label3D:
+	var label := lettering(text, pos + Vector3(0, 0.012, 0), size, color)
+	label.rotation = Vector3(-PI / 2, yaw, 0)
+	label.shaded = true
+	label.outline_size = 0
+	return label
+
+## An arrow of paint on a floor, pointing along `yaw` (0 points north).
+func _floor_arrow(pos: Vector3, yaw: float, color: Color, long: float = 1.1) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos + Vector3(0, 0.004, 0))
+	_placed(frame, "plain", Vector3(0, 0, long * 0.12), Vector3(0.16, 0.008, long * 0.76), color)
+	for edge in [-1.0, 1.0]:
+		_placed(frame, "plain", Vector3(edge * 0.2, 0, -long * 0.28), Vector3(0.16, 0.008, 0.62), color, Vector3(0, edge * 42.0, 0))
+
+## A plate beside a doorway that says what lies behind it: a number and a name.
+func _door_tag(room_id: String, side: int, at: float, code: String, title: String, color: Color = Color("cfe6ff")) -> void:
+	var room: Dictionary = room_of[room_id]
+	_face_box(room, side, "plate", at - 0.36, at + 0.36, 1.46, 1.94, -0.052, -0.04, Color("121416"))
+	_face_box(room, side, "plain", at - 0.36, at + 0.36, 1.9, 1.94, -0.058, -0.052, color.darkened(0.2))
+	var number := _wall_sign(code, _face_point(room, side, at, 1.74, -0.06), 26, color, _model_yaw(side))
+	number.name = "DoorTag"
+	_wall_sign(title, _face_point(room, side, at, 1.56, -0.06), 13, Color(0.75, 0.78, 0.8), _model_yaw(side))
+
+## Corner posts where a passage runs into another without a wall between them: the walls
+## of the two meet in a point there, and behind it is nothing.
+func _corner_post(pos: Vector3, tall: float) -> void:
+	_part("plate", pos + Vector3(0, tall * 0.5, 0), Vector3(0.56, tall, 0.56), Color("1c2023"))
+	_solid(pos + Vector3(0, tall * 0.5, 0), Vector3(0.56, tall, 0.56), false)
+
+## A display with the plan of the Hive (see HiveDisplay), `wide` metres across, on which
+## the cell `here` is marked. Kinds: "wall" (`pos` is the middle of the screen on the face
+## of a wall, which looks along `yaw`), "stele" (`pos` is where it stands on a floor) and
+## "hang" (`pos` is the middle of the screen, hung `drop` metres under a ceiling; it can be
+## read from both sides).
+func _display(pos: Vector3, yaw: float, wide: float, here: String, kind: String = "wall", drop: float = 0.5) -> void:
+	var tall := wide * 9.0 / 16.0
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var steel := Color("14171a")
+	var front := 0.096
+	match kind:
+		"stele":
+			frame = Transform3D(Basis(Vector3.UP, yaw), pos + Vector3(0, 1.05 + tall * 0.5, 0))
+			front = 0.106
+			_placed(frame, "plate", Vector3.ZERO, Vector3(wide + 0.2, tall + 0.2, 0.2), steel)
+			for edge in [-1.0, 1.0]:
+				_placed(frame, "plate", Vector3(edge * wide * 0.36, -(tall * 0.5 + 0.575), 0), Vector3(0.14, 0.95, 0.14), steel)
+			_placed(frame, "plate", Vector3(0, -(tall * 0.5 + 1.02), 0), Vector3(wide * 0.9, 0.06, 0.7), steel)
+			_solid(pos + Vector3(0, (1.15 + tall) * 0.5, 0), Vector3(wide + 0.2, 1.15 + tall, 0.3), true, yaw)
+		"hang":
+			front = 0.106
+			_placed(frame, "plate", Vector3.ZERO, Vector3(wide + 0.2, tall + 0.2, 0.2), steel)
+			for edge in [-1.0, 1.0]:
+				_placed(frame, "plate", Vector3(edge * wide * 0.4, tall * 0.5 + 0.1 + drop * 0.5, 0), Vector3(0.06, drop, 0.06), steel)
+		_:
+			_placed(frame, "plate", Vector3(0, 0, 0.045), Vector3(wide + 0.16, tall + 0.16, 0.09), steel)
+	var faces := [0.0, PI] if kind == "hang" else [0.0]
+	for turn in faces:
+		var side := frame * Transform3D(Basis(Vector3.UP, turn), Vector3.ZERO)
+		var screen: MeshInstance3D = plan.call("screen", here, wide)
+		screen.transform = side * Transform3D(Basis.IDENTITY, Vector3(0, 0, front))
+		add_child(screen)
+		_glow_box(side * Vector3(0, -(tall * 0.5 + 0.05), front - 0.003), Vector3(wide * 0.6, 0.014, 0.012), Color("59d8e6"), 2.2, side.basis)
+		_light(side * Vector3(0, 0, front + 0.8), Color("6fd0e2"), 0.22 * wide, 2.6 + wide, false, 0.0, 0.2, LAMP_FADE)
+
+## A board of directions on a side of a room: dark, one line for every way, each with a
+## chip in the colour that leads there ([text, colour]).
+func _sign_board(room_id: String, side: int, a: float, high: float, lines: Array, wide: float = 3.6, size: int = 30) -> void:
+	var room: Dictionary = room_of[room_id]
+	var row := size * 0.0125
+	var tall := lines.size() * row + 0.14
+	# (Along a south or a west wall the numbers grow to the reader's left.)
+	var left := 1.0 if side == SOUTH or side == WEST else -1.0
+	_face_box(room, side, "plate", a - wide * 0.5, a + wide * 0.5, high - tall * 0.5, high + tall * 0.5, -0.06, -0.04, Color("101214"))
+	for i in range(lines.size()):
+		var y := high + tall * 0.5 - 0.07 - (i + 0.5) * row
+		var chip := a + left * (wide * 0.5 - 0.15)
+		_face_box(room, side, "plain", chip - 0.06, chip + 0.06, y - row * 0.32, y + row * 0.32, -0.066, -0.06, lines[i][1])
+		_wall_sign(str(lines[i][0]), _face_point(room, side, a - left * 0.1, y, -0.068), size, Color(0.86, 0.9, 0.94), _model_yaw(side))
+
+## A cubicle wall between two points of a floor.
+func _partition(from: Vector3, to: Vector3, tall: float = 1.3, cloth: Color = Color(0.36, 0.4, 0.45)) -> void:
+	var span := to - from
+	var long := span.length()
+	var yaw := atan2(-span.z, span.x)
+	var frame := Transform3D(Basis(Vector3.UP, yaw), (from + to) * 0.5)
+	_placed(frame, "cloth", Vector3(0, tall * 0.5 + 0.03, 0), Vector3(long, tall - 0.06, 0.05), _vary(cloth, 0.02))
+	_placed(frame, "steel", Vector3(0, tall + 0.015, 0), Vector3(long + 0.02, 0.03, 0.07), Color("8a9094"))
+	for edge in [-1.0, 1.0]:
+		_placed(frame, "steel", Vector3(edge * (long * 0.5 - 0.03), 0.03, 0), Vector3(0.06, 0.06, 0.4), Color("2a2e31"))
+	_solid((from + to) * 0.5 + Vector3(0, tall * 0.5, 0), Vector3(long, tall, 0.08), true, yaw)
+
+## Paper strewn over a floor around a spot.
+func _litter(centre: Vector3, spread: float, count: int) -> void:
+	_papers(Transform3D(Basis(Vector3.UP, random.randf() * TAU), centre + Vector3(0, 0.005, 0)), Vector3.ZERO, count, spread)
+
+## A blot on a floor: old blood, soot. `long` and `wide` are its half axes, along `yaw`.
+func _blot(pos: Vector3, long: float, wide: float, color: Color = Color(0.2, 0.015, 0.012, 0.76), yaw: float = 0.0) -> void:
+	var kept := batch
+	_chunk("Stains", false)
+	batch.ellipsoid(mats["stain"], pos + Vector3(0, 0.012, 0), Vector3(long, 0.002, wide), color, Basis(Vector3.UP, yaw), 12, 3)
+	for i in range(3):
+		var turn := random.randf() * TAU
+		var off := Vector3(cos(turn) * long * random.randf_range(0.5, 1.2), 0.013 + i * 0.002, sin(turn) * wide * random.randf_range(0.5, 1.2))
+		batch.ellipsoid(mats["stain"], pos + Basis(Vector3.UP, yaw) * off, Vector3(long, 0.002, wide) * random.randf_range(0.2, 0.45), Color(color.r, color.g, color.b, color.a * 0.8), Basis(Vector3.UP, random.randf() * TAU), 10, 3)
+	batch = kept
+
+## Old blood dragged over a floor from one spot to another.
+func _smear(from: Vector3, to: Vector3, wide: float = 0.3) -> void:
+	var span := to - from
+	var yaw := atan2(-span.z, span.x)
+	var steps := maxi(2, roundi(span.length() / 0.9))
+	for i in range(steps):
+		var at := from.lerp(to, (i + 0.5) / steps) + Vector3(random.randf_range(-0.12, 0.12), 0, random.randf_range(-0.12, 0.12))
+		_blot(at, span.length() / steps * random.randf_range(0.5, 0.75), wide * random.randf_range(0.6, 1.1), Color(0.2, 0.015, 0.012, random.randf_range(0.45, 0.75)), yaw)
+
+## A steel bench whose seat faces local +z.
+func _bench(pos: Vector3, yaw: float, long: float = 1.8) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	_placed(frame, "steel", Vector3(0, 0.44, 0), Vector3(long, 0.05, 0.42), Color("7d8488"))
+	_placed(frame, "steel", Vector3(0, 0.8, -0.2), Vector3(long, 0.3, 0.04), Color("7d8488"))
+	for edge in [-1.0, 1.0]:
+		_placed(frame, "steel", Vector3(edge * (long * 0.5 - 0.12), 0.2075, 0), Vector3(0.05, 0.415, 0.4), Color("2a2e31"))
+		_placed(frame, "steel", Vector3(edge * (long * 0.5 - 0.12), 0.56, -0.228), Vector3(0.05, 0.7, 0.03), Color("2a2e31"))
+	_solid(pos + Vector3(0, 0.45, 0), Vector3(long, 0.9, 0.46), true, yaw)
+
+## Furniture thrown together to stop something: `long` metres of it around a spot.
+func _barricade(centre: Vector3, yaw: float, long: float) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), centre)
+	var count := maxi(2, roundi(long / 1.5))
+	for i in range(count):
+		var x := -long * 0.5 + (i + 0.5) * long / count
+		match i % 3:
+			0:
+				# A table on its edge, its legs towards whoever built this.
+				_placed(frame, "steel", Vector3(x, 0.41, 0.1), Vector3(1.45, 0.8, 0.06), _vary(Color("5d6468"), 0.03), Vector3(random.randf_range(-7, 7), random.randf_range(-6, 6), 0))
+				for leg in [-0.6, 0.6]:
+					_placed(frame, "steel", Vector3(x + leg, 0.42, -0.25), Vector3(0.05, 0.05, 0.7), Color("3a4044"))
+			1:
+				# A cabinet on its back, another thing on top.
+				_placed(frame, "steel", Vector3(x, 0.27, 0), Vector3(1.4, 0.52, 0.56), _vary(Color("4a5a66"), 0.03), Vector3(0, random.randf_range(-9, 9), 0))
+				_placed(frame, "cloth", Vector3(x + 0.1, 0.72, 0.02), Vector3(0.9, 0.36, 0.44), _vary(Color("5a4a36"), 0.04), Vector3(0, random.randf_range(-20, 20), random.randf_range(-6, 6)))
+			_:
+				_placed(frame, "siding", Vector3(x, 0.36, -0.05), Vector3(1.0, 0.72, 0.8), _vary(Color("4d5a46"), 0.04), Vector3(0, random.randf_range(-14, 14), 0))
+				_placed(frame, "steel", Vector3(x - 0.1, 0.95, 0.0), Vector3(0.5, 0.45, 0.5), _vary(Color("3c4246"), 0.03), Vector3(random.randf_range(-12, 12), random.randf_range(-30, 30), 0))
+	_solid(centre + Vector3(0, 0.55, 0), Vector3(long, 1.1, 0.8), true, yaw)
+
+## A plant in a pot (somebody watered them until a few days ago).
+func _plant(pos: Vector3, tall: float = 1.3) -> void:
+	_model("potted_plant_04" if random.randf() < 0.6 else "potted_plant_02", pos, random.randf() * TAU, {"height": tall, "solid": false, "far": 40.0})
+	_round_solid(pos, 0.22, 0.8)
+
+## An office machine against a side of a room: a copier, a printer, a water cooler.
+func _machine(room_id: String, side: int, a: float, kind: String = "copier") -> void:
+	var room: Dictionary = room_of[room_id]
+	match kind:
+		"cooler":
+			_face_box(room, side, "plain", a - 0.18, a + 0.18, 0.0, 1.0, -0.42, -0.06, Color("c9ccc8"))
+			_face_box(room, side, "plain", a - 0.13, a + 0.13, 1.0, 1.42, -0.37, -0.11, Color(0.5, 0.68, 0.8))
+			_face_box(room, side, "plain", a - 0.08, a + 0.08, 0.62, 0.74, -0.44, -0.42, Color("1b1d1f"))
+			_solid(_face_centre(room, side, a - 0.2, a + 0.2, 0.0, 1.4, -0.44, 0.0), _face_size(side, a - 0.2, a + 0.2, 0.0, 1.4, -0.44, 0.0))
+		_:
+			_face_box(room, side, "plain", a - 0.5, a + 0.5, 0.0, 0.96, -0.72, -0.06, Color("b9bcb6"))
+			_face_box(room, side, "plain", a - 0.53, a + 0.53, 0.96, 1.06, -0.76, -0.04, Color("2a2d30"))
+			_face_box(room, side, "plain", a - 0.44, a + 0.3, 0.3, 0.42, -0.9, -0.72, Color("a8aba5"))
+			_face_glow(room, side, a + 0.1, a + 0.42, 1.062, 1.068, -0.6, -0.5, Color("7fe0a0"), 2.6)
+			_solid(_face_centre(room, side, a - 0.53, a + 0.53, 0.0, 1.06, -0.76, 0.0), _face_size(side, a - 0.53, a + 0.53, 0.0, 1.06, -0.76, 0.0))
+
+## A board on a side of a room: white with what was written on it last, or cork.
+func _board(room_id: String, side: int, a: float, wide: float = 2.4, cork: bool = false) -> void:
+	var room: Dictionary = room_of[room_id]
+	_face_box(room, side, "steel", a - wide * 0.5 - 0.04, a + wide * 0.5 + 0.04, 0.96, 2.24, -0.058, -0.04, Color("8a9094"))
+	_face_box(room, side, "plain", a - wide * 0.5, a + wide * 0.5, 1.0, 2.2, -0.066, -0.058, Color(0.52, 0.4, 0.26) if cork else Color(0.9, 0.91, 0.9))
+	var slots := 5 if cork else 3
+	for i in range(slots):
+		var at := a - wide * 0.42 + (i + 0.5) * wide * 0.84 / slots
+		var y := random.randf_range(1.3, 1.9) if cork else 1.3 + i * 0.28
+		if cork:
+			_face_box(room, side, "plain", at - 0.105, at + 0.105, y - 0.148, y + 0.148, -0.072, -0.066, _vary(Color("d8d5c8"), 0.06))
+		else:
+			_face_box(room, side, "plain", at - random.randf_range(0.1, 0.3), at + 0.3, y - 0.012, y + 0.012, -0.072, -0.066, [Color("1c3f8a"), Color("a02a22"), Color("1b1d1f")][i % 3])
+
 # ---------------------------------------------------------------- the way down
 
 func _lay_descent() -> void:
@@ -970,12 +1248,12 @@ func _lay_descent() -> void:
 
 func _lay_station() -> void:
 	_own_dice(71004)
-	_begin_zone("train_a", "under")
+	_begin_zone("train_a", "sodium")
 	area = "station"
 	_room("car_a", under, Rect2(-7, -59, 14, 4), 2.6, "car", {"walls": false, "floor": false, "ceiling": false, "lamps": "none"})
 	_train_car(Vector3(0, UNDER, -57), SOUTH)
 	_end_zone()
-	_begin_zone("station", "under", ["descent", "train_a"])
+	_begin_zone("station", "sodium", ["descent", "train_a"])
 	_room("platform", under, Rect2(-40, -55, 80, 20), 7.5, "station", {"bare": [NORTH]})
 	_door("stair_lobby", "platform", 0.0, 2.2, {"kind": "gate", "area": "station", "name": "steel"})
 	_door("car_a", "platform", 0.0, 2.4, {"kind": "script", "name": "car_a", "height": 2.2})
@@ -1021,6 +1299,7 @@ func _lay_station() -> void:
 	_solid(Vector3(21.0, UNDER + 1.0, -35.5), Vector3(2.8, 2.0, 0.6))
 	for k in range(5):
 		_led(Vector3(19.9 + k * 0.5, UNDER + 1.6, -35.81), Vector3(0.06, 0.06, 0.01), [Color("5ee07a"), Color("ffb347"), Color("ff3a2a")][k % 3], 3.0, 0.4 + k * 0.1)
+	_display(Vector3(5.2, UNDER, -40.4), 0.0, 2.4, "station", "stele")
 	_stores(Vector3(-30.0, UNDER, -38.0), 5)
 	_stores(Vector3(12.0, UNDER, -38.2), 4)
 	_stores(Vector3(33.0, UNDER, -52.0), 3)
@@ -1050,12 +1329,12 @@ func _lay_station() -> void:
 
 func _lay_terminal() -> void:
 	_own_dice(71005)
-	_begin_zone("train_b", "under")
+	_begin_zone("train_b", "cold")
 	area = ""
 	_room("car_b", deep, Rect2(-7, -319, 14, 4), 2.6, "car", {"walls": false, "floor": false, "ceiling": false, "lamps": "none"})
 	_train_car(Vector3(0, UNDER, -317), NORTH)
 	_end_zone()
-	_begin_zone("terminal", "under", ["train_b"])
+	_begin_zone("terminal", "cold", ["train_b"])
 	_room("terminal", deep, Rect2(-40, -345, 80, 26), 9.5, "bighall", {"bare": [SOUTH]})
 	_door("car_b", "terminal", 0.0, 2.4, {"kind": "script", "name": "car_b", "height": 2.2})
 	_room("track_b", deep, Rect2(-40, -319, 80, 7), 9.5, "bighall", {"bare": [NORTH], "nav": false, "floor": false, "lamps": "none"})
@@ -1087,6 +1366,7 @@ func _lay_terminal() -> void:
 	_stores(Vector3(22.0, UNDER, -326.0), 5)
 	_stores(Vector3(34.0, UNDER, -336.0), 4)
 	_stores(Vector3(-10.0, UNDER, -338.0), 3)
+	_display(Vector3(-5.6, UNDER, -336.0), 0.0, 3.0, "terminal", "stele")
 	_model("industrial_storage_cart", Vector3(9.0, UNDER, -330.0), 1.2, {"far": 50.0})
 	_part("plate", Vector3(0, UNDER + 4.6, -344.6), Vector3(10.0, 1.1, 0.12), Color("15181a"))
 	var head := lettering("FORSCHUNGSTERMINAL  ·  SEKTOR  B", Vector3(0, UNDER + 4.6, -344.52), 54, Color("cfe6ff"))
@@ -1123,128 +1403,260 @@ func _lay_terminal() -> void:
 
 func _lay_admin() -> void:
 	_own_dice(71006)
-	_begin_zone("admin", "under", ["terminal"])
+	_begin_zone("admin", "cold", ["terminal"])
 	area = "admin"
-	_room("checkpoint", deep, Rect2(-6, -365, 12, 20), 4.2, "panel")
+	var blue: Color = GUIDE.admin
+	var red: Color = GUIDE.security
+	var gold: Color = GUIDE.cafe
+	_room("checkpoint", deep, Rect2(-6, -361, 12, 16), 5.0, "panel", {"lamps": "none", "look": {"stripe": GUIDE.terminal}})
 	_door("terminal", "checkpoint", 0.0, 6.0, {"kind": "gate", "area": "admin", "height": 3.6, "name": "gate_admin"})
-	_room("guard", deep, Rect2(6, -361, 9, 12), 3.4, "panel")
+	_room("guard", deep, Rect2(6, -361, 9, 12), 3.4, "panel", {"look": {"stripe": red}})
 	_door("checkpoint", "guard", -358.5, 1.6, {"kind": "slide"})
 	_pane("checkpoint", EAST, -353.5, 5.0, 1.0, 2.4, "glass", "guard")
-	_room("scanner", deep, Rect2(-15, -361, 9, 12), 3.4, "panel")
+	_room("scanner", deep, Rect2(-15, -361, 9, 12), 3.4, "panel", {"look": {"stripe": GUIDE.terminal}})
 	_door("checkpoint", "scanner", -355.0, 2.0, {"kind": "slide"})
-	_room("ring_s", deep, Rect2(-44, -369, 88, 4), 3.8, "panel")
+	# The ring: the main street of the administration, eight metres wide.
+	_room("ring_s", deep, Rect2(-44, -369, 88, 8), 4.6, "panel", {"lamps": "none", "look": {"stripe": blue}})
 	_door("checkpoint", "ring_s", 0.0, 4.0, {"kind": "slide", "leaf": "double"})
-	_room("office", deep, Rect2(-44, -393, 28, 24), 3.6, "office")
+	_room("office", deep, Rect2(-44, -393, 28, 24), 3.6, "office", {"look": {"dead": 0.2, "stripe": blue}})
 	_door("ring_s", "office", -38.0, 2.0, {"kind": "slide"})
 	_door("ring_s", "office", -22.0, 2.0, {"kind": "slide"})
-	_room("meeting", deep, Rect2(-16, -381, 12, 12), 3.6, "office")
+	_room("meeting", deep, Rect2(-16, -381, 12, 12), 3.6, "office", {"look": {"stripe": blue}})
 	_door("ring_s", "meeting", -12.0, 2.0, {"kind": "slide"})
 	_pane("ring_s", NORTH, -7.5, 4.0, 1.0, 2.4, "glass", "meeting")
-	_room("copy", deep, Rect2(4, -385, 8, 16), 3.6, "office")
+	_room("copy", deep, Rect2(4, -385, 8, 16), 3.6, "office", {"look": {"stripe": red}})
 	_door("ring_s", "copy", 8.0, 2.0, {"kind": "slide"})
-	_room("security", deep, Rect2(12, -385, 18, 16), 3.8, "panel", {"look": {"light": Color("bcd2ff"), "energy": 1.1, "strip_color": Color("7fb0ff")}})
+	_room("security", deep, Rect2(12, -385, 18, 16), 3.8, "panel", {"look": {"light": Color("bcd2ff"), "energy": 1.1, "strip_color": Color("7fb0ff"), "stripe": red, "panel": Color(0.5, 0.53, 0.57)}})
 	_door("ring_s", "security", 21.0, 2.0, {"kind": "slide"})
-	_room("server", deep, Rect2(30, -393, 14, 24), 3.8, "panel", {"look": {"light": Color("9fc4ff"), "energy": 1.0, "floor": ["darkfloor", Color(0.5, 0.52, 0.56)]}})
+	_room("server", deep, Rect2(30, -393, 14, 24), 3.8, "panel", {"look": {"light": Color("7fb2ff"), "energy": 1.0, "floor": ["darkfloor", Color(0.5, 0.52, 0.56)], "stripe": red, "panel": Color(0.42, 0.45, 0.5), "strip_color": Color("5a9cff"), "strip_glow": 3.0}})
 	_door("ring_s", "server", 37.0, 2.0, {"kind": "slide"})
 	_door("security", "server", -377.0, 2.0, {"kind": "slide"})
-	_room("archive", deep, Rect2(-44, -409, 20, 16), 3.6, "office", {"look": {"energy": 1.0}})
+	_room("archive", deep, Rect2(-44, -409, 20, 16), 3.6, "office", {"look": {"energy": 1.0, "dead": 0.34, "flicker": 0.25, "stripe": blue}})
 	_door("office", "archive", -34.0, 2.0, {"kind": "slide"})
-	_room("staff", deep, Rect2(-24, -405, 20, 12), 3.6, "office")
+	_room("staff", deep, Rect2(-24, -405, 20, 12), 3.6, "office", {"look": {"stripe": blue}})
 	_door("office", "staff", -20.0, 2.0, {"kind": "slide"})
 	area = "cafe"
-	_room("spine", deep, Rect2(-4, -405, 8, 36), 4.2, "panel")
-	_door("ring_s", "spine", 0.0, 3.0, {"kind": "gate", "area": "cafe", "name": "gate_cafe"})
+	_room("spine", deep, Rect2(-4, -405, 8, 36), 5.0, "panel", {"lamps": "none", "look": {"stripe": gold}})
+	_door("ring_s", "spine", 0.0, 4.0, {"kind": "gate", "area": "cafe", "name": "gate_cafe", "height": 3.0})
 	area = "admin"
 	_chunk("Kit", false)
-	# --- the way in: a scanner arch, the guard room with the second supply point
-	var check: Dictionary = room_of["checkpoint"]
-	for x in [-2.2, 2.2]:
-		_part("plate", Vector3(x, UNDER + 1.25, -351.0), Vector3(0.3, 2.5, 0.9), Color("23282b"))
-		_solid(Vector3(x, UNDER + 1.25, -351.0), Vector3(0.3, 2.5, 0.9))
-	_part("plate", Vector3(0, UNDER + 2.6, -351.0), Vector3(4.7, 0.3, 0.9), Color("23282b"))
-	_glow_box(Vector3(0, UNDER + 2.43, -351.0), Vector3(3.8, 0.03, 0.2), Color("7fe0a0"), 3.0)
+	# --- the way in: two lanes through scanner arches, a booth between them, a belt for
+	# what people carried at either wall
+	_passage("checkpoint", {"step": 5.2, "ribs": false, "tray": -1, "energy": 2.4, "reach": 10.0})
+	for lane in [-2.9, 2.9]:
+		for edge in [-1.4, 1.4]:
+			var post := Vector3(lane + edge, UNDER, -350.0)
+			_part("plate", post + Vector3(0, 1.25, 0), Vector3(0.3, 2.5, 0.9), Color("23282b"))
+			_solid(post + Vector3(0, 1.25, 0), Vector3(0.3, 2.5, 0.9))
+			_glow_box(post + Vector3(-signf(edge) * 0.155, 1.3, 0), Vector3(0.012, 1.7, 0.04), Color("7fe0a0"), 1.1)
+		_part("plate", Vector3(lane, UNDER + 2.62, -350.0), Vector3(3.1, 0.26, 0.9), Color("23282b"))
+		_glow_box(Vector3(lane, UNDER + 2.48, -350.0), Vector3(2.3, 0.03, 0.2), Color("7fe0a0"), 3.0)
+		_floor_arrow(Vector3(lane, UNDER, -347.9), 0.0, Color("c9a227"))
+	_desk(Vector3(0, UNDER, -350.3), PI, 4)
+	for side in [-1.0, 1.0]:
+		var belt := Vector3(side * 5.15, UNDER, -349.4)
+		_part("steel", belt + Vector3(0, 0.42, 0), Vector3(0.9, 0.84, 3.2), Color("3a4146"))
+		_part("plain", belt + Vector3(0, 0.85, 0), Vector3(0.74, 0.02, 3.1), Color("0e0f10"))
+		_part("steel", belt + Vector3(0, 1.3, 0), Vector3(0.96, 0.9, 1.3), Color("4a5258"))
+		for end in [-1.0, 1.0]:
+			_part("plain", belt + Vector3(0, 1.17, end * 0.656), Vector3(0.7, 0.6, 0.012), Color("050606"))
+		_led(belt + Vector3(-side * 0.485, 1.6, 0.4), Vector3(0.012, 0.05, 0.05), Color("5ee07a"), 3.0, 0.4)
+		_solid(belt + Vector3(0, 0.9, 0), Vector3(0.96, 1.8, 3.2))
+		_model("plastic_crate_02", belt + Vector3(0, 0.86, 1.15), 0.3 * side, {"scale": 1.1, "solid": false, "far": 30.0})
 	_stripe(Vector3(-5.6, UNDER, -347.0), Vector3(5.6, UNDER, -347.0), 0.3, Color("c9a227"))
-	_wall_sign("KONTROLLE  ·  AUSWEIS BEREITHALTEN", _face_point(check, WEST, -350.0, 2.9, -0.05), 20, Color("1c555b"), PI / 2)
+	_floor_text("KONTROLLE", Vector3(0, UNDER, -346.15), 110, Color("c9a227"))
+	_sign_board("checkpoint", WEST, -348.4, 3.5, [["KONTROLLE  ·  AUSWEIS  BEREITHALTEN", GUIDE.terminal], ["VERWALTUNG  ·  KANTINE   ►", blue]], 4.8, 28)
+	_stencil("checkpoint", EAST, -353.5, 3.75, "KONTROLLE", 120)
+	_display(_face_point(room_of["checkpoint"], WEST, -352.4, 1.85, 0.0), _model_yaw(WEST), 2.0, "checkpoint")
+	_model("cardboard_box_01", Vector3(-3.4, UNDER, -354.6), 0.7, {"scale": 1.3, "far": 30.0})
+	_litter(Vector3(1.6, UNDER, -353.4), 1.3, 9)
+	_smear(Vector3(2.9, UNDER, -352.0), Vector3(1.2, UNDER, -359.0), 0.3)
+	# --- the guard room with the second supply point, and the room where bags were searched
 	_supply(Vector3(14.3, UNDER, -355.0), Vector3(-1, 0, 0), "WACHRAUM")
 	_desk(Vector3(8.0, UNDER, -352.4), -PI / 2, 4)
+	_lockers("guard", NORTH, 9.0, 12.2, Color("3d4a54"))
 	_lockers("scanner", WEST, -360.4, -356.0)
 	_table(Vector3(-10.5, UNDER, -352.0), Vector3(3.0, 0.9, 1.0), Color("3c4246"))
 	_model("plastic_crate_02", Vector3(-10.9, UNDER + 0.9, -352.0), 0.3, {"scale": 1.3, "solid": false, "far": 30.0})
 	_model("plastic_crate_02", Vector3(-9.9, UNDER + 0.9, -352.1), 1.1, {"scale": 1.3, "solid": false, "far": 30.0})
-	# --- the long corridor: signs at the crossing, something left lying
-	var ring: Dictionary = room_of["ring_s"]
-	_wall_sign("◄  BÜROS  ·  ARCHIV", _face_point(ring, NORTH, -5.0, 2.9, -0.05), 20, Color("1c555b"))
-	_wall_sign("SICHERHEIT  ·  SERVER  ►", _face_point(ring, NORTH, 5.6, 2.9, -0.05), 20, Color("1c555b"))
-	_wall_sign("KANTINE  ·  ZENTRALRAUM  B2", _face_point(ring, NORTH, 0.0, 3.3, -0.05), 22, Color("c9a227"))
-	_stripe(Vector3(-43.0, UNDER, -367.8), Vector3(43.0, UNDER, -367.8), 0.12, Color("2f6fb0"))
-	_stripe(Vector3(-43.0, UNDER, -366.2), Vector3(43.0, UNDER, -366.2), 0.12, Color("b8452f"))
-	_sealed_door("ring_s", WEST, -367.0)
-	_sealed_door("ring_s", EAST, -367.0)
-	_model("wheelchair_01", Vector3(-28.0, UNDER, -366.4), 2.2, {"far": 40.0})
-	_model("metal_trash_can", Vector3(27.0, UNDER, -365.9), 0.0, {"height": 0.9, "far": 40.0})
-	_model("potted_plant_04", Vector3(-3.0, UNDER, -365.8), 0.0, {"height": 1.2, "far": 40.0})
-	_model("potted_plant_04", Vector3(3.0, UNDER, -365.8), 1.7, {"height": 1.2, "far": 40.0})
-	# --- the open office: rows of desks, some pushed over
+	_shelf(Vector3(-10.6, UNDER, -360.5), 0.0, 4.0, 0.5, 2.0, 4, Color("4a5258"), 0.8)
+	# --- the ring: a coffer of light in every bay, a line on the floor to every wing, a
+	# plate at every door
+	_passage("ring_s", {"step": 5.84, "energy": 2.3, "reach": 10.0, "dead": [3, 11], "fail": [12], "tray": SOUTH})
+	for x in [-0.9, 0.9]:
+		_stripe(Vector3(x, UNDER, -368.9), Vector3(x, UNDER, -361.1), 0.12, gold)
+	_stripe(Vector3(-1.7, UNDER, -366.9), Vector3(-1.7, UNDER, -361.1), 0.12, blue)
+	_stripe(Vector3(-42.5, UNDER, -366.9), Vector3(-1.7, UNDER, -366.9), 0.12, blue)
+	_stripe(Vector3(1.7, UNDER, -366.9), Vector3(1.7, UNDER, -361.1), 0.12, red)
+	_stripe(Vector3(1.7, UNDER, -366.9), Vector3(42.5, UNDER, -366.9), 0.12, red)
+	for stub in [[-38.0, blue, "A-01", "BÜRO  WEST", 1.0], [-22.0, blue, "A-02", "BÜRO  OST", -1.0], [-12.0, blue, "A-03", "BESPRECHUNG", 1.0], [8.0, red, "A-04", "POSTSTELLE", 1.0], [21.0, red, "S-01", "SICHERHEIT", 1.0], [37.0, red, "S-02", "SERVER", 1.0]]:
+		var door_x := float(stub[0])
+		var tone: Color = stub[1]
+		_stripe(Vector3(door_x, UNDER, -368.7), Vector3(door_x, UNDER, -366.9), 0.12, tone)
+		_door_tag("ring_s", NORTH, door_x + 1.55 * float(stub[4]), str(stub[2]), str(stub[3]), tone.lightened(0.45))
+	_sign_board("ring_s", NORTH, 0.0, 3.62, [["▲   KANTINE  ·  ZENTRALRAUM  B2", gold], ["◄   BÜROS  ·  ARCHIV  ·  PERSONAL", blue], ["SICHERHEIT  ·  SERVER   ►", red]], 5.4, 30)
+	_stencil("ring_s", SOUTH, -11.7, 3.25, "B2", 220)
+	_stencil("ring_s", SOUTH, 11.7, 3.25, "VERWALTUNG", 104)
+	_floor_arrow(Vector3(-20.0, UNDER, -365.2), PI / 2, blue)
+	_floor_arrow(Vector3(20.0, UNDER, -365.2), -PI / 2, red)
+	_sealed_door("ring_s", WEST, -365.0)
+	_sealed_door("ring_s", EAST, -365.0)
+	_model("wheelchair_01", Vector3(-28.0, UNDER, -363.4), 2.2, {"far": 40.0})
+	_model("metal_trash_can", Vector3(27.0, UNDER, -361.9), 0.0, {"height": 0.9, "far": 40.0})
+	_plant(Vector3(-3.3, UNDER, -361.75), 1.3)
+	_plant(Vector3(3.3, UNDER, -361.75), 1.3)
+	_bench(Vector3(-17.5, UNDER, -361.55), PI, 2.4)
+	_bench(Vector3(17.5, UNDER, -361.55), PI, 2.4)
+	# Somebody tried to hold the east wing.
+	_barricade(Vector3(30.5, UNDER, -366.3), PI / 2, 4.6)
+	_blot(Vector3(28.6, UNDER, -364.2), 1.0, 0.7)
+	_smear(Vector3(28.4, UNDER, -364.0), Vector3(22.4, UNDER, -367.6), 0.3)
+	_blot(Vector3(32.2, UNDER, -366.0), 1.3, 0.9, Color(0.02, 0.02, 0.02, 0.7))
+	_litter(Vector3(-9.0, UNDER, -364.5), 1.6, 8)
+	_litter(Vector3(33.0, UNDER, -363.4), 1.4, 7)
+	# --- the open office: desks in bays of cloth walls, some of them pushed over
+	var office: Dictionary = room_of["office"]
 	for row in range(3):
+		var z := -374.0 - row * 6.0
+		var away := 1.0 if row != 1 else -1.0
+		for piece in [[-43.0, -32.6], [-29.9, -19.4]]:
+			_partition(Vector3(float(piece[0]), UNDER, z + away * 0.72), Vector3(float(piece[1]), UNDER, z + away * 0.72))
+		for wing in [-37.3, -24.5]:
+			_partition(Vector3(wing, UNDER, z + away * 0.69), Vector3(wing, UNDER, z - away * 0.9), 1.2)
 		for column in range(4):
-			var at := Vector3(-40.5 + column * 6.4, UNDER, -374.0 - row * 6.0)
+			var at := Vector3(-40.5 + column * 6.4, UNDER, z)
 			if (row * 4 + column) % 5 == 3:
-				_table(at + Vector3(0.6, 0, 0.4), Vector3(1.6, 0.76, 0.8), Color("5d6468"), 0.7)
+				_table(at + Vector3(0.3, 0, -away * 0.5), Vector3(1.6, 0.76, 0.8), Color("5d6468"), 0.5)
+				_office_chair(at + Vector3(-0.7, 0, -away * 1.7), 2.1 + column, true)
+				_litter(at + Vector3(0.6, 0, -away * 1.5), 0.9, 7)
 			else:
-				_desk(at, PI if row % 2 == 0 else 0.0, 1 + (row + column) % 3)
+				_desk(at, PI if row != 1 else 0.0, 1 + (row + column) % 3)
 	_lockers("office", WEST, -391.5, -385.0, Color("5d6468"))
 	_model("modern_arm_chair_01", Vector3(-18.5, UNDER, -390.5), -0.8, {"far": 40.0})
+	_machine("office", SOUTH, -30.0, "cooler")
+	_machine("office", EAST, -374.5)
+	_board("office", EAST, -388.0, 2.6)
+	_board("office", WEST, -378.0, 2.2, true)
+	_face_box(office, WEST, "plate", -372.6, -369.9, 1.25, 2.55, -0.06, -0.04, Color("0c0e0f"))
+	_screen(Transform3D(Basis(Vector3.UP, PI / 2), _face_point(office, WEST, -371.25, 1.9, -0.066)), Vector3.ZERO, Vector2(2.5, 1.1), 2, 0.4)
+	_plant(Vector3(-17.0, UNDER, -370.1), 1.4)
+	_plant(Vector3(-43.0, UNDER, -392.0), 1.5)
+	_office_chair(Vector3(-31.4, UNDER, -378.4), 0.6, true)
+	_litter(Vector3(-31.2, UNDER, -376.0), 1.2, 9)
+	_litter(Vector3(-22.0, UNDER, -389.5), 1.4, 9)
+	_blot(Vector3(-27.5, UNDER, -390.2), 0.9, 0.6)
+	_smear(Vector3(-28.4, UNDER, -390.4), Vector3(-33.4, UNDER, -392.2), 0.28)
 	# --- the meeting room
+	_carpet(Vector3(-10.0, UNDER, -375.5), Vector2(8.6, 4.8), Color(0.14, 0.18, 0.28))
 	_table(Vector3(-10.0, UNDER, -375.5), Vector3(6.0, 0.76, 1.8), Color("3a3f44"))
 	for i in range(4):
 		_chair(Vector3(-12.3 + i * 1.5, UNDER, -374.2), PI, Color("23292d"))
 		_chair(Vector3(-12.3 + i * 1.5, UNDER, -376.8), 0.0, Color("23292d"), i == 2)
 	var meeting: Dictionary = room_of["meeting"]
+	_face_box(meeting, NORTH, "plate", -11.45, -8.55, 1.12, 2.68, -0.054, -0.04, Color("0c0e0f"))
 	_screen(Transform3D(Basis(Vector3.UP, 0.0), _face_point(meeting, NORTH, -10.0, 1.9, -0.06)), Vector3.ZERO, Vector2(2.6, 1.4), 8, 0.3)
-	# --- copies and paper
+	_board("meeting", WEST, -376.0, 2.6)
+	_counter("meeting", EAST, -379.8, -377.2, Color(0.3, 0.33, 0.36), Color(0.6, 0.62, 0.63), 0.5)
+	_plant(Vector3(-15.0, UNDER, -380.0), 1.5)
+	_litter(Vector3(-10.0, UNDER + 0.77, -375.5), 0.8, 8)
+	# --- the post room: copiers, pigeonholes, parcels nobody fetched
 	_against("copy", EAST, -372.0, "steel_frame_shelves_01", {"height": 2.2})
 	_against("copy", EAST, -375.0, "steel_frame_shelves_01", {"height": 2.2})
-	_table(Vector3(6.0, UNDER, -380.0), Vector3(1.4, 1.0, 2.6), Color("787d80"))
-	_model("cardboard_box_01", Vector3(9.0, UNDER, -383.0), 0.4, {"scale": 1.4, "far": 30.0})
+	_machine("copy", WEST, -372.4)
+	_machine("copy", WEST, -374.6)
+	_table(Vector3(8.0, UNDER, -380.4), Vector3(2.6, 0.95, 1.2), Color("787d80"))
+	_shelf(Vector3(8.0, UNDER, -384.5), 0.0, 5.2, 0.5, 2.1, 5, Color("5d6468"), 0.9)
+	_model("cardboard_box_01", Vector3(9.3, UNDER, -382.6), 0.4, {"scale": 1.4, "far": 30.0})
+	_model("cardboard_box_01", Vector3(7.6, UNDER + 0.95, -380.3), 1.3, {"scale": 1.2, "solid": false, "far": 30.0})
+	_litter(Vector3(6.6, UNDER, -376.8), 1.2, 10)
 	# --- the security centre: a wall of screens and the desk that lifts the lockdown
 	var security: Dictionary = room_of["security"]
 	for row in range(2):
 		for column in range(6):
 			_screen(Transform3D(Basis(Vector3.UP, 0.0), _face_point(security, NORTH, 14.5 + column * 2.6, 1.75 + row * 0.85, -0.07)), Vector3.ZERO, Vector2(1.3, 0.75), [4, 1, 9, 5, 3, 8][(row * 2 + column) % 6], -1.0)
-	_face_box(security, NORTH, "plate", 13.4, 28.6, 1.3, 3.1, -0.05, 0.0, Color("101214"))
+	_face_box(security, NORTH, "plate", 13.4, 28.6, 1.3, 3.1, -0.06, 0.0, Color("101214"))
 	_console("security", NORTH, 16.0, 26.0, [5, 3, 1, 4])
 	_desk(Vector3(15.0, UNDER, -374.0), PI / 2, 4)
 	_desk(Vector3(27.0, UNDER, -374.0), -PI / 2, 5)
 	_lockers("security", WEST, -384.0, -380.0, Color("3d4a54"))
-	# --- the servers: two rows of racks under a cold light
+	_lockers("security", EAST, -383.8, -380.2, Color("2c3236"))
+	_office_chair(Vector3(22.6, UNDER, -379.6), 1.1, true)
+	_blot(Vector3(19.6, UNDER, -379.0), 1.0, 0.7)
+	_litter(Vector3(24.0, UNDER, -377.4), 1.2, 8)
+	# --- the servers: two rows of racks under a cold light, the cooling at the far end
 	for row in range(2):
 		for i in range(8):
 			_server_rack(Vector3(33.5 + row * 6.0, UNDER, -374.0 - i * 2.1), PI / 2 if row == 0 else -PI / 2, ["compute", "storage", "network"][(i + row) % 3], "S-%02d" % (row * 8 + i + 1))
-	# --- the archive: shelves of files
+	_chunk("Kit", false)
+	var server: Dictionary = room_of["server"]
+	for x in [35.0, 38.0]:
+		_glow_box(Vector3(x, UNDER + 0.012, -381.35), Vector3(0.05, 0.012, 17.4), Color("3f8cff"), 3.2)
+	for x in [33.4, 39.6]:
+		_part("plate", Vector3(x, UNDER + 2.9, -381.35), Vector3(0.5, 0.05, 17.4), Color("2b2f31"))
+		_pipe(Vector3(x - 0.12, UNDER + 2.96, -390.0), Vector3(x - 0.12, UNDER + 2.96, -372.7), 0.04, Color("17191b"), 6)
+		_pipe(Vector3(x + 0.1, UNDER + 2.96, -390.0), Vector3(x + 0.1, UNDER + 2.96, -372.7), 0.03, Color("2b3a4a"), 6)
+	_face_box(server, NORTH, "steel", 32.6, 41.4, 0.0, 2.5, -0.9, 0.0, Color("59626a"))
+	for k in range(4):
+		_face_box(server, NORTH, "plain", 33.0 + k * 2.15, 34.75 + k * 2.15, 0.5, 2.0, -0.912, -0.9, Color("15181a"))
+		_led(_face_point(server, NORTH, 33.2 + k * 2.15, 2.25, -0.906), Vector3(0.08, 0.05, 0.012), Color("5ee07a") if k != 2 else Color("ff3a2a"), 3.0, 1.0 if k != 2 else 0.4)
+	_solid(_face_centre(server, NORTH, 32.6, 41.4, 0.0, 2.5, -0.9, 0.0), _face_size(NORTH, 32.6, 41.4, 0.0, 2.5, -0.9, 0.0))
+	_desk(Vector3(42.0, UNDER, -371.4), -PI / 2, 5)
+	# --- the archive: shelves of files, half in the dark
 	for i in range(4):
 		_shelf(Vector3(-40.0 + i * 4.2, UNDER, -401.5), PI / 2, 9.0, 0.6, 2.4, 5, Color("4a5258"), 0.85)
+	_chunk("Kit", false)
 	_model("cardboard_box_01", Vector3(-27.0, UNDER, -396.0), 1.0, {"scale": 1.5, "far": 30.0})
+	_model("cardboard_box_01", Vector3(-33.6, UNDER, -407.6), 0.2, {"scale": 1.5, "far": 30.0})
 	_model("hand_truck", Vector3(-26.0, UNDER, -406.0), 2.4, {"far": 40.0})
-	# --- the staff room
+	_desk(Vector3(-25.6, UNDER, -395.0), -PI / 2, 0)
+	_litter(Vector3(-33.8, UNDER, -398.0), 1.3, 12)
+	_litter(Vector3(-37.8, UNDER, -404.0), 1.0, 9)
+	_office_chair(Vector3(-29.6, UNDER, -404.6), 2.6, true)
+	# --- the staff room: lockers, a kitchenette, a place to sit
 	_lockers("staff", NORTH, -22.6, -14.0)
-	_sofa(Vector3(-8.5, UNDER, -396.2), PI, Color("2a3a46"), 2.4)
-	_table(Vector3(-8.5, UNDER, -398.4), Vector3(1.4, 0.5, 0.8), Color("3c4246"))
+	_sofa(Vector3(-8.5, UNDER, -394.1), PI, Color("2a3a46"), 2.4)
+	_table(Vector3(-8.5, UNDER, -395.9), Vector3(1.4, 0.5, 0.8), Color("3c4246"))
 	_counter("staff", EAST, -403.6, -399.4, Color(0.3, 0.33, 0.36), Color(0.6, 0.62, 0.63))
-	_mess_table(Vector3(-16.5, UNDER, -400.0))
-	# --- the spine to the canteen
-	var spine: Dictionary = room_of["spine"]
-	_wall_sign("KANTINE", _face_point(spine, WEST, -386.0, 2.9, -0.05), 26, Color("c9a227"), PI / 2)
-	_stripe(Vector3(-0.9, UNDER, -404.0), Vector3(-0.9, UNDER, -370.0), 0.12, Color("c9a227"))
-	_stripe(Vector3(0.9, UNDER, -404.0), Vector3(0.9, UNDER, -370.0), 0.12, Color("c9a227"))
-	_stores(Vector3(-2.4, UNDER, -396.0), 2)
+	var staff: Dictionary = room_of["staff"]
+	_face_box(staff, EAST, "plain", -403.2, -402.6, 0.92, 1.24, -0.5, -0.1, Color("d8d8d2"))
+	_face_box(staff, EAST, "plain", -400.6, -400.2, 0.92, 1.3, -0.42, -0.14, Color("1b1d1f"))
+	_face_box(staff, EAST, "steel", -398.9, -398.1, 0.0, 1.9, -0.72, -0.05, Color("c4c8c4"))
+	_solid(_face_centre(staff, EAST, -398.9, -398.1, 0.0, 1.9, -0.72, 0.0), _face_size(EAST, -398.9, -398.1, 0.0, 1.9, -0.72, 0.0))
+	_mess_table(Vector3(-17.0, UNDER, -399.2))
+	_mess_table(Vector3(-11.6, UNDER, -401.4))
+	_board("staff", SOUTH, -13.0, 2.2, true)
+	_plant(Vector3(-5.0, UNDER, -394.0), 1.3)
+	_litter(Vector3(-14.0, UNDER, -396.4), 1.0, 6)
+	# --- the spine to the canteen: somebody built a barricade here, and it did not hold
+	_passage("spine", {"step": 5.93, "energy": 2.4, "reach": 10.0, "lines": [[-0.9, gold], [0.9, gold]], "tray": WEST, "fail": [3]})
+	_stencil("spine", WEST, -384.05, 3.1, "KANTINE", 170)
+	_stencil("spine", EAST, -389.97, 3.1, "B2  ▲", 170)
+	_display(_face_point(room_of["spine"], EAST, -378.1, 1.95, 0.0), _model_yaw(EAST), 2.6, "admin")
+	for z in [-374.0, -386.5, -401.5]:
+		_floor_arrow(Vector3(0, UNDER, z), 0.0, gold)
+	_bench(Vector3(3.3, UNDER, -372.2), -PI / 2, 2.2)
+	_barricade(Vector3(-1.5, UNDER, -397.4), 0.0, 4.2)
+	_stores(Vector3(-2.4, UNDER, -399.6), 2)
+	_blot(Vector3(2.0, UNDER, -396.4), 1.1, 0.8)
+	_smear(Vector3(2.1, UNDER, -396.8), Vector3(1.5, UNDER, -403.6), 0.3)
+	_blot(Vector3(-0.6, UNDER, -395.6), 1.5, 1.0, Color(0.02, 0.02, 0.02, 0.66))
+	_litter(Vector3(1.4, UNDER, -392.5), 1.2, 7)
 	_shared_dice()
 	_end_zone()
+
+## An office chair on wheels; one that has fallen over lies in the way.
+func _office_chair(pos: Vector3, yaw: float, fallen: bool = false) -> void:
+	_lab_chair(pos, yaw, fallen)
+	if fallen:
+		_solid(pos + Vector3(0, 0.25, 0) + Basis(Vector3.UP, yaw) * Vector3(0, 0, -0.4), Vector3(0.56, 0.5, 0.95), true, yaw)
+	else:
+		_solid(pos + Vector3(0, 0.45, 0), Vector3(0.5, 0.9, 0.5), true, yaw)
 
 # ---------------------------------------------------------------- the canteen
 
 func _lay_canteen() -> void:
 	_own_dice(71007)
-	_begin_zone("cafe", "under", ["admin"])
+	_begin_zone("cafe", "cold", ["admin"])
 	area = "cafe"
 	_room("cafeteria", deep, Rect2(-24, -435, 48, 30), 6.0, "canteen")
 	_door("spine", "cafeteria", 0.0, 4.0)
@@ -1254,10 +1666,11 @@ func _lay_canteen() -> void:
 	_room("cafe_store", deep, Rect2(-38, -425, 14, 16), 3.6, "concrete")
 	_door("cafeteria", "cafe_store", -417.0, 2.4)
 	area = "atrium"
-	_room("north_link", deep, Rect2(-4, -445, 8, 10), 4.2, "panel")
+	_room("north_link", deep, Rect2(-4, -445, 8, 10), 5.0, "panel", {"lamps": "none", "look": {"stripe": GUIDE.core}})
 	_door("cafeteria", "north_link", 0.0, 4.0, {"kind": "gate", "area": "atrium", "name": "gate_atrium", "height": 3.0})
 	area = "cafe"
 	_chunk("Kit", false)
+	_passage("north_link", {"step": 4.8, "ribs": false, "tray": -1, "energy": 2.4, "reach": 10.0, "lines": [[-0.9, GUIDE.core], [0.9, GUIDE.core]]})
 	for row in range(3):
 		for column in range(5):
 			if column == 2 and row < 3:
@@ -1271,6 +1684,7 @@ func _lay_canteen() -> void:
 	_solid(_face_centre(cafe, EAST, -420.0, -413.0, 0.0, 0.96, -0.9, -0.22), _face_size(EAST, -420.0, -413.0, 0.0, 0.96, -0.9, -0.22))
 	_wall_sign("AUSGABE", _face_point(cafe, EAST, -416.5, 2.8, -0.05), 26, Color("1c555b"), -PI / 2)
 	_wall_sign("ZENTRALRAUM  B2  ▲", _face_point(cafe, NORTH, 0.0, 3.6, -0.05), 26, Color("c9a227"))
+	_display(_face_point(cafe, NORTH, -7.0, 2.0, 0.0), _model_yaw(NORTH), 3.2, "cafe")
 	_model("metal_trash_can", Vector3(-22.0, UNDER, -407.0), PI / 2, {"height": 0.9, "far": 40.0})
 	_model("potted_plant_04", Vector3(21.5, UNDER, -433.0), 0.6, {"height": 1.4, "far": 40.0})
 	_model("potted_plant_04", Vector3(-21.5, UNDER, -433.0), 2.0, {"height": 1.4, "far": 40.0})
@@ -1287,7 +1701,7 @@ func _lay_canteen() -> void:
 
 func _lay_atrium() -> void:
 	_own_dice(71008)
-	_begin_zone("atrium", "under", ["cafe"])
+	_begin_zone("atrium", "core", ["cafe"])
 	area = "atrium"
 	_room("atrium", deep, Rect2(-24, -489, 48, 44), 12.0, "bighall")
 	_door("north_link", "atrium", 0.0, 4.0, {"height": 3.2})
@@ -1318,7 +1732,9 @@ func _lay_atrium() -> void:
 		var turn := TAU * turn_index / 8.0
 		_stripe(Vector3(cos(turn) * 4.4, UNDER, -467.0 + sin(turn) * 4.4), Vector3(cos(turn) * 4.4 + 0.01, UNDER, -467.0 + sin(turn) * 4.4 + 0.01), 0.5, Color("c9a227"))
 	var hall: Dictionary = room_of["atrium"]
-	_wall_sign("ZENTRALRAUM  B2", _face_point(hall, NORTH, 0.0, 6.2, -0.05), 64, Color("cfe6ff"))
+	_wall_sign("ZENTRALRAUM  B2", _face_point(hall, NORTH, 0.0, 10.8, -0.05), 64, Color("cfe6ff"))
+	_display(_face_point(hall, NORTH, 0.0, 7.6, 0.0), _model_yaw(NORTH), 8.0, "core")
+	_display(Vector3(5.4, UNDER, -451.4), 0.0, 2.6, "core", "stele")
 	_wall_sign("FORSCHUNG  ▲", _face_point(hall, NORTH, 0.0, 3.4, -0.05), 26, Color("c9a227"))
 	_wall_sign("◄  KRANKENSTATION", _face_point(hall, WEST, -469.0, 3.0, -0.05), 22, Color("1c555b"), PI / 2)
 	_wall_sign("TECHNIK  ►", _face_point(hall, EAST, -469.0, 3.0, -0.05), 22, Color("1c555b"), -PI / 2)
@@ -1340,13 +1756,13 @@ func _lay_atrium() -> void:
 	_end_zone()
 	# --- the plant rooms east of the hall
 	_own_dice(71009)
-	_begin_zone("tech", "under", ["atrium"])
-	_room("maint", deep, Rect2(24, -471, 36, 4), 3.4, "tech")
-	_door("atrium", "maint", -469.0, 2.0, {"kind": "slide"})
-	_room("generator", deep, Rect2(40, -467, 20, 22), 6.0, "tech")
-	_door("maint", "generator", 50.0, 2.4)
-	_room("pump", deep, Rect2(40, -491, 20, 20), 6.0, "tech", {"look": {"light": Color("9fd0c0"), "energy": 2.0}})
-	_door("maint", "pump", 50.0, 2.4)
+	_begin_zone("tech", "plant", ["atrium"])
+	_room("maint", deep, Rect2(24, -472, 36, 6), 4.2, "tech", {"lamps": "none"})
+	_door("atrium", "maint", -469.0, 3.0, {"kind": "slide"})
+	_room("generator", deep, Rect2(40, -466, 20, 21), 6.0, "tech")
+	_door("maint", "generator", 50.0, 3.0)
+	_room("pump", deep, Rect2(40, -491, 20, 19), 6.0, "tech", {"look": {"light": Color("9fd0c0"), "energy": 2.0}})
+	_door("maint", "pump", 50.0, 3.0)
 	_chunk("Kit", false)
 	# The generators: two sets on plinths, the switchboard on the south wall.
 	for x in [45.0, 55.0]:
@@ -1379,12 +1795,15 @@ func _lay_atrium() -> void:
 	_pipe(Vector3(50.0, UNDER + 1.2, -486.0), Vector3(50.0, UNDER + 1.2, -476.5), 0.14, Color("8a5a2c"), 10, "steel")
 	_solid(Vector3(50.0, UNDER + 0.7, -481.25), Vector3(0.4, 1.4, 9.5))
 	_chunk("Glass", false)
-	_part("water", Vector3(50.0, UNDER + 0.03, -481.0), Vector3(19.4, 0.04, 19.4), Color.WHITE)
+	_part("water", Vector3(50.0, UNDER + 0.03, -481.5), Vector3(19.4, 0.04, 18.4), Color.WHITE)
 	_chunk("Kit", false)
-	var maint: Dictionary = room_of["maint"]
-	_wall_sign("GENERATOR  ▼      PUMPEN  ▲", _face_point(maint, NORTH, 44.0, 2.7, -0.05), 20, Color("c9a227"))
+	_passage("maint", {"step": 5.93, "light": Color("ffb36b"), "energy": 2.1, "reach": 9.5, "dead": [1], "fail": [4], "lines": [[0.0, GUIDE.tech, 0.16]], "tray": NORTH})
+	_sign_board("maint", NORTH, 44.5, 2.2, [["▲   PUMPEN  ·  WASSER", GUIDE.tech], ["▼   GENERATOR  ·  NOTSTROM", GUIDE.tech]], 4.2, 26)
+	_stencil("maint", SOUTH, 32.9, 2.4, "TECHNIK", 150, Color(0.78, 0.6, 0.2))
+	_display(_face_point(room_of["maint"], SOUTH, 27.2, 1.75, 0.0), _model_yaw(SOUTH), 2.0, "tech")
 	_sealed_door("maint", EAST, -469.0)
-	_stores(Vector3(33.0, UNDER, -470.2), 2)
+	_stores(Vector3(33.0, UNDER, -470.8), 2)
+	_blot(Vector3(38.0, UNDER, -468.6), 1.4, 0.9, Color(0.03, 0.03, 0.025, 0.7))
 	_shared_dice()
 	_end_zone()
 
@@ -1392,12 +1811,12 @@ func _lay_atrium() -> void:
 
 func _lay_research() -> void:
 	_own_dice(71010)
-	_begin_zone("research", "under", ["atrium"])
+	_begin_zone("research", "sick", ["atrium"])
 	area = "decon"
-	_room("decon", deep, Rect2(-4, -501, 8, 12), 3.6, "lab", {"look": {"light": Color("bfe8ff"), "strip_color": Color("7fe0ff")}})
+	_room("decon", deep, Rect2(-4, -501, 8, 12), 4.2, "lab", {"look": {"light": Color("bfe8ff"), "strip_color": Color("7fe0ff")}})
 	_door("atrium", "decon", 0.0, 3.0, {"kind": "gate", "area": "decon", "name": "gate_decon"})
 	area = "research"
-	_room("lab_corridor", deep, Rect2(-4, -569, 8, 68), 4.2, "lab")
+	_room("lab_corridor", deep, Rect2(-4, -569, 8, 68), 5.0, "lab", {"lamps": "none"})
 	_door("decon", "lab_corridor", 0.0, 3.0, {"kind": "gate", "area": "research", "name": "gate_research"})
 	_room("lab_a", deep, Rect2(-28, -519, 24, 18), 3.8, "lab")
 	_room("lab_b", deep, Rect2(-28, -537, 24, 18), 3.8, "lab")
@@ -1409,8 +1828,9 @@ func _lay_research() -> void:
 		_door("lab_corridor", str(entry[0]), float(entry[1]), 2.0, {"kind": "slide"})
 	for entry in [["lab_a", WEST, -504.5, 5.0], ["lab_a", WEST, -515.0, 6.0], ["lab_b", WEST, -522.5, 5.0], ["lab_b", WEST, -533.0, 6.0], ["quarantine", WEST, -543.0, 8.0], ["quarantine", WEST, -559.0, 8.0], ["lab_c", EAST, -504.5, 5.0], ["lab_c", EAST, -515.0, 6.0], ["cryo", EAST, -524.0, 6.0], ["cryo", EAST, -536.0, 6.0]]:
 		_pane("lab_corridor", int(entry[1]), float(entry[2]), float(entry[3]), 0.9, 2.6, "glass", str(entry[0]))
-	_room("cross", deep, Rect2(-30, -573, 60, 4), 4.2, "panel")
-	_door("lab_corridor", "cross", 0.0, 4.0)
+	# The corridor runs into the crossing without a wall between them.
+	_room("cross", deep, Rect2(-30, -577, 60, 8), 5.0, "panel", {"lamps": "none", "look": {"stripe": GUIDE.hall, "panel": Color(0.62, 0.62, 0.6)}})
+	_door("lab_corridor", "cross", 0.0, 8.0, {"kind": "join"})
 	_chunk("Kit", false)
 	# The sluice: nozzles and a grating.
 	for z in [-492.0, -495.0, -498.0]:
@@ -1420,7 +1840,10 @@ func _lay_research() -> void:
 	_part("tread", Vector3(0, UNDER + 0.006, -495.0), Vector3(5.0, 0.012, 9.0), Color(0.3, 0.32, 0.34))
 	var corridor: Dictionary = room_of["lab_corridor"]
 	_wall_sign("FORSCHUNGSTRAKT  ·  SCHUTZSTUFE  3", _face_point(corridor, WEST, -503.0, 3.3, -0.05), 20, Color("b8452f"), PI / 2)
-	_stripe(Vector3(0, UNDER, -568.0), Vector3(0, UNDER, -502.0), 0.14, Color("2f8f8a"))
+	_passage("lab_corridor", {"step": 5.63, "light": Color("d6f5e6"), "energy": 2.3, "reach": 10.0, "dead": [7], "fail": [5], "lines": [[-0.9, GUIDE.research], [0.9, GUIDE.research]], "tray": -1})
+	for z in [-506.0, -524.0]:
+		_floor_arrow(Vector3(0, UNDER, z), 0.0, GUIDE.research)
+	_display(Vector3(0, UNDER + 3.55, -512.47), 0.0, 3.0, "research", "hang", 0.3)
 	for entry in [[-510.0, "LABOR  A", "LABOR  C"], [-528.0, "LABOR  B", "KRYOLAGER"], [-553.0, "QUARANTÄNE", "NASSLABOR"]]:
 		_wall_sign(str(entry[1]), _face_point(corridor, WEST, float(entry[0]) + 2.0, 3.1, -0.05), 18, Color("1c555b"), PI / 2)
 		_wall_sign(str(entry[2]), _face_point(corridor, EAST, float(entry[0]) + 2.0, 3.1, -0.05), 18, Color("1c555b"), -PI / 2)
@@ -1479,28 +1902,32 @@ func _lay_research() -> void:
 	_burst_tank(Vector3(30.2, UNDER, -548.0), "N-11")
 	_burst_tank(Vector3(30.2, UNDER, -552.0), "N-12")
 	# --- the crossing before the containment hall
-	var cross: Dictionary = room_of["cross"]
-	_wall_sign("EINDÄMMUNG  ·  NUR  MIT  SCHUTZAUSRÜSTUNG", _face_point(cross, NORTH, 0.0, 3.4, -0.05), 24, Color("b8452f"))
-	_hazard(Vector3(-4.0, UNDER + 0.005, -572.4), Vector3(4.0, UNDER + 0.005, -572.4), Vector3(0.5, 0.01, 0.4), 16)
-	_sealed_door("cross", WEST, -571.0)
-	_sealed_door("cross", EAST, -571.0)
-	_stores(Vector3(-22.0, UNDER, -571.0), 3)
-	_stores(Vector3(22.0, UNDER, -571.2), 3)
+	_passage("cross", {"step": 5.96, "light": Color("ffd9c8"), "energy": 2.0, "reach": 10.0, "dead": [2, 7], "fail": [4], "tray": SOUTH})
+	for x in [-4.0, 4.0]:
+		_corner_post(Vector3(x, UNDER, -569.0), 5.0)
+	_sign_board("cross", NORTH, 0.0, 4.15, [["EINDÄMMUNG  ·  NUR  MIT  SCHUTZAUSRÜSTUNG", GUIDE.hall]], 6.4, 30)
+	_stencil("cross", NORTH, -10.0, 3.2, "E-01", 200, Color(0.5, 0.12, 0.1))
+	_stencil("cross", NORTH, 10.0, 3.2, "STUFE  4", 130, Color(0.5, 0.12, 0.1))
+	_hazard(Vector3(-4.0, UNDER + 0.008, -576.2), Vector3(4.0, UNDER + 0.008, -576.2), Vector3(0.5, 0.016, 0.4), 16)
+	_sealed_door("cross", WEST, -573.0)
+	_sealed_door("cross", EAST, -573.0)
+	_stores(Vector3(-22.0, UNDER, -574.0), 3)
+	_stores(Vector3(22.0, UNDER, -574.6), 3)
 	_shared_dice()
 	_end_zone()
 	# --- the containment hall
 	_own_dice(71011)
-	_begin_zone("hall", "under", ["research"])
+	_begin_zone("hall", "deep", ["research"])
 	area = "hall"
-	_room("containment", deep, Rect2(-30, -619, 60, 46), 14.0, "bighall", {"look": {"light": Color("ffe1c8"), "energy": 1.5}})
+	_room("containment", deep, Rect2(-30, -619, 60, 42), 14.0, "bighall", {"look": {"light": Color("ffe1c8"), "energy": 1.5}})
 	_door("cross", "containment", 0.0, 5.0, {"kind": "gate", "area": "hall", "name": "gate_hall", "height": 3.6})
 	_chunk("Kit", false)
 	for spot in [Vector3(-16, UNDER, -588), Vector3(16, UNDER, -588), Vector3(-16, UNDER, -606), Vector3(16, UNDER, -606)]:
 		_vessel(spot, 3.4, 11.0, Color(1.0, 0.42, 0.3) if spot.x * (spot.z + 597.0) > 0.0 else Color(0.5, 1.0, 0.62))
-	for spot in [Vector3(-6, UNDER, -582), Vector3(7, UNDER, -598), Vector3(-7, UNDER, -600), Vector3(0, UNDER, -590), Vector3(24, UNDER, -597), Vector3(-25, UNDER, -596), Vector3(-24, UNDER, -578), Vector3(24, UNDER, -578)]:
+	for spot in [Vector3(-6, UNDER, -584), Vector3(7, UNDER, -598), Vector3(-7, UNDER, -600), Vector3(0, UNDER, -590), Vector3(24, UNDER, -597), Vector3(-25, UNDER, -596), Vector3(-24, UNDER, -581), Vector3(24, UNDER, -581)]:
 		_stores(spot, 3)
 	for x in [-9.0, 9.0]:
-		_pillar(Vector3(x, UNDER, -579.0), 0.9, 14.0)
+		_pillar(Vector3(x, UNDER, -582.0), 0.9, 14.0)
 		_pillar(Vector3(x, UNDER, -611.0), 0.9, 14.0)
 	# The freight lift at the far end: a platform in a frame, lamps turning.
 	var lift := Vector3(0, UNDER, -615.0)
@@ -1515,6 +1942,8 @@ func _lay_research() -> void:
 		_light(lift + Vector3(x, 5.4, 3.3), Color("ffb347"), 1.6, 9.0, false, 0.5, 1.0, 70.0)
 	var hall: Dictionary = room_of["containment"]
 	_wall_sign("FRACHTAUFZUG  ·  EBENE  U3", _face_point(hall, NORTH, 0.0, 7.2, -0.05), 48, Color("c9a227"))
+	_display(_face_point(hall, NORTH, 9.2, 2.3, 0.0), _model_yaw(NORTH), 3.4, "hall")
+	_display(Vector3(6.4, UNDER, -583.6), 0.0, 2.6, "hall", "stele")
 	_wall_sign("EINDÄMMUNGSHALLE", _face_point(hall, SOUTH, 0.0, 6.2, -0.05), 56, Color("cfe6ff"), PI)
 	_shared_dice()
 	_end_zone()
@@ -1561,8 +1990,9 @@ func tour() -> Array:
 		["43_control", Vector3(24.0, DECK, -343.0), Vector3(36.0, DECK + 1.2, -339.5)],
 		["44_checkpoint", Vector3(0, UNDER, -346.5), Vector3(0, UNDER + 1.6, -366.0)],
 		["45_guard", Vector3(7.5, UNDER, -358.5), Vector3(14.0, UNDER + 1.2, -353.0)],
-		["46_ring_east", Vector3(-40, UNDER, -367.0), Vector3(40, UNDER + 1.6, -367.0)],
-		["47_office", Vector3(-42.5, UNDER, -370.5), Vector3(-20, UNDER + 1.0, -390.0)],
+		["46_ring_east", Vector3(-40, UNDER, -365.0), Vector3(40, UNDER + 1.6, -365.0)],
+		["46b_ring_junction", Vector3(-9, UNDER, -362.5), Vector3(4, UNDER + 2.2, -369.0)],
+		["47_office", Vector3(-31.2, UNDER, -370.4), Vector3(-37.0, UNDER + 0.7, -389.0)],
 		["48_meeting", Vector3(-14.5, UNDER, -370.5), Vector3(-6, UNDER + 1.2, -380.0)],
 		["49_security", Vector3(14, UNDER, -371.0), Vector3(22, UNDER + 1.8, -385.0)],
 		["50_server", Vector3(36.5, UNDER, -370.5), Vector3(36.5, UNDER + 1.4, -392.0)],
@@ -1577,8 +2007,8 @@ func tour() -> Array:
 		["59_atrium_supply", Vector3(-10, UNDER, -451.0), Vector3(-12, UNDER + 1.2, -445.5)],
 		["60_med", Vector3(-26, UNDER, -469.0), Vector3(-45, UNDER + 1.0, -474.0)],
 		["61_maint", Vector3(26, UNDER, -469.0), Vector3(58, UNDER + 1.6, -469.0)],
-		["62_generator", Vector3(50, UNDER, -465.0), Vector3(48, UNDER + 1.6, -446.0)],
-		["63_pump", Vector3(50, UNDER, -473.0), Vector3(52, UNDER + 1.6, -490.0)],
+		["62_generator", Vector3(50, UNDER, -464.0), Vector3(48, UNDER + 1.6, -446.0)],
+		["63_pump", Vector3(50, UNDER, -474.0), Vector3(52, UNDER + 1.6, -490.0)],
 		["64_decon", Vector3(0, UNDER, -490.5), Vector3(0, UNDER + 1.6, -501.0)],
 		["65_lab_corridor", Vector3(0, UNDER, -502.5), Vector3(0, UNDER + 1.6, -569.0)],
 		["66_lab_a", Vector3(-6, UNDER, -510.0), Vector3(-24, UNDER + 1.0, -512.0)],
@@ -1586,14 +2016,20 @@ func tour() -> Array:
 		["68_quarantine", Vector3(-6, UNDER, -551.0), Vector3(-26, UNDER + 1.4, -548.0)],
 		["69_cryo", Vector3(6, UNDER, -530.0), Vector3(26, UNDER + 1.2, -527.0)],
 		["70_flooded", Vector3(6, UNDER, -555.0), Vector3(28, UNDER + 1.0, -552.0)],
-		["71_cross", Vector3(0, UNDER, -570.0), Vector3(0, UNDER + 1.8, -573.0)],
-		["72_hall_in", Vector3(0, UNDER, -575.0), Vector3(0, UNDER + 5.0, -612.0)],
+		["71_cross", Vector3(0, UNDER, -566.0), Vector3(0, UNDER + 1.8, -577.0)],
+		["71b_cross_east", Vector3(-20, UNDER, -573.0), Vector3(20, UNDER + 1.8, -573.4)],
+		["72_hall_in", Vector3(0, UNDER, -579.0), Vector3(0, UNDER + 5.0, -612.0)],
 		["73_hall_side", Vector3(-27, UNDER, -598.0), Vector3(14, UNDER + 4.0, -600.0)],
 		["74_lift", Vector3(0, UNDER, -604.0), Vector3(0, UNDER + 2.5, -616.0)],
 		["75_lab_tables", Vector3(-9.0, UNDER, -514.5), Vector3(-22.0, UNDER + 1.0, -508.5)],
 		["76_work_place", Vector3(-21.0, UNDER, -511.5), Vector3(-27.4, UNDER + 1.1, -514.6)],
 		["77_microscope", Vector3(-20.7, UNDER, -513.5), Vector3(-21.6, UNDER + 1.2, -515.0)],
-		["78_sealed_door", Vector3(37.5, UNDER, -367.0), Vector3(44.0, UNDER + 1.2, -367.0)]
+		["78_sealed_door", Vector3(37.5, UNDER, -365.0), Vector3(44.0, UNDER + 1.2, -365.0)],
+		["80_plan_terminal", Vector3(-5.6, UNDER, -331.6), Vector3(-5.6, UNDER + 1.9, -336.0)],
+		["81_plan_atrium", Vector3(0, UNDER, -474.0), Vector3(0, UNDER + 7.4, -489.0)],
+		["82_plan_labs", Vector3(0, UNDER, -505.0), Vector3(0, UNDER + 3.4, -512.5)],
+		["83_plan_spine", Vector3(-2.2, UNDER, -379.4), Vector3(3.8, UNDER + 1.9, -378.1)],
+		["84_plan_station", Vector3(2.0, UNDER, -37.0), Vector3(5.2, UNDER + 1.7, -40.4)]
 	]
 
 ## Starts or ends what is seen from the car while the train runs: the terminal is not
@@ -1634,11 +2070,11 @@ func _after_build() -> void:
 		"booth": Vector3(31.5, UNDER, -33.6), "radio": Vector3(21.0, UNDER, -37.0), "depot": Vector3(47.0, UNDER, -48.0), "ops_from": Vector3(43.5, UNDER, -48.0), "ops_stand": Vector3(30.0, UNDER, -44.0),
 		"nadja_door": Vector3(-38.5, UNDER, -49.5), "nadja_inside": Vector3(-43.5, UNDER, -49.5), "nadja_far": Vector3(-52.0, UNDER, -49.5), "car_a": Vector3(0, UNDER, -57.0),
 		"car_b": Vector3(0, UNDER, -317.0), "terminal": Vector3(0, UNDER, -330.0), "control": Vector3(31.0, DECK, -340.4), "gate_admin": Vector3(0, UNDER, -343.0),
-		"checkpoint": Vector3(0, UNDER, -352.0), "supply_checkpoint": Vector3(12.0, UNDER, -355.0), "junction": Vector3(0, UNDER, -367.0), "office": Vector3(-30.0, UNDER, -381.0),
+		"checkpoint": Vector3(0, UNDER, -354.0), "supply_checkpoint": Vector3(12.0, UNDER, -355.0), "junction": Vector3(0, UNDER, -365.0), "office": Vector3(-31.2, UNDER, -382.6),
 		"security": Vector3(21.0, UNDER, -383.3), "server": Vector3(37.0, UNDER, -381.0), "spine": Vector3(0, UNDER, -387.0), "cafeteria": Vector3(0, UNDER, -420.0),
 		"atrium_south": Vector3(0, UNDER, -448.5), "atrium": Vector3(0, UNDER, -457.0), "supply_atrium": Vector3(-12.0, UNDER, -448.0), "maint": Vector3(30.0, UNDER, -469.0),
 		"pump": Vector3(50.0, UNDER, -481.0), "generator": Vector3(50.0, UNDER, -446.7), "decon": Vector3(0, UNDER, -495.0), "labs_south": Vector3(0, UNDER, -505.0),
-		"labs": Vector3(0, UNDER, -535.0), "cross": Vector3(0, UNDER, -571.0), "hall_end": Vector3(0, UNDER, -596.0), "lift": Vector3(0, UNDER, -615.0)
+		"labs": Vector3(0, UNDER, -535.0), "cross": Vector3(0, UNDER, -573.0), "hall_end": Vector3(0, UNDER, -596.0), "lift": Vector3(0, UNDER, -615.0)
 	}
 	facings = {"landing": 0.0, "landing_out": 0.0}
 	player_start = Vector3(0, 0.05, 61.5)

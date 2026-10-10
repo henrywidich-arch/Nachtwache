@@ -29,11 +29,58 @@ const LAMP_FADE := 36.0
 const ZONE_SIGHT := 64.0
 ## The light that is everywhere, the haze and the sky, by where the viewer is: in the
 ## park, in the villa, or under the ground.
+## ("tint" is the colour of the haze far away. Every mood has every value: the light
+## glides from one to the next as the viewer walks from zone to zone.)
 const MOODS := {
-	"out": {"ambient": Color(0.34, 0.44, 0.6), "energy": 0.56, "fog": 0.0055, "haze": 0.011, "glow": 0.8, "sky": 1.0, "moon": 1.0},
-	"villa": {"ambient": Color(0.5, 0.44, 0.38), "energy": 0.44, "fog": 0.003, "haze": 0.006, "glow": 0.25, "sky": 1.0, "moon": 1.0},
-	"under": {"ambient": Color(0.52, 0.57, 0.63), "energy": 0.62, "fog": 0.0012, "haze": 0.006, "glow": 0.0, "sky": 0.0, "moon": 0.0}
+	"out": {"ambient": Color(0.34, 0.44, 0.6), "energy": 0.56, "fog": 0.0055, "haze": 0.011, "glow": 0.8, "sky": 1.0, "moon": 1.0, "tint": Color(0.16, 0.2, 0.26)},
+	"villa": {"ambient": Color(0.54, 0.43, 0.33), "energy": 0.38, "fog": 0.003, "haze": 0.007, "glow": 0.25, "sky": 1.0, "moon": 1.0, "tint": Color(0.2, 0.17, 0.13)},
+	"under": {"ambient": Color(0.52, 0.57, 0.63), "energy": 0.62, "fog": 0.0012, "haze": 0.006, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.16, 0.2, 0.26)},
+	# The station: sodium light on concrete, dust in the air.
+	"sodium": {"ambient": Color(0.62, 0.5, 0.36), "energy": 0.4, "fog": 0.003, "haze": 0.013, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.22, 0.16, 0.09)},
+	# The terminal, the offices, the canteen: cold and white.
+	"cold": {"ambient": Color(0.5, 0.57, 0.66), "energy": 0.52, "fog": 0.0024, "haze": 0.006, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.14, 0.19, 0.26)},
+	# Where the facility has locked itself down: red, and nothing else.
+	"alarm": {"ambient": Color(0.72, 0.17, 0.12), "energy": 0.46, "fog": 0.004, "haze": 0.015, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.3, 0.05, 0.04)},
+	# The central hall.
+	"core": {"ambient": Color(0.42, 0.52, 0.66), "energy": 0.36, "fog": 0.003, "haze": 0.011, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.17, 0.24)},
+	# The plant rooms: dim, warm, oily.
+	"plant": {"ambient": Color(0.56, 0.45, 0.32), "energy": 0.3, "fog": 0.004, "haze": 0.014, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.14, 0.08)},
+	# The research wing: a sick green.
+	"sick": {"ambient": Color(0.38, 0.56, 0.52), "energy": 0.36, "fog": 0.005, "haze": 0.01, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.2, 0.18)},
+	# The containment hall: dark, with what glows in it.
+	"deep": {"ambient": Color(0.3, 0.36, 0.46), "energy": 0.2, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.12, 0.16)}
 }
+## The moods of places under the ground (no moon, no shadows of it).
+const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep"]
+## Water that stands in a room: dark, smooth, with a slow swell that bends what is
+## mirrored in it. It is drawn where it stands deeper than a few millimetres over the
+## floor `floor_y`, so that a sheet of it may rise out of the floor like a shore.
+const FLOOD := """shader_type spatial;
+render_mode cull_back, shadows_disabled;
+uniform sampler2D ripples : hint_normal, repeat_enable, filter_linear_mipmap;
+uniform vec3 deep : source_color = vec3(0.012, 0.05, 0.055);
+uniform float floor_y = -9.6;
+varying vec3 world;
+void vertex() {
+	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+	float depth = world.y - floor_y;
+	if (depth < 0.006) {
+		discard;
+	}
+	vec3 a = texture(ripples, world.xz * 0.19 + vec2(TIME * 0.011, TIME * 0.016)).rgb * 2.0 - 1.0;
+	vec3 b = texture(ripples, world.xz * 0.43 + vec2(-TIME * 0.019, TIME * 0.008)).rgb * 2.0 - 1.0;
+	vec2 tilt = (a.xy + b.xy) * 0.05;
+	vec3 up = normalize(vec3(tilt.x, 1.0, tilt.y));
+	NORMAL = normalize((VIEW_MATRIX * vec4(up, 0.0)).xyz);
+	float shore = smoothstep(0.006, 0.08, depth);
+	ALBEDO = mix(vec3(0.045, 0.06, 0.06), deep, shore);
+	ROUGHNESS = mix(0.22, 0.03, shore);
+	METALLIC = 0.0;
+	SPECULAR = 0.9;
+}
+"""
 
 ## The floors: {id, label, y, bounds (metres), region (cells), rooms}. Its index is the
 ## level a navigation grid has.
@@ -71,6 +118,8 @@ var plan_stamp := 0
 var plan_made := -1
 var mood := "out"
 var mood_now: Dictionary = {}
+## Lamp glass that is a material of its own (see _own_glow).
+var lone_glows: Array = []
 ## How long the parts of the build took (milliseconds), and the time spent on finding
 ## paths, for the checks.
 var build_times: Dictionary = {}
@@ -99,7 +148,7 @@ func _begin_zone(id: String, mood_id: String = "", sees: Array = []) -> void:
 	var entry: Dictionary = zones[id]
 	if mood_id != "":
 		entry.mood = mood_id
-		entry.shadows = mood_id != "under"
+		entry.shadows = not BELOW.has(mood_id)
 	for other in sees:
 		_zones_see(id, str(other))
 	zone_child = get_child_count()
@@ -334,6 +383,8 @@ func _build_surfaces() -> void:
 	_surface("plate", "metal_plate_02", 2.0, 0.7, 0.55)
 	_surface("shutter", "painted_metal_shutter", 2.0, 0.8, 0.4)
 	_surface("granite", "granite_tile", 2.0, 0.32)
+	# The same stone, polished: the lamps of a corridor stand in it.
+	_surface("gloss", "granite_tile", 2.0, 0.17)
 	_surface("tiles", "interior_tiles", 1.6, 0.6)
 	_surface("cladding", "exterior_wall_cladding_03", 2.4, 0.75)
 	# Armoured glass: a little more to see of it than of the farm's.
@@ -350,6 +401,31 @@ func _build_surfaces() -> void:
 	water.roughness = 0.03
 	water.metallic = 0.3
 	mats["water"] = water
+	# What a flood leaves on a wall: the colour of a box is its colour and how much it covers.
+	var stain := StandardMaterial3D.new()
+	stain.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	stain.vertex_color_use_as_albedo = true
+	stain.vertex_color_is_srgb = true
+	stain.roughness = 0.3
+	mats["stain"] = stain
+	# Water one wades through (see FLOOD): not see-through, so that the room is mirrored in it.
+	var swell := FastNoiseLite.new()
+	swell.seed = 77
+	swell.frequency = 0.012
+	swell.fractal_octaves = 3
+	var ripples := NoiseTexture2D.new()
+	ripples.width = 256
+	ripples.height = 256
+	ripples.seamless = true
+	ripples.noise = swell
+	ripples.as_normal_map = true
+	ripples.bump_strength = 5.0
+	var flood_shader := Shader.new()
+	flood_shader.code = FLOOD
+	var flood := ShaderMaterial.new()
+	flood.shader = flood_shader
+	flood.set_shader_parameter("ripples", ripples)
+	mats["flood"] = flood
 
 ## The file of a model: one of assets/hive/models by its name, or a path below assets/.
 func _model_path(id: String) -> String:
@@ -593,26 +669,31 @@ func _dress(room: Dictionary, side: int, look: Dictionary, a: float, b: float, y
 	var high := y1 > tall - 0.05
 	match str(look.get("dress", "")):
 		"panel":
+			# Dark steel at the foot, a dark lower row, a band in the colour of the sector, light
+			# panels above it and a seam of light over those.
 			var light: Color = look.get("panel", Color(0.8, 0.83, 0.85))
+			var dark: Color = look.get("wainscot", Color(0.36, 0.39, 0.43))
 			if low:
-				_face_box(room, side, "plate", a, b, 0.0, minf(0.2, y1), -0.03, 0.0, Color("15181a"))
-			var row := 0.26
-			var first := true
+				_face_box(room, side, "plate", a, b, 0.0, minf(0.2, y1), -0.045, 0.0, Color("15181a"))
+			var count := maxi(1, roundi((b - a) / 1.5))
+			var wide := (b - a) / count
+			var bands: Array = [[0.26, 0.98, dark]]
+			var row := 1.14
 			while row + 0.7 < tall:
-				var top := minf(row + 2.44, tall - 0.3)
-				var p0 := maxf(row, y0 + (0.0 if low else 0.05))
-				var p1 := minf(top, y1 - (0.0 if high else 0.05))
-				if p1 - p0 > 0.3:
-					var count := maxi(1, roundi((b - a) / 1.5))
-					var wide := (b - a) / count
-					for i in range(count):
-						_face_box(room, side, "cladding", a + i * wide + 0.03, a + (i + 1) * wide - 0.03, p0, p1, -0.035, 0.0, _vary(light, 0.012))
-				if first and low and y1 > top + 0.1 and top + 0.3 < tall and bool(look.get("strip", true)):
-					_face_glow(room, side, a, b, top + 0.02, top + 0.06, -0.014, 0.0, look.get("strip_color", Color("bfe0ff")), float(look.get("strip_glow", 2.0)))
-				if first and look.has("stripe") and p1 - p0 > 1.2 and p0 < 1.0:
-					_face_box(room, side, "plain", a, b, 1.02, 1.1, -0.04, 0.0, look.stripe)
-				first = false
+				var top := minf(row + (1.56 if row < 1.2 else 2.44), tall - 0.3)
+				bands.append([row, top, light if row < 1.2 else light.darkened(0.06)])
 				row = top + 0.08
+			for band in bands:
+				var p0 := maxf(float(band[0]), y0 + (0.0 if low else 0.05))
+				var p1 := minf(float(band[1]), y1 - (0.0 if high else 0.05))
+				if p1 - p0 > 0.2:
+					for i in range(count):
+						_face_box(room, side, "cladding", a + i * wide + 0.03, a + (i + 1) * wide - 0.03, p0, p1, -0.035, 0.0, _vary(band[2], 0.012))
+			if low and y1 > 1.12:
+				_face_box(room, side, "plain", a, b, 1.02, 1.1, -0.026, 0.0, look.get("stripe", Color("2b3034")))
+			if low and y1 > 2.8 and tall > 3.1 and bool(look.get("strip", true)):
+				_face_glow(room, side, a, b, 2.72, 2.76, -0.014, 0.0, look.get("strip_color", Color("bfe0ff")), float(look.get("strip_glow", 2.0)))
+			_tide(room, side, look, a, b, y0, y1)
 		"wood":
 			var wood: Color = look.get("wood", Color(0.62, 0.56, 0.5))
 			var dark := wood.darkened(0.3)
@@ -648,9 +729,26 @@ func _dress(room: Dictionary, side: int, look: Dictionary, a: float, b: float, y
 				for run in runs:
 					_pipe(_face_point(room, side, a, tall - float(run[0]), -0.16), _face_point(room, side, b, tall - float(run[0]), -0.16), float(run[1]), run[2], 8)
 				_face_box(room, side, "plate", a, b, tall - 1.34, tall - 1.26, -0.3, 0.0, Color("2b2f31"))
+			_tide(room, side, look, a, b, y0, y1)
 		"concrete":
 			if look.has("stripe") and low and y1 > 1.2:
 				_face_box(room, side, "plain", a, b, 1.0, 1.1, -0.006, 0.0, look.stripe)
+
+## The mark a flood has left on a piece of wall: a look with "tide" (how high the water
+## stood) has it, on the sides "tide_sides" (left out: all) and between the two places
+## "tide_span" along the wall (left out: everywhere).
+func _tide(room: Dictionary, side: int, look: Dictionary, a: float, b: float, y0: float, y1: float) -> void:
+	if not look.has("tide") or y0 > 0.05 or not (look.get("tide_sides", [NORTH, EAST, SOUTH, WEST]) as Array).has(side):
+		return
+	var mark := minf(float(look.tide), y1)
+	var span: Array = look.get("tide_span", [-INF, INF])
+	var from := maxf(a, float(span[0]))
+	var to := minf(b, float(span[1]))
+	if to - from < 0.1 or mark < 0.4:
+		return
+	_face_box(room, side, "stain", from, to, 0.21, mark, -0.054, -0.052, Color(0.09, 0.15, 0.11, 0.46))
+	if y1 > float(look.tide) + 0.05:
+		_face_box(room, side, "plain", from, to, mark, mark + 0.03, -0.06, -0.047, Color(0.12, 0.16, 0.11))
 
 # ---------------------------------------------------------------- rooms
 
@@ -686,7 +784,13 @@ func _build_room(room: Dictionary) -> void:
 		for side in range(4):
 			if not (room.bare as Array).has(side):
 				_build_side(room, side, look)
+	# (`glow`: the glass of its lamps is a material of its own, which can be dimmed alone.)
+	var kept := glow_key
+	if room.has("glow"):
+		_own_glow(str(room.glow))
+		glow_key = str(room.glow)
 	_light_room(room, look)
+	glow_key = kept
 
 ## The lamps of a room: a grid under its ceiling, as wide-meshed as its style says.
 func _light_room(room: Dictionary, look: Dictionary) -> void:
@@ -697,13 +801,24 @@ func _light_room(room: Dictionary, look: Dictionary) -> void:
 	var gap := float(look.get("lamp_gap", 6.0))
 	var nx := maxi(1, roundi(inner.size.x / gap))
 	var nz := maxi(1, roundi(inner.size.y / gap))
+	# `lamp_every`: only every so many of them is a lamp that lights, the others only glow
+	# (a light costs time, a glowing tube none); `dead`: the share that is dark.
+	var every := maxi(1, int(look.get("lamp_every", 1)))
+	var dead := float(look.get("dead", 0.0))
+	var before := flickers.size()
 	for ix in range(nx):
 		for iz in range(nz):
 			var at := Vector3(inner.position.x + (ix + 0.5) * inner.size.x / nx, float(room.y) + float(room.height), inner.position.y + (iz + 0.5) * inner.size.y / nz)
-			_lamp(kind, at, look, inner.size.x >= inner.size.y, float(room.height))
+			var how := "lit" if (ix + iz) % every == 0 else "glow"
+			if dead > 0.0 and random.randf() < dead:
+				how = "dead"
+			_lamp(kind, at, look, inner.size.x >= inner.size.y, float(room.height), how)
+	room["lights"] = [before, flickers.size()]
 
 ## A lamp of a kind under a ceiling at `at`. Returns its light.
-func _lamp(kind: String, at: Vector3, look: Dictionary, along_x: bool, tall: float) -> Light3D:
+## (`how`: "lit", or "glow" for one that only glows, or "dead" for a dark one - a tube or
+## a caged lamp; the others always light.)
+func _lamp(kind: String, at: Vector3, look: Dictionary, along_x: bool, tall: float, how: String = "lit") -> Light3D:
 	var color: Color = look.get("light", Color("d6e8ff"))
 	var energy := float(look.get("energy", 1.5))
 	var reach := float(look.get("reach", maxf(7.0, float(look.get("lamp_gap", 6.0)) * 1.3)))
@@ -711,15 +826,27 @@ func _lamp(kind: String, at: Vector3, look: Dictionary, along_x: bool, tall: flo
 	var lamp: Light3D
 	match kind:
 		"tube":
-			var size := Vector3(1.3, 0.07, 0.3) if along_x else Vector3(0.3, 0.07, 1.3)
+			# Two tubes in a housing.
+			var size := Vector3(1.5, 0.07, 0.5) if along_x else Vector3(0.5, 0.07, 1.5)
+			var tube := Vector3(1.36, 0.03, 0.1) if along_x else Vector3(0.1, 0.03, 1.36)
+			var apart := Vector3(0, 0, 0.12) if along_x else Vector3(0.12, 0, 0)
 			_part("plate", at - Vector3(0, 0.035, 0), size, Color("1d2022"))
-			_glow_box(at - Vector3(0, 0.08, 0), size - Vector3(0.1, 0.04, 0.08), color, 5.5)
-			lamp = _light(at - Vector3(0, minf(0.9, tall * 0.2), 0), color, energy, reach, false, flicker, 0.35, LAMP_FADE)
-			(lamp as OmniLight3D).omni_attenuation = 0.9
+			for edge in [-1.0, 1.0]:
+				if how == "dead":
+					_part("plain", at - Vector3(0, 0.085, 0) + apart * edge, tube, Color("3a3e40"))
+				else:
+					_glow_box(at - Vector3(0, 0.085, 0) + apart * edge, tube, color, 5.5)
+			if how == "lit":
+				lamp = _light(at - Vector3(0, minf(0.9, tall * 0.2), 0), color, energy, reach, false, flicker, 0.35, LAMP_FADE)
+				(lamp as OmniLight3D).omni_attenuation = 0.9
 		"cage":
 			_part("plate", at - Vector3(0, 0.04, 0), Vector3(0.26, 0.08, 0.26), Color("1b1c1b"))
-			_glow_ball(at - Vector3(0, 0.14, 0), 0.08, color, 5.0)
-			lamp = _light(at - Vector3(0, 0.6, 0), color, energy, reach, false, flicker, 0.5, LAMP_FADE)
+			if how == "dead":
+				batch.ellipsoid(mats["plain"], at - Vector3(0, 0.14, 0), Vector3.ONE * 0.08, Color("3a3e40"), Basis.IDENTITY, 8, 5)
+			else:
+				_glow_ball(at - Vector3(0, 0.14, 0), 0.08, color, 5.0)
+			if how == "lit":
+				lamp = _light(at - Vector3(0, 0.6, 0), color, energy, reach, false, flicker, 0.5, LAMP_FADE)
 		"hang":
 			var drop := maxf(1.0, tall - float(look.get("lamp_height", 5.2)))
 			_part("plain", at - Vector3(0, drop * 0.5, 0), Vector3(0.03, drop, 0.03), Color("101010"))
@@ -1163,7 +1290,8 @@ func _commit() -> void:
 		var zone_id := str(key).get_slice("|", 0)
 		var parent: Node3D = zones[zone_id].node if zones.has(zone_id) else self
 		for instance in (chunks[key] as MeshBatch).commit(parent, str(key).get_slice("|", 1), chunk_shadows[key]):
-			if instance.mesh.surface_get_material(0) in [mats["glow"], mats["steady"], mats["blink"], mats["screen"], mats["pane"], mats["glass"]]:
+			var made: Material = instance.mesh.surface_get_material(0)
+			if made in [mats["glow"], mats["steady"], mats["blink"], mats["screen"], mats["pane"], mats["glass"], mats["flood"], mats["stain"]] or lone_glows.has(made):
 				instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	chunks.clear()
 
@@ -1238,6 +1366,7 @@ func _apply_mood() -> void:
 	environment.ambient_light_color = mood_now.ambient
 	environment.ambient_light_energy = float(mood_now.energy)
 	environment.fog_density = float(mood_now.fog)
+	environment.fog_light_color = mood_now.tint
 	environment.volumetric_fog_density = float(mood_now.haze)
 	environment.volumetric_fog_emission_energy = float(mood_now.glow)
 	environment.background_energy_multiplier = float(mood_now.sky)
@@ -1323,7 +1452,7 @@ func is_indoors(pos: Vector3) -> bool:
 	if room.is_empty():
 		# Between rooms: a stairwell under the ground is indoors too.
 		var id := zone_at(pos)
-		return id != "" and str(zones[id].mood) == "under"
+		return id != "" and BELOW.has(str(zones[id].mood))
 	return not bool(room.outdoor)
 
 func is_toxic(_pos: Vector3) -> bool:
@@ -1482,6 +1611,22 @@ func _look_from(pos: Vector3) -> void:
 		_show_zones()
 	elif pos.distance_squared_to(shown_at) > 4.0:
 		_show_zones()
+
+## Gives a zone another mood (the red of a lockdown), at once if the viewer is in it.
+func set_zone_mood(id: String, mood_id: String) -> void:
+	if not zones.has(id) or not MOODS.has(mood_id):
+		return
+	zones[id].mood = mood_id
+	if here_zone == id:
+		mood = mood_id
+
+## Lamp glass that can be dimmed without touching any other: a copy of the map's, under
+## its own name (for the room option `glow`, or for glow_key while something is built).
+func _own_glow(key: String) -> StandardMaterial3D:
+	if not mats.has(key):
+		mats[key] = (mats["glow"] as StandardMaterial3D).duplicate()
+		lone_glows.append(mats[key])
+	return mats[key]
 
 func _show_zones() -> void:
 	if not zones.has(here_zone):
