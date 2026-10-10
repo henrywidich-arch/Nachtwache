@@ -9,10 +9,21 @@
 # drum really comes off the gun during a reload.
 #
 # The gun is turned so that the muzzle points forward, scaled to 1.02 m (a G3-type
-# machine gun) and put with the middle of its pistol grip on the origin. The drum is
-# scaled so that its feed tower fits the magazine well (the drum is then 20 cm across) and
-# set into the well, hanging to the left of the gun as the feed tower sits at the side of
-# the drum. Both have their texture seams welded, are reduced (gun about 70,000, drum
+# machine gun) and put with the middle of its pistol grip on the origin.
+#
+# The drum is a drum as on an AK or a Thompson: its own axis lies ALONG the barrel, its two
+# round faces look at the muzzle and at the shooter, and the cartridges in it lie along
+# that axis. The face with the winding key (two wings round a boss), the latch strap and
+# the box of the feed tower is its back and looks at the shooter; the plain cover with the
+# hub is its front. So it is turned until its axis lies along the barrel, scaled so that
+# the tower's box is as wide as the housing of the magazine well (the drum is then 17 cm
+# across and 8.4 cm deep), and hung in the middle under the gun: the box goes into the
+# back of the housing, the drum lies forward of it, clear of the trigger guard and well
+# behind the handguard. (The first build had it a quarter turn off - the axis across the
+# gun, the box in the well, the whole drum hanging off to the left like a wheel beside
+# the gun - because gun and drum were given the same turn: the gun's model shows its side
+# to the front, the drum's model its round face.)
+# Both have their texture seams welded, are reduced (gun about 70,000, drum
 # about 20,000 triangles) and get textures of 2048 pixels (JPEG in the GLB, as Godot
 # extracts them).
 #
@@ -48,16 +59,20 @@ OUT_GLB = os.path.abspath(arg("--out", os.path.join(HERE, "..", "assets", "model
 # x = -0.704) stands at z = 0.205, the notch of the rear sight above the drum at x = 0.365.
 GUN_SCALE = 0.533
 GRIP = Vector((0.37, 0.0, -0.12))
-WELL = Vector((0.0695, 0.0025, -0.057))      # the middle of the mouth of the magazine well
+WELL_BACK = Vector((0.150, 0.0025, -0.057))  # the back end of the underside of the well's housing, in the middle
 SIGHT_Z = 0.205
 FRONT_SIGHT_X, REAR_SIGHT_X = -0.704, 0.365
 GUN_TRIANGLES = 70000
 # ------------------------------------------------------------------ the drum (source)
-# In mgMagazin.glb: the drum is a disc about the y axis (radius 0.877, from y = -0.52 to
-# 0.35), its feed tower on top from z = 0.79 to 0.949, x = -0.284 to 0.284 (along the
-# gun), y = 0.256 to 0.555 (at the side of the drum). The bottom of the drum is z = -0.952.
-DRUM_SCALE = 0.115
-TOWER = Vector((0.0, 0.405, 0.80))            # the foot of the feed tower, where it meets the drum
+# In mgMagazin.glb: the drum is a disc about the y axis (radius 0.877; its plain front
+# face at y = -0.52, its back face with the winding key at y = 0.35). The box of its feed
+# tower hangs on the back face at the top: x = -0.284 to 0.284 (across the gun), y = 0.256
+# to 0.555, its top at z = 0.949, which is 0.072 above the drum's rim. The bottom of the
+# drum is z = -0.952.
+DRUM_SCALE = 0.097
+BOX = Vector((0.0, 0.555, 0.949))            # the box of the feed tower: the back edge of its top, in the middle
+BOX_INSET = 0.003                            # how far the box stays inside the back end of the housing (metres)
+BOX_SUNK = 0.004                             # how far its top goes up into the housing; the rim stays 3 mm under it
 DRUM_BOTTOM = -0.952
 DRUM_TRIANGLES = 20000
 TEXTURE = 2048
@@ -68,13 +83,17 @@ def gun_point(p):
     return Vector((d.y, -d.x, d.z)) * GUN_SCALE
 
 
-WELL_MOUTH = gun_point(WELL)
+# Where the back edge of the box's top comes to lie, in modelling space.
+BOX_PLACE = gun_point(WELL_BACK) + Vector((0.0, BOX_INSET, BOX_SUNK))
+# The drum's turn: half a turn about the vertical in its own space brings its back face
+# (+y) to the shooter (-y of the modelling space) without mirroring anything.
+DRUM_TURN = Matrix.Rotation(math.radians(180.0), 4, "Z")
 
 
 def drum_point(p):
-    """A point of mgMagazin.glb in modelling space, with the drum seated in the well."""
-    d = Vector(p) - TOWER
-    return Vector((d.y, -d.x, d.z)) * DRUM_SCALE + WELL_MOUTH
+    """A point of mgMagazin.glb in modelling space, with the drum hung under the well."""
+    d = Vector(p) - BOX
+    return Vector((-d.x, -d.y, d.z)) * DRUM_SCALE + BOX_PLACE
 
 
 def bounds(obj):
@@ -150,7 +169,7 @@ def main():
     gun = load(GUN_SRC)
     prepare(gun, Matrix.Scale(GUN_SCALE, 4) @ rot @ Matrix.Translation(-GRIP), "Body", GUN_TRIANGLES, "mg2")
     drum = load(DRUM_SRC)
-    prepare(drum, Matrix.Translation(WELL_MOUTH) @ Matrix.Scale(DRUM_SCALE, 4) @ rot @ Matrix.Translation(-TOWER), "Magazine", DRUM_TRIANGLES, "mg2_drum")
+    prepare(drum, Matrix.Translation(BOX_PLACE) @ Matrix.Scale(DRUM_SCALE, 4) @ DRUM_TURN @ Matrix.Translation(-BOX), "Magazine", DRUM_TRIANGLES, "mg2_drum")
 
     root = bpy.data.objects.new("MG2", None)
     bpy.context.scene.collection.objects.link(root)
@@ -166,7 +185,8 @@ def main():
     print("SPEC sight line %.4f" % ((SIGHT_Z - GRIP.z) * GUN_SCALE), "front post", godot(gun_point((FRONT_SIGHT_X, 0, SIGHT_Z))), "rear sight", godot(gun_point((REAR_SIGHT_X, 0, SIGHT_Z))))
     print("SPEC receiver top %.4f" % ((0.165 - GRIP.z) * GUN_SCALE))
     print("SPEC support", godot(gun_point((-0.40, 0.0, 0.085))))
-    print("SPEC well", godot(WELL_MOUTH))
+    print("SPEC well housing back end", godot(gun_point(WELL_BACK)), "box top back edge", godot(BOX_PLACE))
+    print("SPEC drum faces: back (winding key) at z %.4f, front at z %.4f, rim top at y %.4f" % (-drum_point((0, 0.35, 0)).y, -drum_point((0, -0.52, 0)).y, drum_point((0, 0, 0.877)).z))
     centre = (dlow + dhigh) * 0.5
     print("SPEC magazine_foot", godot(Vector((centre.x, centre.y, dlow.z))), "drum from", godot(dlow), "to", godot(dhigh))
     print("SPEC gun length %.3f height %.3f" % (high.y - low.y, high.z - low.z))

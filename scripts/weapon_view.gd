@@ -84,15 +84,17 @@ const GUNS := {
 		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.008, -0.053, -0.18)
 	},
 	# The M21E, the second machine gun (its id is mg2; tools/blender_make_mg2.py): the gun and
-	# its drum are two models of the user's, each with its own textures. The drum sits in the
-	# magazine well in front of the trigger guard and hangs to the left; it comes off
-	# downwards. Aimed over the notch of its rear sight and its hooded front post (irons: the
-	# tip of the post).
+	# its drum are two models of the user's, each with its own textures. The drum hangs in
+	# the middle under the magazine well, in front of the trigger guard: its own axis lies
+	# along the barrel, the face with the winding key looks at the shooter, and the box of
+	# its feed tower goes up into the back of the well. It comes off downwards, and the hand
+	# takes it from below (magazine_foot: the lowest point of its rim). Aimed over the notch
+	# of its rear sight and its hooded front post (irons: the tip of the post).
 	"mg2": {
 		"scene": "res://assets/models/mg2.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1165, -0.7094), "bore": 0.0133,
 		"rail": 0.1519, "optic": -0.15, "irons": 0.1754,
 		"support": Vector3(0, 0.1093, -0.4104), "handle": Vector3(-0.03, 0.133, -0.52),
-		"magazine_out": Vector3(-0.2, -0.98, 0.0), "magazine_foot": Vector3(-0.0452, -0.1678, -0.1602)
+		"magazine_out": Vector3(-0.1, -0.99, 0.0), "magazine_foot": Vector3(0.0014, -0.1467, -0.174)
 	}
 }
 ## The reflex sight is the user's model of a holographic sight: a hood with a tunnel to
