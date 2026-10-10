@@ -38,7 +38,7 @@ const MOODS := {
 	# The station: sodium light on concrete, dust in the air.
 	"sodium": {"ambient": Color(0.62, 0.5, 0.36), "energy": 0.4, "fog": 0.003, "haze": 0.013, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.22, 0.16, 0.09)},
 	# The terminal, the offices, the canteen: cold and white.
-	"cold": {"ambient": Color(0.5, 0.57, 0.66), "energy": 0.52, "fog": 0.0024, "haze": 0.006, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.14, 0.19, 0.26)},
+	"cold": {"ambient": Color(0.5, 0.57, 0.66), "energy": 0.52, "fog": 0.0024, "haze": 0.008, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.14, 0.19, 0.26)},
 	# Where the facility has locked itself down: red, and nothing else.
 	"alarm": {"ambient": Color(0.72, 0.17, 0.12), "energy": 0.46, "fog": 0.004, "haze": 0.015, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.3, 0.05, 0.04)},
 	# The central hall.
@@ -696,6 +696,11 @@ func _dress(room: Dictionary, side: int, look: Dictionary, a: float, b: float, y
 				if p1 - p0 > 0.2:
 					for i in range(count):
 						_face_box(room, side, "cladding", a + i * wide + 0.03, a + (i + 1) * wide - 0.03, p0, p1, -0.035, 0.0, _vary(band[2], 0.012))
+			# Louvres in every third panel of the lower row: where the air of the facility comes from.
+			if low and y1 > 1.03 and wide > 0.9:
+				for i in range(1, count, 3):
+					for k in range(4):
+						_face_box(room, side, "plain", a + i * wide + 0.16, a + (i + 1) * wide - 0.16, 0.36 + k * 0.15, 0.42 + k * 0.15, -0.05, -0.035, Color("0c0e0f"))
 			if low and y1 > 1.12:
 				_face_box(room, side, "plain", a, b, 1.02, 1.1, -0.026, 0.0, look.get("stripe", Color("2b3034")))
 			if low and y1 > 2.8 and tall > 3.1 and bool(look.get("strip", true)):
@@ -863,7 +868,7 @@ func _lamp(kind: String, at: Vector3, look: Dictionary, along_x: bool, tall: flo
 			batch.cylinder(mats["plate"], at - Vector3(0, drop + 0.2, 0), 0.34, 0.1, 0.22, Color("202326"), 12)
 			_glow_box(at - Vector3(0, drop + 0.21, 0), Vector3(0.36, 0.02, 0.36), color, 6.0)
 			_light(at - Vector3(0, drop + 0.6, 0), color, energy * 1.5, reach, false, flicker, 0.2, LAMP_FADE + 12.0)
-			lamp = _spot(at - Vector3(0, drop + 0.25, 0), Vector3.DOWN, color, energy * 7.0, tall - drop + 4.0, 66.0, flicker, 0.7, LAMP_FADE + 12.0)
+			lamp = _spot(at - Vector3(0, drop + 0.25, 0), Vector3.DOWN, color, energy * 7.0, tall - drop + 4.0, 66.0, flicker, 1.6, LAMP_FADE + 12.0)
 			(lamp as SpotLight3D).spot_attenuation = 0.7
 		"chandelier":
 			var hang := float(look.get("lamp_drop", 0.5))

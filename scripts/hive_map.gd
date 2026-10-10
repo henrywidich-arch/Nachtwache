@@ -1666,6 +1666,7 @@ func _lay_admin() -> void:
 	_desk(Vector3(27.0, UNDER, -374.0), -PI / 2, 5)
 	_lockers("security", WEST, -384.0, -380.0, Color("3d4a54"))
 	_lockers("security", EAST, -383.8, -380.2, Color("2c3236"))
+	_display(_face_point(security, WEST, -374.4, 1.98, 0.0), _model_yaw(WEST), 2.6, "security")
 	_office_chair(Vector3(22.6, UNDER, -379.6), 1.1, true)
 	_blot(Vector3(19.6, UNDER, -379.0), 1.0, 0.7)
 	_litter(Vector3(24.0, UNDER, -377.4), 1.2, 8)
