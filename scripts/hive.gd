@@ -10,8 +10,10 @@ extends Node
 ## for a while. To the game this is a night that never begins (as in the test room): the
 ## director keeps the next round from ever starting and spawns by itself.
 ##
-## What is said here is a stand-in: lines that are only read, until the mission's own
-## dialogue is written and recorded.
+## What is said is the mission's own dialogue (Radio, the cues m2_...): command over the
+## radio - until the channel is cleared at the station that is not Coleman's voice -, Nadja
+## and the operators where they stand, Nadja over the loudspeakers of the facility, and
+## the squad among itself. All of it waits its turn in one queue (see "what is said").
 
 ## The stages in their order: what the HUD calls the place, the goal, the place the marker
 ## points at, and how strong the enemies are there (as a round of the first mission).
@@ -76,7 +78,14 @@ const RIDE_SECONDS := 15.0
 const NADJA_HEALTH := 260.0
 const INTRO_SECONDS := 6.5
 const START_ARMOUR := 50.0
-const SPEAKER_TINT := {"COLEMAN": Color(0, 0, 0, 0), "NADJA": Color(0.55, 0.3, 0.42, 0.9), "PHANTOM": Color(0.1, 0.22, 0.34, 0.9), "HAVOC": Color(0.1, 0.22, 0.34, 0.9), "GHOST": Color(0.1, 0.22, 0.34, 0.9)}
+## The ink of a speaker's words on the radio's panel (command's is the panel's own).
+const INK := {"nadja": Color("f2a9c4"), "phantom": Color("69c8ff"), "havoc": Color("69c8ff"), "ghost": Color("69c8ff"), "viper": Color("cfe6d2"), "scorpion": Color("cfe6d2"), "raven": Color("cfe6d2")}
+## A word of the squad that has waited this long for its turn is about something long over.
+const STALE := 45.0
+## From this far a line said in person is heard at its full level.
+const VOICE_REACH := 11.0
+## The rooms of the research wing that stand full of what Nadja has made.
+const LAB_ROOMS := ["lab_corridor", "lab_a", "lab_b", "lab_c", "quarantine", "cryo", "flooded"]
 
 var game: Node3D
 var on := false
@@ -111,9 +120,20 @@ var feel_left := 0.0
 var guards: Array = []
 ## The last guards of the villa and the infected that are on each of them: {guard, pack}.
 var doomed: Array = []
-## Lines that are still to be read: [speaker, text, seconds].
+## What is still to be said, in its order: {kind, cue, ...} (see "what is said").
 var lines: Array = []
+## Seconds until the next of them may follow; below zero for as long as nobody has spoken.
 var line_left := 0.0
+## What the lines wait for before they go on (see until), and for how long at most.
+var hold_id := ""
+var hold_left := 0.0
+## The voice of whoever says a line in person, and who that is.
+var voice: AudioStreamPlayer3D
+var talker: Node3D
+## When Nadja turned away behind her door.
+var walk_clock := 0.0
+## Seconds until somebody of the squad may make small talk again.
+var idle_left := 45.0
 var puppets: Array = []
 var stalker_sent := false
 var board_time := 0.0
@@ -132,6 +152,12 @@ func begin() -> void:
 	doomed.clear()
 	lines.clear()
 	line_left = 0.0
+	hold_id = ""
+	talker = null
+	walk_clock = 0.0
+	idle_left = 45.0
+	game.talk_until = 0
+	game.round_called = false
 	clock = 0.0
 	nadja_down = 0.0
 	nadja_gone = false
@@ -183,6 +209,10 @@ func end() -> void:
 	game.story.nadja = null
 	game.sounds.dry = false
 	lines.clear()
+	hold_id = ""
+	talker = null
+	if voice != null:
+		voice.stop()
 	guards.clear()
 	stage = ""
 	goal = ""
@@ -226,7 +256,7 @@ func _arrive() -> void:
 	heli.rotation.y = -PI / 2
 	heli.light_up()
 	heli_clock = 0.0
-	say("COLEMAN", "Die Villa gehört Helix. Dr. Nadja kennt den Zugang nach unten – bringt sie hinein.", 7.0)
+	line("m2_arrival")
 	if (game.check_mode and not game.story_in_checks) or game.intro_skipped:
 		heli.global_position = pad + Vector3(0, 0.1, 0)
 		heli_clock = INTRO_SECONDS
@@ -355,24 +385,29 @@ func _enter(id: String) -> void:
 		"landing":
 			pressure_left = 7.0
 		"villa":
+			line("m2_villa")
+			talk("m2_villa")
 			_post(["mauler", "mauler", "striker"], [Vector3(-14, 0, 12), Vector3(-19, 0, 19), Vector3(-10, 0, 17)], false)
 			_post(["ripper"], [Vector3(16, 0, 15)], false)
 			_post(["mauler", "leech"], [Vector3(-13, 0, 5), Vector3(-20, 0, -1)], false)
 			_post(["mauler"], [Vector3(17, 0, 2)], false)
 		"mirror":
-			say("NADJA", "Hier. Hinter dem Spiegel. Gebt mir einen Moment am Schloss.", 5.0)
+			face("m2_n_mirror")
+			talk("m2_mirror")
 			if is_instance_valid(nadja):
 				nadja.order = "hold"
 				nadja.hold_point = _point("keypad")
 		"descent":
-			say("NADJA", "Offen. Die Treppe führt zu einem Bahnhof, der auf keinem Plan steht.", 6.0)
+			face("m2_n_open")
+			talk("m2_stairs")
 			if is_instance_valid(nadja):
 				nadja.order = "follow"
 			_post(["mauler", "ripper"], [_point("lobby") + Vector3(-1.2, 0, -2.0), _point("lobby") + Vector3(1.2, 0, -2.4)], false)
 		"station":
 			map.unlock("station")
 			game.sounds.play_at("shutter_open", _point("lobby"))
-			say("COLEMAN", "Der Bahnsteig ist voll von ihnen. Räumt ihn, bevor es mehr werden.", 5.5)
+			line("m2_platform")
+			talk("m2_station")
 			var middle := _point("platform")
 			_post(["mauler", "mauler", "striker", "mauler", "striker", "ripper", "mauler", "charger"], [middle + Vector3(-14, 0, -5), middle + Vector3(12, 0, -6), middle + Vector3(-6, 0, -8), middle + Vector3(18, 0, -3), middle + Vector3(-24, 0, -2), middle + Vector3(27, 0, -7), middle + Vector3(3, 0, -3), middle + Vector3(-30, 0, -8)], true)
 		"nadja":
@@ -384,17 +419,20 @@ func _enter(id: String) -> void:
 		"hold":
 			progress = 0.0
 			progress_text = "ZUG FÄHRT HOCH"
+			game.round_called = false
+			_dismiss_puppets()
 			game.sounds.play_sound("wave")
-			say("COLEMAN", "Das Hochfahren hört man im ganzen Tunnel. Haltet den Bahnsteig.", 5.0)
+			line("m2_power")
 		"board":
 			map.set_door("car_a", true)
 			game.sounds.play_at("shutter_open", _point("car_a"))
-			say("COLEMAN", "Der Zug steht unter Strom. Alle einsteigen.", 4.0)
+			line("m2_board")
 		"ride":
 			_start_ride()
 		"terminal":
 			map.set_door("car_b", true)
 			_checkpoint("terminal", 300)
+			talk("m2_arrived")
 			_use("control", "control", "[E] Tor zur Anlage öffnen")
 			var hall := _point("terminal")
 			_post(["mauler", "mauler", "striker", "mauler", "charger"], [hall + Vector3(-14, 0, -8), hall + Vector3(12, 0, -10), hall + Vector3(0, 0, -14), hall + Vector3(18, 0, -4), hall + Vector3(-22, 0, -3)], false)
@@ -402,68 +440,96 @@ func _enter(id: String) -> void:
 		"admin":
 			map.unlock("admin")
 			game.sounds.play_at("shutter_open", _point("gate_admin"))
-			say("COLEMAN", "Das ist keine Wachmannschaft mehr da drin. Was immer in der Anlage passiert ist – es läuft noch.", 6.5)
+			line("m2_terminal")
 			_post(["mauler", "mauler", "mauler", "striker"], [_point("checkpoint") + Vector3(-2, 0, -6), _point("checkpoint") + Vector3(2, 0, -8), _point("junction") + Vector3(-8, 0, 0), _point("junction") + Vector3(9, 0, 0)], false)
 		"security":
 			_use("security", "security", "[E] Sperre aufheben")
-			say("COLEMAN", "Das Tor nach Norden hängt an der Sicherheitszentrale. Ostflügel.", 5.0)
+			line("m2_security")
+			talk("m2_offices")
 			_post(["mauler", "mauler", "striker", "ripper", "ripper"], [_point("office") + Vector3(-6, 0, -4), _point("office") + Vector3(5, 0, 3), _point("office") + Vector3(0, 0, -8), _point("security") + Vector3(-4, 0, -3), _point("server") + Vector3(0, 0, -6)], false)
 		"cafe":
 			map.unlock("cafe")
 			game.sounds.play_at("shutter_open", _point("junction"))
+			line("m2_p_alive")
 			_post(["mauler", "mauler", "striker", "leech"], [_point("cafeteria") + Vector3(-10, 0, -6), _point("cafeteria") + Vector3(9, 0, -8), _point("cafeteria") + Vector3(0, 0, -11), _point("cafeteria") + Vector3(-15, 0, 4)], false)
 		"lockdown":
 			map.lock("cafe")
 			progress = 0.0
 			progress_text = "ABRIEGELUNG"
+			game.round_called = false
 			game.sounds.play_sound("wave")
 			game.sounds.play_at("shutter_close", _point("cafeteria"))
-			say("COLEMAN", "Die Anlage riegelt ab – ihr seid eingeschlossen. Das System startet neu, haltet so lange durch.", 6.5)
+			line("m2_n_lock")
+			line("m2_lockdown")
+			talk("m2_locked")
 		"atrium":
 			map.unlock("cafe")
 			map.unlock("atrium")
 			game.sounds.play_at("shutter_open", _point("cafeteria"))
 			_checkpoint("atrium", 350)
-			say("NADJA", "An alle C.R.U.-Einheiten: Das Fireteam ist im Hive. Wer es mir bringt, bekommt frisches Aerosol – und das Dreifache.", 7.0)
-			say("COLEMAN", "Sie hat das System der Anlage – und jetzt kauft sie sich die C.R.U. Rechnet an jedem Zugang mit Trupps.", 6.5)
-			say("GHOST", "Auf uns schießen sie auch. Sie hat uns von der Liste gestrichen.", 5.0)
+			line("m2_n_cru")
+			line("m2_cru")
+			line("m2_g_list")
+			talk("m2_bought")
 			_post(["cru_elite", "cru_assault", "cru_assault", "cru_marksman"], [_point("atrium") + Vector3(-12, 0, -10), _point("atrium") + Vector3(12, 0, -8), _point("atrium") + Vector3(0, 0, -16), _point("atrium") + Vector3(-15, 0, 6)], false)
 		"generator":
 			_use("generator", "generator", "[E] Notstrom einschalten")
-			say("COLEMAN", "Die Schleuse zum Forschungstrakt ist stromlos. Östlich von euch liegt die Technik.", 5.5)
+			talk("m2_atrium")
+			line("m2_generator")
 			_post(["ripper", "ripper", "leech", "mauler", "striker"], [_point("maint") + Vector3(6, 0, 0), _point("maint") + Vector3(14, 0, 0), _point("pump") + Vector3(0, 0, -4), _point("generator") + Vector3(-4, 0, 4), _point("generator") + Vector3(4, 0, 6)], false)
 		"decon":
 			map.unlock("decon")
 			game.sounds.play_sound("beep")
-			say("COLEMAN", "Strom liegt an. Zurück zum Zentralraum, die Schleuse im Norden.", 5.0)
+			line("m2_power_on")
 		"labs":
 			map.unlock("decon")
 			map.unlock("research")
 			_checkpoint("labs", 350)
-			say("COLEMAN", "Nadja ist vor euch durch diese Schleuse. Was sie sucht, liegt hinter den Laboren.", 6.0)
+			line("m2_labs")
 			_post(["mauler", "striker", "ripper", "leech", "healer", "mauler"], [_point("labs") + Vector3(0, 0, 8), _point("labs") + Vector3(-12, 0, 0), _point("labs") + Vector3(12, 0, -4), _point("labs") + Vector3(0, 0, -14), _point("labs") + Vector3(-14, 0, -24), _point("labs") + Vector3(14, 0, -26)], false)
 		"hall":
 			map.unlock("hall")
 			game.sounds.play_at("shutter_open", _point("cross"))
 			progress = 0.0
 			progress_text = "FRACHTAUFZUG KOMMT"
-			say("COLEMAN", "Die Eindämmungshalle. Der Frachtaufzug dahinter ist euer Weg weiter nach unten – ruft ihn und haltet aus.", 6.5)
+			game.round_called = false
+			line("m2_hall")
+			talk("m2_stand")
 			var floor_spot := _point("hall_end")
 			_post(["cru_elite", "cru_elite", "cru_heavy", "cru_shield", "cru_medic"], [floor_spot + Vector3(-12, 0, -8), floor_spot + Vector3(12, 0, -8), floor_spot + Vector3(0, 0, -14), floor_spot + Vector3(-6, 0, -4), floor_spot + Vector3(8, 0, -16)], false)
 		"exit":
-			say("COLEMAN", "Der Aufzug ist da. Rein mit euch.", 4.0)
+			line("m2_lift")
+			talk("m2_down")
 
 func _update(delta: float) -> void:
 	var player: Survivor = game.player
 	var here: Vector3 = player.global_position
 	var room: Dictionary = map.room_at(here)
 	var room_id := "" if room.is_empty() else str(room.id)
+	# From the tunnel they hold the operators report once, when nobody else is talking.
+	if stage in ["generator", "decon"] and stage_time > 16.0 and not done.has("h_tunnel") and _silent_for(2.0):
+		done["h_tunnel"] = true
+		line("m2_h_tunnel")
+	# A little after the guards have been talked over, Nadja has a word about the house.
+	if stage in ["landing", "villa"] and done.has("terrace_guards") and not done.has("n_house") and _silent_for(2.5):
+		done["n_house"] = true
+		face("m2_n_house")
+	# When it has been quiet for a while, somebody of the squad has something to say.
+	idle_left -= delta
+	if idle_left <= 0.0 and game.alive_count == 0 and _silent_for(6.0) and not stage in ["nadja", "deal", "ride"]:
+		idle_left = randf_range(70.0, 110.0)
+		var chatter: Teammate = game.squad_voice()
+		if chatter != null:
+			game.bark(chatter, chatter.look, "idle")
+	if room_id == "flooded" and _once("water"):
+		talk("m2_water")
 	match stage:
 		"landing":
 			# The last guards of the house show themselves once the squad comes up the drive.
 			if here.z < 56.0 and _once("terrace_guards"):
 				_overrun([Vector3(-9, 0, 27.0), Vector3(8, 0, 27.5), Vector3(-1, 0, 29.5)], ["cru_assault", "cru_shotgunner", "cru_assault"])
-				say("COLEMAN", "Das ist der Rest der Wachmannschaft. Ihr Aerosol ist verbraucht – die Infizierten fallen über sie her.", 6.0)
+				line("m2_guards")
+				talk("m2_land")
 			if here.distance_to(_point("front_door")) < 7.0 or bool(map.is_indoors(here)):
 				_enter("villa")
 		"villa":
@@ -493,17 +559,25 @@ func _update(delta: float) -> void:
 				_dismiss_guards()
 				left = 0
 			if left == 0 and stage_time > 4.0:
+				_all_clear()
 				_enter("nadja" if is_instance_valid(nadja) and not nadja_gone else "deal")
 		"nadja":
-			_run_nadja_leaving(delta)
+			_run_nadja_leaving()
 		"deal":
-			_run_deal(delta)
+			# What is said carries this stage (see _deal). Should it ever stall, the mission goes on.
+			if stage_time > 150.0:
+				lines.clear()
+				hold_id = ""
+				done["radio_clear"] = true
+				_dismiss_puppets()
+				_enter("power")
 		"hold":
 			progress = minf(1.0, progress + delta / HOLD_STATION)
 			if progress > 0.45 and _once("hold_squad"):
-				say("COLEMAN", "Aus dem Depot kommen mehr. Der Lärm zieht sie an.", 4.5)
+				line("m2_depot")
 				_post(["striker", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
 			if progress >= 1.0:
+				_all_clear()
 				_enter("board")
 		"board":
 			# Whoever of the squad is not in the car yet is pulled in when the doors close.
@@ -520,9 +594,12 @@ func _update(delta: float) -> void:
 				_enter("lockdown")
 		"lockdown":
 			progress = minf(1.0, progress + delta / HOLD_CAFE)
+			if progress > 0.45 and _once("lockdown_taunt"):
+				_taunt()
 			if progress > 0.6 and _once("lockdown_crusher"):
 				_post(["crusher"], [_point("cafeteria") + Vector3(0, 0, -12)], false)
 			if progress >= 1.0:
+				_all_clear()
 				_enter("atrium")
 		"atrium":
 			if here.distance_to(_point("atrium")) < 8.0:
@@ -541,8 +618,12 @@ func _update(delta: float) -> void:
 			# Half-way up the corridor a squad comes in through the lock behind them.
 			if here.z < -532.0 and _once("labs_squad"):
 				game.sounds.play_at("shutter_open", _point("decon"))
-				say("COLEMAN", "C.R.U. hinter euch - sie kommen durch die Schleuse.", 4.5)
+				line("m2_behind")
 				_post(["cru_assault", "cru_assault", "cru_shotgunner", "cru_marksman"], [_point("decon") + Vector3(-1.5, 0, 2.0), _point("decon") + Vector3(1.5, 0, 3.0), _point("decon") + Vector3(0, 0, 5.0), _point("decon") + Vector3(0, 0, 8.0)], false)
+			# In among the laboratories Nadja speaks of what stands in them.
+			if stage_time > 9.0 and room_id in LAB_ROOMS and _once("n_tanks"):
+				line("m2_n_tanks")
+				talk("m2_tanks")
 			if not stalker_sent and stage_time > 14.0:
 				stalker_sent = true
 				var lair := _hidden_spot(16.0, 30.0)
@@ -555,15 +636,20 @@ func _update(delta: float) -> void:
 		"hall":
 			if room_id == "containment":
 				progress = minf(1.0, progress + delta / HOLD_HALL)
+				if progress > 0.16 and _once("n_work"):
+					line("m2_n_work")
 				if progress > 0.5 and _once("hall_crusher"):
 					_post(["crusher"], [_point("hall_end") + Vector3(0, 0, -16)], false)
+				if progress > 0.75 and _once("hall_taunt"):
+					_taunt()
 			if progress >= 1.0:
 				_enter("exit")
 		"exit":
 			if here.distance_to(_point("lift")) < 3.2:
-				game.finish(true)
+				_win()
 
 func _open_mirror() -> void:
+	_all_clear()
 	map.unlock("descent")
 	game.sounds.play_at("shutter_open", _point("mirror") + Vector3(0, 1.5, 0))
 	_checkpoint("descent", 250)
@@ -617,7 +703,9 @@ func _watch_nadja(delta: float) -> void:
 
 ## At the station Nadja runs for a door that only opens for her.
 func _nadja_leaves() -> void:
-	say("NADJA", "Wartet hier. Ich hole den Zug aus der Abstellung.", 4.0)
+	# What the squad still had to say about the way here is not said any more.
+	lines = lines.filter(func(entry: Dictionary) -> bool: return str(entry.kind) != "squad")
+	face("m2_n_wait")
 	map.set_door("nadja", true)
 	game.sounds.play_at("shutter_open", _point("nadja_door"))
 	nadja.order = "hold"
@@ -626,36 +714,44 @@ func _nadja_leaves() -> void:
 	game.survivors.erase(nadja)
 	nadja.health = nadja.max_health
 
-func _run_nadja_leaving(delta: float) -> void:
+func _run_nadja_leaving() -> void:
 	if not is_instance_valid(nadja):
 		_enter("deal")
 		return
-	var inside := _point("nadja_inside")
-	if not done.has("nadja_inside"):
-		# To the door along the platform first, then straight through it.
-		if nadja.global_position.distance_to(_point("nadja_door")) < 1.6 or stage_time > 7.0:
-			nadja.hold_point = inside
-		if stage_time > 12.0:
-			nadja.global_position = inside
-		if nadja.global_position.distance_to(inside) < 1.4 and _once("nadja_inside"):
-			map.set_door("nadja", false)
-			game.sounds.play_at("shutter_close", _point("nadja_door"))
-			stage_time = 20.0
-			say("NADJA", "Es tut mir leid. Ihr habt mich hergebracht – mehr habe ich nie gebraucht.", 5.5)
-			say("NADJA", "Geht nach Hause, solange ihr noch könnt.", 4.0)
+	if done.has("nadja_inside"):
+		# What she says through the glass, what the squad makes of it and her going are
+		# carried by the lines (see _beat). Should they ever stall, the mission goes on.
+		if stage_time > 90.0:
+			_beat("deal")
 		return
-	if stage_time > 24.0 and _once("nadja_walks"):
-		nadja.hold_point = _point("nadja_far")
-	if stage_time > 30.0:
-		nadja_gone = true
-		game.story.nadja = null
+	var inside := _point("nadja_inside")
+	# To the door along the platform first, then straight through it.
+	if nadja.global_position.distance_to(_point("nadja_door")) < 1.6 or stage_time > 7.0:
+		nadja.hold_point = inside
+	if stage_time > 12.0:
+		nadja.global_position = inside
+	if nadja.global_position.distance_to(inside) < 1.4 and _once("nadja_inside"):
+		map.set_door("nadja", false)
+		game.sounds.play_at("shutter_close", _point("nadja_door"))
+		face("m2_n_sorry")
+		face("m2_n_home")
+		beat("nadja_walks")
+		talk("m2_betrayed")
+		until("nadja_off", 6.0)
+		beat("deal")
+
+func _nadja_is_gone() -> void:
+	nadja_gone = true
+	game.story.nadja = null
+	if is_instance_valid(nadja):
 		game.team.erase(nadja)
 		nadja.queue_free()
-		nadja = null
-		_enter("deal")
+	nadja = null
 
 ## Three operators step out of the tunnel with their weapons down, one of them clears the
-## radio channel, and they leave again. Nobody has to stand still for it.
+## radio channel, and they leave again. Nobody has to stand still for it: what is said
+## carries it along (see _beat), and the control room can be used as soon as command is
+## back, while the last words are still being said.
 func _deal() -> void:
 	var from := _point("ops_from")
 	var stand := _point("ops_stand")
@@ -665,16 +761,34 @@ func _deal() -> void:
 		body.look = looks[index]
 		add_child(body)
 		body.global_position = from + Vector3(0, 0, (index - 1) * 1.4)
-		puppets.append({"node": body, "goal": stand + Vector3(0, 0, (index - 1) * 2.0), "look": looks[index]})
-	say("PHANTOM", "Waffen runter. Heute sind wir nicht euer Problem.", 4.5)
-	say("HAVOC", "Die Ärztin hat euch benutzt. Uns übrigens auch.", 4.5)
-	say("GHOST", "Euer Funk ist gekapert, seit sie frei ist. Gebt mir einen Moment an der Anlage.", 5.5)
+		puppets.append({"node": body, "goal": stand + Vector3(0, 0, (index - 1) * 2.0), "look": looks[index], "leaving": false, "left": 0.0, "work": false})
+	talk("m2_operators")
+	until("ops_there", 7.0)
+	face("m2_p_truce")
+	face("m2_h_used")
+	face("m2_g_radio")
+	beat("ghost_radio")
+	until("ops_there", 7.0)
+	beat("radio_clear")
+	face("m2_g_clear")
+	line("m2_back")
+	line("m2_truth")
+	beat("power")
+	talk("m2_colonel")
+	face("m2_p_tunnel")
+	beat("ops_leave")
 
-func _run_deal(delta: float) -> void:
-	for puppet in puppets:
-		var body: SoldierVisual = puppet.node
-		if not is_instance_valid(body):
+## The operators at the station walk to where they are wanted, stand there turned to the
+## survivor, and are gone once they have left the way they came.
+func _run_puppets(delta: float) -> void:
+	if puppets.is_empty():
+		return
+	var gone: Array = []
+	for puppet: Dictionary in puppets:
+		if not is_instance_valid(puppet.node):
+			gone.append(puppet)
 			continue
+		var body: SoldierVisual = puppet.node
 		var gap: Vector3 = (puppet.goal as Vector3) - body.global_position
 		gap.y = 0.0
 		var speed := Vector3.ZERO
@@ -682,32 +796,80 @@ func _run_deal(delta: float) -> void:
 			speed = gap.normalized() * 2.6
 			body.global_position += speed * delta
 			body.rotation.y = atan2(-speed.x, -speed.z)
+		elif not bool(puppet.leaving) and not bool(puppet.work):
+			var to: Vector3 = game.player.global_position - body.global_position
+			body.rotation.y = lerp_angle(body.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 4.0))
 		body.animate(delta, speed, false, false)
-	if stage_time > 9.0 and _once("ghost_radio"):
-		for puppet in puppets:
-			if str(puppet.look) == "ghost":
-				puppet.goal = _point("radio")
-	if stage_time > 16.0 and _once("radio_clear"):
-		game.sounds.play_sound("glitch", -6.0)
-		say("GHOST", "Sauber. Die Stimme, die ihr jetzt hört, ist echt.", 4.0)
-		say("COLEMAN", "…hört ihr mich? Endlich. Wer in den letzten Stunden mit euch gesprochen hat – ich war es nicht.", 6.5)
-		say("PHANTOM", "Der Zug bringt euch zu ihr. Wir halten den Osttunnel – dieses eine Mal.", 5.0)
-	if stage_time > 24.0 and _once("ops_leave"):
-		for puppet in puppets:
-			puppet.goal = _point("ops_from")
-	if stage_time > 31.0:
-		for puppet in puppets:
-			if is_instance_valid(puppet.node):
-				puppet.node.queue_free()
-		puppets.clear()
-		_enter("power")
+		if bool(puppet.leaving):
+			puppet.left = float(puppet.left) + delta
+			if gap.length() <= 0.3 or float(puppet.left) > 12.0:
+				body.queue_free()
+				gone.append(puppet)
+	for puppet: Dictionary in gone:
+		puppets.erase(puppet)
+
+func _dismiss_puppets() -> void:
+	for puppet: Dictionary in puppets:
+		puppet.goal = _point("ops_from")
+		puppet.leaving = true
+
+## Something that happens when the lines have come to it.
+func _beat(id: String) -> void:
+	match id:
+		"nadja_walks":
+			walk_clock = clock
+			if is_instance_valid(nadja):
+				nadja.hold_point = _point("nadja_far")
+		"deal":
+			if stage == "nadja":
+				_nadja_is_gone()
+				_enter("deal")
+		"ghost_radio":
+			for puppet: Dictionary in puppets:
+				if str(puppet.look) == "ghost":
+					puppet.goal = _point("radio")
+					puppet.work = true
+		"radio_clear":
+			# From here on the voice of command is Coleman's own.
+			done["radio_clear"] = true
+			game.sounds.play_sound("glitch", -6.0)
+		"power":
+			if stage == "deal":
+				_enter("power")
+		"ops_leave":
+			_dismiss_puppets()
+
+## Whether what the lines wait for (see until) has come about.
+func _come(id: String) -> bool:
+	match id:
+		"nadja_off":
+			return not is_instance_valid(nadja) or clock - walk_clock > 5.0
+		"ops_there":
+			for puppet: Dictionary in puppets:
+				if not is_instance_valid(puppet.node):
+					continue
+				var gap: Vector3 = (puppet.goal as Vector3) - (puppet.node as Node3D).global_position
+				if Vector2(gap.x, gap.z).length() > 0.6:
+					return false
+	return true
+
+## The squad is in the lift: the mission is won. The last word is command's, and it is
+## heard over the summary of the night.
+func _win() -> void:
+	lines.clear()
+	hold_id = ""
+	game.radio_busy = maxf(game.radio_busy, line_left)
+	game.finish(true)
+	game.radio("m2_end", 9.0)
+
 
 # ---------------------------------------------------------------- the train
 
 func _start_ride() -> void:
 	map.set_door("car_a", false)
 	game.sounds.play_at("shutter_close", _point("car_a"))
-	say("COLEMAN", "Die Anlage vor euch steht auf keiner Karte. Nadja will hinein – findet heraus, warum.", 6.5)
+	line("m2_ride")
+	talk("m2_train")
 
 func _run_ride(_delta: float) -> void:
 	if stage_time > 1.6 and _once("ride_jump"):
@@ -882,25 +1044,192 @@ func _run_pressure(delta: float) -> void:
 
 # ---------------------------------------------------------------- what is said
 
-## A line that is read on the radio's panel (a stand-in until it is recorded).
-func say(who: String, text: String, seconds: float = 5.0) -> void:
-	lines.append([who, text, seconds])
+## Everything that is said in this mission waits its turn in one queue - the radio, Nadja
+## and the operators where they stand, the squad - so that nobody talks over anybody.
+## What is not a line but happens between two (see beat and until) waits in it as well.
+
+## A line over the radio - or, Nadja's once she has the facility, over its loudspeakers.
+func line(cue: String) -> void:
+	lines.append({"kind": "radio", "cue": cue})
+
+## A line of somebody who stands there: Nadja while she is with the squad, an operator
+## at the station.
+func face(cue: String) -> void:
+	lines.append({"kind": "person", "cue": cue})
+
+## A short exchange of the squad: whoever of it has a line for this says it, in the order
+## the lines are written (Radio.BARKS). Who is not there or is down is passed over.
+func talk(cue: String) -> void:
+	var parts: Dictionary = Radio.BARKS.get(cue, {})
+	for look: String in parts:
+		lines.append({"kind": "squad", "cue": cue, "who": look, "at": clock})
+
+## Somebody of the squad calls something out in his turn (one of its calls, as in a fight:
+## heard, not read).
+func shout(cue: String) -> void:
+	lines.append({"kind": "call", "cue": cue})
+
+## A place that was fought for is clear: more often than not somebody says so.
+func _all_clear() -> void:
+	if randf() < 0.6:
+		shout("clear")
+
+## Something that is to happen when the lines have come this far (see _beat).
+func beat(id: String) -> void:
+	lines.append({"kind": "beat", "id": id})
+
+## The lines go on when something has come about (see _come), or after so many seconds.
+func until(id: String, seconds: float) -> void:
+	lines.append({"kind": "until", "id": id, "seconds": seconds})
+
+## A radio line of the game's own - somebody is down, a new kind of enemy is seen - takes
+## its turn here too (Game._say). While the mission has more to say it is left out.
+func heard(cue: String, seconds: float, speaker: String = "") -> void:
+	if lines.size() < 2:
+		lines.append({"kind": "game", "cue": cue, "seconds": seconds, "who": speaker})
+
+## Until the channel is cleared at the station the voice of command is not Coleman's: his
+## lines sound as in the last hours of the first mission (Radio.hijacked).
+func channel_taken() -> bool:
+	return on and not done.has("radio_clear") and ORDER.find(stage) <= ORDER.find("deal")
+
+## Nobody has said anything for so many seconds, and nothing waits to be said.
+func _silent_for(seconds: float) -> bool:
+	return lines.is_empty() and hold_id == "" and line_left <= -seconds
+
+## Nadja has a word for the squad over the loudspeakers, if nobody else is talking.
+func _taunt() -> void:
+	if _silent_for(0.0):
+		line("m2_n_taunt")
 
 func _run_lines(delta: float) -> void:
 	line_left -= delta
-	if line_left > 0.0 or lines.is_empty():
-		return
-	var line: Array = lines.pop_front()
-	line_left = float(line[2]) + 0.4
-	var words := str(line[1])
-	# Until the channel is cleared at the station, command's voice is not Coleman's: a
-	# letter is lost here and there, as in the last hours of the first mission.
-	if str(line[0]) == "COLEMAN" and not done.has("radio_clear") and ORDER.find(stage) <= ORDER.find("deal"):
-		words = Radio.garbled(words)
-		game.sounds.play_sound("glitch", -12.0)
-	else:
-		game.sounds.play_sound("radio")
-	game.hud.radio("%s:  %s" % [line[0], words], float(line[2]), SPEAKER_TINT.get(str(line[0]), Color(0, 0, 0, 0)))
+	if voice != null and voice.playing and is_instance_valid(talker):
+		voice.global_position = talker.global_position + Vector3(0, 1.6, 0)
+	if hold_id != "":
+		hold_left -= delta
+		if hold_left > 0.0 and not _come(hold_id):
+			return
+		hold_id = ""
+	var turns := 0
+	while line_left <= 0.0 and hold_id == "" and not lines.is_empty() and turns < 30:
+		turns += 1
+		var entry: Dictionary = lines.pop_front()
+		line_left = _speak(entry)
+
+## Says what has come to its turn. Returns the seconds until the next may follow (none
+## for what is passed over, and for what is not a line).
+func _speak(entry: Dictionary) -> float:
+	var cue := str(entry.get("cue", ""))
+	match str(entry.kind):
+		"beat":
+			_beat(str(entry.id))
+		"until":
+			hold_id = str(entry.id)
+			hold_left = float(entry.seconds)
+		"call":
+			var caller: Teammate = game.squad_voice()
+			game.talk_until = 0
+			if caller == null or not game.bark(caller, caller.look, cue):
+				return 0.0
+			return maxf(0.0, (int(game.bark_until.get(caller.get_instance_id(), 0)) - Time.get_ticks_msec()) / 1000.0)
+		"game":
+			return _quiet(game.speak_radio(cue, float(entry.seconds), str(entry.who)))
+		"radio":
+			var speaker := _speaker_of(cue)
+			var wait: float = game.speak_radio(cue, _reading(cue), "", INK.get(speaker, Color(0, 0, 0, 0)))
+			# A line that is only read gets the time it takes to read it.
+			if wait > 0.0 and not _recorded(speaker, cue, cue):
+				wait = _reading(cue)
+			return _quiet(wait)
+		"person":
+			var speaker := _speaker_of(cue)
+			var body := _body_of(speaker)
+			# Nadja says it only while she is there. (An operator who has gone is still heard.)
+			if body == null and speaker == "nadja":
+				return 0.0
+			return _quiet(_voice(Radio.pick(cue), body))
+		"squad":
+			var who := str(entry.who)
+			var mate := _squad_member(who)
+			if mate == null or clock - float(entry.at) > STALE:
+				return 0.0
+			# Nobody talks over himself: a call he is in the middle of is let out first.
+			var now := Time.get_ticks_msec()
+			if now < int(game.bark_until.get(mate.get_instance_id(), 0)) - 450:
+				lines.push_front(entry)
+				return 0.15
+			return _quiet(_voice(Radio.bark(who, cue), mate))
+	return 0.0
+
+## Somebody who stands there says a line: it is heard from where he stands, and read on
+## the radio's panel (without the click of a channel). Returns the seconds it takes.
+func _voice(said: Dictionary, body: Node3D) -> float:
+	if said.is_empty():
+		return 0.0
+	var length := 0.0
+	var path := str(said.sound)
+	talker = body
+	if path != "" and not game.sounds.hush:
+		if voice == null:
+			voice = AudioStreamPlayer3D.new()
+			voice.bus = "Voice"
+			voice.unit_size = VOICE_REACH
+			voice.attenuation_filter_cutoff_hz = 9000
+			voice.volume_db = 1.0
+			add_child(voice)
+		voice.stream = load(path)
+		voice.global_position = (body.global_position if is_instance_valid(body) else game.player.global_position) + Vector3(0, 1.6, 0)
+		voice.play()
+		length = voice.stream.get_length()
+	var words := str(said.text)
+	var seconds := length + 0.7 if length > 0.0 else read_seconds(words.length())
+	var hud: SurvivalHUD = game.hud
+	hud.radio_label.text = "%s:  %s" % [said.name, words]
+	hud.radio_label.add_theme_color_override("font_color", INK.get(str(said.speaker), SurvivalHUD.RADIO_INK))
+	hud.radio_left = seconds
+	return length + 0.35 if length > 0.0 else seconds
+
+## While a line of the mission is heard the squad keeps its small talk to itself (Game.bark).
+func _quiet(seconds: float) -> float:
+	if seconds > 0.0:
+		game.talk_until = Time.get_ticks_msec() + int(seconds * 1000.0)
+	return seconds
+
+func _speaker_of(cue: String) -> String:
+	return str(Radio.LINES[cue][0]) if Radio.LINES.has(cue) else "coleman"
+
+## Whether the variant of a line that was picked last has been recorded.
+func _recorded(speaker: String, cue: String, key: String) -> bool:
+	return Radio._sound(speaker, cue, int(Radio.last.get(key, 0))) != ""
+
+## The seconds it takes to read a radio line (its longest variant).
+func _reading(cue: String) -> float:
+	var longest := 0
+	if Radio.LINES.has(cue):
+		for variant: String in Radio.LINES[cue][1]:
+			longest = maxi(longest, variant.length())
+	return read_seconds(longest)
+
+static func read_seconds(letters: int) -> float:
+	return clampf(1.8 + letters / 15.0, 3.0, 9.5)
+
+## Who of the squad has that look, is there and on his feet.
+func _squad_member(look: String) -> Teammate:
+	for mate: Teammate in game.team:
+		if is_instance_valid(mate) and mate.look == look and not mate.down and mate.visible:
+			return mate
+	return null
+
+## Where a speaker stands: Nadja, an operator at the station (null if he is not there).
+func _body_of(speaker: String) -> Node3D:
+	if speaker == "nadja":
+		return nadja if is_instance_valid(nadja) and not nadja_gone else null
+	for puppet: Dictionary in puppets:
+		if str(puppet.look) == speaker and is_instance_valid(puppet.node):
+			return puppet.node
+	return _squad_member(speaker)
+
 
 # ---------------------------------------------------------------- the HUD
 
@@ -963,5 +1292,6 @@ func _process(delta: float) -> void:
 		return
 	_watch_nadja(delta)
 	_update(delta)
+	_run_puppets(delta)
 	_run_overrun()
 	_run_pressure(delta)
