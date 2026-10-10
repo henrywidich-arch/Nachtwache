@@ -2625,6 +2625,8 @@ func _threats(game: Node3D) -> void:
 	await _hit_answer(game)
 	await _ding_answer(game)
 	await _second_exploder(game)
+	await _crusher_shell(game)
+	await _crusher_guard(game)
 	await _hive_staff(game)
 	game.team_enabled = true
 	game.start_run()
@@ -2727,6 +2729,236 @@ func _take_off(game: Node3D, enemy: Infected) -> void:
 	enemy._retire()
 	enemy.queue_free()
 	game.alive_count = maxi(0, game.alive_count - 1)
+
+## The Crusher's shell: once the giant has been hurt it comes by the clock - a warning, the
+## shell, a pause - cuts whatever strikes it to a quarter, lets nothing hold it up, makes
+## it faster, lies over its body for everybody to see, and answers a hit with a dull knock.
+func _crusher_shell(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	_wipe_all(game)
+	await wait(0.6)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	var built := true
+	for kind in ["crusher_shell_tell", "crusher_shell_on", "crusher_shell_off", "hit_shell"]:
+		built = built and bool(sounds.recorded.get(kind, false))
+	var round_now: int = game.wave
+	game.wave = game.ROUNDS.size()
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.set_physics_process(false)
+	giant.position = Vector3(0, 0.05, 33.0)
+	var body: InfectedVisual = giant.model
+	# Unhurt it has no shell, and its clock stands.
+	giant._harden(30.0)
+	var waits: bool = giant.shell == "" and not giant.shell_armed and not giant.hardened()
+	# Hurt, it warns - and is still as open as ever for that second.
+	giant.receive_hit(giant.max_health * (Infected.SHELL_FIRST + 0.02), Vector3.BACK)
+	giant._harden(0.01)
+	var armed: bool = giant.shell_armed and giant.shell == ""
+	giant._harden(2.0)
+	var warns: bool = giant.shell == "tell" and not giant.hardened() and body.shell_state == "tell"
+	var health: float = giant.health
+	giant.receive_hit(100.0, Vector3.BACK)
+	var open: bool = is_equal_approx(giant.health, health - 100.0)
+	for i in range(6):
+		body.animate(0.1, 0.0)
+	var creeps: bool = body.shell > 0.02 and body.shell < 0.7 and body.mesh_instance.material_overlay == body.shell_skin
+	# Then it is shut: a quarter of a bullet gets through, a quarter of the fire, and neither
+	# a blow nor a flashbang holds it up.
+	giant._harden(Infected.SHELL_TELL + 0.01)
+	var shut: bool = giant.hardened() and is_equal_approx(giant.shell_left, Infected.SHELL_SECONDS)
+	health = giant.health
+	giant.receive_hit(100.0, Vector3.BACK)
+	var bullet: bool = is_equal_approx(giant.health, health - 100.0 * Infected.SHELL_SHARE)
+	# (A Medic's gas adds nothing to the shell; without the shell it counts as ever.)
+	health = giant.health
+	giant.warded = 5.0
+	giant.receive_hit(100.0, Vector3.BACK)
+	bullet = bullet and is_equal_approx(giant.health, health - 100.0 * Infected.SHELL_SHARE)
+	giant.warded = 0.0
+	health = giant.health
+	giant.ignite(1.0)
+	giant._burn(Infected.BURN_TICK)
+	var fire: bool = is_equal_approx(giant.health, health - Infected.BURN_DPS * Infected.BURN_TICK * Infected.SHELL_SHARE)
+	giant.burn_left = 0.0
+	giant.cue("burn", [false])
+	giant.held_left = 0.0
+	giant.stun(4.0)
+	giant.shove(Vector3.BACK, 5.0, 1.0, 0.0)
+	var unmoved: bool = giant.held_left <= 0.0
+	for i in range(4):
+		body.animate(0.1, 0.0)
+	var eye: MeshInstance3D = body.eyes.get_child(0) as MeshInstance3D
+	var shows: bool = body.shell > 0.95 and body.mesh_instance.material_overlay == body.shell_skin and body.shell_lamp.visible and body.shell_lamp.light_energy > 0.9 and eye.material_override == InfectedVisual.shell_eye
+	# A Medic's sheen waits under it.
+	body.set_buffed(true)
+	var over_sheen: bool = body.mesh_instance.material_overlay == body.shell_skin
+	# The shooter hears and sees that his bullet is wasted; the bar of the boss says why.
+	player.camera.look_at(giant.global_position + Vector3(0, 1.2, 0))
+	await frames(4)
+	var dings: int = int(sounds.answers.ding) + int(sounds.answers.ding_head)
+	var dulls: int = sounds.dulls
+	health = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var shot_shut: float = health - giant.health
+	var dull: bool = sounds.dulls == dulls + 1 and int(sounds.answers.ding) + int(sounds.answers.ding_head) == dings and game.hud.hit_is_dull and shot_shut > 0.0
+	await frames(3)
+	var named: bool = (game.hud.boss_box.get_child(0) as Label).text.ends_with("GEHÄRTET")
+	# It opens again, and the next shell is a pause away.
+	giant._harden(Infected.SHELL_SECONDS + 0.01)
+	var opens: bool = giant.shell == "" and not giant.hardened() and giant.shell_left >= Infected.SHELL_PAUSE.x - Infected.SHELL_TELL - 0.01 and giant.shell_left <= Infected.SHELL_PAUSE.y - Infected.SHELL_TELL
+	for i in range(8):
+		body.animate(0.1, 0.0)
+	var bare: bool = body.shell <= 0.01 and body.mesh_instance.material_overlay == InfectedVisual.sheen and not body.shell_lamp.visible and eye.material_override == InfectedVisual.buff_eye
+	body.set_buffed(false)
+	bare = bare and body.mesh_instance.material_overlay == null and eye.material_override == InfectedVisual.eye_materials["crusher"]
+	await wait(0.2)
+	health = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var shot_open: float = health - giant.health
+	var rings: bool = sounds.dulls == dulls + 1 and int(sounds.answers.ding) + int(sounds.answers.ding_head) == dings + 1 and not game.hud.hit_is_dull and is_equal_approx(shot_shut, shot_open * Infected.SHELL_SHARE)
+	expect(built and waits and armed and warns and open and creeps and shut and opens, "The Crusher's shell comes by the clock once it has lost a tenth of its health: a second of warning in which it is still open, %.0f seconds shut, %.0f to %.0f open" % [Infected.SHELL_SECONDS, Infected.SHELL_PAUSE.x, Infected.SHELL_PAUSE.y])
+	expect(bullet and fire and unmoved, "Behind its shell a quarter of everything gets through - bullets and fire alike, no less under a Medic's gas - and neither a blow nor a flashbang holds it up")
+	expect(shows and over_sheen and bare, "The shell shows: amber plates over the whole body, eyes of the same colour and a light around it - over a Medic's sheen, and gone when it opens")
+	expect(dull and named and rings, "A bullet on the shell is answered with a dull knock and a mark of its own, and the boss's bar says GEHÄRTET; on the open Crusher it dings again (%.1f against %.1f)" % [shot_shut, shot_open])
+	# It is faster behind its shell. (Near enough that it does not hurry: see HURRY_FROM.)
+	face(game, Vector3(0, 0.05, 19.0), PI)
+	giant.special_cooldown = 99.0
+	giant.set_shell("")
+	giant.set_physics_process(true)
+	await wait(0.8)
+	var slow: float = Vector2(giant.velocity.x, giant.velocity.z).length()
+	giant.set_shell("on")
+	await wait(0.5)
+	var fast: float = Vector2(giant.velocity.x, giant.velocity.z).length()
+	giant.set_physics_process(false)
+	# The test room shuts and opens it at a click.
+	game.sandbox.crusher_state("shell", false)
+	var room_open: bool = not giant.hardened() and not game.sandbox.crusher_shows("shell")
+	game.sandbox.crusher_state("shell", true)
+	expect(slow > 1.0 and fast > slow * 1.15 and fast < slow * 1.25 and room_open and giant.hardened() and game.sandbox.crusher_shows("shell"), "Behind its shell the Crusher walks a fifth faster (%.2f against %.2f m/s), and the test room shuts and opens the shell at a click" % [fast, slow])
+	_take_off(game, giant)
+	game.boss = null
+	# How much longer it lasts under steady fire: half as long again at the most, never twice.
+	var lasts: Array = []
+	for dps in [110.0, 240.0]:
+		for shelled in [false, true]:
+			var sum := 0.0
+			for run in range(6):
+				var dummy: Infected = game.spawn_enemy("crusher")
+				dummy.set_physics_process(false)
+				dummy.position = Vector3(0, 0.05, 36.0)
+				var seconds := 0.0
+				# (Down to its last breath, not beyond: no cloud, no points.)
+				while dummy.health > 30.0 and seconds < 200.0:
+					seconds += 0.05
+					if shelled:
+						dummy._harden(0.05)
+					dummy.receive_hit(float(dps) * 0.05, Vector3.BACK)
+				sum += seconds
+				_take_off(game, dummy)
+			lasts.append(sum / 6.0)
+	await wait(0.3)
+	_wipe_all(game)
+	game.fx.clear()
+	game.boss = null
+	game.wave = round_now
+	var slower: float = float(lasts[1]) / float(lasts[0])
+	var slower_fast: float = float(lasts[3]) / float(lasts[2])
+	expect(slower > 1.2 and slower < 1.6 and slower_fast > 1.15 and slower_fast < 1.6, "Under steady fire a grown Crusher lasts %.1f s in place of %.1f (%.2f times as long), under heavy fire %.1f in place of %.1f (%.2f): longer, not twice as long" % [lasts[1], lasts[0], slower, lasts[3], lasts[2], slower_fast])
+
+## The Crusher's guard: shot in the head, it raises a forearm before its face, and a shot
+## at the head is one at the body as long as it is there. It takes the arm down to strike
+## and after a few seconds, and leaves the head open for a while.
+func _crusher_guard(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	_wipe_all(game)
+	await wait(0.6)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.position = Vector3(0, 0.05, 27.0)
+	giant.special_cooldown = 99.0
+	giant.cooldown = 99.0
+	var body: InfectedVisual = giant.model
+	await frames(6)
+	giant.set_physics_process(false)
+	# One shot in the head is one in the head; the second brings the arm up.
+	player.camera.look_at(giant.head_box.global_position)
+	await frames(6)
+	var heads: int = int(sounds.answers.ding_head)
+	var health: float = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var head_shot: float = health - giant.health
+	giant._ward(0.1)
+	var open: bool = int(sounds.answers.ding_head) == heads + 1 and giant.head_hits == 1 and not giant.guard
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	giant._ward(0.1)
+	var raised: bool = giant.guard and body.guard_on and not giant.guarding()
+	for i in range(10):
+		body.animate(0.05, 0.0)
+	# The forearm really lies before the eyes.
+	var arm: Dictionary = body.rig.arms[InfectedVisual.GUARD_ARM]
+	var skeleton: Skeleton3D = body.skeleton
+	var elbow: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(arm.fore.index).origin
+	var wrist: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(arm.hand.index).origin
+	var offsets: Array = InfectedVisual.eye_offsets["crusher"]
+	var eyes: Vector3 = skeleton.global_transform * (skeleton.get_bone_global_pose(body.rig.head.index) * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5))
+	var nearest: Vector3 = Geometry3D.get_closest_point_to_segment(eyes, elbow, wrist)
+	var before: float = (nearest - eyes).dot(giant.facing())
+	var covered: bool = giant.guarding() and body.guard > 0.95 and nearest.distance_to(eyes) < 0.32 and before > 0.08 and nearest.distance_to(elbow) > 0.1 and nearest.distance_to(wrist) > 0.1
+	expect(open and raised and covered, "Shot twice in the head within a moment, the Crusher raises a forearm before its face: it lies %.2f m before its eyes, which are behind the middle of it" % before)
+	# Behind it a shot at the head is one at the body - whoever says otherwise.
+	heads = int(sounds.answers.ding_head)
+	var plain: int = int(sounds.answers.ding)
+	health = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var guarded_shot: float = health - giant.health
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	expect(int(sounds.answers.ding_head) == heads and int(sounds.answers.ding) == plain + 1 and not game.hud.hit_is_head and guarded_shot > 0.0 and guarded_shot < head_shot - 1.0 and giant.head_hits == 0 and not giant.head_struck(true, giant.head_box.global_position), "Behind the forearm a shot at the head is one at the body: %.1f in place of %.1f, the plain ding and no mark of a headshot" % [guarded_shot, head_shot])
+	# To strike it takes the arm down, and the head is open for that blow.
+	body.attack(1.15, 0.5, "slam")
+	for i in range(8):
+		body.animate(0.05, 0.0)
+	var strikes: bool = giant.guard and body.guard < 0.4 and not giant.guarding() and giant.head_struck(true, giant.head_box.global_position)
+	for i in range(20):
+		body.animate(0.05, 0.0)
+	strikes = strikes and giant.guarding()
+	# After a few seconds it comes down, and stays down for a while whatever strikes the head.
+	giant._ward(Infected.GUARD_SECONDS.y + 0.1)
+	var down: bool = not giant.guard and not body.guard_on and giant.guard_rest >= Infected.GUARD_REST.x
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	giant._ward(0.1)
+	var rests: bool = not giant.guard and giant.head_hits == 2
+	giant._ward(Infected.GUARD_REST.y)
+	var forgets: bool = not giant.guard and giant.head_hits == 0
+	# Now and then it raises it by itself.
+	giant._ward(Infected.GUARD_IDLE.y)
+	expect(strikes and down and rests and forgets and giant.guard, "It takes the arm down to strike - the head is open for that blow - and after %.0f to %.1f seconds; then the head stays open for %.0f at the least, and now and then the arm goes up by itself" % [Infected.GUARD_SECONDS.x, Infected.GUARD_SECONDS.y, Infected.GUARD_REST.x])
+	# The test room raises and drops it at a click, and it goes with the shell.
+	game.sandbox.crusher_state("guard", false)
+	var dropped: bool = not giant.guard and not game.sandbox.crusher_shows("guard")
+	game.sandbox.crusher_state("guard", true)
+	game.sandbox.crusher_state("shell", true)
+	for i in range(12):
+		body.animate(0.05, 0.0)
+	expect(dropped and giant.guarding() and giant.hardened() and game.sandbox.crusher_shows("guard") and body.shell > 0.95 and body.guard > 0.95, "The test room raises and drops the arm at a click, and the Crusher can be behind its shell and its arm at once")
+	_take_off(game, giant)
+	game.boss = null
+	await wait(0.2)
 
 ## The second exploding infected: a Charger in another body, with a burst of its own -
 ## low, wide, the colour of blood orange, and a puddle that lies there for a while.
@@ -4274,7 +4506,8 @@ func _snap_shot(game: Node3D) -> bool:
 	var best_distance := 45.0
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy.dead:
+		# (Somebody stood there for a look - the Crusher of the co-op check - is left alone.)
+		if enemy.dead or enemy.has_meta("staged"):
 			continue
 		var distance := enemy.global_position.distance_to(game.player.global_position)
 		var aim: Vector3 = enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.62, 0)
@@ -4413,6 +4646,26 @@ func coop_story(game: Node3D, as_host: bool, tag: String) -> void:
 	await wait(0.3)
 	get_tree().call_deferred("quit", 0)
 
+## What the guest of the co-op check sends at the Crusher: a hit of a size nobody deals.
+const GIANT_PROBE := 400.0
+
+## A place a few metres from the posts of the co-op pair that both of them see, with room
+## for a Crusher to stand; Vector3.INF if there is none.
+func _stage_spot(posts: Array) -> Vector3:
+	var space: PhysicsDirectSpaceState3D = get_viewport().world_3d.direct_space_state
+	var middle: Vector3 = ((posts[0] as Vector3) + (posts[1] as Vector3)) * 0.5
+	for radius in [4.5, 3.5, 6.0]:
+		for i in range(16):
+			var spot: Vector3 = middle + Vector3(cos(i * TAU / 16.0), 0, sin(i * TAU / 16.0)) * float(radius)
+			var clear: bool = space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3(0, 0.3, 0), spot + Vector3(0, 2.7, 0), 1)).is_empty()
+			clear = clear and not space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3(0, 0.6, 0), spot + Vector3(0, -0.6, 0), 1)).is_empty()
+			for post in posts:
+				for height in [1.64, 2.3]:
+					clear = clear and space.intersect_ray(PhysicsRayQueryParameters3D.create((post as Vector3) + Vector3(0, 1.6, 0), spot + Vector3(0, float(height), 0), 1)).is_empty()
+			if clear:
+				return spot
+	return Vector3.INF
+
 ## Run two instances: one with -- --mp-host-test, one with -- --mp-join-test.
 ## Each plays the first rounds with a simple aim-bot and prints what it saw of the other.
 func coop(game: Node3D, as_host: bool) -> void:
@@ -4536,6 +4789,28 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var op_blind := 0.0
 	var op_voice := false
 	var op_left := false
+	# The Crusher's shell and guard (not in a run with an operator): the host stands a Crusher
+	# that does nothing before both, lets its shell creep, shuts it, raises its arm, opens
+	# and drops both again. The guest fires one real shot at its copy behind shell and arm
+	# and sends two hits of a size nobody else deals (GIANT_PROBE), each with the claim of a
+	# headshot: one on the shell behind the arm, one on the open giant. The host keeps it
+	# alive and notes what those two took off it and whether they counted as shots in the
+	# head; both print what they saw. (The aim-bots leave it alone, see _snap_shot: they
+	# have a round to fight.)
+	var giant: Infected = null
+	var giant_step := 0
+	var giant_from := seconds * 0.5
+	var giant_wait := 0.0
+	var giant_placed := false
+	var giant_drops: Array = []
+	var giant_states: Array = []
+	var giant_shell := 0.0
+	var giant_guard := 0.0
+	var giant_bar := false
+	var giant_dull := false
+	var giant_seen := false
+	var giant_dulls := -1
+	var giant_gone := false
 	while clock < seconds and game.state == "playing":
 		await get_tree().physics_frame
 		clock += get_physics_process_delta_time()
@@ -4660,6 +4935,82 @@ func coop(game: Node3D, as_host: bool) -> void:
 			soldier.health = 700.0
 		# A third of the way in the host puts the second exploding infected into the yard and
 		# sets it off two seconds later (harmlessly: this is about what both sides see of it).
+		if as_host and not op_run:
+			if giant_step == 0 and clock > giant_from:
+				giant_step = 1
+				var spot := _stage_spot([Vector3(-0.8, 0.05, 2.6), Vector3(0.9, 0.05, 2.6)])
+				if spot != Vector3.INF:
+					giant_placed = true
+					giant = game.spawn_enemy("crusher")
+					giant.set_physics_process(false)
+					giant.set_meta("staged", true)
+					giant.position = spot
+			elif is_instance_valid(giant) and not giant.dead:
+				# (It stands still, so nothing of it runs by itself: its picture is moved here.)
+				giant.model.animate(get_physics_process_delta_time(), 0.0)
+				var drop: float = giant.max_health - giant.health
+				if drop >= GIANT_PROBE * Infected.SHELL_SHARE * 0.9:
+					giant_drops.append("%s:%.0f:%d" % ["shut" if giant.hardened() else "open", drop, giant.head_hits])
+				giant.health = giant.max_health
+				if giant_step == 1 and clock > giant_from + 1.0:
+					giant_step = 2
+					giant.set_shell("tell")
+				elif giant_step == 2 and clock > giant_from + 2.0:
+					giant_step = 3
+					giant.set_shell("on")
+					giant.set_guard(true)
+				elif giant_step == 3 and clock > giant_from + 6.0:
+					giant_step = 4
+					giant.set_shell("")
+					giant.set_guard(false)
+				elif giant_step == 4 and clock > giant_from + 8.5:
+					giant_step = 5
+					giant._retire()
+					giant.cue("vanish")
+					game.alive_count = maxi(0, game.alive_count - 1)
+					game.boss = null
+		elif not as_host and not op_run:
+			if giant == null:
+				for foe in get_tree().get_nodes_in_group("infected"):
+					if (foe as Infected).kind == "crusher":
+						giant = foe as Infected
+						giant.set_meta("staged", true)
+			elif not is_instance_valid(giant) or giant.dead:
+				giant_gone = true
+				if giant_dulls < 0:
+					giant_dulls = game.sounds.dulls
+			else:
+				giant_seen = true
+				var state: String = giant.shell if giant.shell != "" else "open"
+				if not giant_states.has(state):
+					giant_states.append(state)
+				giant_shell = maxf(giant_shell, giant.model.shell)
+				giant_guard = maxf(giant_guard, giant.model.guard)
+				giant_bar = giant_bar or (game.hud.boss_box.get_child(0) as Label).text.ends_with("GEHÄRTET")
+				var way: Vector3 = (giant.global_position - game.player.global_position).normalized()
+				if giant_step == 0 and giant.hardened() and giant.guarding():
+					giant_wait += get_physics_process_delta_time()
+					if giant_wait > 0.6 and not giant_dull:
+						# Real shots at the head behind the arm, on the shell, until one has landed.
+						var dulls: int = game.sounds.dulls
+						var to: Vector3 = giant.head_box.global_position - game.player.camera.global_position
+						game.player.rotation.y = atan2(-to.x, -to.z)
+						game.player.camera.rotation.x = atan2(to.y, Vector2(to.x, to.z).length())
+						game.sounds.hit_heard = -10.0
+						game.player.shot_cooldown = 0.0
+						game.player.reload_left = 0.0
+						game.player.ammo = maxi(game.player.ammo, 2)
+						game.player.shoot()
+						giant_dull = game.sounds.dulls == dulls + 1 and game.hud.hit_is_dull
+					if giant_wait > 2.2:
+						giant_step = 1
+						giant_wait = 0.0
+						game.net.report_hit(giant, GIANT_PROBE, way, true)
+				elif giant_step == 1 and giant.shell == "" and not giant.guard:
+					giant_wait += get_physics_process_delta_time()
+					if giant_wait > 0.7:
+						giant_step = 2
+						game.net.report_hit(giant, GIANT_PROBE, way, true)
 		if as_host and clock > seconds * 0.3 and wet_step == 0:
 			wet_step = 1
 			wet_one = game.spawn_enemy("charger", "boomer2")
@@ -4713,6 +5064,11 @@ func coop(game: Node3D, as_host: bool) -> void:
 	for number in numbers:
 		seen_looks.append("%d:%s" % [int(number), str(charger_looks[number])])
 	print("%s_CHARGERS looks=%s puddles=%d" % [tag, ",".join(PackedStringArray(seen_looks)), wet_puddles])
+	if not op_run:
+		if as_host:
+			print("MP_HOST_CRUSHER placed=%s steps=%d probes=%s" % [str(giant_placed), giant_step, ",".join(PackedStringArray(giant_drops))])
+		else:
+			print("MP_GUEST_CRUSHER seen=%s states=%s shell=%.2f arm=%.2f bar=%s dull_answers=%d head_shot_dull=%s probes=%d gone=%s" % [str(giant_seen), ",".join(PackedStringArray(giant_states)), giant_shell, giant_guard, str(giant_bar), giant_dulls, str(giant_dull), giant_step, str(giant_gone)])
 	# The weapon this side ended with, and which weapons of the partner it was shown shots
 	# of (by their sound, as they come across) and how many.
 	var partner_shots: Array = []

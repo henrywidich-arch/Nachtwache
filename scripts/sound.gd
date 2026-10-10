@@ -64,7 +64,11 @@ const MIX := {
 	"boomer_burst": [0.0, 0.07, 2],
 	# The Prowler: its call carries through walls and corridors, the rest is as loud as a Crusher.
 	"prowler_call": [3.0, 0.04, 2], "prowler_growl": [-3.0, 0.08, 1], "prowler_strike": [0.0, 0.07, 1], "prowler_leap": [1.0, 0.06, 2],
-	"prowler_pain": [1.0, 0.06, 1], "prowler_roar": [4.0, 0.03, 2], "prowler_death": [3.0, 0.03, 2]
+	"prowler_pain": [1.0, 0.06, 1], "prowler_roar": [4.0, 0.03, 2], "prowler_death": [3.0, 0.03, 2],
+	# The Crusher's shell (built by tools/make_crusher_sounds.js): the grinding that warns of
+	# it, the blow with which it shuts, its breaking up - all three must carry through gunfire -
+	# and the dull knock a shooter hears in place of the ding when his bullet lands on it.
+	"crusher_shell_tell": [1.0, 0.03, 2], "crusher_shell_on": [3.0, 0.03, 2], "crusher_shell_off": [1.0, 0.04, 2], "hit_shell": [-4.0, 0.07, 1]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -97,7 +101,8 @@ const STAND_INS := {
 	"m32_open": "click", "m32_shell": "click", "m32_close": "click", "m32_turn": "click", "shell_flight": "wind",
 	"hit_body": "hit", "hit_head": "hit", "hit_kill": "squish", "boomer_burst": "squish",
 	"ding_glas": "hit", "ding_glas_head": "hit", "ding_glas_kill": "hit", "ding_messing": "hit", "ding_messing_head": "hit", "ding_messing_kill": "hit",
-	"ding_tink": "hit", "ding_tink_head": "hit", "ding_tink_kill": "hit", "ding_spiel": "hit", "ding_spiel_head": "hit", "ding_spiel_kill": "hit"
+	"ding_tink": "hit", "ding_tink_head": "hit", "ding_tink_kill": "hit", "ding_spiel": "hit", "ding_spiel_head": "hit", "ding_spiel_kill": "hit",
+	"crusher_shell_tell": "hiss", "crusher_shell_on": "thud", "crusher_shell_off": "pop", "hit_shell": "hit"
 }
 
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):
@@ -114,7 +119,7 @@ const FAKE_PITCH := 0.955
 ## DRY: sounds that are played without the reverb of the world (straight on the bus the
 ## settings call "SFX"): the answers to a hit are the shooter's, not the yard's. (Every
 ## ding is one of them too, see _start.)
-const DRY := ["hit_body", "hit_head", "hit_kill"]
+const DRY := ["hit_body", "hit_head", "hit_kill", "hit_shell"]
 ## The ding: what answers a hit on an infected. (Soldiers keep the fleshy answer, and the
 ## player's own files come first, see OWN_HITS.) DING names the family that is played:
 ## "ding_glas" (crystal, the clearest), "ding_messing" (a small brass bell), "ding_tink"
@@ -175,6 +180,8 @@ var answers := {"hit_body": 0, "hit_head": 0, "hit_kill": 0, "ding": 0, "ding_he
 var ladder_step := 0
 var ladder_at := -10.0
 var dinged := false
+## How often a hit was answered with the dull knock (see confirm_dull).
+var dulls := 0
 ## The player's own hit sounds that were found (see OWN_HITS), looked for once.
 var own_hits: Array = []
 var own_asked := false
@@ -438,6 +445,22 @@ func confirm_hit(headshot: bool, killed: bool = false, infected: bool = false) -
 			_ding(headshot, level, now)
 	if killed:
 		confirm_kill()
+
+## A bullet of the player of this machine has landed on what it hardly gets through (the
+## Crusher's shell): a dull knock in place of the ding - he hears that the shot is wasted.
+## It breaks the ladder of the dings, and it keeps their pace.
+func confirm_dull() -> void:
+	if hush:
+		return
+	var now := Time.get_ticks_msec() * 0.001
+	hit_landed = now
+	if now - hit_heard < HIT_FLOOR:
+		return
+	hit_heard = now
+	dinged = false
+	ladder_at = -10.0
+	dulls += 1
+	play_sound("hit_shell")
 
 ## The ding for a hit on an infected: a bell struck once, or twice and higher for a head.
 ## One rung higher than the ding before if that was only a moment ago (see LADDER).

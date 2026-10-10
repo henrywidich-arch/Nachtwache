@@ -71,6 +71,7 @@ var splatter_left := 0.0
 var flash_overlay: ColorRect
 var hit_left := 0.0
 var hit_is_head := false
+var hit_is_dull := false
 var banner_left := 0.0
 var radio_left := 0.0
 var flash_left := 0.0
@@ -491,7 +492,13 @@ func _draw_reticle() -> void:
 	reticle.draw_circle(centre, 1.3, color)
 	for direction in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 		reticle.draw_line(centre + direction * gap, centre + direction * (gap + 6), color, 1.6)
-	if hit_left > 0:
+	if hit_left > 0 and hit_is_dull:
+		# It did not get through: stubs in place of the cross, shut in by a ring.
+		color = Color(0.8, 0.62, 0.38, 0.9)
+		for direction in [Vector2(-1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1)]:
+			reticle.draw_line(centre + direction * 6.5, centre + direction * 9, color, 2)
+		reticle.draw_arc(centre, 14.5, 0.0, TAU, 28, color, 1.6)
+	elif hit_left > 0:
 		color = ORANGE if hit_is_head else IVORY
 		for direction in [Vector2(-1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1)]:
 			reticle.draw_line(centre + direction * 9, centre + direction * 16, color, 2)
@@ -510,10 +517,12 @@ func loadout() -> void:
 	loadout_left = 2.4
 
 ## The cross that shows a hit. `answered`: whoever calls plays the sound of it himself
-## (a bullet's hit has its own answer, see FieldAudio.confirm_hit).
-func hit_marker(headshot: bool, answered: bool = false) -> void:
+## (a bullet's hit has its own answer, see FieldAudio.confirm_hit). `dull`: it landed on
+## what it hardly gets through (the Crusher's shell), and the mark shows that.
+func hit_marker(headshot: bool, answered: bool = false, dull: bool = false) -> void:
 	hit_left = 0.17
 	hit_is_head = headshot
+	hit_is_dull = dull
 	if not answered:
 		game.sounds.play_sound("headshot" if headshot else "hit")
 
@@ -717,6 +726,11 @@ func _process(delta: float) -> void:
 		boss_bar.value = gauge.x
 		(boss_box.get_child(0) as Label).text = str(game.boss.spec.label)
 		boss_box.modulate = Color(2.4, 0.42, 0.3) if game.boss.kind == "prowler" else Color.WHITE
+		# The Crusher's shell: its bar takes the shell's colour and says so, and it flickers
+		# in the second before.
+		if game.boss.shell == "on" or (game.boss.shell == "tell" and fmod(Time.get_ticks_msec() * 0.001, 0.24) < 0.12):
+			(boss_box.get_child(0) as Label).text = "%s  ·  GEHÄRTET" % str(game.boss.spec.label)
+			boss_box.modulate = Color(3.2, 1.0, 0.12)
 	else:
 		boss_box.hide()
 	# Red vignette for wounds, a slow heartbeat when badly hurt.
@@ -1169,6 +1183,12 @@ func _test_enemies(column: VBoxContainer, room: Sandbox) -> void:
 		_chip("EINGEFROREN  ·  %s" % ("AN" if room.frozen else "AUS"), _test_set.bind("frozen", not room.frozen), room.frozen, 230),
 		_chip("ALLE ENTFERNEN  (%d)" % room.alive(), _test_do.bind("clear"), false, 230),
 		_chip("ECHTE RUNDE %d STARTEN" % room.strength, _test_do.bind("round"), false, 250)])
+	# The Crusher's states, to be looked at in peace (best with the room frozen).
+	var shut: bool = room.crusher_shows("shell")
+	var raised: bool = room.crusher_shows("guard")
+	_test_row(column, "", [
+		_chip("CRUSHER: PANZER  ·  %s" % ("AN" if shut else "AUS"), _test_set.bind("shell", not shut), shut, 260),
+		_chip("CRUSHER: ARM VORM GESICHT  ·  %s" % ("AN" if raised else "AUS"), _test_set.bind("guard", not raised), raised, 330)])
 
 func _test_player(column: VBoxContainer, room: Sandbox) -> void:
 	var with_squad: bool = not game.team.is_empty()
@@ -1260,6 +1280,8 @@ func _test_set(what: String, value: Variant) -> void:
 				game.wave = room.strength
 		"frozen":
 			room.frozen = bool(value)
+		"shell", "guard":
+			room.crusher_state(str(what), bool(value))
 		"god":
 			room.god = bool(value)
 		"ammo":

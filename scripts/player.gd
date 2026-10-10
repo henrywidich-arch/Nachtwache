@@ -1194,7 +1194,7 @@ func _pierce(data: Dictionary, passes: int, direction: Vector3, first: Infected,
 			game.fx.dust(stop, hit.normal)
 			return stop
 		var enemy := target as Infected
-		var headshot := head_zone or enemy.is_headshot(stop)
+		var headshot := enemy.head_struck(head_zone, stop)
 		var damage: float = float(data.damage) * force
 		if headshot:
 			damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
@@ -1436,7 +1436,8 @@ func shoot() -> void:
 					game.sounds.play_at("bolt", endpoint, 0.0, randf_range(1.5, 1.9))
 			elif target is Infected:
 				var enemy := target as Infected
-				var headshot := head_zone or enemy.is_headshot(hit.position)
+				# (Not behind the Crusher's forearm: there it is a shot at the body.)
+				var headshot := enemy.head_struck(head_zone, hit.position)
 				var damage: float = float(data.damage) + weapon_level * (10.0 / pellets)
 				if pellets > 1:
 					# Shot spreads and slows: full force up close, a third of it at long range.
@@ -1451,7 +1452,12 @@ func shoot() -> void:
 				entry.through = entry.through or shielded
 				struck[enemy] = entry
 				if marks < 4:
-					game.fx.blood(endpoint, direction, headshot or pellets > 1)
+					if enemy.hardened():
+						# It glances off the Crusher's shell: chips of it, no blood, and a clack.
+						game.fx.dust(endpoint, hit.normal)
+						game.sounds.play_at("bolt", endpoint, -3.0, randf_range(0.7, 0.9))
+					else:
+						game.fx.blood(endpoint, direction, headshot or pellets > 1)
 			elif marks < 4:
 				game.fx.dust(endpoint, hit.normal)
 			marks += 1
@@ -1465,9 +1471,12 @@ func shoot() -> void:
 	var any_head := false
 	var any_kill := false
 	var any_infected := false
+	# Whatever landed, landed on the Crusher's shell: the answer says that it was wasted.
+	var all_dull := true
 	for enemy in struck:
 		var entry: Dictionary = struck[enemy]
 		any_head = any_head or entry.headshot
+		all_dull = all_dull and (enemy as Infected).hardened()
 		# (What was hit is known on a guest's machine as well as on the host's: his copy of
 		# a soldier is a soldier too. Without this a guest never heard the answer for an
 		# infected.)
@@ -1491,7 +1500,10 @@ func shoot() -> void:
 			any_kill = any_kill or ((enemy as Infected).dead and (enemy as Infected).health <= 0.0)
 			if push >= PUSH_LEAST:
 				(enemy as Infected).blown(entry.direction, push)
-	if not struck.is_empty():
+	if not struck.is_empty() and all_dull and not any_kill:
+		game.hud.hit_marker(false, true, true)
+		game.sounds.confirm_dull()
+	elif not struck.is_empty():
 		game.hud.hit_marker(any_head, true)
 		# The shooter hears his hit: one answer for the whole shot, whatever it struck. (A
 		# guest of a co-op match learns of a kill from the host, see SurvivalHUD.kill_feed.)

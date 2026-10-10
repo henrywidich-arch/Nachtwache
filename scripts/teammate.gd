@@ -179,6 +179,9 @@ func _pick_target() -> Infected:
 		# A Medic is worth more than whoever stands nearer.
 		if enemy.kind == "healer":
 			gap *= 0.45
+		# A Crusher behind its shell is the last to be shot at.
+		if enemy.hardened():
+			gap *= 2.5
 		candidates.append([gap, enemy])
 	candidates.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0])
 	for i in range(mini(5, candidates.size())):
@@ -382,7 +385,8 @@ func _physics_process(delta: float) -> void:
 		look_dir = Vector3(line.x, 0, line.z)
 		wanted_pitch = atan2(line.y, Vector2(line.x, line.z).length())
 		var off := absf(angle_difference(facing, atan2(-line.x, -line.z)))
-		if reload_left <= 0.0 and ammo > 0 and off < 0.16 and pause_left <= 0.0 and hold_fire <= 0.0:
+		# (Nobody empties a magazine into the Crusher's shell: they wait until it opens.)
+		if reload_left <= 0.0 and ammo > 0 and off < 0.16 and pause_left <= 0.0 and hold_fire <= 0.0 and not target.hardened():
 			if shot_left <= 0.0:
 				_shoot(aim_point, pace > 0.5)
 			# The recoil shows for a moment after every shot; automatic fire keeps it going.
@@ -438,7 +442,7 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 				body = body.get_meta("infected")
 			if body is Infected:
 				var enemy := body as Infected
-				var headshot := head_zone or enemy.is_headshot(hit.position)
+				var headshot := enemy.head_struck(head_zone, hit.position)
 				var damage := float(gun.damage) * damage_factor * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
 				if pellets > 1:
 					damage *= clampf(1.0 - (muzzle.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)

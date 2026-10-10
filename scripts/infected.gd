@@ -255,6 +255,30 @@ const QUAKE_REACH := 4.5
 const QUAKE_HARM := 26.0
 const POUNCE_FLIGHT := 0.46
 const ENRAGE_PACE := 1.6
+## The Crusher's shell. Again and again it hardens for SHELL_SECONDS: only SHELL_SHARE of
+## whatever strikes it gets through meanwhile (bullets, blasts and fire alike), nothing
+## holds it up, and it walks SHELL_PACE times as fast (SHELL_PACE_ENRAGED once it rages -
+## it is fast enough then). Between two shells it is as open as ever for SHELL_PAUSE
+## seconds (from, to), the last SHELL_TELL of them with the shell already creeping over
+## it: the last moment to shoot. The first comes once it has lost SHELL_FIRST of its health.
+const SHELL_SHARE := 0.25
+const SHELL_PACE := 1.2
+const SHELL_PACE_ENRAGED := 1.1
+const SHELL_SECONDS := 5.0
+const SHELL_PAUSE := Vector2(8.0, 12.0)
+const SHELL_TELL := 1.0
+const SHELL_FIRST := 0.1
+## The Crusher's guard: a forearm before its face, and a shot at the head counts as one at
+## the body as long as it is there. It comes up when GUARD_HITS shots have struck its head
+## within GUARD_MEMORY seconds, and now and then by itself (every GUARD_IDLE seconds, from -
+## to, once it has noticed somebody); it stays up for GUARD_SECONDS and then leaves the
+## head open for GUARD_REST at the least. To strike, to leap and to roar it takes the arm
+## down, and the head is open for that moment.
+const GUARD_HITS := 2
+const GUARD_MEMORY := 1.5
+const GUARD_SECONDS := Vector2(3.0, 4.5)
+const GUARD_REST := Vector2(5.0, 8.0)
+const GUARD_IDLE := Vector2(9.0, 16.0)
 const GRAVITY := 22.0
 ## The round after which nobody gets any faster (they still get tougher): past it the
 ## endless night would outrun the survivors.
@@ -334,6 +358,20 @@ var leap_left := 0.0
 var leap_hit := false
 var special_cooldown := 2.0
 var enraged := false
+## The Crusher's shell: "" (open), "tell" (about to harden) or "on"; the seconds until
+## that changes; and whether it has been hurt enough for its first one.
+var shell := ""
+var shell_left := 0.0
+var shell_armed := false
+## The Crusher's guard: whether the arm is up (or on its way there), the seconds it stays,
+## the seconds until it may come up again, the seconds until it comes up by itself, and
+## the shots that struck its head a moment ago.
+var guard := false
+var guard_left := 0.0
+var guard_rest := 0.0
+var guard_idle := 7.0
+var head_hits := 0
+var head_hits_left := 0.0
 ## Seconds this one stays strengthened by a Medic's gas.
 var warded := 0.0
 ## The Medic's gas as it is seen, how long it has been creeping, and when it next works
@@ -561,6 +599,16 @@ func blocks(_direction: Vector3) -> bool:
 func is_headshot(point: Vector3) -> bool:
 	return point.y - global_position.y > float(spec.head)
 
+## Whether a shot counts as one in the head: it struck the head's own zone (`zone`) or the
+## body at `point`, high enough - and the Crusher does not hold its forearm before its face.
+func head_struck(zone: bool, point: Vector3) -> bool:
+	return (zone or is_headshot(point)) and not guarding()
+
+## True while the Crusher's forearm really is before its face (not on its way up, and not
+## while it has taken it down to strike).
+func guarding() -> bool:
+	return guard and not dead and model.guard > 0.6
+
 func facing() -> Vector3:
 	return Vector3(-sin(model.rotation.y), 0, -cos(model.rotation.y))
 
@@ -621,6 +669,24 @@ func show_cue(action: String, args: Array) -> void:
 				game.fx.charger_burst(global_position + Vector3(0, 0.9, 0))
 		"shed":
 			game.fx.drop_growths(global_position + Vector3(0, 1.0, 0), int(args[0]), puppet, args.size() > 1 and bool(args[1]))
+		"shell":
+			shell = str(args[0])
+			model.set_shell(shell)
+			var chest := global_position + Vector3.UP * 1.5
+			match shell:
+				"tell":
+					game.sounds.play_at("crusher_shell_tell", chest)
+				"on":
+					game.sounds.play_at("crusher_shell_on", chest)
+					game.player.shake_from(global_position, 0.5, 14.0)
+				_:
+					game.sounds.play_at("crusher_shell_off", chest)
+					for i in range(6):
+						game.fx.dust(global_position + Vector3(randf_range(-0.6, 0.6), randf_range(0.6, 2.2), randf_range(-0.6, 0.6)), Vector3.UP)
+		"guard":
+			guard = bool(args[0])
+			model.guard_on = guard
+			game.sounds.play_at("swipe", mouth(), -5.0, 0.6 if guard else 0.5)
 		"enrage":
 			enraged = true
 			model.scream("roar")
@@ -703,6 +769,9 @@ func _physics_process(delta: float) -> void:
 	cooldown -= delta
 	repath_left -= delta
 	pain_left -= delta
+	if kind == "crusher":
+		_harden(delta)
+		_ward(delta)
 	if warded > 0.0:
 		# Strengthened by a Medic's gas: it mends until the gas has worn off.
 		warded -= delta
@@ -758,6 +827,8 @@ func _physics_process(delta: float) -> void:
 		pace = minf(pace * (1.0 + minf((distance - HURRY_FROM) / 18.0, 1.0) * HURRY_BOOST), maxf(pace, HURRY_TOP))
 	if enraged:
 		pace *= ENRAGE_PACE
+	if shell == "on":
+		pace *= SHELL_PACE_ENRAGED if enraged else SHELL_PACE
 	var reach: float = spec.reach
 	# The Medic leaves the fighting to the others: with its prey in sight it stops a good
 	# way off and lets its cloud work.
@@ -1046,6 +1117,70 @@ func _ambient(delta: float, look: Vector3, turn: bool) -> void:
 			game.sounds.play_at("thud", global_position)
 			game.player.shake_from(global_position, 0.3, 12.0)
 
+## True while the Crusher's shell is shut: hardly anything gets through to it.
+func hardened() -> bool:
+	return shell == "on" and not dead
+
+## The Crusher's shell comes and goes by the clock: a pause, the tell, the shell, a pause.
+func _harden(delta: float) -> void:
+	if not shell_armed:
+		if health > max_health * (1.0 - SHELL_FIRST):
+			return
+		shell_armed = true
+		shell_left = randf_range(0.4, 1.6)
+	shell_left -= delta
+	if shell_left > 0.0:
+		return
+	match shell:
+		"":
+			shell_left = SHELL_TELL
+			cue("shell", ["tell"])
+		"tell":
+			shell_left = SHELL_SECONDS
+			cue("shell", ["on"])
+		_:
+			shell_left = randf_range(SHELL_PAUSE.x, SHELL_PAUSE.y) - SHELL_TELL
+			cue("shell", [""])
+
+## The Crusher's guard goes up when its head has just been shot at, and now and then by
+## itself; it comes down after a few seconds and stays down for a while.
+func _ward(delta: float) -> void:
+	head_hits_left -= delta
+	if head_hits_left <= 0.0:
+		head_hits = 0
+	if guard:
+		guard_left -= delta
+		if guard_left <= 0.0:
+			guard_rest = randf_range(GUARD_REST.x, GUARD_REST.y)
+			guard_idle = randf_range(GUARD_IDLE.x, GUARD_IDLE.y)
+			head_hits = 0
+			cue("guard", [false])
+		return
+	guard_rest -= delta
+	if alert:
+		guard_idle -= delta
+	if guard_rest <= 0.0 and (head_hits >= GUARD_HITS or guard_idle <= 0.0):
+		head_hits = 0
+		guard_left = randf_range(GUARD_SECONDS.x, GUARD_SECONDS.y)
+		cue("guard", [true])
+
+## Raises or drops the guard at once, whatever the clock says (the test room, checks,
+## pictures); the clock goes on from there.
+func set_guard(on: bool) -> void:
+	guard_left = GUARD_SECONDS.y if on else 0.0
+	guard_rest = 0.0 if on else GUARD_REST.x
+	guard_idle = GUARD_IDLE.y
+	if on != guard:
+		cue("guard", [on])
+
+## Puts the shell into a state at once, whatever the clock says (the test room, checks,
+## pictures); the clock goes on from there.
+func set_shell(state: String) -> void:
+	shell_armed = true
+	shell_left = float({"tell": SHELL_TELL, "on": SHELL_SECONDS}.get(state, SHELL_PAUSE.x - SHELL_TELL))
+	if state != shell:
+		cue("shell", [state])
+
 ## Where the Crusher comes down the ground shakes: everybody near is hurt, less the further
 ## away, except `spared`, who took the blow itself.
 func _quake(spared: Node3D) -> void:
@@ -1164,8 +1299,20 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 			health -= amount
 			vanish()
 			return
+	if kind == "crusher":
+		# Behind its forearm no shot is one in the head, whoever says so (a co-op guest whose
+		# picture of the arm was a moment behind); shots in the open head make it raise the arm.
+		if guarding():
+			headshot = false
+		elif headshot:
+			head_hits += 1
+			head_hits_left = GUARD_MEMORY
+	# Behind its shell the Crusher takes a fraction, whatever it is that strikes it. (A
+	# Medic's gas adds nothing to that: the two together made it a wall.)
+	if shell == "on":
+		amount *= SHELL_SHARE
 	# Strengthened by a Medic's gas, it takes less.
-	if warded > 0.0:
+	elif warded > 0.0:
 		amount *= CLOUD_WARD
 	if fresh > 0.0:
 		amount *= HiveEntries.FRESH_WARD
@@ -1235,7 +1382,9 @@ func shove(direction: Vector3, speed: float, seconds: float, damage: float, sour
 	var back := Vector3(direction.x, 0, direction.z).normalized()
 	var reaction := str(spec.stagger)
 	if reaction == "":
-		held_left = maxf(held_left, seconds * 0.3)
+		# (A hardened Crusher does not even notice the blow.)
+		if shell != "on":
+			held_left = maxf(held_left, seconds * 0.3)
 		if kind != "crusher":
 			knock = back * speed * 0.5
 		return
@@ -1307,7 +1456,7 @@ func voice() -> String:
 
 ## Blinded by a flashbang: reels on the spot for a few seconds.
 func stun(seconds: float) -> void:
-	if dead or seconds <= 0.0:
+	if dead or seconds <= 0.0 or shell == "on":
 		return
 	var reels: bool = str(spec.stagger) != ""
 	if reels:
