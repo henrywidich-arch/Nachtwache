@@ -67,8 +67,9 @@ var skills: Dictionary = {}
 ## The tree of abilities the player has specialised in ("" for none).
 var skill_tree := ""
 ## Who goes on with the survivor from the station of the second mission: "fireteam", the
-## two who came with him, or "operators" - Phantom, Havoc and Ghost, while the squad stays
-## behind to hold the tunnel.
+## two who came with him, or two of the three operators, named by their looks - while the
+## squad and the third of them stay behind at the station.
+const COMPANIES := ["fireteam", "phantom_havoc", "phantom_ghost", "havoc_ghost"]
 var company := "fireteam"
 
 func open() -> void:
@@ -103,8 +104,7 @@ func open() -> void:
 	if parsed.get("skills") is Dictionary:
 		skills = parsed.skills
 	skill_tree = str(parsed.get("skill_tree", ""))
-	if str(parsed.get("company", "")) in ["fireteam", "operators"]:
-		company = str(parsed.company)
+	company = known_company(str(parsed.get("company", "")))
 
 func save() -> void:
 	if not stored:
@@ -154,8 +154,23 @@ func next_mode() -> void:
 	save()
 
 func next_company() -> void:
-	company = "operators" if company == "fireteam" else "fireteam"
+	company = COMPANIES[(COMPANIES.find(known_company(company)) + 1) % COMPANIES.size()]
 	save()
+
+## A choice of company as it is understood today: "operators" (kept by v0.25 to v0.28,
+## when all three came along) is Phantom and Havoc; anything unknown is the squad.
+static func known_company(value: String) -> String:
+	if value == "operators":
+		return "phantom_havoc"
+	return value if value in COMPANIES else "fireteam"
+
+## The looks of the two operators a choice of company names (none for the squad).
+static func pair_of(value: String) -> Array[String]:
+	var looks: Array[String] = []
+	if value != "fireteam" and value in COMPANIES:
+		for look in value.split("_"):
+			looks.append(look)
+	return looks
 
 func choose_mission(number: int) -> void:
 	if number in [1, 2]:

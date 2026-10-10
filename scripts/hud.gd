@@ -877,7 +877,8 @@ func _choose_mission(number: int) -> void:
 
 ## The second mission: who goes on with the survivor from the station (Profile.company).
 func _company_label() -> String:
-	return "BEGLEITER AB BAHNHOF  ·  %s" % ("OPERATOREN" if game.profile.company == "operators" else "FIRETEAM")
+	var pair := Profile.pair_of(Profile.known_company(str(game.profile.company)))
+	return "BEGLEITER AB BAHNHOF  ·  %s" % ("FIRETEAM" if pair.is_empty() else "%s + %s" % [pair[0].to_upper(), pair[1].to_upper()])
 
 func _next_company() -> void:
 	game.profile.next_company()
