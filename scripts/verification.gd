@@ -2785,7 +2785,7 @@ func _crusher_shell(game: Node3D) -> void:
 	for i in range(4):
 		body.animate(0.1, 0.0)
 	var eye: MeshInstance3D = body.eyes.get_child(0) as MeshInstance3D
-	var shows: bool = body.shell > 0.95 and body.mesh_instance.material_overlay == body.shell_skin and body.shell_lamp.visible and body.shell_lamp.light_energy > 1.0 and eye.material_override == InfectedVisual.shell_eye
+	var shows: bool = body.shell > 0.95 and body.mesh_instance.material_overlay == body.shell_skin and body.shell_lamp.visible and body.shell_lamp.light_energy > 0.9 and eye.material_override == InfectedVisual.shell_eye
 	# A Medic's sheen waits under it.
 	body.set_buffed(true)
 	var over_sheen: bool = body.mesh_instance.material_overlay == body.shell_skin
@@ -4500,7 +4500,8 @@ func _snap_shot(game: Node3D) -> bool:
 	var best_distance := 45.0
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy.dead:
+		# (Somebody stood there for a look - the Crusher of the co-op check - is left alone.)
+		if enemy.dead or enemy.has_meta("staged"):
 			continue
 		var distance := enemy.global_position.distance_to(game.player.global_position)
 		var aim: Vector3 = enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.62, 0)
@@ -4639,6 +4640,26 @@ func coop_story(game: Node3D, as_host: bool, tag: String) -> void:
 	await wait(0.3)
 	get_tree().call_deferred("quit", 0)
 
+## What the guest of the co-op check sends at the Crusher: a hit of a size nobody deals.
+const GIANT_PROBE := 400.0
+
+## A place a few metres from the posts of the co-op pair that both of them see, with room
+## for a Crusher to stand; Vector3.INF if there is none.
+func _stage_spot(posts: Array) -> Vector3:
+	var space: PhysicsDirectSpaceState3D = get_viewport().world_3d.direct_space_state
+	var middle: Vector3 = ((posts[0] as Vector3) + (posts[1] as Vector3)) * 0.5
+	for radius in [4.5, 3.5, 6.0]:
+		for i in range(16):
+			var spot: Vector3 = middle + Vector3(cos(i * TAU / 16.0), 0, sin(i * TAU / 16.0)) * float(radius)
+			var clear: bool = space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3(0, 0.3, 0), spot + Vector3(0, 2.7, 0), 1)).is_empty()
+			clear = clear and not space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3(0, 0.6, 0), spot + Vector3(0, -0.6, 0), 1)).is_empty()
+			for post in posts:
+				for height in [1.64, 2.3]:
+					clear = clear and space.intersect_ray(PhysicsRayQueryParameters3D.create((post as Vector3) + Vector3(0, 1.6, 0), spot + Vector3(0, float(height), 0), 1)).is_empty()
+			if clear:
+				return spot
+	return Vector3.INF
+
 ## Run two instances: one with -- --mp-host-test, one with -- --mp-join-test.
 ## Each plays the first rounds with a simple aim-bot and prints what it saw of the other.
 func coop(game: Node3D, as_host: bool) -> void:
@@ -4762,6 +4783,28 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var op_blind := 0.0
 	var op_voice := false
 	var op_left := false
+	# The Crusher's shell and guard (not in a run with an operator): the host stands a Crusher
+	# that does nothing before both, lets its shell creep, shuts it, raises its arm, opens
+	# and drops both again. The guest fires one real shot at its copy behind shell and arm
+	# and sends two hits of a size nobody else deals (GIANT_PROBE), each with the claim of a
+	# headshot: one on the shell behind the arm, one on the open giant. The host keeps it
+	# alive and notes what those two took off it and whether they counted as shots in the
+	# head; both print what they saw. (The aim-bots leave it alone, see _snap_shot: they
+	# have a round to fight.)
+	var giant: Infected = null
+	var giant_step := 0
+	var giant_from := seconds * 0.5
+	var giant_wait := 0.0
+	var giant_placed := false
+	var giant_drops: Array = []
+	var giant_states: Array = []
+	var giant_shell := 0.0
+	var giant_guard := 0.0
+	var giant_bar := false
+	var giant_dull := false
+	var giant_seen := false
+	var giant_dulls := -1
+	var giant_gone := false
 	while clock < seconds and game.state == "playing":
 		await get_tree().physics_frame
 		clock += get_physics_process_delta_time()
@@ -4886,6 +4929,82 @@ func coop(game: Node3D, as_host: bool) -> void:
 			soldier.health = 700.0
 		# A third of the way in the host puts the second exploding infected into the yard and
 		# sets it off two seconds later (harmlessly: this is about what both sides see of it).
+		if as_host and not op_run:
+			if giant_step == 0 and clock > giant_from:
+				giant_step = 1
+				var spot := _stage_spot([Vector3(-0.8, 0.05, 2.6), Vector3(0.9, 0.05, 2.6)])
+				if spot != Vector3.INF:
+					giant_placed = true
+					giant = game.spawn_enemy("crusher")
+					giant.set_physics_process(false)
+					giant.set_meta("staged", true)
+					giant.position = spot
+			elif is_instance_valid(giant) and not giant.dead:
+				# (It stands still, so nothing of it runs by itself: its picture is moved here.)
+				giant.model.animate(get_physics_process_delta_time(), 0.0)
+				var drop: float = giant.max_health - giant.health
+				if drop >= GIANT_PROBE * Infected.SHELL_SHARE * 0.9:
+					giant_drops.append("%s:%.0f:%d" % ["shut" if giant.hardened() else "open", drop, giant.head_hits])
+				giant.health = giant.max_health
+				if giant_step == 1 and clock > giant_from + 1.0:
+					giant_step = 2
+					giant.set_shell("tell")
+				elif giant_step == 2 and clock > giant_from + 2.0:
+					giant_step = 3
+					giant.set_shell("on")
+					giant.set_guard(true)
+				elif giant_step == 3 and clock > giant_from + 6.0:
+					giant_step = 4
+					giant.set_shell("")
+					giant.set_guard(false)
+				elif giant_step == 4 and clock > giant_from + 8.5:
+					giant_step = 5
+					giant._retire()
+					giant.cue("vanish")
+					game.alive_count = maxi(0, game.alive_count - 1)
+					game.boss = null
+		elif not as_host and not op_run:
+			if giant == null:
+				for foe in get_tree().get_nodes_in_group("infected"):
+					if (foe as Infected).kind == "crusher":
+						giant = foe as Infected
+						giant.set_meta("staged", true)
+			elif not is_instance_valid(giant) or giant.dead:
+				giant_gone = true
+				if giant_dulls < 0:
+					giant_dulls = game.sounds.dulls
+			else:
+				giant_seen = true
+				var state: String = giant.shell if giant.shell != "" else "open"
+				if not giant_states.has(state):
+					giant_states.append(state)
+				giant_shell = maxf(giant_shell, giant.model.shell)
+				giant_guard = maxf(giant_guard, giant.model.guard)
+				giant_bar = giant_bar or (game.hud.boss_box.get_child(0) as Label).text.ends_with("GEHÄRTET")
+				var way: Vector3 = (giant.global_position - game.player.global_position).normalized()
+				if giant_step == 0 and giant.hardened() and giant.guarding():
+					giant_wait += get_physics_process_delta_time()
+					if giant_wait > 0.6 and not giant_dull:
+						# Real shots at the head behind the arm, on the shell, until one has landed.
+						var dulls: int = game.sounds.dulls
+						var to: Vector3 = giant.head_box.global_position - game.player.camera.global_position
+						game.player.rotation.y = atan2(-to.x, -to.z)
+						game.player.camera.rotation.x = atan2(to.y, Vector2(to.x, to.z).length())
+						game.sounds.hit_heard = -10.0
+						game.player.shot_cooldown = 0.0
+						game.player.reload_left = 0.0
+						game.player.ammo = maxi(game.player.ammo, 2)
+						game.player.shoot()
+						giant_dull = game.sounds.dulls == dulls + 1 and game.hud.hit_is_dull
+					if giant_wait > 2.2:
+						giant_step = 1
+						giant_wait = 0.0
+						game.net.report_hit(giant, GIANT_PROBE, way, true)
+				elif giant_step == 1 and giant.shell == "" and not giant.guard:
+					giant_wait += get_physics_process_delta_time()
+					if giant_wait > 0.7:
+						giant_step = 2
+						game.net.report_hit(giant, GIANT_PROBE, way, true)
 		if as_host and clock > seconds * 0.3 and wet_step == 0:
 			wet_step = 1
 			wet_one = game.spawn_enemy("charger", "boomer2")
@@ -4939,6 +5058,11 @@ func coop(game: Node3D, as_host: bool) -> void:
 	for number in numbers:
 		seen_looks.append("%d:%s" % [int(number), str(charger_looks[number])])
 	print("%s_CHARGERS looks=%s puddles=%d" % [tag, ",".join(PackedStringArray(seen_looks)), wet_puddles])
+	if not op_run:
+		if as_host:
+			print("MP_HOST_CRUSHER placed=%s steps=%d probes=%s" % [str(giant_placed), giant_step, ",".join(PackedStringArray(giant_drops))])
+		else:
+			print("MP_GUEST_CRUSHER seen=%s states=%s shell=%.2f arm=%.2f bar=%s dull_answers=%d head_shot_dull=%s probes=%d gone=%s" % [str(giant_seen), ",".join(PackedStringArray(giant_states)), giant_shell, giant_guard, str(giant_bar), giant_dulls, str(giant_dull), giant_step, str(giant_gone)])
 	# The weapon this side ended with, and which weapons of the partner it was shown shots
 	# of (by their sound, as they come across) and how many.
 	var partner_shots: Array = []

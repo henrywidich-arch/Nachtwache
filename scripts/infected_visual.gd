@@ -1077,7 +1077,7 @@ func set_shell(state: String) -> void:
 		shell_lamp.omni_range = 6.0
 		shell_lamp.shadow_enabled = false
 		shell_lamp.light_energy = 0.0
-		shell_lamp.position = Vector3(0, float(config.height) * 0.55, -0.5)
+		shell_lamp.position = Vector3(0, float(config.height) * 0.6, -1.0)
 		add_child(shell_lamp)
 	_dress()
 
@@ -1098,7 +1098,7 @@ func _shell_step(delta: float) -> void:
 	shell_flare = maxf(0.0, shell_flare - delta * 3.2)
 	shell_skin.set_shader_parameter("amount", shell)
 	shell_skin.set_shader_parameter("flare", shell_flare)
-	shell_lamp.light_energy = shell * 1.7 + shell_flare * 2.2
+	shell_lamp.light_energy = shell * 1.1 + shell_flare * 2.0
 	shell_lamp.visible = shell > 0.01
 	if shown != (shell > 0.01):
 		_dress()

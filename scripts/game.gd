@@ -528,6 +528,10 @@ func _warm_up() -> void:
 			if model is ProwlerVisual:
 				# Its glow of the last fight is a shader of its own.
 				(model as ProwlerVisual).set_enraged(true)
+			if look == "crusher":
+				# So is the Crusher's shell.
+				model.set_shell("on")
+				model.shell_skin.set_shader_parameter("amount", 1.0)
 			model.position = Vector3(column * 0.9 - 2.3, 0, 0)
 			column += 1
 	fx.warm_up(stage.global_position + Vector3(0, 0.4, 1.5))
@@ -2500,8 +2504,8 @@ func _run_crusher_states() -> void:
 	var giant: Infected = sandbox.spawn("crusher")[0]
 	# Close enough to fill the picture.
 	var toward := (player.global_position - giant.global_position).normalized()
-	player.global_position = giant.global_position + Vector3(toward.x, 0, toward.z).normalized() * 3.4
-	player.camera.look_at(giant.global_position + Vector3(0, 1.75, 0))
+	player.global_position = giant.global_position + Vector3(toward.x, 0, toward.z).normalized() * 2.7
+	player.camera.look_at(giant.global_position + Vector3(0, 1.95, 0))
 	for light in ["day", "night"]:
 		sandbox.set_daylight(light == "day")
 		await tick.call(0.8)
