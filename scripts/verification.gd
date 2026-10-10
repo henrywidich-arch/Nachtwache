@@ -2683,6 +2683,8 @@ func _story(game: Node3D) -> void:
 ## with the picture, and under load several steps of the physics pass between two pictures.
 func _turn(hive: HiveDirector) -> void:
 	var before := hive.clock
+	# (Nobody of the squad is in the middle of a call the director would wait for.)
+	hive.game.bark_until.clear()
 	for i in range(40):
 		await get_tree().process_frame
 		if hive.clock != before:
@@ -2784,9 +2786,22 @@ func _spoken(game: Node3D) -> void:
 		hive.line_left = 0.0
 		await _turn(hive)
 		var stale: bool = hive.lines.is_empty() and hud.radio_label.text == shown
+		# A line of the mission waits for a call somebody of the squad is in the middle of.
+		game.talk_until = 0
+		var calling: bool = game.bark(scorpion, "scorpion", "reload") and hive._squad_calling()
+		hive.line("m2_depot")
+		hive.line_left = 0.0
+		var clock_before: float = hive.clock
+		for step in range(40):
+			await get_tree().process_frame
+			if hive.clock != clock_before:
+				break
+		var waited: bool = calling and hive.lines.size() == 1 and hive.call_wait > 0.0 and hud.radio_label.text == shown
+		hive.lines.clear()
+		stale = stale and waited
 		if not (parts == 3 and said == ["VIPER", "SCORPION"] and alone == ["SCORPION"] and busy and hushed and stale):
 			print("SPOKEN_SQUAD parts=%d busy=%s hushed=%s stale=%s scorpion: down=%s visible=%s health=%.0f rising=%.2f at=%s  viper: down=%s  player at=%s stage=%s alive=%d" % [parts, busy, hushed, stale, scorpion.down, scorpion.visible, scorpion.health, scorpion.rising_left, str(scorpion.global_position.snapped(Vector3.ONE * 0.1)), viper.down, str(game.player.global_position.snapped(Vector3.ONE * 0.1)), hive.stage, game.alive_count])
-		expect(parts == 3 and said == ["VIPER", "SCORPION"] and alone == ["SCORPION"] and busy and hushed and stale, "The squad talks among itself in the order its lines are written; who is not there or is down says nothing, small talk waits while a line is said, and a word that comes too late is dropped (%s / %s)" % [str(said), str(alone)])
+		expect(parts == 3 and said == ["VIPER", "SCORPION"] and alone == ["SCORPION"] and busy and hushed and stale, "The squad talks among itself in the order its lines are written; who is not there or is down says nothing, small talk waits while a line is said, a line waits for a call that is being made, and a word that comes too late is dropped (%s / %s)" % [str(said), str(alone)])
 	# --- once the channel is cleared, command's words come through whole
 	hive.lines.clear()
 	hive.done["radio_clear"] = true
@@ -2861,6 +2876,19 @@ func _spoken(game: Node3D) -> void:
 		viper.order = "follow"
 		expect(coming and not scorpion.leader_called and packed and Radio.BARKS.has("low_ammo") and Radio.BARKS.leader_down.has("ghost"), "When the survivor goes down the one who comes for him calls it out, once; a pack around one of the squad is called out, and not again right away")
 		hive.set_process(true)
+	# --- the arrival is filmed: what command says meanwhile is read on the lower bar
+	game.story_in_checks = true
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	await _turn(hive)
+	var filmed: bool = hive.intro_left > 0.0 and not hud.play_ui.visible and is_instance_valid(hive.caption) and hive.caption.text.begins_with("COLEMAN:") and hive.caption.text == hud.radio_label.text
+	hive._end_intro()
+	await frames(2)
+	expect(filmed and not is_instance_valid(hive.caption) and hud.play_ui.visible and hud.radio_left >= 3.0 and game.player.controlled, "While the arrival at the villa is filmed, command's first words are read on the lower bar of the picture, and after it on the radio's panel for long enough")
+	game.story_in_checks = false
 	Radio.hijacked = false
 	await _company(game)
 	game.return_to_menu()

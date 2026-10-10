@@ -105,6 +105,9 @@ var heli_clock := -1.0
 var intro_left := 0.0
 var intro_camera: Camera3D
 var bars: Array[ColorRect] = []
+## What is said while the arrival is filmed, to be read on the lower bar of the picture
+## (the radio's panel is out of it with the rest of the HUD).
+var caption: Label
 ## The goal shown on the HUD, the place its marker points at, and what can be used there.
 var goal := ""
 var marker := Vector3.INF
@@ -132,6 +135,8 @@ var voice: AudioStreamPlayer3D
 var talker: Node3D
 ## When Nadja turned away behind her door.
 var walk_clock := 0.0
+## Seconds the next line has waited for a call of the squad to be over.
+var call_wait := 0.0
 ## Seconds until somebody of the squad may make small talk again.
 var idle_left := 45.0
 var puppets: Array = []
@@ -161,6 +166,7 @@ func begin() -> void:
 	hold_id = ""
 	talker = null
 	walk_clock = 0.0
+	call_wait = 0.0
 	idle_left = 45.0
 	game.talk_until = 0
 	game.round_called = false
@@ -298,6 +304,15 @@ func _arrive() -> void:
 		bar.anchor_bottom = 0.12 if edge == 0 else 1.0
 		game.hud.root.add_child(bar)
 		bars.append(bar)
+	caption = (game.hud as SurvivalHUD).label("", 17, SurvivalHUD.RADIO_INK)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	caption.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	caption.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	caption.anchor_left = 0.12
+	caption.anchor_right = 0.88
+	caption.anchor_top = 0.88
+	caption.anchor_bottom = 1.0
+	game.hud.root.add_child(caption)
 
 func _end_intro() -> void:
 	if intro_left <= 0.0 and bars.is_empty() and not is_instance_valid(intro_camera):
@@ -307,11 +322,17 @@ func _end_intro() -> void:
 		if is_instance_valid(bar):
 			bar.queue_free()
 	bars.clear()
+	if is_instance_valid(caption):
+		caption.queue_free()
+	caption = null
 	if is_instance_valid(intro_camera):
 		intro_camera.queue_free()
 	intro_camera = null
 	if not on:
 		return
+	# What was being said goes on on the radio's panel, long enough to be read.
+	if game.hud.radio_left > 0.0:
+		game.hud.radio_left = maxf(game.hud.radio_left, 3.5)
 	if is_instance_valid(heli):
 		heli.global_position = (map.points.landing as Vector3) + Vector3(0, 0.1, 0)
 	heli_clock = maxf(heli_clock, INTRO_SECONDS)
@@ -339,6 +360,8 @@ func _run_heli(delta: float) -> void:
 	heli_clock += delta
 	if intro_left > 0.0:
 		intro_left -= delta
+		if is_instance_valid(caption):
+			caption.text = game.hud.radio_label.text if game.hud.radio_left > 0.0 else ""
 		var down := clampf(heli_clock / (INTRO_SECONDS - 1.2), 0.0, 1.0)
 		heli.global_position = pad + Vector3(0, lerpf(13.0, 0.1, ease(down, -1.8)), 0)
 		intro_camera.look_at(heli.global_position + Vector3(0, 1.6, 0), Vector3.UP)
@@ -1207,6 +1230,13 @@ func _run_lines(delta: float) -> void:
 ## for what is passed over, and for what is not a line).
 func _speak(entry: Dictionary) -> float:
 	var cue := str(entry.get("cue", ""))
+	if str(entry.kind) in ["radio", "person", "squad", "game"]:
+		# A call somebody of the squad is in the middle of is let out first (but nobody waits long).
+		if call_wait < 2.5 and _squad_calling():
+			call_wait += 0.15
+			lines.push_front(entry)
+			return 0.15
+		call_wait = 0.0
 	match str(entry.kind):
 		"beat":
 			_beat(str(entry.id))
@@ -1240,11 +1270,6 @@ func _speak(entry: Dictionary) -> float:
 			var mate := _squad_member(who)
 			if mate == null or clock - float(entry.at) > STALE:
 				return 0.0
-			# Nobody talks over himself: a call he is in the middle of is let out first.
-			var now := Time.get_ticks_msec()
-			if now < int(game.bark_until.get(mate.get_instance_id(), 0)) - 450:
-				lines.push_front(entry)
-				return 0.15
 			return _quiet(_voice(Radio.bark(who, cue), mate))
 	return 0.0
 
@@ -1276,11 +1301,20 @@ func _voice(said: Dictionary, body: Node3D) -> float:
 	hud.radio_left = seconds
 	return length + 0.35 if length > 0.0 else seconds
 
-## While a line of the mission is heard the squad keeps its small talk to itself (Game.bark).
+## While a line of the mission is heard the squad keeps its small talk to itself
+## (Game.bark) - and for the breath between two lines too, if another is waiting.
 func _quiet(seconds: float) -> float:
 	if seconds > 0.0:
-		game.talk_until = Time.get_ticks_msec() + int(seconds * 1000.0)
+		game.talk_until = Time.get_ticks_msec() + int((seconds + (0.0 if lines.is_empty() else 0.5)) * 1000.0)
 	return seconds
+
+## Somebody of the squad is in the middle of a call.
+func _squad_calling() -> bool:
+	var now := Time.get_ticks_msec()
+	for mate: Teammate in game.team:
+		if now < int(game.bark_until.get(mate.get_instance_id(), 0)) - 450:
+			return true
+	return false
 
 func _speaker_of(cue: String) -> String:
 	return str(Radio.LINES[cue][0]) if Radio.LINES.has(cue) else "coleman"
