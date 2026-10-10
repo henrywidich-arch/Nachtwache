@@ -92,6 +92,11 @@ func _init() -> void:
 	material.shader = shader
 
 func _ready() -> void:
+	# (A run without a screen draws nothing, and asking it for the picture is an error.)
+	if DisplayServer.get_name() == "headless":
+		done = true
+		set_process(false)
+		return
 	# The plan is drawn by a sheet of its own, once, and kept as a picture.
 	stage = SubViewport.new()
 	stage.name = "PlanSheet"

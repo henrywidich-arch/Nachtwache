@@ -77,3 +77,5 @@ Alle Texturen und Modelle in diesem Ordner stammen von **Poly Haven** (https://p
 ## Eigene Modelle
 
 Im Ordner `user/` liegen fünf eigene Modelle des Projekts (mit Meshy erzeugt, für das Spiel vereinfacht und neu texturiert): `lab_table_a`, `lab_table_b`, `microscope_a`, `microscope_b` und `door`. Sie stammen nicht von Poly Haven.
+
+Dazu kommen acht weitere eigene Modelle (erzeugt, mit `tools/blender_prop.py` auf 3000 bis 5000 Dreiecke vereinfacht; ihr Bild, das im Original nur leuchtete, ist jetzt eine gewöhnliche Farbtextur): `steel_door` (Stahlschiebetür mit Warnstreifen und Tastenfeld), `pipe_valve` (Rohrbogen mit rotem Handrad), `microscope_c` (Labormikroskop), `crt_computer` (alter Röhrenrechner mit Tastatur), `vending_machine` (Snackautomat), `mop_trolley` (gelber Putzwagen), `gas_cylinder` (grüne Gasflasche auf einem Karren) und `generator` (Benzingenerator). Auch sie stammen nicht von Poly Haven.

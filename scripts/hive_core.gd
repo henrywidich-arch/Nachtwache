@@ -44,7 +44,7 @@ const MOODS := {
 	# The central hall.
 	"core": {"ambient": Color(0.42, 0.52, 0.66), "energy": 0.36, "fog": 0.003, "haze": 0.011, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.17, 0.24)},
 	# The plant rooms: dim, warm, oily.
-	"plant": {"ambient": Color(0.56, 0.45, 0.32), "energy": 0.3, "fog": 0.004, "haze": 0.014, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.14, 0.08)},
+	"plant": {"ambient": Color(0.56, 0.45, 0.32), "energy": 0.44, "fog": 0.004, "haze": 0.014, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.14, 0.08)},
 	# The research wing: a sick green.
 	"sick": {"ambient": Color(0.38, 0.56, 0.52), "energy": 0.44, "fog": 0.005, "haze": 0.01, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.2, 0.18)},
 	# The containment hall: dark, with what glows in it.
