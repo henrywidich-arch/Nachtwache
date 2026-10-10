@@ -286,7 +286,7 @@ func send(kind: String, pack: int = 1, others: Array = []) -> bool:
 	var fitting: Array = others.filter(func(other: Variant) -> bool: return KINDS.has(str(other)))
 	var rare := RARE.has(kind)
 	while kinds.size() < pack and not fitting.is_empty():
-		var next := str(fitting[randi() % fitting.size()])
+		var next := HiveDirector.pick(fitting)
 		if RARE.has(next):
 			next = "mauler" if rare else next
 			rare = true

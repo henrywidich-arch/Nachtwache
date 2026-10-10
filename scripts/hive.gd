@@ -82,6 +82,10 @@ const PRESSURE := {
 	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 10, 6.5, "hidden", [3, 4]]
 }
 const LONE := 0.5
+## How often a kind that the dice chose really comes; a Mauler comes in its place the
+## other times. (The Striker stands in nearly every list above and left its growths
+## everywhere; the Charger only a little too often.)
+const THIN := {"striker": 0.65, "charger": 0.88}
 ## How many may be alive at once in this mission whatever a stage and a level say (the
 ## squad's guns and the answer to camping come on top): what the frame rate was measured
 ## with.
@@ -511,7 +515,7 @@ func _enter(id: String) -> void:
 			line("m2_platform")
 			talk("m2_station")
 			var middle := _point("platform")
-			_post(["mauler", "mauler", "striker", "mauler", "striker", "ripper", "mauler", "charger"], [middle + Vector3(-14, 0, -5), middle + Vector3(12, 0, -6), middle + Vector3(-6, 0, -8), middle + Vector3(18, 0, -3), middle + Vector3(-24, 0, -2), middle + Vector3(27, 0, -7), middle + Vector3(3, 0, -3), middle + Vector3(-30, 0, -8)], true)
+			_post(["mauler", "mauler", "striker", "mauler", "mauler", "ripper", "mauler", "charger"], [middle + Vector3(-14, 0, -5), middle + Vector3(12, 0, -6), middle + Vector3(-6, 0, -8), middle + Vector3(18, 0, -3), middle + Vector3(-24, 0, -2), middle + Vector3(27, 0, -7), middle + Vector3(3, 0, -3), middle + Vector3(-30, 0, -8)], true)
 		"nadja":
 			_nadja_leaves()
 		"deal":
@@ -681,7 +685,7 @@ func _update(delta: float) -> void:
 			progress = minf(1.0, progress + delta / HOLD_STATION)
 			if progress > 0.45 and _once("hold_squad"):
 				line("m2_depot", true)
-				_post(["striker", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
+				_post(["mauler", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
 			if progress >= 1.0:
 				_all_clear()
 				_enter("board")
@@ -1273,6 +1277,11 @@ func _park_spot() -> Vector3:
 func _horde() -> float:
 	return float(game.rules.get("horde", 1.0))
 
+## One of `kinds` by the dice, thinned by THIN.
+static func pick(kinds: Array) -> String:
+	var kind := str(kinds[randi() % kinds.size()])
+	return "mauler" if THIN.has(kind) and randf() > float(THIN[kind]) else kind
+
 ## How many may be alive at once in the stage that runs. (Whoever digs himself in gets a
 ## few more: see HiveEntries.)
 func _crowd() -> int:
@@ -1291,7 +1300,7 @@ func _run_pressure(delta: float) -> void:
 	# (Whoever digs himself in gets them sooner.)
 	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste()
 	var kinds: Array = plan[0]
-	var kind := str(kinds[randi() % kinds.size()])
+	var kind := pick(kinds)
 	# Nearly all of them come through a way in near the squad - out of a ceiling, out of a
 	# wall -, also in plain sight, and a pack of them; the others as they always did, one
 	# at a time from where nobody looks.
