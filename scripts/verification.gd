@@ -1391,12 +1391,17 @@ func _latest(game: Node3D) -> void:
 	var mg2_lined: bool = absf(mg2_aim.y + (mg2_gun.mount as Vector3).y + float(mg2_gun.irons)) < 0.005 and float((WeaponView.VIEWS.mg2.aim_angles as Vector3).x) > 0.0 and mg2_aim.x == 0.0 and (WeaponView.VIEWS.mg2.muzzle as Vector3).is_equal_approx((mg2_gun.mount as Vector3) + (mg2_gun.muzzle as Vector3))
 	var mg2_drum := mg2.get_node_or_null("Magazine") as Node3D
 	var mg2_paint := false
+	# The drum hangs as a drum does: its own axis along the barrel (so it is wider across the
+	# gun than it is deep along it), in the middle under the gun, forward of the pistol grip.
+	var mg2_hung := false
 	if mg2_drum != null:
 		var mg2_body := mg2.find_child("Body", true, false) as MeshInstance3D
 		var mg2_shell := mg2_drum.find_child("*", true, false) as MeshInstance3D
 		if mg2_body != null and mg2_shell != null:
 			var mg2_skin := mg2_shell.get_surface_override_material(0) as BaseMaterial3D
 			mg2_paint = mg2_skin != null and mg2_skin.albedo_texture != null and mg2_skin != mg2_body.get_surface_override_material(0)
+			var mg2_box: AABB = mg2_shell.transform * mg2_shell.get_aabb()
+			mg2_hung = mg2_box.size.x > 0.15 and mg2_box.size.x > mg2_box.size.z * 1.3 and absf(mg2_box.get_center().x) < 0.01 and mg2_box.end.z < (mg2_gun.mount as Vector3).z and mg2_box.end.y < (mg2_gun.mount as Vector3).y + float(mg2_gun.rail)
 	# What the player reads of it: its name, in the hand and on the shop's list of heavy
 	# weapons, where it stands right after the machine gun.
 	var mg2_named: bool = str(Survivor.WEAPONS.mg2.label) == "M21E" and player.weapon_label() == "M21E" and str(Survivor.WEAPONS.mg.label) == "MASCHINENGEWEHR" and Survivor.ORDER.find("mg2") == Survivor.ORDER.find("mg") + 1 and str(Survivor.WEAPONS.mg2.group) == "heavy" and str(SurvivalHUD.SHOP_NOTES.get("mg2", "")).contains("Trommel")
@@ -1408,7 +1413,7 @@ func _latest(game: Node3D) -> void:
 		await get_tree().physics_frame
 		if mg2_drum != null:
 			mg2_away = maxf(mg2_away, mg2_drum.position.length())
-	expect(mg2_owned and player.current_weapon == "mg2" and mg2_full and mg2_named and Survivor.kind_of("mg2") == "heavy" and mg2_drum != null and mg2_lined and mg2_paint and (WeaponView.reload_step("mg2", 0.38).magazine as Vector3).length() > 0.2 and mg2_away > 0.2 and mg2_drum.position.length() < 0.001 and player.ammo == 75 and bool(game.sounds.recorded.get("mg2", false)) and float(Survivor.WEAPONS.mg2.damage) > float(Survivor.WEAPONS.mg.damage) and int(Survivor.WEAPONS.mg2.magazine) < int(Survivor.WEAPONS.mg.magazine), "The M21E is a second machine gun beside the old one: 75 harder rounds in a drum with textures of its own, which comes off the gun when it is reloaded; it is aimed over its iron sights")
+	expect(mg2_owned and player.current_weapon == "mg2" and mg2_full and mg2_named and Survivor.kind_of("mg2") == "heavy" and mg2_drum != null and mg2_lined and mg2_paint and mg2_hung and (WeaponView.reload_step("mg2", 0.38).magazine as Vector3).length() > 0.2 and mg2_away > 0.2 and mg2_drum.position.length() < 0.001 and player.ammo == 75 and bool(game.sounds.recorded.get("mg2", false)) and float(Survivor.WEAPONS.mg2.damage) > float(Survivor.WEAPONS.mg.damage) and int(Survivor.WEAPONS.mg2.magazine) < int(Survivor.WEAPONS.mg.magazine), "The M21E is a second machine gun beside the old one: 75 harder rounds in a drum with textures of its own, which hangs in the middle under the gun with its round faces to the muzzle and to the shooter and comes off when it is reloaded; it is aimed over its iron sights")
 	game.team_enabled = true
 	game.start_run()
 
@@ -6066,6 +6071,203 @@ func _hive(game: Node3D) -> void:
 	var voices: Vector2i = map.sound.call("count")
 	expect(alarm_off and alarm_seen and alarm_gone and not map.alarm_on, "The lockdown's red light and its horn come with the lock of the canteen and go when it opens")
 	expect(wet and map.room_of.has("flooded") and map.drip_mesh != null and map.spark_mesh != null and voices.x >= 12 and voices.x == voices.y, "Water stands in the laboratory corridor under drips and sparks, and every voice of the map has its sound (%d of %d)" % [voices.y, voices.x])
+	# --- the ways in: holes in ceilings and walls, windows, the edge of the platform - where
+	# they are, that somebody who comes through one stands on free ground from which he gets
+	# at the survivor, that the director uses them to flank, and what camping brings
+	var ways: HiveEntries = hive.entries
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	_wipe_all(game)
+	for id in map.areas:
+		map.unlock(str(id), true)
+	for mate in game.team:
+		mate.set_physics_process(false)
+		mate.global_position = (map.points.landing as Vector3) + Vector3(2, 0.05, 0)
+	await frames(3)
+	var way_rooms := {}
+	var way_kinds := {}
+	var way_faults: Array[String] = []
+	for entry in map.entries:
+		way_rooms[str(entry.room)] = int(way_rooms.get(str(entry.room), 0)) + 1
+		way_kinds[str(entry.kind)] = int(way_kinds.get(str(entry.kind), 0)) + 1
+		var way_land: Vector3 = entry.land
+		if way_land == Vector3.INF:
+			way_faults.append("%s: no ground" % entry.id)
+			continue
+		var way_level: int = map.level_of(way_land + Vector3(0, 0.3, 0))
+		var way_from: Vector3 = map.points.landing if way_level in [map.ground, map.upper] else (map.points.platform if way_level == map.under else map.points.terminal)
+		var way_cell := Vector2i(roundi(way_land.x / CabinMap.CELL), roundi(way_land.z / CabinMap.CELL))
+		if not bool(entry.get("fixed", false)) and map.navigation[way_level].is_point_solid(way_cell):
+			way_faults.append("%s: its ground is closed" % entry.id)
+		elif map.path_between(way_land, way_from).is_empty():
+			way_faults.append("%s: no way from it" % entry.id)
+		elif is_instance_valid(entry.node) == (str(entry.kind) == "edge"):
+			way_faults.append("%s: nothing to rattle" % entry.id)
+	expect(map.entries.size() >= 100 and way_faults.is_empty() and way_kinds.size() == 6 and int(way_kinds.get("drop", 0)) >= 30 and int(way_kinds.get("hole", 0)) >= 30 and int(way_kinds.get("duct", 0)) >= 10 and int(way_kinds.get("window", 0)) >= 8, "The map has more than a hundred ways in through ceilings, walls, windows and over the edge of the platforms, each leading to free ground that is joined to the rest (%d: %s)%s" % [map.entries.size(), str(way_kinds), "" if way_faults.is_empty() else " - " + ", ".join(PackedStringArray(way_faults.slice(0, 6)))])
+	var thin: Array[String] = []
+	for need in [["ring_s", 8], ["spine", 4], ["lab_corridor", 5], ["cross", 4], ["maint", 4], ["platform", 7], ["stairs", 1], ["stair_lobby", 1], ["terminal", 6], ["cafeteria", 6], ["atrium", 6], ["containment", 6], ["dining", 2], ["checkpoint", 2]]:
+		if int(way_rooms.get(str(need[0]), 0)) < int(need[1]):
+			thin.append("%s has %d" % [need[0], int(way_rooms.get(str(need[0]), 0))])
+	expect(thin.is_empty(), "Every long passage - the ring, the spine, the laboratory corridor, the crossing, the plant passage, the stairs, the platform - and every hall that is held has its ways in%s" % ("" if thin.is_empty() else ": " + ", ".join(PackedStringArray(thin))))
+	# Where a squad could sit tight: every room with a single door, and every supply point
+	# under a roof. (Nadja's lock is hers alone, and nobody stays in the car of a train.)
+	var snug: Array[String] = []
+	for room in map.rooms:
+		if bool(room.outdoor) or room.get("nav", true) == false or room.get("walls", true) == false or (room.doors as Array).size() != 1 or str(room.id) == "airlock":
+			continue
+		if not way_rooms.has(str(room.id)):
+			snug.append(str(room.id))
+	var far_supply := 0
+	for station in map.stations:
+		if str(station.kind) != "shop" or not map.is_indoors(station.pos):
+			continue
+		var nearest_way := INF
+		for entry in map.entries:
+			nearest_way = minf(nearest_way, (entry.land as Vector3).distance_to(station.pos))
+		if nearest_way > 14.0:
+			far_supply += 1
+	expect(snug.is_empty() and far_supply == 0 and way_rooms.has("booth") and way_rooms.has("control") and way_rooms.has("guard") and way_rooms.has("generator") and way_rooms.has("security"), "Every room with a single door has a way in of its own, every room the mission sends the squad into, and every supply point under a roof has one near%s" % ("" if snug.is_empty() else " - without: " + ", ".join(PackedStringArray(snug))))
+	# --- somebody comes through each kind of them
+	hive.stage = "admin"
+	hive.stage_time = 30.0
+	var through: Array[String] = []
+	var longest_way := 0.0
+	for trial in [["ring_s_drop", Vector3(-33, 0, -365)], ["ring_s_hole", Vector3(-27, 0, -365)], ["ring_s_duct", Vector3(-15, 0, -365)], ["dining_window", Vector3(0, 0, 5.6)], ["kitchen_cellar", Vector3(17, 0, 5)], ["platform_edge", Vector3(-18, 0, -45)]]:
+		var way_index := -1
+		for k in range(map.entries.size()):
+			if way_index < 0 and str(map.entries[k].id).begins_with(str(trial[0])):
+				way_index = k
+		if way_index < 0:
+			through.append("%s: missing" % trial[0])
+			continue
+		var way: Dictionary = map.entries[way_index]
+		var goal: Vector3 = way.land
+		face(game, Vector3((trial[1] as Vector3).x, goal.y + 0.05, (trial[1] as Vector3).z), 0.0)
+		await frames(2)
+		var comer: Infected = ways.come(way_index, "mauler")
+		if comer == null:
+			through.append("%s: nobody came" % way.id)
+			continue
+		var began_at := comer.global_position
+		var carried: bool = comer.entering == ways and began_at.distance_to(goal) > 0.6
+		var steps := 0
+		while is_instance_valid(comer) and comer.entering != null and steps < 150:
+			await frames(1)
+			steps += 1
+		longest_way = maxf(longest_way, steps / 60.0)
+		var stands: bool = is_instance_valid(comer) and not comer.dead and Vector2(comer.global_position.x - goal.x, comer.global_position.z - goal.z).length() < 0.5 and absf(comer.global_position.y - goal.y) < 0.3
+		var gap_before: float = comer.global_position.distance_to(player.global_position) if stands else 0.0
+		var reaches: bool = stands and not map.path_between(comer.global_position, player.global_position).is_empty()
+		await frames(80)
+		var nearer: bool = is_instance_valid(comer) and (comer.dead or comer.global_position.distance_to(player.global_position) < gap_before - 0.5)
+		if not (carried and stands and reaches and nearer and steps < 80 and absf(steps / 60.0 - ways.seconds(way_index)) < 0.2):
+			through.append("%s: carried %s stands %s reaches %s nearer %s after %d steps (meant %.2f s)" % [way.id, str(carried), str(stands), str(reaches), str(nearer), steps, ways.seconds(way_index)])
+		_wipe_all(game)
+		await frames(2)
+	expect(through.is_empty() and longest_way < 1.25, "Out of a ceiling, out of a hole in a wall, out of a duct, through a window, out of the cellar and up from the track: whoever comes through is carried to free ground within about a second and goes for the survivor from there (the longest took %.2f s)%s" % [longest_way, "" if through.is_empty() else " - " + "; ".join(PackedStringArray(through))])
+	# Shot on the way down, the body still comes down; and not everybody fits through.
+	var drop_way := -1
+	for k in range(map.entries.size()):
+		if drop_way < 0 and str(map.entries[k].id).begins_with("office_drop"):
+			drop_way = k
+	face(game, (map.points.office as Vector3) + Vector3(-6, 0.05, 6), 0.0)
+	var faller: Infected = ways.come(drop_way, "striker")
+	await frames(8)
+	var in_the_air: bool = faller.global_position.y > HiveMap.UNDER + 1.0 and faller.entering == ways
+	faller.receive_hit(99999.0, Vector3.FORWARD)
+	await frames(50)
+	var came_down: bool = faller.dead and faller.entering == null and absf(faller.global_position.y - HiveMap.UNDER) < 0.2
+	var size_matters: bool = not ways.send("crusher") and not ways.send("prowler") and not ways.send("cru_assault") and not ways.send("cru_shield") and ways.due.is_empty()
+	expect(in_the_air and came_down and size_matters, "An infected shot on its way out of a ceiling falls to the floor like any other; the Crusher, the Prowler and the soldiers cannot use a way in at all")
+	_wipe_all(game)
+	await frames(2)
+	# --- the director: not in the first seconds of a stage, never where nobody keeps coming,
+	# and mostly from behind and from the side
+	var truce := true
+	for id in ["station", "nadja", "deal", "power", "board", "ride"]:
+		truce = truce and not HiveDirector.PRESSURE.has(id)
+	face(game, Vector3(0, HiveMap.UNDER + 0.05, -365), -PI / 2)
+	await frames(2)
+	hive.stage_time = 2.0
+	var too_soon: bool = not ways.send("mauler")
+	hive.stage_time = 30.0
+	ways.camp_time = 0.0
+	var sides := {"behind": 0, "beside": 0, "ahead": 0}
+	var near_ones := 0
+	var looks := -player.global_basis.z
+	for k in range(240):
+		var pick := ways.choose()
+		if pick < 0:
+			continue
+		var to_way: Vector3 = (map.entries[pick].land as Vector3) - player.global_position
+		var side := Vector2(looks.x, looks.z).normalized().dot(Vector2(to_way.x, to_way.z).normalized())
+		sides["behind" if side < -0.25 else ("beside" if side < 0.55 else "ahead")] += 1
+		if to_way.length() < HiveEntries.KEEP:
+			near_ones += 1
+	expect(truce and too_soon and near_ones == 0 and int(sides.behind) > int(sides.ahead) * 1.5 and int(sides.behind) + int(sides.beside) + int(sides.ahead) >= 200, "Nobody comes through a way in during the first seconds of a stage or while there is a truce; in a passage they come mostly behind the survivor's back, never on top of him (behind %d, beside %d, ahead %d)" % [int(sides.behind), int(sides.beside), int(sides.ahead)])
+	# --- a stage runs: most of those who keep coming take a way in, with a warning first
+	hive.stage = "lockdown"
+	ways.came = 0
+	ways.passed = 0
+	ways.used.clear()
+	ways.told.clear()
+	hud.banner_left = 0.0
+	var warned := 0
+	for k in range(600):
+		hive.stage_time += 0.05
+		hive._run_pressure(0.05)
+		warned = maxi(warned, ways.coming())
+		ways.camp_time = 0.0
+		ways._process(0.05)
+		if game.alive_count >= 6:
+			_wipe_all(game)
+	var open_share: float = float(ways.came) / maxf(1.0, ways.came + ways.passed)
+	expect(ways.came >= 4 and warned >= 1 and open_share > 0.4 and ways.told.has("hole"), "While a stage runs, most of those who keep coming are announced at a way in and come through it - the first time the survivor is told what the noise means -; the others come as before, from where nobody looks (%d of %d)" % [ways.came, ways.came + ways.passed])
+	_wipe_all(game)
+	await frames(2)
+	# --- camping: staying put is noticed, and answered from the nearest ways in - the one
+	# in the survivor's own room among them -, sooner and with more
+	face(game, Vector3(27.5, HiveMap.UNDER + 0.05, -410.0), 0.0)
+	hive.stage = "lockdown"
+	hive.stage_time = 30.0
+	ways.camp_at = Vector3.INF
+	await frames(30)
+	var counting: bool = ways.camp_time > 0.3 and ways.camp_time < 0.8 and ways.heat() == 0.0 and ways.haste() == 1.0 and ways.more() == 0
+	face(game, Vector3(27.5, HiveMap.UNDER + 0.05, -420.0), 0.0)
+	await frames(6)
+	var moved_on: bool = ways.camp_time < 0.2
+	face(game, Vector3(27.5, HiveMap.UNDER + 0.05, -410.0), 0.0)
+	await frames(6)
+	ways.camp_time = HiveEntries.CAMP_AFTER + HiveEntries.CAMP_FULL + 1.0
+	var hot: bool = ways.heat() == 1.0 and is_equal_approx(ways.haste(), HiveEntries.CAMP_HASTE) and ways.more() == HiveEntries.CAMP_MORE
+	var nearest_three: Array = ways.found(player.global_position).slice(0, HiveEntries.CAMP_NEAREST)
+	var own_room := 0
+	var strays := 0
+	ways.came = 0
+	ways.passed = 0
+	ways.used.clear()
+	for k in range(600):
+		hive.stage_time += 0.05
+		hive._run_pressure(0.05)
+		ways.camp_time = HiveEntries.CAMP_AFTER + HiveEntries.CAMP_FULL + 1.0
+		ways._process(0.05)
+		if game.alive_count >= 10:
+			_wipe_all(game)
+	for index in ways.used:
+		var close := false
+		for item: Array in nearest_three:
+			close = close or int(item[1]) == index
+		if str(map.entries[index].room) == "kitchen_f":
+			own_room += 1
+		elif not close and (map.entries[index].land as Vector3).distance_to(player.global_position) > 22.0:
+			strays += 1
+	expect(counting and moved_on and hot and ways.used.size() >= 12 and ways.passed == 0 and own_room >= 3 and strays == 0, "A survivor who stays in one place is noticed after a while: then everybody comes through the ways in nearest to him - also the one in his own room -, sooner than the stage says and a few more at once (%d in half a minute, %d of them in his room)" % [ways.used.size(), own_room])
+	_wipe_all(game)
+	for mate in game.team:
+		mate.set_physics_process(true)
+	hive.prowl.set_process(true)
+	hive.set_process(true)
+	await frames(3)
 	# --- and back to the farm
 	game.return_to_menu()
 	await frames(3)
