@@ -861,7 +861,7 @@ func run(game: Node3D) -> void:
 	game.player.extra_slots = 1
 	game.player.position = (spots.shop as Vector3) + lift
 	game.interact()
-	expect(game.buy_weapon("shotgun") and game.credits == 0 and game.player.current_weapon == "shotgun" and game.player.ammo == 6 and game.player.reserve == 42, "Shotgun purchase deducts 250 and equips it with six shells")
+	expect(game.buy_weapon("shotgun") and game.credits == 0 and game.player.current_weapon == "shotgun" and game.player.ammo == 8 and game.player.reserve == 48, "Shotgun purchase deducts 250 and equips it with eight shells")
 	game.resume_run()
 	game.player._select_slot(1)
 	var other: String = game.player.current_weapon
@@ -881,28 +881,31 @@ func run(game: Node3D) -> void:
 	await frames(20)
 	var pitch_before: float = game.player.camera.rotation.x
 	game.player.shoot()
-	expect(close_target.dead and game.player.ammo == 5, "One shotgun blast at close range kills a Mauler")
+	expect(close_target.dead and game.player.ammo == 7, "One shotgun blast at close range kills a Mauler")
 	expect(game.player.camera.rotation.x > pitch_before + 0.04 and game.player.pump_clock >= 0.0 and game.player.trauma > 0.2, "The blast kicks the view and the pump has to be worked")
 	game.player.shoot()
-	expect(game.player.ammo == 5, "The shotgun cannot fire again before the pump stroke is done")
+	expect(game.player.ammo == 7, "The shotgun cannot fire again before the pump stroke is done")
 	await wait(1.1)
 	face(game, Vector3(0, 0.05, 1.0), PI)
 	await frames(3)
+	# (What the first blast carried on through the body in front of it has reached it already.)
+	var far_before: float = far_target.health
 	game.player.shoot()
-	var far_loss: float = far_target.max_health - far_target.health
-	expect(not far_target.dead and far_loss > 0.0 and far_loss < 9 * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.4, "At long range the shot has lost most of its force")
+	var far_loss: float = far_before - far_target.health
+	expect(not far_target.dead and far_loss > 0.0 and far_loss < int(Survivor.WEAPONS.shotgun.pellets) * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.4, "At long range the shot has lost most of its force")
 	far_target.receive_hit(9999, Vector3.BACK)
 	await wait(1.1)
 	game.player.ammo = 2
 	var shells_before: int = game.player.reserve
 	game.player.start_reload()
-	await wait(1.0)
+	# (A shell goes in every 0.4 s, the first after 0.65 s.)
+	await wait(0.85)
 	expect(game.player.ammo == 3 and game.player.loading_shells, "Shells go into the tube one at a time")
-	await wait(2.2)
-	expect(game.player.ammo == 6 and game.player.reserve == shells_before - 4 and not game.player.loading_shells, "The reload stops when the tube is full and uses exactly four shells")
+	await wait(2.4)
+	expect(game.player.ammo == 8 and int(Survivor.WEAPONS.shotgun.magazine) == 8 and game.player.reserve == shells_before - 6 and not game.player.loading_shells, "The reload stops when the tube is full and uses exactly six shells")
 	game.player.ammo = 1
 	game.player.start_reload()
-	await wait(1.0)
+	await wait(0.85)
 	game.player.shoot()
 	expect(game.player.ammo == 2 and not game.player.loading_shells and game.player.reload_left == 0.0, "Firing breaks off a half-finished shotgun reload")
 	# --- a blast from close by throws back whoever it does not kill
@@ -936,7 +939,62 @@ func run(game: Node3D) -> void:
 	faraway.receive_hit(99999.0, Vector3.BACK)
 	var pump_gun: Dictionary = Survivor.WEAPONS.shotgun
 	var auto_gun: Dictionary = Survivor.WEAPONS.autoshotgun
-	expect(blast_harm >= 9 * float(pump_gun.damage) and float(pump_gun.damage) * int(pump_gun.pellets) > 200.0 and blast_speed > 3.0 and blast_way > 0.3 and blast_far and float(pump_gun.push) > float(auto_gun.push) and str(auto_gun.sound) == "autoshotgun" and bool(game.sounds.recorded.get("autoshotgun", false)) and float(auto_gun.damage) * int(auto_gun.pellets) > 130.0, "A blast from close by does more than 200 damage and throws back whoever is still standing (%.1f m/s, %.2f m); further away it only hurts. The automatic shotgun has a shot of its own" % [blast_speed, blast_way])
+	expect(blast_harm >= int(pump_gun.pellets) * float(pump_gun.damage) and float(pump_gun.damage) * int(pump_gun.pellets) > 200.0 and blast_speed > 3.0 and blast_way > 0.3 and blast_far and float(pump_gun.push) > float(auto_gun.push) and str(auto_gun.sound) == "autoshotgun" and bool(game.sounds.recorded.get("autoshotgun", false)) and float(auto_gun.damage) * int(auto_gun.pellets) > 130.0, "A blast from close by does more than 200 damage and throws back whoever is still standing (%.1f m/s, %.2f m); further away it only hurts. The automatic shotgun has a shot of its own" % [blast_speed, blast_way])
+	# --- shot goes on through soft bodies: four in a line, the fourth is out of its reach
+	await wait(1.1)
+	game.player.ammo = 6
+	face(game, Vector3(0, 0.05, 1.0), PI)
+	var shot_row: Array[Infected] = []
+	for shot_i in range(4):
+		var shot_body: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+		shot_body.set_physics_process(false)
+		shot_body.max_health = 5000.0
+		shot_body.health = 5000.0
+		shot_body.position = Vector3(0, 0.05, 4.0 + shot_i * 0.9)
+		shot_row.append(shot_body)
+	await frames(12)
+	game.player.shoot()
+	var shot_lost: Array[float] = []
+	for shot_body in shot_row:
+		shot_lost.append(5000.0 - shot_body.health)
+		shot_body.receive_hit(99999.0, Vector3.BACK)
+	var shot_carry: Array = pump_gun.carry
+	var shot_through: bool = shot_lost[0] >= float(pump_gun.damage) * int(pump_gun.pellets) - 0.01 and absf(shot_lost[1] / shot_lost[0] - float(shot_carry[0])) < 0.001 and absf(shot_lost[2] / shot_lost[0] - float(shot_carry[1])) < 0.001 and shot_lost[3] == 0.0 and shot_carry.size() == 2 and float(shot_carry[0]) < 1.0 and float(shot_carry[1]) < float(shot_carry[0])
+	# A soldier's armour stops it: nothing reaches whoever stands behind him.
+	await wait(1.1)
+	var shot_guard: Infected = game.spawn_enemy("cru_assault")
+	shot_guard.set_physics_process(false)
+	shot_guard.max_health = 5000.0
+	shot_guard.health = 5000.0
+	shot_guard.position = Vector3(0, 0.05, 4.0)
+	var shot_behind: Infected = game.spawn_enemy("mauler", "mauler_hazmat")
+	shot_behind.set_physics_process(false)
+	shot_behind.position = Vector3(0, 0.05, 4.9)
+	await frames(12)
+	game.player.shoot()
+	var shot_stopped: bool = shot_guard.health < 5000.0 and shot_behind.health == shot_behind.max_health and not Survivor.lets_shot_through(shot_guard) and Survivor.lets_shot_through(shot_behind)
+	shot_guard.receive_hit(9999999.0, Vector3.BACK)
+	shot_behind.receive_hit(99999.0, Vector3.BACK)
+	# The cone: two rings evenly round the middle, nothing beyond its edge.
+	var shot_cone: Array[Vector2] = Survivor.shot_pattern(int(pump_gun.pellets), float(pump_gun.spread))
+	var shot_core := 0
+	var shot_rim: Array[float] = []
+	var shot_widest := 0.0
+	for shot_off in shot_cone:
+		shot_widest = maxf(shot_widest, shot_off.length())
+		if shot_off.length() <= float(pump_gun.spread) * Survivor.SHOT_CORE_REACH + 0.0001:
+			shot_core += 1
+		else:
+			shot_rim.append(shot_off.angle())
+	shot_rim.sort()
+	var shot_gap := 0.0
+	for shot_i in range(shot_rim.size()):
+		shot_gap = maxf(shot_gap, fposmod(shot_rim[(shot_i + 1) % shot_rim.size()] - shot_rim[shot_i], TAU))
+	var shot_even: bool = shot_cone.size() == int(pump_gun.pellets) and shot_core == int(round(int(pump_gun.pellets) * Survivor.SHOT_CORE)) and shot_widest <= float(pump_gun.spread) + 0.0001 and shot_gap < TAU / 3.0
+	# At range it is no rifle: at 20 m a blast with every pellet on the body does less in a
+	# second than the AK-47.
+	var shot_fades: bool = is_equal_approx(Survivor.shot_force(8.0), 1.0) and is_equal_approx(Survivor.shot_force(17.0), 0.5) and is_equal_approx(Survivor.shot_force(40.0), Survivor.SHOT_LEAST) and float(pump_gun.damage) * int(pump_gun.pellets) * Survivor.shot_force(20.0) / float(pump_gun.interval) < float(Survivor.WEAPONS.ak.damage) / float(Survivor.WEAPONS.ak.interval)
+	expect(shot_through and shot_stopped and shot_even and shot_fades and int(pump_gun.pellets) == 12 and int(auto_gun.pellets) == 10 and float(pump_gun.spread) > float(Survivor.WEAPONS.ak.spread) * 5.0 and (auto_gun.carry as Array).size() == 2 and float(auto_gun.carry[0]) < float(shot_carry[0]), "A blast of shot goes on through two soft bodies, weaker each time, and stops in a soldier's armour; its pellets fill a wide cone evenly; at 20 m a rifle does more")
 	# --- Ripper
 	game.player.health = 100
 	face(game, Vector3(0, 0.05, 1.0), PI)
@@ -1503,7 +1561,7 @@ func _arsenal(game: Node3D) -> void:
 	await frames(2)
 	giant.shove(Vector3.BACK, Survivor.MELEE_PUSH, Survivor.MELEE_DAZE, Survivor.MELEE_DAMAGE)
 	giant.blown(Vector3.BACK, float(Survivor.WEAPONS.shotgun.push))
-	expect(giant.knock == Vector3.ZERO and giant.held_left > 0.0 and giant.held_left < 1.0 and giant.health < giant.max_health, "The Crusher is only held up for a moment by a blow, and not moved at all: not by a blast of shot either")
+	expect(giant.knock == Vector3.ZERO and giant.held_left > 0.0 and giant.held_left < 1.0 and giant.health < giant.max_health and not Survivor.lets_shot_through(giant), "The Crusher is only held up for a moment by a blow, and not moved at all: not by a blast of shot either, and no shot goes on through it")
 	_wipe(game)
 	game.boss = null
 	await frames(2)
@@ -4337,7 +4395,7 @@ func _newer(game: Node3D) -> void:
 	player.unlock("autoshotgun")
 	player.shot_cooldown = 0.0
 	player.shoot()
-	expect(player.ammo == 7 and player.pump_clock < 0.0, "The automatic shotgun needs no pump stroke")
+	expect(player.ammo == int(Survivor.WEAPONS.autoshotgun.magazine) - 1 and int(Survivor.WEAPONS.autoshotgun.magazine) == 10 and player.pump_clock < 0.0, "The automatic shotgun needs no pump stroke")
 	expect(player.unlock("pistol") and player.ammo == 15 and player.unlock("revolver") and player.ammo == 6 and int(Survivor.WEAPONS.minigun.from_round) > int(Survivor.WEAPONS.launcher.from_round), "Two handguns are on sale, the heaviest weapons only late in the night")
 	# --- holding a position
 	game.start_run()
@@ -4425,7 +4483,15 @@ func bot(game: Node3D) -> void:
 	var tree := ""
 	var build := ""
 	var vest := "--bot-vest" in OS.get_cmdline_user_args()
+	# --bot-scatter: the bot's shots scatter as a player's do from the hip (checks fire dead
+	# centre otherwise, which flatters whatever fires pellets).
+	Survivor.scatter_in_checks = "--bot-scatter" in OS.get_cmdline_user_args()
+	# --bot-reach=10: the bot holds its fire until somebody is this near, as whoever
+	# carries a shotgun does (it shoots at anything within 40 m otherwise).
+	var reach := 40.0
 	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--bot-reach="):
+			reach = float(arg.trim_prefix("--bot-reach="))
 		if arg.begins_with("--bot-weapon="):
 			arm = arg.trim_prefix("--bot-weapon=")
 		if arg.begins_with("--bot-tree="):
@@ -4595,7 +4661,7 @@ func bot(game: Node3D) -> void:
 			var query := PhysicsRayQueryParameters3D.create(eye, aim, 1)
 			# Behind a shield that faces the bot: anybody else comes first.
 			var rank := distance + (1000.0 if enemy.blocks(enemy.global_position - game.player.global_position) else 0.0)
-			if distance < 40.0 and rank < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
+			if distance < reach and rank < best_distance and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
 				best = enemy
 				best_distance = rank
 		if best != null:
@@ -5369,7 +5435,7 @@ func _squadwork(game: Node3D) -> void:
 	player.shoot()
 	await frames(2)
 	var through: float = sound - bearer.health
-	expect(bounced and stopped and through > 0.0 and through <= 9 * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.5 + 0.01 and bearer.knock == Vector3.ZERO and skills.shield_share("shotgun") == 0.5 and skills.shield_share("autoshotgun") == 0.5 and skills.shield_share("rifle") == 0.5, "With two ranks of the breacher's ability against armour both shotguns shoot through a shield with half their force (%.0f), and it throws nobody back" % through)
+	expect(bounced and stopped and through > 0.0 and through <= int(Survivor.WEAPONS.shotgun.pellets) * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.5 + 0.01 and bearer.knock == Vector3.ZERO and skills.shield_share("shotgun") == 0.5 and skills.shield_share("autoshotgun") == 0.5 and skills.shield_share("rifle") == 0.5, "With two ranks of the breacher's ability against armour both shotguns shoot through a shield with half their force (%.0f), and it throws nobody back" % through)
 	bearer.receive_hit(99999.0, Vector3.FORWARD)
 	skills.reset()
 	# --- the squad finds its feet over the first rounds
