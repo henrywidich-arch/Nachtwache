@@ -71,6 +71,17 @@ const GUNS := {
 		"rail": 0.17, "optic": -0.15, "irons": 0.1897, "metal": 0.85, "rough": 0.5,
 		"support": Vector3(0, 0.0907, -0.3539), "handle": Vector3(0.0377, 0.1327, -0.1011),
 		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.008, -0.053, -0.18)
+	},
+	# The M21E, the second machine gun (its id is mg2; tools/blender_make_mg2.py): the gun and
+	# its drum are two models of the user's, each with its own textures. The drum sits in the
+	# magazine well in front of the trigger guard and hangs to the left; it comes off
+	# downwards. Aimed over the notch of its rear sight and its hooded front post (irons: the
+	# tip of the post).
+	"mg2": {
+		"scene": "res://assets/models/mg2.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1165, -0.7094), "bore": 0.0133,
+		"rail": 0.1519, "optic": -0.15, "irons": 0.1754,
+		"support": Vector3(0, 0.1093, -0.4104), "handle": Vector3(-0.03, 0.133, -0.52),
+		"magazine_out": Vector3(-0.2, -0.98, 0.0), "magazine_foot": Vector3(-0.0452, -0.1678, -0.1602)
 	}
 }
 ## The reflex sight is the user's model of a holographic sight: a hood with a tunnel to
@@ -120,6 +131,13 @@ const VIEWS := {
 	"mg": {
 		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.1047, -0.207), "muzzle": Vector3(0.0005, 0.0367, -0.5833),
+		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The M21E (build_gun): the eye on the line over its rear sight and the tip of its front
+	# post, 14 cm behind the rear sight.
+	"mg2": {
+		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.0879, -0.225), "aim_angles": Vector3(1.715, 0.0, 0.0), "muzzle": Vector3(0, 0.0315, -0.6244),
 		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	"p90": {
@@ -603,17 +621,19 @@ static func build_gun(id: String) -> Node3D:
 		for surface in range(mesh.mesh.get_surface_count()):
 			var source := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
 			# The gun brings its own textures; the magazine is plain and gets the grain of
-			# the other models.
+			# the other models. A magazine with textures of its own (the drum of the M21E)
+			# keeps them: each textured material of the model becomes one of the view.
 			if source.albedo_texture != null:
-				if not gun_materials.has(id):
-					gun_materials[id] = tune(source.duplicate() as BaseMaterial3D)
+				var slot := id + "/" + source.resource_name
+				if not gun_materials.has(slot):
+					gun_materials[slot] = tune(source.duplicate() as BaseMaterial3D)
 					# A gun whose paint came out like polished chrome is taken down a little.
 					if gun.has("metal"):
-						(gun_materials[id] as BaseMaterial3D).metallic = float(gun.metal)
+						(gun_materials[slot] as BaseMaterial3D).metallic = float(gun.metal)
 					if gun.has("rough"):
-						(gun_materials[id] as BaseMaterial3D).roughness_texture = null
-						(gun_materials[id] as BaseMaterial3D).roughness = float(gun.rough)
-				mesh.set_surface_override_material(surface, gun_materials[id])
+						(gun_materials[slot] as BaseMaterial3D).roughness_texture = null
+						(gun_materials[slot] as BaseMaterial3D).roughness = float(gun.rough)
+				mesh.set_surface_override_material(surface, gun_materials[slot])
 			else:
 				mesh.set_surface_override_material(surface, shotgun_material(source, true, id + "/"))
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

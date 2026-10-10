@@ -29,6 +29,9 @@ var flame_voice: AudioStreamPlayer3D
 ## The partner ducks: a lower body, also for whoever shoots at it on this machine.
 var crouched := false
 var body_shape: CollisionShape3D
+## What was shown of the partner's shots here: the sound of the weapon -> how many of
+## them (the co-op checks read which weapons came across).
+var shots_shown: Dictionary = {}
 
 func _ready() -> void:
 	# The infected bump into it; nothing pushes it around.
@@ -149,6 +152,7 @@ func set_down(now: bool) -> void:
 ## The partner fired: flash, tracer and the sound of their weapon from where they stand.
 func show_shot(to: Vector3, sound: String) -> void:
 	firing_left = 0.2
+	shots_shown[sound] = int(shots_shown.get(sound, 0)) + 1
 	if sound == "flamer":
 		# No shot but a stream of fire, for as long as these keep coming.
 		flame_left = 0.3

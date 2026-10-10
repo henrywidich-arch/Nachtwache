@@ -1377,6 +1377,35 @@ func _latest(game: Node3D) -> void:
 	var owned: bool = player.unlock("mg")
 	var mg: Node3D = player.weapon
 	expect(owned and player.current_weapon == "mg" and player.ammo == 100 and player.max_reserve() == 400 and int(Survivor.WEAPONS.mg.slot) == int(Survivor.WEAPONS.minigun.slot) and Survivor.ORDER.has("mg") and str(Survivor.WEAPONS.mg.group) == "heavy" and mg.get_node_or_null("Magazine") != null and mg.find_child("Feed", true, false) != null and game.sounds.recorded.get("mg", false), "The machine gun carries a hundred rounds in its box and four boxes more, and shares its key with the minigun")
+	# --- the M21E, the second machine gun (its id is mg2): its drum has textures of its own
+	# and comes off whole. Its front post stands lower than its rear sight, so it is tipped up
+	# a little when aimed.
+	var mg2_owned: bool = player.unlock("mg2")
+	var mg2_full: bool = player.ammo == 75 and player.max_reserve() == 300
+	var mg2: Node3D = player.weapon
+	var mg2_gun: Dictionary = WeaponView.GUNS.mg2
+	var mg2_aim: Vector3 = WeaponView.VIEWS.mg2.aim
+	var mg2_lined: bool = absf(mg2_aim.y + (mg2_gun.mount as Vector3).y + float(mg2_gun.irons)) < 0.005 and float((WeaponView.VIEWS.mg2.aim_angles as Vector3).x) > 0.0 and mg2_aim.x == 0.0 and (WeaponView.VIEWS.mg2.muzzle as Vector3).is_equal_approx((mg2_gun.mount as Vector3) + (mg2_gun.muzzle as Vector3))
+	var mg2_drum := mg2.get_node_or_null("Magazine") as Node3D
+	var mg2_paint := false
+	if mg2_drum != null:
+		var mg2_body := mg2.find_child("Body", true, false) as MeshInstance3D
+		var mg2_shell := mg2_drum.find_child("*", true, false) as MeshInstance3D
+		if mg2_body != null and mg2_shell != null:
+			var mg2_skin := mg2_shell.get_surface_override_material(0) as BaseMaterial3D
+			mg2_paint = mg2_skin != null and mg2_skin.albedo_texture != null and mg2_skin != mg2_body.get_surface_override_material(0)
+	# What the player reads of it: its name, in the hand and on the shop's list of heavy
+	# weapons, where it stands right after the machine gun.
+	var mg2_named: bool = str(Survivor.WEAPONS.mg2.label) == "M21E" and player.weapon_label() == "M21E" and str(Survivor.WEAPONS.mg.label) == "MASCHINENGEWEHR" and Survivor.ORDER.find("mg2") == Survivor.ORDER.find("mg") + 1 and str(Survivor.WEAPONS.mg2.group) == "heavy" and str(SurvivalHUD.SHOP_NOTES.get("mg2", "")).contains("Trommel")
+	# The reload: the drum leaves the gun, and a full one comes back.
+	player.ammo = 5
+	player.start_reload()
+	var mg2_away := 0.0
+	for i in range(int(float(Survivor.WEAPONS.mg2.reload_time) * 60.0) + 20):
+		await get_tree().physics_frame
+		if mg2_drum != null:
+			mg2_away = maxf(mg2_away, mg2_drum.position.length())
+	expect(mg2_owned and player.current_weapon == "mg2" and mg2_full and mg2_named and Survivor.kind_of("mg2") == "heavy" and mg2_drum != null and mg2_lined and mg2_paint and (WeaponView.reload_step("mg2", 0.38).magazine as Vector3).length() > 0.2 and mg2_away > 0.2 and mg2_drum.position.length() < 0.001 and player.ammo == 75 and bool(game.sounds.recorded.get("mg2", false)) and float(Survivor.WEAPONS.mg2.damage) > float(Survivor.WEAPONS.mg.damage) and int(Survivor.WEAPONS.mg2.magazine) < int(Survivor.WEAPONS.mg.magazine), "The M21E is a second machine gun beside the old one: 75 harder rounds in a drum with textures of its own, which comes off the gun when it is reloaded; it is aimed over its iron sights")
 	game.team_enabled = true
 	game.start_run()
 
@@ -1934,7 +1963,7 @@ func _loadout(game: Node3D) -> void:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int(Survivor.KINDS[kind].key)
-	expect(keyed and int(kinds.primary) == 8 and int(kinds.secondary) == 2 and int(kinds.heavy) == 9 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
+	expect(keyed and int(kinds.primary) == 8 and int(kinds.secondary) == 2 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
 	# --- one of each kind; a second one is traded for the first
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
@@ -2976,7 +3005,7 @@ func _kit(game: Node3D) -> void:
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 7 and int(rows.heavy) == 6 and int(rows.mods) == 3 and not Survivor.GOODS.has("mags") and parts == 12 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 7 and int(rows.heavy) == 7 and int(rows.mods) == 3 and not Survivor.GOODS.has("mags") and parts == 12 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
@@ -4065,6 +4094,9 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var ducked := false
 	var blows := 0
 	var modifier_seen := ""
+	# The newer weapons: for the last quarter of the fight the host takes the M21E in hand,
+	# and the other side has to hear it like any weapon (see RemoteSurvivor.shots_shown).
+	var rearmed := 0
 	# --mp-operator: an operator comes into the fight (see below).
 	var op_run := "--mp-operator" in OS.get_cmdline_user_args()
 	var op: Operator = null
@@ -4100,6 +4132,10 @@ func coop(game: Node3D, as_host: bool) -> void:
 			game.player.set_crouched(false)
 		if game.modifier != "":
 			modifier_seen = "%s harm=%.2f" % [game.modifier, float(game.rules.harm)]
+		if rearmed == 0 and clock > seconds * 0.75 and not game.player.down:
+			rearmed = 1
+			if as_host:
+				game.player.unlock("mg2")
 		var within: Infected = null
 		for foe in game.enemies.get_children():
 			if not foe is Infected or foe.dead:
@@ -4239,6 +4275,15 @@ func coop(game: Node3D, as_host: bool) -> void:
 	for number in numbers:
 		seen_looks.append("%d:%s" % [int(number), str(charger_looks[number])])
 	print("%s_CHARGERS looks=%s puddles=%d" % [tag, ",".join(PackedStringArray(seen_looks)), wet_puddles])
+	# The weapon this side ended with, and which weapons of the partner it was shown shots
+	# of (by their sound, as they come across) and how many.
+	var partner_shots: Array = []
+	if is_instance_valid(game.net.remote):
+		var sounds_shown: Array = game.net.remote.shots_shown.keys()
+		sounds_shown.sort()
+		for sound in sounds_shown:
+			partner_shots.append("%s:%d" % [str(sound), int(game.net.remote.shots_shown[sound])])
+	print("%s_WEAPONS own=%s sound=%s partner=%s" % [tag, game.player.current_weapon, str(game.player.gun().sound), ",".join(PackedStringArray(partner_shots))])
 	var partner_at := Vector3.ZERO
 	var partner_health := -1.0
 	if is_instance_valid(game.net.remote):

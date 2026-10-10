@@ -38,6 +38,10 @@ const WEAPONS := {
 	# The machine gun: a hundred rounds in the box and four boxes more. Shares its key with
 	# the minigun.
 	"mg": {"label": "MASCHINENGEWEHR", "slot": 3, "price": 800, "group": "heavy", "from_round": 3, "sound": "mg", "magazine": 100, "reserve_max": 400, "reload_time": 4.2, "interval": 0.085, "damage": 30.0, "head_multiplier": 2.2, "spread": 0.022, "kick": 0.0085, "flash": 1.2, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
+	# The M21E (its id is mg2), the second machine gun: heavier rounds from a drum of 75 that
+	# hangs under it on the left and comes off whole. Shares its key with the machine gun and
+	# the minigun.
+	"mg2": {"label": "M21E", "slot": 3, "price": 950, "group": "heavy", "from_round": 4, "sound": "mg2", "magazine": 75, "reserve_max": 300, "reload_time": 4.0, "interval": 0.09, "damage": 38.0, "head_multiplier": 2.2, "spread": 0.02, "kick": 0.011, "flash": 1.3, "cues": [[0.14, "mag_out"], [0.6, "mag_in"], [0.86, "bolt"]]},
 	"minigun": {"label": "MINIGUN", "slot": 3, "price": 1500, "group": "heavy", "from_round": 6, "sound": "minigun", "magazine": 200, "reserve_max": 600, "reload_time": 4.5, "interval": 0.045, "damage": 21.0, "head_multiplier": 1.8, "spread": 0.03, "kick": 0.0035, "flash": 1.1, "spin": 0.55},
 	# semi: one shot for every pull of the trigger. zoom and aim_spread: see ATTACHMENTS.
 	"m14": {"label": "M14", "slot": 1, "price": 320, "sound": "m14", "semi": true, "magazine": 20, "reserve_max": 140, "reload_time": 2.3, "interval": 0.2, "damage": 100.0, "head_multiplier": 2.6, "spread": 0.006, "kick": 0.028, "flash": 1.3, "punch": 1.6, "settle": 0.6, "zoom": 38.0, "aim_spread": 0.3, "pierce": 1},
@@ -54,7 +58,7 @@ const WEAPONS := {
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
 const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil"]
-const ORDER := ["rifle", "ak", "g36", "p90", "ump", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "minigun", "flamer", "nitro", "fifty"]
+const ORDER := ["rifle", "ak", "g36", "p90", "ump", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
 ## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
 ## kind, and as many more of any kind as slings were bought (extra_slots).
@@ -348,6 +352,7 @@ func _ready() -> void:
 func _build_weapon() -> void:
 	weapon_models["rifle"] = WeaponView.build_gun("rifle")
 	weapon_models["mg"] = WeaponView.build_gun("mg")
+	weapon_models["mg2"] = WeaponView.build_gun("mg2")
 	weapon_models["g36"] = WeaponView.build_gun("g36")
 	weapon_models["p90"] = WeaponView.build_p90()
 	weapon_models["badger"] = WeaponView.build_badger()

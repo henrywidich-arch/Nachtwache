@@ -16,7 +16,7 @@ const RADIO_INK := Color("e9dfa3")
 const SHOP_NOTES := {
 	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action: brutal auf kurze Distanz, wirft Getroffene zurück",
 	"pistol": "Leicht, schnell gezogen", "revolver": "Sechs Schuss, jeder ein Hammer", "autoshotgun": "Halbautomatisch, Kastenmagazin: drei Ladungen in der Sekunde",
-	"sniper": "Zielfernrohr, durchschlägt mehrere Körper", "launcher": "Sechs 40-mm-Granaten in der Trommel, einzeln geladen, zünden beim Aufschlag", "mg": "100 Schuss im Kasten und vier Kästen Reserve", "minigun": "Läuft an, dann mäht sie alles nieder",
+	"sniper": "Zielfernrohr, durchschlägt mehrere Körper", "launcher": "Sechs 40-mm-Granaten in der Trommel, einzeln geladen, zünden beim Aufschlag", "mg": "100 Schuss im Kasten und vier Kästen Reserve", "mg2": "Maschinengewehr im Kaliber 7,62 mit 75-Schuss-Trommel: trifft härter als das MG, tritt kräftiger", "minigun": "Läuft an, dann mäht sie alles nieder",
 	"g36": "750 Schuss in der Minute, genau und ruhig im Rückstoß: das beste Sturmgewehr im Regal", "m14": "Ein Schuss pro Abzug: schlägt hart ein, geht durch einen Körper, sehr genau", "svd": "Halbautomatisches Scharfschützengewehr mit Zielfernrohr",
 	"flamer": "Feuerstrahl bis zehn Meter: wen er trifft, der brennt weiter", "nitro": "Zwei Läufe, zwei Hämmer – anderthalbfach gegen Spezial-Infizierte",
 	"fifty": "Schießt durch Schilde und Panzerung und durchschlägt vier Körper"
