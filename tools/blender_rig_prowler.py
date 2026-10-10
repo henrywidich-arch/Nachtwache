@@ -11,6 +11,7 @@ the ground (two-bone IK), so that a paw that stands does not slide. One GLB come
       [--review <folder>]  frame strips of every clip (side and front)
       [--only idle,run]    only these clips (for looking at them; do not export such a run)
       [--tris 30000] [--tex 2048] [--no-export] [--fresh]
+      [--jawtest]          with --review: four close views of the head, to see which joint opens the mouth
 
 The animal looks along -Y in Blender (+Z in the game's file), its left side is +X.
 Ground speeds the gaits are made for (scripts/prowler_visual.gd carries the same numbers):
@@ -366,21 +367,29 @@ RUN_T, RUN_V, RUN_DUTY = 0.4, 8.5, 0.24
 
 
 def clip_idle(P, u):
-    br = wave(2 * u)
-    P.d = Vector((0.02 * wave(u), 0.0, 0.012 * br))
-    P.roll = 1.2 * wave(u)
-    P.spine[2][0] = 1.5 * br
-    look = wave(u, 0.1)
-    P.neck[0][1] = 11 * look
-    P.neck[1][1] = 10 * look
-    P.head[1] = 10 * look
-    P.neck[0][0] = 3 * wave(2 * u, 0.2)
-    P.head[0] = 4 * wave(u, 0.35)
-    P.head[2] = 6 * wave(u, 0.2)
-    P.jaw = 5 + 3 * br
-    P.tail[0][1] = 10 * wave(u, 0.3)
-    P.tail[1][1] = 14 * wave(u, 0.45)
-    P.tail[0][0] = 3 * br
+    """It stands and breathes, and its head searches: to the left, to the right, then up to take the scent."""
+    br = wave(4 * u)
+    yaw = key(u, [(0.0, 0.0), (0.12, 26.0), (0.28, 24.0), (0.45, -30.0), (0.62, -28.0), (0.80, 4.0), (1.0, 0.0)])
+    lift = key(u, [(0.0, 0.0), (0.70, 0.0), (0.80, 1.0), (0.90, 1.0), (1.0, 0.0)])
+    P.d = Vector((0.03 * wave(u), 0.0, 0.014 * br - 0.02 * lift))
+    P.roll = 1.5 * wave(u)
+    P.pitch = 2.5 * lift
+    P.spine[2][0] = 1.6 * br + 2.0 * lift
+    P.spine[2][1] = 0.12 * yaw
+    P.neck[0][1] = 0.36 * yaw
+    P.neck[1][1] = 0.32 * yaw
+    P.head[1] = 0.32 * yaw
+    P.neck[0][0] = br + 12.0 * lift
+    P.neck[1][0] = 8.0 * lift
+    P.head[0] = 3.0 * wave(2 * u, 0.35) + 6.0 * lift
+    P.head[2] = 0.2 * yaw
+    P.jaw = 5.0 + 3.0 * br + 8.0 * lift
+    P.tail[0][1] = 10.0 * wave(2 * u, 0.3)
+    P.tail[1][1] = 14.0 * wave(2 * u, 0.45)
+    P.tail[0][0] = 3.0 * br
+    # one forepaw kneads the ground
+    P.leg["FL"].off = Vector((0.0, 0.0, 0.06 * bump(u, 0.50, 0.58)))
+    P.leg["FL"].curl = 14.0 * bump(u, 0.46, 0.62)
 
 
 def clip_stalk(P, u):
@@ -667,7 +676,7 @@ def clip_death(P, t):
 
 CLIPS = [
     # name, pose function (of the phase 0..1 for loops, of the time in seconds otherwise), seconds, loop
-    ("idle", clip_idle, 3.2, True),
+    ("idle", clip_idle, 6.4, True),
     ("stalk", clip_stalk, STALK_T, True),
     ("trot", clip_trot, TROT_T, True),
     ("run", clip_run, RUN_T, True),

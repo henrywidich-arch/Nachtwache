@@ -141,6 +141,8 @@ func _ready() -> void:
 		flank.whole = self
 		flank.game = game
 		flank.kind = kind
+		# (A guest of a co-op match reports its hits by this number: they are hits on the whole.)
+		flank.net_id = net_id
 		flank.spec = spec
 		flank.model = model
 		flank.head_box = head_box
