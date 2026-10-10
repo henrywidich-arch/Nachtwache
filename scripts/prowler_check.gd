@@ -120,6 +120,8 @@ func run_hive() -> void:
 	var hive: HiveDirector = game.hive
 	var prowl: HiveProwler = hive.prowl
 	var player: Survivor = game.player
+	# It only comes to open ground: the squad's leader stands in the ring for it.
+	game._place_player(hive._point("junction") + Vector3(0, 0.05, 0), 0)
 	hive.stage_time = 20.0
 	prowl.wait_left = 0.0
 	var called := false
@@ -159,8 +161,9 @@ func run_hive() -> void:
 		clock += get_physics_process_delta_time()
 		player.health = 100.0
 	print("PROWLER_HIVE visit called=%s from=%.1f hidden=%s bar=%s nerve=%d landed=%d gone_after=%.1f visits=%d wounds=%d stalker=%s" % [str(called), from_gap, str(hidden), str(bar), int(nerve), landed, clock, prowl.visits, prowl.wounds, str(is_instance_valid(game.mission.stalker))])
-	# The last fight.
+	# The last fight, in the hall itself.
 	hive._enter("hall")
+	game._place_player(hive._point("hall_end") + Vector3(0, 0.05, 0), 0)
 	clock = 0.0
 	while clock < 20.0 and prowl.beast == null:
 		await get_tree().physics_frame
@@ -195,6 +198,77 @@ func run_hive() -> void:
 		game._place_player(player.global_position, rad_to_deg(atan2(-to.x, -to.z)), -8.0)
 	await game._capture(folder, "hive_dead.png")
 	print("PROWLER_HIVE last came_after=%.1f health=%d enraged=%s killed=%s paid=%d armor=%d" % [came_after, int(full), str(rage), str(prowl.killed), game.credits - purse, int(player.armor)])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## How it turns (`--prowler-check --prowler-moves`): the clips of turning, braking and
+## shaking at a telling moment, then a quarter of a minute of it at work with its prey
+## behind it at the start, and in numbers how often it came round over its haunches,
+## slid to a stand, and how fast it turned at most.
+func run_moves() -> void:
+	var folder: String = game._capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	game.start_run()
+	game.set_process(false)
+	game.hud.banner_left = 0
+	game.hud.radio_left = 0
+	game._place_player(Vector3(-1.5, 0.05, 13.0), 180)
+	var beast := game.spawn_enemy("prowler") as Prowler
+	beast.position = Vector3(-0.5, 0.05, 17.5)
+	beast.set_physics_process(false)
+	beast.model.rotation.y = 0.0
+	var body := beast.model as ProwlerVisual
+	var at := beast.position
+	for shot: Array in [["turn_a", "turn", 0.1], ["turn_b", "turn", 0.3], ["pivot_a", "pivot", 0.16], ["pivot_b", "pivot", 0.28], ["brake", "brake", 0.2], ["shake", "shake", 0.42]]:
+		body.turn_rate = 2.6 if str(shot[1]) == "turn" else 0.0
+		_pose(body, str(shot[1]), float(shot[2]), 0.0)
+		await game._capture_from(folder, "moves_%s.png" % shot[0], at + Vector3(2.8, 1.5, -3.4), at + Vector3(0, 0.6, 0), 45)
+	# A curve at a gallop, frozen: the spine bent, the head ahead, the body leaning in.
+	body.turn_rate = 2.4
+	_pose(body, "run", 0.5, 7.0)
+	await game._capture_from(folder, "moves_curve.png", at + Vector3(0.0, 2.4, -4.6), at + Vector3(0, 0.6, 0), 45)
+	await game._capture_from(folder, "moves_curve_top.png", at + Vector3(0.0, 6.0, -0.1), at, 45)
+	# (To the left of an animal that looks along -Z is -X: both numbers are above 0 when it bends and leans into a left curve.)
+	print("PROWLER_CURVE head_left=%.2f lean_left=%.2f" % [-(body.head_position().x - beast.global_position.x), -body.holder.global_transform.basis.y.x])
+	beast._retire()
+	beast.queue_free()
+	# At work: it starts with its back to its prey.
+	var hunter := game.spawn_enemy("prowler") as Prowler
+	hunter.position = Vector3(-1.5, 0.05, 22.0)
+	hunter.model.rotation.y = PI
+	var pivots := 0
+	var brakes := 0
+	var top := 0.0
+	var turns := 0.0
+	var last_mode := ""
+	var seen := {}
+	var clock := 0.0
+	while clock < 16.0 and is_instance_valid(hunter):
+		await get_tree().physics_frame
+		var step := get_physics_process_delta_time()
+		clock += step
+		game.player.health = 100.0
+		game.player.down = false
+		top = maxf(top, absf(hunter.turning))
+		if (hunter.model as ProwlerVisual).gait.begins_with("turn"):
+			turns += step
+		if hunter.mode != last_mode:
+			last_mode = hunter.mode
+			pivots += 1 if hunter.mode == "pivot" else 0
+			brakes += 1 if hunter.mode == "brake" else 0
+		var run := hunter.get_real_velocity()
+		var key := ""
+		if hunter.mode == "pivot" and hunter.pivot_clock > 0.2:
+			key = "pivot"
+		elif hunter.mode == "brake":
+			key = "brake"
+		elif absf(hunter.turning) > 1.7 and Vector2(run.x, run.z).length() > 5.0:
+			key = "curve"
+		if key != "" and not seen.has(key):
+			seen[key] = true
+			var here := hunter.global_position
+			await game._capture_from(folder, "moves_live_%s.png" % key, here + Vector3(3.6, 1.7, 2.4), here + Vector3(0, 0.6, 0), 50)
+	print("PROWLER_MOVES pivots=%d brakes=%d top_turn=%d deg/s stepping=%.1fs landed=%d seen=%s" % [pivots, brakes, int(rad_to_deg(top)), turns, hunter.landed if is_instance_valid(hunter) else -1, str(seen.keys())])
 	print("PROWLER_CAPTURE_COMPLETE")
 	get_tree().quit()
 
@@ -239,6 +313,14 @@ func _pose(body: ProwlerVisual, clip: String, seconds: float, speed: float) -> v
 		"idle", "stalk", "trot", "run":
 			body.animate(0.0, speed)
 			body.player.seek(0.0, true)
+		"turn":
+			pass
+		"pivot":
+			body.pivot(true)
+		"brake":
+			body.brake()
+		"shake":
+			body.shake()
 		"leap":
 			body.pounce()
 		"roar":
