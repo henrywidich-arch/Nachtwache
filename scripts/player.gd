@@ -1194,7 +1194,7 @@ func _pierce(data: Dictionary, passes: int, direction: Vector3, first: Infected,
 			game.fx.dust(stop, hit.normal)
 			return stop
 		var enemy := target as Infected
-		var headshot := head_zone or enemy.is_headshot(stop)
+		var headshot := enemy.head_struck(head_zone, stop)
 		var damage: float = float(data.damage) * force
 		if headshot:
 			damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
@@ -1436,7 +1436,8 @@ func shoot() -> void:
 					game.sounds.play_at("bolt", endpoint, 0.0, randf_range(1.5, 1.9))
 			elif target is Infected:
 				var enemy := target as Infected
-				var headshot := head_zone or enemy.is_headshot(hit.position)
+				# (Not behind the Crusher's forearm: there it is a shot at the body.)
+				var headshot := enemy.head_struck(head_zone, hit.position)
 				var damage: float = float(data.damage) + weapon_level * (10.0 / pellets)
 				if pellets > 1:
 					# Shot spreads and slows: full force up close, a third of it at long range.

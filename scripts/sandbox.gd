@@ -240,8 +240,8 @@ func clear() -> void:
 		game.complete_wave()
 
 ## The Crusher's states, for a look at them: every Crusher in the room shuts its shell
-## ("shell") or opens it. In a frozen room it stays as it is; otherwise its clock
-## goes on from there.
+## ("shell") or opens it, raises its forearm before its face ("guard") or drops it. In a
+## frozen room it stays as it is; otherwise its clock goes on from there.
 func crusher_state(what: String, on: bool) -> void:
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
@@ -249,12 +249,14 @@ func crusher_state(what: String, on: bool) -> void:
 			continue
 		if what == "shell":
 			enemy.set_shell("on" if on else "")
+		else:
+			enemy.set_guard(on)
 
 ## True if a Crusher in the room is in that state.
 func crusher_shows(what: String) -> bool:
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy.kind == "crusher" and not enemy.dead and what == "shell" and enemy.shell == "on":
+		if enemy.kind == "crusher" and not enemy.dead and (enemy.shell == "on" if what == "shell" else enemy.guard):
 			return true
 	return false
 

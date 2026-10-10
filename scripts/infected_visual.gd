@@ -303,6 +303,17 @@ void fragment() {
 }
 """
 static var shell_code: Shader
+## The Crusher's guard (see _raise_guard), in the measures of its skeleton: which arm (0 its
+## right, 1 its left), how far before the eyes the forearm lies, where along the forearm
+## (0 elbow, 1 wrist) the eyes are behind it, how the forearm lies (across to the other
+## side, upwards), where the elbow is kept (out to its own side, down, forward), and how far
+## the head is drawn in behind it (radians).
+const GUARD_ARM := 1
+const GUARD_FRONT := 0.12
+const GUARD_ALONG := 0.55
+const GUARD_LIE := Vector2(1.0, 0.15)
+const GUARD_ELBOW := Vector3(1.0, -0.4, 0.3)
+const GUARD_TUCK := 0.16
 static var shell_eye: StandardMaterial3D
 
 var kind := "mauler_hazmat"
@@ -345,6 +356,10 @@ var shell_for := 0.0
 var shell_flare := 0.0
 var shell_skin: ShaderMaterial
 var shell_lamp: OmniLight3D
+## The Crusher's guard: whether its forearm is wanted before its face, and how far up it
+## is (0 to 1). It comes down by itself for whatever is no walking: a blow, a leap, a roar.
+var guard_on := false
+var guard := 0.0
 
 func _ready() -> void:
 	config = KINDS[kind]
@@ -1101,6 +1116,9 @@ func animate(delta: float, speed: float) -> void:
 	travel = 0.0
 	if shell_skin != null:
 		_shell_step(delta)
+	if guard_on or guard > 0.0:
+		var up := guard_on and not dying and state == "move"
+		guard = move_toward(guard, 1.0 if up else 0.0, delta * (4.5 if up else 5.5))
 	if dying:
 		death_time += delta
 		if dissolving:
@@ -1168,9 +1186,63 @@ func _overlay() -> void:
 		if above >= 0:
 			up = skeleton.get_bone_global_pose(above).basis.inverse() * Vector3.UP
 		skeleton.set_bone_pose_position(pelvis, skeleton.get_bone_pose_position(pelvis) - up * drop)
+	if guard > 0.01:
+		_raise_guard(smoothstep(0.0, 1.0, guard))
 	if swell > 0.0:
 		var pulse := 1.0 + swell * (0.2 + 0.06 * sin(clock * 34.0))
 		holder.scale = Vector3(pulse, 1.0 + swell * 0.04, pulse) * model_scale
+
+## Turns a bone, in model space and on top of whatever it is posed as, so that what points
+## along `from` comes to point along `to` - as far as `weight` says.
+func _point(index: int, from: Vector3, to: Vector3, weight: float) -> void:
+	if from.length_squared() < 0.000001 or to.length_squared() < 0.000001:
+		return
+	var turn := Quaternion.IDENTITY.slerp(Quaternion(from.normalized(), to.normalized()), weight)
+	var global := skeleton.get_bone_global_pose(index).basis.get_rotation_quaternion()
+	skeleton.set_bone_pose_rotation(index, skeleton.get_bone_pose_rotation(index) * (global.inverse() * turn * global))
+
+## The Crusher's forearm before its face. No clip does this: shoulder and elbow are turned
+## so that the forearm lies across the eyes, a hand's breadth before them, whatever the
+## clip does with the arm meanwhile - the legs and the other arm go on walking. The head
+## is drawn in behind it a little.
+func _raise_guard(weight: float) -> void:
+	if not eye_offsets.has(kind) or not rig.has("arms"):
+		return
+	_nudge(rig.head.index, Vector3(GUARD_TUCK * weight, 0, 0))
+	var arm: Dictionary = rig.arms[GUARD_ARM]
+	var head := skeleton.get_bone_global_pose(rig.head.index)
+	var offsets: Array = eye_offsets[kind]
+	var face: Vector3 = head * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5)
+	# Which way the face looks, and which way the arm's own side lies from it.
+	var ahead: Vector3 = (head.basis.orthonormalized() * (skeleton.get_bone_global_rest(rig.head.index).basis.orthonormalized().inverse() * Vector3(0, 0, 1))).normalized()
+	var shoulder: Vector3 = skeleton.get_bone_global_pose(arm.upper.index).origin
+	var elbow_now: Vector3 = skeleton.get_bone_global_pose(arm.fore.index).origin
+	var hand_now: Vector3 = skeleton.get_bone_global_pose(arm.hand.index).origin
+	var out := Vector3.UP.cross(ahead).normalized()
+	if out.dot(shoulder - face) < 0.0:
+		out = -out
+	var upper_length := shoulder.distance_to(elbow_now)
+	var fore_length := elbow_now.distance_to(hand_now)
+	var before := face + ahead * GUARD_FRONT
+	var pole := out * GUARD_ELBOW.x + Vector3.DOWN * GUARD_ELBOW.y + ahead * GUARD_ELBOW.z
+	# The forearm is to pass before the eyes. Where its wrist has to be for that depends on
+	# where the elbow ends up, and that on the wrist: three rounds settle it.
+	var lie := (-out * GUARD_LIE.x + Vector3.UP * GUARD_LIE.y).normalized()
+	var elbow := elbow_now
+	var wrist := hand_now
+	for i in range(3):
+		wrist = before + lie * fore_length * (1.0 - GUARD_ALONG)
+		var reach := wrist - shoulder
+		var span := clampf(reach.length(), absf(upper_length - fore_length) + 0.005, upper_length + fore_length - 0.005)
+		var along := reach.normalized()
+		wrist = shoulder + along * span
+		var near := (upper_length * upper_length - fore_length * fore_length + span * span) / (2.0 * span)
+		var bend := (pole - along * pole.dot(along)).normalized()
+		elbow = shoulder + along * near + bend * sqrt(maxf(0.0, upper_length * upper_length - near * near))
+		lie = (wrist - elbow).normalized()
+	_point(arm.upper.index, elbow_now - shoulder, elbow - shoulder, weight)
+	var fore := skeleton.get_bone_global_pose(arm.fore.index).origin
+	_point(arm.fore.index, skeleton.get_bone_global_pose(arm.hand.index).origin - fore, wrist - fore, weight)
 
 func _begin(clip_name: String, blend: float, rate: float, from: float, hold: float, next_state: String) -> void:
 	player.speed_scale = 1.0
@@ -1286,6 +1358,7 @@ func die(clip_name: String) -> void:
 ## Sinks to its knees and shrinks away; used by the Crusher inside its acid cloud.
 func dissolve() -> void:
 	set_shell("")
+	guard_on = false
 	dying = true
 	dissolving = true
 	state = "dead"

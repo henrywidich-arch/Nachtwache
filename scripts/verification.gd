@@ -2626,6 +2626,7 @@ func _threats(game: Node3D) -> void:
 	await _ding_answer(game)
 	await _second_exploder(game)
 	await _crusher_shell(game)
+	await _crusher_guard(game)
 	await _hive_staff(game)
 	game.team_enabled = true
 	game.start_run()
@@ -2865,6 +2866,93 @@ func _crusher_shell(game: Node3D) -> void:
 	var slower: float = float(lasts[1]) / float(lasts[0])
 	var slower_fast: float = float(lasts[3]) / float(lasts[2])
 	expect(slower > 1.2 and slower < 1.6 and slower_fast > 1.15 and slower_fast < 1.6, "Under steady fire a grown Crusher lasts %.1f s in place of %.1f (%.2f times as long), under heavy fire %.1f in place of %.1f (%.2f): longer, not twice as long" % [lasts[1], lasts[0], slower, lasts[3], lasts[2], slower_fast])
+
+## The Crusher's guard: shot in the head, it raises a forearm before its face, and a shot
+## at the head is one at the body as long as it is there. It takes the arm down to strike
+## and after a few seconds, and leaves the head open for a while.
+func _crusher_guard(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	_wipe_all(game)
+	await wait(0.6)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.position = Vector3(0, 0.05, 27.0)
+	giant.special_cooldown = 99.0
+	giant.cooldown = 99.0
+	var body: InfectedVisual = giant.model
+	await frames(6)
+	giant.set_physics_process(false)
+	# One shot in the head is one in the head; the second brings the arm up.
+	player.camera.look_at(giant.head_box.global_position)
+	await frames(6)
+	var heads: int = int(sounds.answers.ding_head)
+	var health: float = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var head_shot: float = health - giant.health
+	giant._ward(0.1)
+	var open: bool = int(sounds.answers.ding_head) == heads + 1 and giant.head_hits == 1 and not giant.guard
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	giant._ward(0.1)
+	var raised: bool = giant.guard and body.guard_on and not giant.guarding()
+	for i in range(10):
+		body.animate(0.05, 0.0)
+	# The forearm really lies before the eyes.
+	var arm: Dictionary = body.rig.arms[InfectedVisual.GUARD_ARM]
+	var skeleton: Skeleton3D = body.skeleton
+	var elbow: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(arm.fore.index).origin
+	var wrist: Vector3 = skeleton.global_transform * skeleton.get_bone_global_pose(arm.hand.index).origin
+	var offsets: Array = InfectedVisual.eye_offsets["crusher"]
+	var eyes: Vector3 = skeleton.global_transform * (skeleton.get_bone_global_pose(body.rig.head.index) * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5))
+	var nearest: Vector3 = Geometry3D.get_closest_point_to_segment(eyes, elbow, wrist)
+	var before: float = (nearest - eyes).dot(giant.facing())
+	var covered: bool = giant.guarding() and body.guard > 0.95 and nearest.distance_to(eyes) < 0.32 and before > 0.08 and nearest.distance_to(elbow) > 0.1 and nearest.distance_to(wrist) > 0.1
+	expect(open and raised and covered, "Shot twice in the head within a moment, the Crusher raises a forearm before its face: it lies %.2f m before its eyes, which are behind the middle of it" % before)
+	# Behind it a shot at the head is one at the body - whoever says otherwise.
+	heads = int(sounds.answers.ding_head)
+	var plain: int = int(sounds.answers.ding)
+	health = giant.health
+	sounds.hit_heard = -10.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var guarded_shot: float = health - giant.health
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	expect(int(sounds.answers.ding_head) == heads and int(sounds.answers.ding) == plain + 1 and not game.hud.hit_is_head and guarded_shot > 0.0 and guarded_shot < head_shot - 1.0 and giant.head_hits == 0 and not giant.head_struck(true, giant.head_box.global_position), "Behind the forearm a shot at the head is one at the body: %.1f in place of %.1f, the plain ding and no mark of a headshot" % [guarded_shot, head_shot])
+	# To strike it takes the arm down, and the head is open for that blow.
+	body.attack(1.15, 0.5, "slam")
+	for i in range(8):
+		body.animate(0.05, 0.0)
+	var strikes: bool = giant.guard and body.guard < 0.4 and not giant.guarding() and giant.head_struck(true, giant.head_box.global_position)
+	for i in range(20):
+		body.animate(0.05, 0.0)
+	strikes = strikes and giant.guarding()
+	# After a few seconds it comes down, and stays down for a while whatever strikes the head.
+	giant._ward(Infected.GUARD_SECONDS.y + 0.1)
+	var down: bool = not giant.guard and not body.guard_on and giant.guard_rest >= Infected.GUARD_REST.x
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	giant.receive_hit(10.0, Vector3.BACK, true)
+	giant._ward(0.1)
+	var rests: bool = not giant.guard and giant.head_hits == 2
+	giant._ward(Infected.GUARD_REST.y)
+	var forgets: bool = not giant.guard and giant.head_hits == 0
+	# Now and then it raises it by itself.
+	giant._ward(Infected.GUARD_IDLE.y)
+	expect(strikes and down and rests and forgets and giant.guard, "It takes the arm down to strike - the head is open for that blow - and after %.0f to %.1f seconds; then the head stays open for %.0f at the least, and now and then the arm goes up by itself" % [Infected.GUARD_SECONDS.x, Infected.GUARD_SECONDS.y, Infected.GUARD_REST.x])
+	# The test room raises and drops it at a click, and it goes with the shell.
+	game.sandbox.crusher_state("guard", false)
+	var dropped: bool = not giant.guard and not game.sandbox.crusher_shows("guard")
+	game.sandbox.crusher_state("guard", true)
+	game.sandbox.crusher_state("shell", true)
+	for i in range(12):
+		body.animate(0.05, 0.0)
+	expect(dropped and giant.guarding() and giant.hardened() and game.sandbox.crusher_shows("guard") and body.shell > 0.95 and body.guard > 0.95, "The test room raises and drops the arm at a click, and the Crusher can be behind its shell and its arm at once")
+	_take_off(game, giant)
+	game.boss = null
+	await wait(0.2)
 
 ## The second exploding infected: a Charger in another body, with a burst of its own -
 ## low, wide, the colour of blood orange, and a puddle that lies there for a while.

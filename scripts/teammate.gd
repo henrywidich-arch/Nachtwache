@@ -442,7 +442,7 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 				body = body.get_meta("infected")
 			if body is Infected:
 				var enemy := body as Infected
-				var headshot := head_zone or enemy.is_headshot(hit.position)
+				var headshot := enemy.head_struck(head_zone, hit.position)
 				var damage := float(gun.damage) * damage_factor * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
 				if pellets > 1:
 					damage *= clampf(1.0 - (muzzle.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)

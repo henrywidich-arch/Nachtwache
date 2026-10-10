@@ -2438,7 +2438,7 @@ func _run_hive_check() -> void:
 		print("HIVE_VIEW %s draws=%d tris=%d fps=%d" % [view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), int(Engine.get_frames_per_second())])
 	get_tree().quit()
 
-const CRUSHER_SHOTS := ["plain", "tell", "shell"]
+const CRUSHER_SHOTS := ["plain", "tell", "shell", "guard", "both"]
 
 func _run_sandbox_check() -> void:
 	var folder := _capture_dir()
@@ -2484,7 +2484,9 @@ func _run_sandbox_check() -> void:
 	get_tree().quit()
 
 ## Pictures of the Crusher's states, as the player sees them in the test room - by day and
-## in the night of the farm: plain, with the shell creeping over it, behind its shell.
+## in the night of the farm: plain, with the shell creeping over it, behind its shell, with
+## its forearm before its face, and both. `--side` adds the guard seen from its side and
+## from above, `--menu` the test room's menu with the two switches.
 ##   hid.sh "--crusher-states" <capture folder>
 func _run_crusher_states() -> void:
 	var folder := _capture_dir()
@@ -2505,11 +2507,30 @@ func _run_crusher_states() -> void:
 		await tick.call(0.8)
 		for state in CRUSHER_SHOTS:
 			giant.set_shell("on" if state in ["shell", "both"] else ("tell" if state == "tell" else ""))
+			giant.set_guard(state in ["guard", "both"])
 			await tick.call(0.55 if state == "tell" else 1.2)
 			hud.banner_left = 0
 			hud.radio_left = 0
 			await _capture(folder, "crusher_%s_%s.png" % [light, state])
-	print("CRUSHER_STATES_CAPTURE_COMPLETE shell=%s" % giant.shell)
+	if "--side" in OS.get_cmdline_user_args():
+		sandbox.set_daylight(true)
+		giant.set_shell("")
+		giant.set_guard(true)
+		await tick.call(1.0)
+		var at: Vector3 = giant.global_position
+		var front: Vector3 = giant.facing()
+		var beside := Vector3(-front.z, 0, front.x)
+		await _capture_from(folder, "crusher_guard_front.png", at + front * 2.6 + Vector3(0, 2.3, 0), at + Vector3(0, 2.1, 0), 50)
+		await _capture_from(folder, "crusher_guard_left.png", at + beside * 2.6 + front * 0.6 + Vector3(0, 2.3, 0), at + Vector3(0, 2.1, 0), 50)
+		await _capture_from(folder, "crusher_guard_right.png", at - beside * 2.6 + front * 0.6 + Vector3(0, 2.3, 0), at + Vector3(0, 2.1, 0), 50)
+		await _capture_from(folder, "crusher_guard_low.png", at + front * 2.4 + Vector3(0, 1.1, 0), at + Vector3(0, 2.2, 0), 50)
+	if "--menu" in OS.get_cmdline_user_args():
+		open_test()
+		sandbox.tab = "enemies"
+		hud.show_menu("test")
+		await tick.call(0.5)
+		await _capture(folder, "crusher_menu.png")
+	print("CRUSHER_STATES_CAPTURE_COMPLETE shell=%s guard=%s" % [giant.shell, str(giant.guarding())])
 	get_tree().quit()
 
 ## Pictures of the shop's counter and of the workbench: every list, a weapon picked, the

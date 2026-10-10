@@ -1185,8 +1185,10 @@ func _test_enemies(column: VBoxContainer, room: Sandbox) -> void:
 		_chip("ECHTE RUNDE %d STARTEN" % room.strength, _test_do.bind("round"), false, 250)])
 	# The Crusher's states, to be looked at in peace (best with the room frozen).
 	var shut: bool = room.crusher_shows("shell")
+	var raised: bool = room.crusher_shows("guard")
 	_test_row(column, "", [
-		_chip("CRUSHER: PANZER  ·  %s" % ("AN" if shut else "AUS"), _test_set.bind("shell", not shut), shut, 260)])
+		_chip("CRUSHER: PANZER  ·  %s" % ("AN" if shut else "AUS"), _test_set.bind("shell", not shut), shut, 260),
+		_chip("CRUSHER: ARM VORM GESICHT  ·  %s" % ("AN" if raised else "AUS"), _test_set.bind("guard", not raised), raised, 330)])
 
 func _test_player(column: VBoxContainer, room: Sandbox) -> void:
 	var with_squad: bool = not game.team.is_empty()
@@ -1278,7 +1280,7 @@ func _test_set(what: String, value: Variant) -> void:
 				game.wave = room.strength
 		"frozen":
 			room.frozen = bool(value)
-		"shell":
+		"shell", "guard":
 			room.crusher_state(str(what), bool(value))
 		"god":
 			room.god = bool(value)
