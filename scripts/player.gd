@@ -404,10 +404,16 @@ func magazine_size() -> int:
 
 ## What the magazine of a weapon holds: more with the workbench's bigger magazine.
 func magazine_of(id: String) -> int:
-	var size := int(WEAPONS[id].magazine)
+	var size := int(round(int(WEAPONS[id].magazine) * (1.0 + rare(id, "mags"))))
 	return size * 3 / 2 if upgrade(id, "mags") > 0 else size
 
 # ---------------------------------------------------------------- the workbench
+
+## What a rare weapon has of its own, as a share (0 for a plain one): "damage", "reload",
+## "steady", "mags" or "reserve". Rare weapons are found in the caches of the second
+## mission (HiveCaches); the workbench's levels come on top.
+func rare(id: String, line: String) -> float:
+	return float((inventory[id].get("rare", {}) as Dictionary).get(line, 0.0)) if inventory.has(id) else 0.0
 
 ## The level a line of the workbench has on a weapon.
 func upgrade(id: String, line: String) -> int:
@@ -442,7 +448,7 @@ func damage_of(id: String) -> float:
 	var data: Dictionary = WEAPONS[id]
 	if data.has("flame") or data.has("grenade"):
 		return float(data.damage) * (1.0 + UPGRADE_SHARE * upgrade(id, "damage"))
-	return float(data.damage) + float(UPGRADES.damage.step) * upgrade(id, "damage") / int(data.get("pellets", 1))
+	return float(data.damage) * (1.0 + rare(id, "damage")) + float(UPGRADES.damage.step) * upgrade(id, "damage") / int(data.get("pellets", 1))
 
 ## Seconds a reload of a weapon takes: quicker with the sweeper's hands and the workbench.
 func reload_of(id: String) -> float:
@@ -450,7 +456,7 @@ func reload_of(id: String) -> float:
 
 ## Share of its time a reload of a weapon still takes.
 func _quicker(id: String) -> float:
-	return 1.0 - minf(0.6, game.skills.quicker(id) + float(UPGRADES.drill.step) * upgrade(id, "drill"))
+	return 1.0 - minf(0.6, game.skills.quicker(id) + float(UPGRADES.drill.step) * upgrade(id, "drill") + rare(id, "reload"))
 
 ## Seconds one step of loading the drum takes (see DRUM).
 func drum_time(step: String) -> float:
@@ -612,7 +618,7 @@ func max_reserve() -> int:
 
 ## How much ammunition for a weapon fits into the pockets; an ability makes them deeper.
 func reserve_cap(id: String) -> int:
-	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.deeper(id) + float(UPGRADES.pouch.step) * upgrade(id, "pouch"))))
+	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.deeper(id) + float(UPGRADES.pouch.step) * upgrade(id, "pouch") + rare(id, "reserve"))))
 
 ## The weapon in hand as it shoots now: its values from the table, changed by whatever is
 ## fitted to it.
@@ -620,11 +626,14 @@ func gun() -> Dictionary:
 	var record: Dictionary = inventory[current_weapon]
 	var on: Dictionary = record.get("fitted", {})
 	var steadied := upgrade(current_weapon, "brace")
-	if on.is_empty() and steadied == 0:
+	if on.is_empty() and steadied == 0 and not record.has("rare"):
 		return WEAPONS[current_weapon]
 	if not record.has("tuned"):
 		var data: Dictionary = (WEAPONS[current_weapon] as Dictionary).duplicate()
-		data["kick"] = float(data.kick) * (1.0 - float(UPGRADES.brace.step) * steadied)
+		data["kick"] = float(data.kick) * (1.0 - float(UPGRADES.brace.step) * steadied) * (1.0 - rare(current_weapon, "steady"))
+		# (What a rare weapon has of its own: see rare.)
+		data["spread"] = float(data.spread) * (1.0 - rare(current_weapon, "steady"))
+		data["damage"] = float(data.damage) * (1.0 + rare(current_weapon, "damage"))
 		for slot in on:
 			var part: Dictionary = ATTACHMENTS[current_weapon][on[slot]]
 			var replaced: Dictionary = part.get("set", {})
@@ -678,7 +687,7 @@ func _show_parts() -> void:
 	flash.position = muzzle
 
 func weapon_label() -> String:
-	return WEAPONS[current_weapon].label
+	return ("★ " if inventory.has(current_weapon) and inventory[current_weapon].has("rare") else "") + str(WEAPONS[current_weapon].label)
 
 ## "primary", "secondary" or "heavy": the kind a weapon is of.
 static func kind_of(id: String) -> String:
