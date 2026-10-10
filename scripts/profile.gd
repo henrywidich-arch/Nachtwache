@@ -58,6 +58,10 @@ var squad: Array = ["viper", "scorpion"]
 var skills: Dictionary = {}
 ## The tree of abilities the player has specialised in ("" for none).
 var skill_tree := ""
+## Who goes on with the survivor from the station of the second mission: "fireteam", the
+## two who came with him, or "operators" - Phantom, Havoc and Ghost, while the squad stays
+## behind to hold the tunnel.
+var company := "fireteam"
 
 func open() -> void:
 	if not stored or not FileAccess.file_exists(PATH):
@@ -91,6 +95,8 @@ func open() -> void:
 	if parsed.get("skills") is Dictionary:
 		skills = parsed.skills
 	skill_tree = str(parsed.get("skill_tree", ""))
+	if str(parsed.get("company", "")) in ["fireteam", "operators"]:
+		company = str(parsed.company)
 
 func save() -> void:
 	if not stored:
@@ -100,6 +106,8 @@ func save() -> void:
 		kept["skills"] = skills
 	if skill_tree != "":
 		kept["skill_tree"] = skill_tree
+	if company != "fireteam":
+		kept["company"] = company
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
 	if file != null:
 		file.store_string(JSON.stringify(kept, "\t"))
@@ -135,6 +143,10 @@ func next_difficulty() -> void:
 
 func next_mode() -> void:
 	mode = "endless" if mode == "story" else "story"
+	save()
+
+func next_company() -> void:
+	company = "operators" if company == "fireteam" else "fireteam"
 	save()
 
 func choose_mission(number: int) -> void:

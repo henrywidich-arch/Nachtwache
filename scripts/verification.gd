@@ -2706,8 +2706,7 @@ func _spoken(game: Node3D) -> void:
 		used[found.get_string(1) + ":" + cue] = true
 		if (found.get_string(1) == "talk" and not Radio.BARKS.has(cue)) or (found.get_string(1) != "talk" and not Radio.LINES.has(cue)):
 			unknown.append(cue)
-	# (Two of them belong to the operators as companions.)
-	var later := ["m2_p_join", "m2_stay"]
+	var later: Array[String] = []
 	var unsaid: Array[String] = []
 	for cue: String in Radio.LINES:
 		if cue.begins_with("m2_") and not later.has(cue) and not (used.has("line:" + cue) or used.has("face:" + cue) or used.has("radio:" + cue)):
@@ -2863,12 +2862,126 @@ func _spoken(game: Node3D) -> void:
 		expect(coming and not scorpion.leader_called and packed and Radio.BARKS.has("low_ammo") and Radio.BARKS.leader_down.has("ghost"), "When the survivor goes down the one who comes for him calls it out, once; a pack around one of the squad is called out, and not again right away")
 		hive.set_process(true)
 	Radio.hijacked = false
+	await _company(game)
 	game.return_to_menu()
 	await frames(2)
 	profile.mission = kept_mission
 	game.team_enabled = false
 	game.start_run()
 	await frames(2)
+
+## The operators as companions (v0.24): chosen in the main menu for the second mission,
+## they take the squad's places at the station.
+func _company(game: Node3D) -> void:
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	var profile: Profile = game.profile
+	var kept: String = profile.company
+	# --- the switch: only for the second mission, and the menu still fits the screen
+	profile.company = "fireteam"
+	profile.mission = 2
+	game.return_to_menu()
+	await frames(2)
+	var switch_button: Button = null
+	var bottom := 0.0
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("BEGLEITER AB BAHNHOF"):
+			switch_button = node as Button
+	for node in hud.modal.get_children():
+		if node is VBoxContainer:
+			bottom = (node as VBoxContainer).position.y + (node as VBoxContainer).get_combined_minimum_size().y
+	var offered: bool = switch_button != null and switch_button.text.ends_with("FIRETEAM")
+	if switch_button != null:
+		hud._next_company()
+	var chosen := false
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text == "BEGLEITER AB BAHNHOF  ·  OPERATOREN":
+			chosen = true
+	profile.mission = 1
+	hud.show_menu("main")
+	var absent := true
+	for node in hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("BEGLEITER"):
+			absent = false
+	profile.mission = 2
+	expect(offered and chosen and absent and profile.company == "operators" and bottom > 300.0 and bottom <= 720.0, "For the second mission the main menu asks who goes on from the station, the squad or the operators; the first mission is not asked, and the menu still fits the screen (it ends at %d of 720)" % int(bottom))
+	# --- at the station the three take the squad's places
+	game.team_enabled = true
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	var before: Array[String] = []
+	var old_mates: Array = []
+	for mate: Teammate in game.team:
+		before.append(mate.look)
+		old_mates.append(mate)
+	hive.lines.clear()
+	hive._enter("deal")
+	var heard: Array[String] = []
+	var shown := hud.radio_label.text
+	for turn in range(200):
+		if hive.done.has("joined") and hive.lines.is_empty():
+			break
+		hive.line_left = 0.0
+		hive.hold_left = 0.0
+		game.bark_until.clear()
+		await _turn(hive)
+		if hud.radio_label.text != shown:
+			shown = hud.radio_label.text
+			heard.append(shown.get_slice(":", 0))
+	var order := ",".join(PackedStringArray(heard))
+	var looks: Array[String] = []
+	var armed := true
+	var counted := true
+	for mate: Teammate in game.team:
+		looks.append(mate.look)
+		armed = armed and not mate.unarmed and mate.label == str(Radio.NAMES[mate.look]) and not Radio.bark(mate.look, "reload").is_empty()
+		counted = counted and game.survivors.has(mate)
+	var dropped := true
+	for mate: Teammate in old_mates:
+		dropped = dropped and not game.team.has(mate) and not game.survivors.has(mate) and str(mate.order) == "hold"
+	var shotgun: bool = looks.size() == 3 and game.team[1].gun == Teammate.GUNS.shotgun and game.team[0].gun == Teammate.GUNS.badger
+	game.talk_until = 0
+	game.bark_until.clear()
+	var called: bool = looks.size() == 3 and game.bark(game.team[0], "phantom", "reload") and str(Radio.bark("ghost", "kill").sound) != ""
+	if not order.ends_with("COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,VIPER,SCORPION"):
+		print("COMPANY heard: ", order)
+	expect(before == ["viper", "scorpion"] and looks == ["phantom", "havoc", "ghost"] and armed and counted and dropped and shotgun and called and hive.puppets.is_empty() and hive.stage == "power" and hive.leavers.size() == 2 and order.ends_with("COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,VIPER,SCORPION") and not order.contains("PHANTOM,VIPER,SCORPION,PHANTOM"), "With the operators chosen, Phantom says at the end of the truce that they come along, the squad stays to hold the tunnel, and Phantom, Havoc and Ghost are the survivor's companions - armed like the squad, with their own calls (%s)" % str(looks))
+	# The squad is gone once it has reached the tunnel; a companion who goes down gets up again.
+	for leaver: Dictionary in hive.leavers:
+		(leaver.node as Node3D).global_position = map_point(game, "ops_from")
+	await _turn(hive)
+	await _turn(hive)
+	var ghost: Teammate = game.team[2] if game.team.size() == 3 else null
+	var rises := false
+	if ghost != null:
+		ghost._go_down(Vector3.INF)
+		ghost.down_left = 0.05
+		for turn in range(30):
+			await get_tree().physics_frame
+			if not ghost.down:
+				break
+		rises = not ghost.down and ghost.health > 0.0
+	expect(hive.leavers.is_empty() and rises and game.team.size() == 3 and game.extra_guns() == 3, "The squad has left for the tunnel, and an operator who goes down is back on his feet like any companion: none of them dies")
+	# --- a night taken up behind the station begins with the three at the survivor's side
+	hive.resume_at = "terminal"
+	game.start_run()
+	await frames(3)
+	looks.clear()
+	for mate: Teammate in game.team:
+		looks.append(mate.look)
+	var fireteam_first := true
+	hive.resume_at = "descent"
+	game.start_run()
+	await frames(3)
+	for mate: Teammate in game.team:
+		fireteam_first = fireteam_first and mate.look in ["viper", "scorpion"]
+	expect(looks == ["phantom", "havoc", "ghost"] and fireteam_first and game.team.size() == 2 and hive.company == "operators", "Taken up behind the station the night begins with the three operators at the survivor's side, taken up before it with the squad")
+	profile.company = kept
+	Radio.hijacked = false
+
+func map_point(game: Node3D, id: String) -> Vector3:
+	return (game.cabin as HiveMap).points[id]
 
 ## What came with v0.7: voices, the C.R.U., six more weapons, more errands, skins.
 func _newer(game: Node3D) -> void:
@@ -3029,7 +3142,8 @@ func _near(game: Node3D, reach: float) -> String:
 	return "[" + ", ".join(PackedStringArray(names)) + "]"
 
 ## Run with -- --bot-check [--bot-seconds=180] [--bot-pos=x,z] [--bot-round=1]
-## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]. With a window (no --headless)
+## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]
+## [--bot-company=operators]. With a window (no --headless)
 ## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
 ## position while the real spawner runs, which exercises navigation, special infected and
@@ -3071,6 +3185,9 @@ func bot(game: Node3D) -> void:
 				game.profile.mission = 2
 		if arg.begins_with("--bot-level="):
 			game.profile.difficulty = arg.trim_prefix("--bot-level=")
+		# --bot-company=operators: in the second mission the three operators go on from the station.
+		if arg.begins_with("--bot-company="):
+			game.profile.company = arg.trim_prefix("--bot-company=")
 	Engine.time_scale = pace
 	await wait(1.0)
 	game.start_run()
@@ -4684,7 +4801,7 @@ func _hive(game: Node3D) -> void:
 	for node in hud.modal.find_children("*", "Button", true, false):
 		if (node as Button).text.begins_with("MODUS"):
 			mode_button = node as Button
-	expect(words.contains("MISSION 1") and words.contains("MISSION 2") and words.contains("EINSATZ STARTEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and mode_button != null and mode_button.disabled and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen in the main menu; the second has leaderboards of its own and neither an endless night nor modifiers")
+	expect(words.contains("MISSION 1") and words.contains("MISSION 2") and words.contains("EINSATZ STARTEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and words.contains("MODUS") and mode_button == null and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen in the main menu; the second has leaderboards of its own and neither an endless night nor modifiers")
 	profile.mode = "endless"
 	hud._next_board()
 	var after_villa: String = profile.play()
@@ -5064,6 +5181,10 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 		squad_kills += mate.kills
 	print("BOT_RESULT state=%s stage=%s t=%d kills=%d squad_kills=%d score=%d heals=%d most_alive=%d seen=%s lost=%d paths=%d path_ms_each=%.3f" % [game.state, hive.stage, int(game.elapsed), game.kills, squad_kills, game.score, heals, most_alive, str(seen), lost.size(), map.path_calls, (map.path_usec / 1000.0) / maxf(1.0, float(map.path_calls))])
 	print("BOT_STAGES ", " ".join(PackedStringArray(stages)))
+	var company: Array[String] = []
+	for mate in game.team:
+		company.append("%s:%d" % [mate.look, mate.kills])
+	print("BOT_COMPANY ", " ".join(PackedStringArray(company)))
 	for entry in lost:
 		print("BOT_LOST ", entry)
 	game.sounds.stop_all()

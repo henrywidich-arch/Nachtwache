@@ -135,6 +135,12 @@ var walk_clock := 0.0
 ## Seconds until somebody of the squad may make small talk again.
 var idle_left := 45.0
 var puppets: Array = []
+## Who goes on with the survivor from the station: "fireteam" or "operators" (read from
+## the profile when the night begins).
+var company := "fireteam"
+## Those of the squad who walk off to hold the tunnel when the operators take their
+## places: {node, left}.
+var leavers: Array = []
 var stalker_sent := false
 var board_time := 0.0
 
@@ -166,6 +172,8 @@ func begin() -> void:
 	progress = -1.0
 	heli_clock = -1.0
 	intro_left = 0.0
+	leavers.clear()
+	company = str(game.profile.company)
 	var from := resume_at if CHECKPOINTS.has(resume_at) else "landing"
 	resume_at = ""
 	checkpoint = from
@@ -179,6 +187,9 @@ func begin() -> void:
 	game.preparation_left = 99999.0
 	game.sounds.dry = true
 	var at: Vector3 = map.points.get(str(start.at), map.player_start)
+	# Taken up behind the station, the operators are already at the survivor's side.
+	if company == "operators" and ORDER.find(from) > ORDER.find("deal"):
+		_operators_join(true)
 	_place_squad(at, float(map.facings.get(str(start.at), 0.0)))
 	if ORDER.find(from) < ORDER.find("nadja"):
 		_spawn_nadja(at + Vector3(1.4, 0, 2.6))
@@ -202,6 +213,7 @@ func end() -> void:
 		if is_instance_valid(puppet.node):
 			puppet.node.queue_free()
 	puppets.clear()
+	leavers.clear()
 	if is_instance_valid(heli):
 		heli.queue_free()
 	heli = null
@@ -420,7 +432,11 @@ func _enter(id: String) -> void:
 			progress = 0.0
 			progress_text = "ZUG FÄHRT HOCH"
 			game.round_called = false
-			_dismiss_puppets()
+			# Whoever goes on with the survivor is at his side when the infected come.
+			if company == "operators":
+				_operators_join(false)
+			else:
+				_dismiss_puppets()
 			game.sounds.play_sound("wave")
 			line("m2_power")
 		"board":
@@ -450,7 +466,8 @@ func _enter(id: String) -> void:
 		"cafe":
 			map.unlock("cafe")
 			game.sounds.play_at("shutter_open", _point("junction"))
-			line("m2_p_alive")
+			if company != "operators":
+				line("m2_p_alive")
 			_post(["mauler", "mauler", "striker", "leech"], [_point("cafeteria") + Vector3(-10, 0, -6), _point("cafeteria") + Vector3(9, 0, -8), _point("cafeteria") + Vector3(0, 0, -11), _point("cafeteria") + Vector3(-15, 0, 4)], false)
 		"lockdown":
 			map.lock("cafe")
@@ -507,7 +524,7 @@ func _update(delta: float) -> void:
 	var room: Dictionary = map.room_at(here)
 	var room_id := "" if room.is_empty() else str(room.id)
 	# From the tunnel they hold the operators report once, when nobody else is talking.
-	if stage in ["generator", "decon"] and stage_time > 16.0 and not done.has("h_tunnel") and _silent_for(2.0):
+	if company != "operators" and stage in ["generator", "decon"] and stage_time > 16.0 and not done.has("h_tunnel") and _silent_for(2.0):
 		done["h_tunnel"] = true
 		line("m2_h_tunnel")
 	# A little after the guards have been talked over, Nadja has a word about the house.
@@ -775,8 +792,14 @@ func _deal() -> void:
 	line("m2_truth")
 	beat("power")
 	talk("m2_colonel")
-	face("m2_p_tunnel")
-	beat("ops_leave")
+	if company == "operators":
+		# A change of plan: the three come along, and the squad holds the tunnel for them.
+		face("m2_p_join")
+		talk("m2_stay")
+		beat("join")
+	else:
+		face("m2_p_tunnel")
+		beat("ops_leave")
 
 ## The operators at the station walk to where they are wanted, stand there turned to the
 ## survivor, and are gone once they have left the way they came.
@@ -808,6 +831,67 @@ func _run_puppets(delta: float) -> void:
 	for puppet: Dictionary in gone:
 		puppets.erase(puppet)
 
+## Phantom, Havoc and Ghost take the places of the squad: companions like any other, with
+## their own weapons and their own calls. The squad walks off into the tunnel the three
+## came out of, to hold it. `instant`: nobody walks anywhere (a night that is taken up
+## behind the station).
+func _operators_join(instant: bool) -> void:
+	if not _once("joined"):
+		return
+	for mate: Teammate in game.team.duplicate():
+		game.team.erase(mate)
+		game.survivors.erase(mate)
+		if instant:
+			mate.queue_free()
+			continue
+		if mate.down:
+			mate.revive(true)
+		# (Sent off: who has something to see to is not called back to the survivor's side.)
+		mate.job = {"kind": "post", "pos": _point("ops_from")}
+		mate.order = "hold"
+		mate.hold_point = _point("ops_from")
+		leavers.append({"node": mate, "left": 0.0})
+	var player: Survivor = game.player
+	var looks := ["phantom", "havoc", "ghost"]
+	var slots := [Vector3(-2.0, 0, 2.3), Vector3(2.2, 0, 2.6), Vector3(0.3, 0, 3.9)]
+	for index in range(3):
+		var at: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * (slots[index] as Vector3)
+		var yaw: float = player.rotation.y
+		# Each goes on from where he stood at the station.
+		for puppet: Dictionary in puppets:
+			if str(puppet.look) == looks[index] and is_instance_valid(puppet.node):
+				at = (puppet.node as Node3D).global_position
+				yaw = (puppet.node as Node3D).rotation.y
+				(puppet.node as Node3D).queue_free()
+		var mate := Teammate.new()
+		mate.game = game
+		mate.look = looks[index]
+		mate.slot = slots[index]
+		mate.facing = yaw
+		game.mates.add_child(mate)
+		mate.global_position = at
+		mate.outfit(int(game.squad_levels.squad_armor), int(game.squad_levels.squad_ammo))
+		game.team.append(mate)
+		game.survivors.append(mate)
+	puppets.clear()
+
+## Those of the squad who went to hold the tunnel are gone once they have reached it.
+func _run_leavers(delta: float) -> void:
+	if leavers.is_empty():
+		return
+	var gone: Array = []
+	for leaver: Dictionary in leavers:
+		if not is_instance_valid(leaver.node):
+			gone.append(leaver)
+			continue
+		var mate: Teammate = leaver.node
+		leaver.left = float(leaver.left) + delta
+		if mate.global_position.distance_to(_point("ops_from")) < 1.6 or float(leaver.left) > 25.0:
+			mate.queue_free()
+			gone.append(leaver)
+	for leaver: Dictionary in gone:
+		leavers.erase(leaver)
+
 func _dismiss_puppets() -> void:
 	for puppet: Dictionary in puppets:
 		puppet.goal = _point("ops_from")
@@ -838,6 +922,8 @@ func _beat(id: String) -> void:
 				_enter("power")
 		"ops_leave":
 			_dismiss_puppets()
+		"join":
+			_operators_join(false)
 
 ## Whether what the lines wait for (see until) has come about.
 func _come(id: String) -> bool:
@@ -1214,11 +1300,15 @@ func _reading(cue: String) -> float:
 static func read_seconds(letters: int) -> float:
 	return clampf(1.8 + letters / 15.0, 3.0, 9.5)
 
-## Who of the squad has that look, is there and on his feet.
+## Who of the squad has that look, is there and on his feet - also one who is on his way
+## to the tunnel he is to hold.
 func _squad_member(look: String) -> Teammate:
 	for mate: Teammate in game.team:
 		if is_instance_valid(mate) and mate.look == look and not mate.down and mate.visible:
 			return mate
+	for leaver: Dictionary in leavers:
+		if is_instance_valid(leaver.node) and str((leaver.node as Teammate).look) == look and not (leaver.node as Teammate).down:
+			return leaver.node
 	return null
 
 ## Where a speaker stands: Nadja, an operator at the station (null if he is not there).
@@ -1293,5 +1383,6 @@ func _process(delta: float) -> void:
 	_watch_nadja(delta)
 	_update(delta)
 	_run_puppets(delta)
+	_run_leavers(delta)
 	_run_overrun()
 	_run_pressure(delta)
