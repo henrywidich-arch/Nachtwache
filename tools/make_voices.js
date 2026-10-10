@@ -41,8 +41,10 @@ function hard(speaker) {
 // m2_n_tanks, m2_n_work, m2_n_taunt).
 const IN_PERSON = ['nadja_freed', 'nadja_follow', 'nadja_pain', 'nadja_board', 'nadja_channel', 'nadja_static',
   'm2_n_house', 'm2_n_mirror', 'm2_n_open', 'm2_n_wait', 'm2_n_sorry', 'm2_n_home'];
-// Coleman is slowed down a touch: calm and unhurried even when things go wrong.
-const RADIO = 'atempo=0.94,highpass=f=330,lowpass=f=3300,acompressor=threshold=-22dB:ratio=5:attack=4:release=90:makeup=5,highpass=f=330,lowpass=f=3300';
+// (The Coleman before this one was slowed down a touch, calm and unhurried even when
+// things go wrong. The voice of 2026-10-10 speaks at that pace by itself - slowed down
+// as well its lines came out 5 % longer than the old ones - so nothing is stretched now.)
+const RADIO = 'highpass=f=330,lowpass=f=3300,acompressor=threshold=-22dB:ratio=5:attack=4:release=90:makeup=5,highpass=f=330,lowpass=f=3300';
 const SPEAKER = 'highpass=f=260,lowpass=f=4200,acompressor=threshold=-20dB:ratio=3:attack=5:release=120:makeup=3,aecho=0.8:0.5:38:0.22';
 // The three operators break into the Fireteam's channel with sets of their own: a narrower,
 // harder band than Coleman's, driven a little too hot. What they shout across the yard
@@ -58,6 +60,16 @@ const TRIM = 'silenceremove=start_periods=1:start_threshold=-46dB:start_silence=
 // is that much louder. This many dB bring each back to how loud its lines were in the game
 // (measured: the median over the lines both voices have recorded).
 const LEVEL = { viper: -4.0, scorpion: -3.0, raven: -3.0 };
+// Nadja's new voice: what she cries out in person in the first mission is 2 dB denser
+// than it was; and over the loudspeakers of the facility she is a little louder than
+// over the lab's, so that she stands beside Coleman.
+function level(line, sound) {
+  if (line.speaker === 'nadja') {
+    const second = line.cue.startsWith('m2_');
+    return sound === 'clean' ? (second ? 0 : -2.0) : (second ? 1.0 : 0);
+  }
+  return LEVEL[line.speaker] || 0;
+}
 // A pause inside a line may last this long; a longer one is cut down to it. The voice
 // generator now and then leaves seconds of dead air in the middle of a sentence.
 const PAUSE = 0.9;
@@ -130,9 +142,10 @@ for (let i = 0; i < files.length; i++) {
   const chain = pause.filter + TRIM + (line.speaker === 'coleman' ? ',' + RADIO : (intruder ? ',' + INTRUDER : (radio ? ',' + SPEAKER : ''))) + hard(line.speaker);
   const measured = probe(file, chain);
   // Radio lines sit a little under full level; the calls of people nearby use all of it.
-  const gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0) + (LEVEL[line.speaker] || 0);
+  const sound = line.speaker === 'coleman' ? 'radio' : (intruder ? 'set' : (radio ? 'speaker' : 'clean'));
+  const gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0) + level(line, sound);
   const rate = line.text.length / measured.seconds;
-  const entry = { file: line.speaker + '/' + line.cue + '_' + line.n, sound: line.speaker === 'coleman' ? 'radio' : (intruder ? 'set' : (radio ? 'speaker' : 'clean')), seconds: +measured.seconds.toFixed(2), chars: line.text.length, rate: +rate.toFixed(1), gain: +gain.toFixed(1), mean: measured.mean };
+  const entry = { file: line.speaker + '/' + line.cue + '_' + line.n, sound, seconds: +measured.seconds.toFixed(2), chars: line.text.length, rate: +rate.toFixed(1), gain: +gain.toFixed(1), mean: measured.mean };
   if (pause.cut > 0) entry.pause_cut = +pause.cut.toFixed(2);
   // A recording far slower than speech is carries more than the line.
   const longest = 1.2 + line.text.length / 9.0;
