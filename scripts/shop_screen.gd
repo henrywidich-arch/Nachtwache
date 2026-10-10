@@ -143,8 +143,12 @@ func _list() -> Array:
 		out.append({"head": "Die Waffe des aktiven Fähigkeiten-Wegs, ab %d Punkten darin." % Skills.WEAPON_NEEDS})
 	elif tab == "team":
 		out.append({"head": "Für deine beiden Begleiter, für diese Nacht." if not game.team.is_empty() else "Nur für Einsätze mit Begleitern: Im Koop sind keine dabei."})
+	# (The lockers of the second mission: the standard weapons, and what he has found.)
+	var short: bool = game.hive.on
+	if short and tab in ["weapons", "sidearms", "heavy"]:
+		out.append({"head": "Der Waffenschrank führt nur Standardwaffen. Alle anderen liegen in den Waffenlagern der Anlage – abseits des Wegs."})
 	for id in Survivor.ORDER:
-		if str(Survivor.WEAPONS[id].get("group", "weapons")) == tab:
+		if str(Survivor.WEAPONS[id].get("group", "weapons")) == tab and (not short or HiveCaches.sells(id) or player.inventory.has(id)):
 			var state := weapon_state(id)
 			out.append({"kind": "weapon", "id": id, "title": str(Survivor.WEAPONS[id].label), "tag": state[0], "tone": state[1]})
 	if tab == "mods":

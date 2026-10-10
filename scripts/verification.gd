@@ -6798,6 +6798,8 @@ func _hive(game: Node3D) -> void:
 	hive.prowl.set_process(true)
 	hive.set_process(true)
 	await frames(3)
+	# --- the weapon caches off the way, and the lockers' short list
+	await _hive_caches(game)
 	# --- and back to the farm
 	game.return_to_menu()
 	await frames(3)
@@ -6808,6 +6810,24 @@ func _hive(game: Node3D) -> void:
 	game.start_run()
 	await frames(3)
 	expect(home and game.cabin == farm and game.mode == "story" and not hive.on and game.phase == "preparing" and game.credits == 120 and player.global_position.y > -1.0 and not farm.path_between(farm.points.yard_south, farm.points.hall).is_empty(), "Back in the menu the farm is in the world again, and the next night there is an ordinary one")
+	# --- the farm is untouched by the caches: its shop sells every weapon, as it always did
+	game.credits = 5000
+	game.wave = 9
+	player.position = (farm.points.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.open_shop()
+	var on_sale := 0
+	var farm_note := false
+	for tab: String in ["weapons", "sidearms", "heavy", "class"]:
+		hud._open_tab(tab)
+		for entry: Dictionary in hud.counter.entries:
+			on_sale += 1 if str(entry.get("kind", "")) == "weapon" else 0
+			farm_note = farm_note or str(entry.get("head", "")).contains("Waffenlagern")
+	var farm_sells: bool = game.buy_weapon("g36") and player.inventory.has("g36")
+	game.resume_run()
+	var no_side := true
+	for marker in game.markers():
+		no_side = no_side and not marker.has("side")
+	expect(on_sale == Survivor.ORDER.size() and not farm_note and farm_sells and no_side and not hive.caches.on and hive.caches.prompt() == "", "On the farm nothing has changed: its shop lists and sells every weapon (%d), and no cache is a side goal there" % on_sale)
 	profile.mode = kept_mode
 	profile.mission = kept_mission
 	# --- nothing stands in a doorway of the map: no wall, no plinth or wainscot that runs
@@ -6825,6 +6845,253 @@ func _hive(game: Node3D) -> void:
 	probe.free()
 	var first_find := "" if in_doorways.is_empty() else ", the first: %s in %s" % [in_doorways[0].what, in_doorways[0].door]
 	expect(doorways >= 50 and in_doorways.is_empty(), "No doorway of the second mission's map has anything standing in it (%d doorways tried, %d finds%s)" % [doorways, in_doorways.size(), first_find])
+
+## The weapon caches of the second mission (HiveCaches): what its lockers still sell,
+## where the other weapons lie, how a cache is opened and what a checkpoint keeps.
+func _hive_caches(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	game.return_to_menu()
+	await frames(2)
+	game.profile.mission = 2
+	game.start_run()
+	await frames(3)
+	var map := game.cabin as HiveMap
+	var caches: HiveCaches = hive.caches
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	for mate in game.team:
+		mate.set_physics_process(false)
+	_wipe_all(game)
+	# --- the lockers sell the short list, and nothing else
+	game.credits = 5000
+	game.wave = 9
+	face(game, beside(game, "shop", map.points.supply_lz), 0.0)
+	game.open_shop()
+	var listed: Array[String] = []
+	var note := false
+	for tab: String in ["weapons", "sidearms", "heavy", "class"]:
+		hud._open_tab(tab)
+		for entry: Dictionary in hud.counter.entries:
+			if str(entry.get("kind", "")) == "weapon":
+				listed.append(str(entry.id))
+			note = note or str(entry.get("head", "")).contains("Waffenlagern")
+	var refused: bool = not game.buy_weapon("g36") and not game.buy_weapon("minigun") and not player.inventory.has("g36")
+	var plain: bool = game.buy_weapon("ak") and player.inventory.has("ak") and game.buy_weapon("pistol")
+	game.resume_run()
+	var short := listed.size() == HiveCaches.STANDARD.size()
+	for id in listed:
+		short = short and HiveCaches.sells(id)
+	var only_found := HiveCaches.found_only()
+	expect(short and note and refused and plain and listed.has("rifle") and listed.has("pistol") and listed.has("flamer") and listed.has("nitro") and listed.has("fifty") and only_found.size() >= 12 and only_found.has("minigun") and not only_found.has("rifle"), "The weapon lockers of the second mission sell the standard weapons only - the carbine, one rifle, one submachine gun, the sidearm and the weapons of the trees (%s) -, say where the others are, and refuse the rest" % ", ".join(PackedStringArray(listed)))
+	player.inventory = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
+	player.equip_weapon("rifle", true)
+	# --- every night a share of the places holds a cache, other ones from night to night,
+	# the dearer weapons deeper in and behind a lock
+	var sites: Array[Dictionary] = map.caches
+	var dealt_now: Dictionary = HiveCaches.deal(caches.night, sites)
+	var as_dealt := true
+	var live_now := 0
+	for index in range(sites.size()):
+		var holds := str(sites[index].holds)
+		live_now += 1 if str(sites[index].state) == "shut" else 0
+		as_dealt = as_dealt and holds == str(dealt_now.get(index, "")) and (str(sites[index].state) == "shut") == dealt_now.has(index)
+	var seen := {}
+	var same := 0
+	var fewest := 99
+	var most := 0
+	var standard_found := 0
+	var worth := {"plain": 0.0, "sealed": 0.0, "shallow": 0.0, "deep": 0.0}
+	var count := {"plain": 0, "sealed": 0, "shallow": 0, "deep": 0}
+	var before: Dictionary = {}
+	for night in range(1, 41):
+		var dealt: Dictionary = HiveCaches.deal(night, sites)
+		same += 1 if dealt == before else 0
+		before = dealt
+		fewest = mini(fewest, dealt.size())
+		most = maxi(most, dealt.size())
+		var twice := {}
+		for index: int in dealt:
+			seen[index] = true
+			var weapon := str(dealt[index])
+			standard_found += 1 if HiveCaches.sells(weapon) or not Survivor.WEAPONS.has(weapon) or twice.has(weapon) else 0
+			twice[weapon] = true
+			var price := float(Survivor.WEAPONS[weapon].price)
+			var lock := "sealed" if bool(sites[index].sealed) else "plain"
+			worth[lock] += price
+			count[lock] += 1
+			if int(sites[index].depth) <= 1 or int(sites[index].depth) == 3:
+				var where := "deep" if int(sites[index].depth) == 3 else "shallow"
+				worth[where] += price
+				count[where] += 1
+	var again: bool = HiveCaches.deal(7, sites) == HiveCaches.deal(7, sites)
+	var by_depth: bool = float(worth.deep) / maxf(1.0, count.deep) > float(worth.shallow) / maxf(1.0, count.shallow) * 1.6 and float(worth.sealed) / maxf(1.0, count.sealed) > float(worth.plain) / maxf(1.0, count.plain) * 1.4
+	expect(sites.size() >= 24 and as_dealt and live_now == dealt_now.size() and live_now >= 8 and live_now < sites.size() and seen.size() == sites.size() and same == 0 and again and fewest >= 8 and most <= 16 and standard_found == 0 and by_depth, "A night deals a share of the places a cache each (%d of %d tonight, %d to %d in forty nights, every place in some of them, no two nights alike); what is in it is never a standard weapon nor twice the same, the dearer ones deeper in and behind a lock (%d on average in a plain one, %d in a sealed one)" % [live_now, sites.size(), fewest, most, int(float(worth.plain) / maxf(1.0, count.plain)), int(float(worth.sealed) / maxf(1.0, count.sealed))])
+	# --- nobody knows of a cache before he has come near it or read of it
+	for id in map.areas:
+		map.unlock(str(id), true)
+	caches.fill_all({"werkstatt": "revolver", "depot_kiste": "shotgun", "depot": "mg", "scanner": "mp7"})
+	face(game, map.points.landing_out, 0.0)
+	var unknown: bool = caches.markers().is_empty() and caches.summary().is_empty() and hive.prompt() == ""
+	var shop_index := caches._index_of("werkstatt")
+	var shed: Dictionary = sites[shop_index]
+	face(game, (shed.stand as Vector3) + (shed.frame as Transform3D).basis.z * 6.0 + Vector3(0, 0.05, 0), 0.0)
+	caches._notice(player.global_position)
+	var side_marks: Array = game.markers()
+	var lines: Array[String] = hive.summary()
+	var noticed: bool = bool(shed.known) and not caches.markers().is_empty() and bool(caches.markers()[0].get("side", false)) and hive.markers().size() <= 1 and (hive.markers().is_empty() or not hive.markers()[0].has("side")) and side_marks.size() == hive.markers().size() + caches.markers().size() and " ".join(PackedStringArray(lines)).contains("NEBENZIEL") and (lines.is_empty() or not lines[0].contains("NEBENZIEL") or hive.goal == "")
+	var board_known := 0
+	var board_read := false
+	for board in caches.boards:
+		if str(board.group) == "station":
+			face(game, Vector3((board.at as Vector3).x, HiveMap.UNDER + 0.05, (board.at as Vector3).z + 2.0), 0.0)
+			caches._notice(player.global_position)
+			board_read = bool(board.read) and is_instance_valid(board.marks) and (board.marks as MeshInstance3D).mesh != null
+	for site in sites:
+		board_known += 1 if str(site.group) == "station" and bool(site.known) else 0
+	var screens_name := 0
+	for screen in caches.screens:
+		screens_name += 1 if int(screen.names) >= 0 and (screen.line as Label3D).text.contains("WAFFENLAGER") else 0
+	expect(unknown and noticed and board_read and board_known == 3 and caches.boards.size() >= 8 and screens_name >= 4, "A cache is a side goal once the survivor has come near it or has read a display that marks tonight's caches (%d displays, %d terminals name the nearest): a line under the stage's goal and a small mark beside the stage's own, never in its place" % [caches.boards.size(), screens_name])
+	# --- a plain one is searched and gives what it holds; a found weapon is his like a bought one
+	face(game, (shed.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	var ask := hive.prompt()
+	game.interact_blocked_until = 0
+	game.interact()
+	var searching: bool = str(shed.state) == "opening" and hive.prompt() == ""
+	for k in range(4):
+		caches._process(0.5)
+	var not_yet: bool = str(shed.state) == "opening"
+	for k in range(4):
+		caches._process(0.5)
+	var lies_ready: bool = str(shed.state) == "open" and hive.prompt().contains(str(Survivor.WEAPONS.revolver.label)) and not player.inventory.has("revolver")
+	game.interact()
+	var got: bool = player.inventory.has("revolver") and player.current_weapon == "revolver" and player.inventory.has("rifle") and str(shed.state) == "empty" and player.ammo == int(Survivor.WEAPONS.revolver.magazine) and player.reserve == player.reserve_cap("revolver")
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var fired: bool = player.ammo == int(Survivor.WEAPONS.revolver.magazine) - 1
+	face(game, beside(game, "shop", map.points.supply_station, 1), 0.0)
+	game.open_shop()
+	hud._open_tab("sidearms")
+	var carried := false
+	for entry: Dictionary in hud.counter.entries:
+		carried = carried or (str(entry.get("id", "")) == "revolver" and str(entry.get("tag", "")).begins_with("DABEI"))
+	game.resume_run()
+	# (No place for a second primary weapon: the carbine stays in the crate, and comes back.)
+	var crate: Dictionary = sites[caches._index_of("depot_kiste")]
+	face(game, (crate.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	game.interact()
+	for k in range(8):
+		caches._process(0.5)
+	var swap_note: bool = hive.prompt().contains("bleibt hier")
+	game.interact()
+	var swapped: bool = player.inventory.has("shotgun") and not player.inventory.has("rifle") and str(crate.holds) == "rifle" and str(crate.state) == "open"
+	game.interact()
+	var back: bool = player.inventory.has("rifle") and not player.inventory.has("shotgun") and str(crate.holds) == "shotgun"
+	expect(ask.contains("durchsuchen") and searching and not_yet and lies_ready and got and fired and carried and swap_note and swapped and back, "A plain cache is searched in a few seconds beside it and gives what it holds: the weapon is the survivor's like a bought one - loaded, in the hand, on the lockers' list -, and one he has no place for trades places with the one he carries")
+	# --- a sealed one opens only while he stays, and they come for it
+	_wipe_all(game)
+	var cage: Dictionary = sites[caches._index_of("depot")]
+	face(game, (cage.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	var warns := hive.prompt()
+	var tasks_before: int = game.stats.objectives
+	caches.answered = 0
+	hive.stage = "station"
+	game.interact()
+	for k in range(10):
+		caches._process(0.5)
+	var half := float(cage.left)
+	var came: int = caches.answered
+	var held: bool = str(cage.state) == "opening" and bool(cage.near) and is_equal_approx(half, HiveCaches.SEALED_SECONDS - 5.0) and " ".join(PackedStringArray(caches.summary())).contains("WIRD GEÖFFNET")
+	# (Held down beside it - the Prowler's pin, a Leech - or on the ground: he has not left.)
+	player.down = true
+	player.clung_by = null
+	for k in range(2):
+		caches._process(0.5)
+	player.down = false
+	held = held and is_equal_approx(float(cage.left), half - 1.0)
+	half = float(cage.left)
+	face(game, (cage.stand as Vector3) + (cage.frame as Transform3D).basis.x * -9.0 + Vector3(0, 0.05, 0), 0.0)
+	for k in range(10):
+		caches._process(0.5)
+	var stopped: bool = is_equal_approx(float(cage.left), half) and not bool(cage.near) and caches.answered == came and " ".join(PackedStringArray(caches.summary())).contains("UNTERBROCHEN") and not caches.markers().is_empty()
+	await wait(1.6)
+	var bodies := 0
+	for node in get_tree().get_nodes_in_group("infected"):
+		bodies += 1 if not (node as Infected).dead else 0
+	_wipe_all(game)
+	face(game, (cage.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	cage.answer = 999.0
+	for k in range(41):
+		caches._process(0.5)
+	var open: bool = str(cage.state) == "open" and game.stats.objectives == tasks_before + 1 and hive.prompt().contains("nehmen")
+	game.interact()
+	var heavy: bool = player.inventory.has("mg") and player.current_weapon == "mg" and str(cage.state) == "empty"
+	expect(warns.contains(str(int(HiveCaches.SEALED_SECONDS))) and held and came >= 2 and bodies >= 2 and stopped and open and heavy, "A sealed cache takes %d seconds beside it: it goes on only while the survivor stays near (held down or on the ground as well), stands still when he walks off and goes on when he is back - and for as long as it lasts packs come for it, in a stage in which nobody comes by himself as well (%d in five seconds, %d through the ways in)" % [int(HiveCaches.SEALED_SECONDS), came, bodies])
+	_wipe_all(game)
+	# --- a checkpoint keeps what was found before it, and nothing that was found after it
+	var night_was := caches.night
+	hive._checkpoint("descent", 0)
+	var later: Dictionary = sites[caches._index_of("scanner")]
+	face(game, (later.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	game.interact()
+	for k in range(8):
+		caches._process(0.5)
+	game.interact()
+	var found_after: bool = player.inventory.has("mp7") and str(later.state) == "open"
+	game.retry_checkpoint()
+	await frames(3)
+	hive.set_process(false)
+	hive.prowl.set_process(false)
+	_wipe_all(game)
+	sites = map.caches
+	var kept_ok: bool = hive.checkpoint == "descent" and caches.night == night_was and player.inventory.has("mg") and player.inventory.has("revolver") and player.inventory.has("rifle") and not player.inventory.has("mp7") and not player.inventory.has("ak")
+	var places_ok: bool = str(sites[caches._index_of("depot")].state) == "empty" and str(sites[caches._index_of("werkstatt")].state) == "empty" and str(sites[caches._index_of("scanner")].state) == "shut" and str(sites[caches._index_of("scanner")].holds) == "mp7" and bool(sites[caches._index_of("depot")].known)
+	game.return_to_menu()
+	await frames(2)
+	game.start_run()
+	await frames(3)
+	hive.set_process(false)
+	var fresh: bool = hive.checkpoint == "landing" and caches.kept.is_empty() and player.inventory.size() == 1 and player.inventory.has("rifle") and caches.night != night_was
+	expect(found_after and kept_ok and places_ok and fresh, "A defeat taken up again at a checkpoint is the same night: the caches opened before that checkpoint stay open and the weapons found by then are in the survivor's hands again, what was found after it lies in its cache again - and a new night is dealt anew")
+	# --- none of them stands on the main way, and each can be walked to
+	for id in map.areas:
+		map.unlock(str(id), true)
+	for door in map.doors:
+		map._shut_door(door, false, true)
+	map.route_cache.clear()
+	var way: Array[Vector3] = []
+	var stops: Array = ["landing_out"]
+	for id: String in HiveDirector.ORDER:
+		var stop := str(HiveDirector.STAGES[id][2])
+		if stop != "" and map.points.has(stop):
+			stops.append(stop)
+	for k in range(stops.size() - 1):
+		for point in map.path_between(map.points[stops[k]], map.points[stops[k + 1]]):
+			way.append(point)
+	var nearest := INF
+	var nearest_id := ""
+	var cut_off := ""
+	var in_way_rooms := 0
+	var way_rooms := {}
+	for point in way:
+		var room := map.room_at(point + Vector3(0, 0.3, 0))
+		if not room.is_empty():
+			way_rooms[str(room.id)] = true
+	for site in sites:
+		var stand: Vector3 = site.stand
+		for point in way:
+			if absf(point.y - stand.y) < 2.0 and Vector2(point.x - stand.x, point.z - stand.z).length() < nearest:
+				nearest = Vector2(point.x - stand.x, point.z - stand.z).length()
+				nearest_id = str(site.id)
+		in_way_rooms += 1 if way_rooms.has(str(site.room)) else 0
+		var from: Vector3 = map.points.terminal if int(site.level) >= map.deep else (map.points.platform if int(site.level) == map.under else map.points.hall)
+		if map.path_between(from, stand).is_empty():
+			cut_off += str(site.id) + " "
+	expect(way.size() > 400 and nearest >= 5.0 and in_way_rooms <= 1 and cut_off == "", "No cache stands on the main way - the nearest (%s) is %.1f m beside it, at the dead end of a gallery; no other is in a room the way leads through - and every one can be walked to%s" % [nearest_id, nearest, "" if cut_off == "" else " (not: %s)" % cut_off])
+	hive.prowl.set_process(true)
+	hive.set_process(true)
 
 ## The bot of --bot-check on the map of the second mission (--bot-mode=villa): it follows
 ## the marker along the map's paths, shoots what it sees, uses what the mission wants
@@ -6848,6 +7115,8 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 	var next_report := 20.0
 	var most_alive := 0
 	var next_grenade := 0.0
+	var side_goal := Vector3.INF
+	var side_wait := 0.0
 	# (A physics step lasts longer in game time while the bot runs faster than real time.)
 	var step := Engine.time_scale / float(Engine.physics_ticks_per_second)
 	while game.state == "playing" and game.elapsed < limit:
@@ -6902,9 +7171,12 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 				player.throw_cooldown = 0.0
 				player.throw("grenade")
 			best_distance = fmod(best_distance, 1000.0)
-		# --- use what is to be used
-		if hive.prompt() != "":
+		# --- use what is to be used: what the stage wants used, and a plain weapon cache
+		# the bot stands before (a sealed one it leaves alone)
+		if hive.use_at != Vector3.INF and player.global_position.distance_to(hive.use_at) < 2.6:
 			game.interact()
+		else:
+			hive.caches.bot_use()
 		# --- where to: the marker; guards that hide are looked for
 		var goal := Vector3.INF
 		var marks: Array = hive.markers()
@@ -6915,6 +7187,13 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 				if is_instance_valid(guard) and not (guard as Infected).dead:
 					goal = (guard as Infected).global_position
 					break
+		# (A plain weapon cache near its way comes first: it turns off to it.)
+		side_wait -= step
+		if side_wait <= 0.0:
+			side_wait = 1.0
+			side_goal = hive.caches.bot_goal(player.global_position)
+		if side_goal != Vector3.INF and goal != Vector3.INF:
+			goal = side_goal
 		# Standing and shooting while somebody is close; otherwise on towards the goal.
 		var fighting := best != null and best_distance < 9.0
 		if goal != Vector3.INF and not fighting and hive.intro_left <= 0.0:
@@ -6955,6 +7234,11 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 		squad_kills += mate.kills
 	print("BOT_RESULT state=%s stage=%s t=%d kills=%d squad_kills=%d score=%d heals=%d most_alive=%d seen=%s lost=%d paths=%d path_ms_each=%.3f" % [game.state, hive.stage, int(game.elapsed), game.kills, squad_kills, game.score, heals, most_alive, str(seen), lost.size(), map.path_calls, (map.path_usec / 1000.0) / maxf(1.0, float(map.path_calls))])
 	print("BOT_STAGES ", " ".join(PackedStringArray(stages)))
+	var carried: Array[String] = []
+	for id: String in Survivor.ORDER:
+		if player.inventory.has(id):
+			carried.append(id)
+	print("BOT_CACHES opened=%d carries=%s" % [hive.caches.opened, ",".join(PackedStringArray(carried))])
 	var company: Array[String] = []
 	for mate in game.team:
 		company.append("%s:%d" % [mate.look, mate.kills])

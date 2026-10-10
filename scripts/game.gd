@@ -802,7 +802,8 @@ func _aim_shop_camera(view: Dictionary) -> void:
 
 ## The places the HUD and the map in the corner point at.
 func markers() -> Array:
-	return hive.markers() if hive.on else mission.markers()
+	# (In the second mission also the side goals: the weapon caches the survivor knows of.)
+	return hive.markers() + hive.caches.markers() if hive.on else mission.markers()
 
 ## The second mission again, from the last checkpoint that was reached.
 func retry_checkpoint() -> void:
@@ -1996,6 +1997,8 @@ func buy_weapon(id: String, instead_of: String = "") -> bool:
 	if not Survivor.WEAPONS.has(id) or player.inventory.has(id): return false
 	# A tree's own weapon is for those who have put points into that tree.
 	if skills.weapon_barred(id) != "": return false
+	# The lockers of the second mission sell the standard weapons only: the others are found.
+	if hive.on and not HiveCaches.sells(id): return false
 	# The heaviest weapons only reach the shop once the night is well under way.
 	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave and not sandbox.on: return false
 	var old := outgoing(id, instead_of)
