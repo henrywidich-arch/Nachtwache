@@ -1388,12 +1388,17 @@ func _latest(game: Node3D) -> void:
 	var mg2_lined: bool = absf(mg2_aim.y + (mg2_gun.mount as Vector3).y + float(mg2_gun.irons)) < 0.005 and float((WeaponView.VIEWS.mg2.aim_angles as Vector3).x) > 0.0 and mg2_aim.x == 0.0 and (WeaponView.VIEWS.mg2.muzzle as Vector3).is_equal_approx((mg2_gun.mount as Vector3) + (mg2_gun.muzzle as Vector3))
 	var mg2_drum := mg2.get_node_or_null("Magazine") as Node3D
 	var mg2_paint := false
+	# The drum hangs as a drum does: its own axis along the barrel (so it is wider across the
+	# gun than it is deep along it), in the middle under the gun, forward of the pistol grip.
+	var mg2_hung := false
 	if mg2_drum != null:
 		var mg2_body := mg2.find_child("Body", true, false) as MeshInstance3D
 		var mg2_shell := mg2_drum.find_child("*", true, false) as MeshInstance3D
 		if mg2_body != null and mg2_shell != null:
 			var mg2_skin := mg2_shell.get_surface_override_material(0) as BaseMaterial3D
 			mg2_paint = mg2_skin != null and mg2_skin.albedo_texture != null and mg2_skin != mg2_body.get_surface_override_material(0)
+			var mg2_box: AABB = mg2_shell.transform * mg2_shell.get_aabb()
+			mg2_hung = mg2_box.size.x > 0.15 and mg2_box.size.x > mg2_box.size.z * 1.3 and absf(mg2_box.get_center().x) < 0.01 and mg2_box.end.z < (mg2_gun.mount as Vector3).z and mg2_box.end.y < (mg2_gun.mount as Vector3).y + float(mg2_gun.rail)
 	# What the player reads of it: its name, in the hand and on the shop's list of heavy
 	# weapons, where it stands right after the machine gun.
 	var mg2_named: bool = str(Survivor.WEAPONS.mg2.label) == "M21E" and player.weapon_label() == "M21E" and str(Survivor.WEAPONS.mg.label) == "MASCHINENGEWEHR" and Survivor.ORDER.find("mg2") == Survivor.ORDER.find("mg") + 1 and str(Survivor.WEAPONS.mg2.group) == "heavy" and str(SurvivalHUD.SHOP_NOTES.get("mg2", "")).contains("Trommel")
@@ -1405,7 +1410,7 @@ func _latest(game: Node3D) -> void:
 		await get_tree().physics_frame
 		if mg2_drum != null:
 			mg2_away = maxf(mg2_away, mg2_drum.position.length())
-	expect(mg2_owned and player.current_weapon == "mg2" and mg2_full and mg2_named and Survivor.kind_of("mg2") == "heavy" and mg2_drum != null and mg2_lined and mg2_paint and (WeaponView.reload_step("mg2", 0.38).magazine as Vector3).length() > 0.2 and mg2_away > 0.2 and mg2_drum.position.length() < 0.001 and player.ammo == 75 and bool(game.sounds.recorded.get("mg2", false)) and float(Survivor.WEAPONS.mg2.damage) > float(Survivor.WEAPONS.mg.damage) and int(Survivor.WEAPONS.mg2.magazine) < int(Survivor.WEAPONS.mg.magazine), "The M21E is a second machine gun beside the old one: 75 harder rounds in a drum with textures of its own, which comes off the gun when it is reloaded; it is aimed over its iron sights")
+	expect(mg2_owned and player.current_weapon == "mg2" and mg2_full and mg2_named and Survivor.kind_of("mg2") == "heavy" and mg2_drum != null and mg2_lined and mg2_paint and mg2_hung and (WeaponView.reload_step("mg2", 0.38).magazine as Vector3).length() > 0.2 and mg2_away > 0.2 and mg2_drum.position.length() < 0.001 and player.ammo == 75 and bool(game.sounds.recorded.get("mg2", false)) and float(Survivor.WEAPONS.mg2.damage) > float(Survivor.WEAPONS.mg.damage) and int(Survivor.WEAPONS.mg2.magazine) < int(Survivor.WEAPONS.mg.magazine), "The M21E is a second machine gun beside the old one: 75 harder rounds in a drum with textures of its own, which hangs in the middle under the gun with its round faces to the muzzle and to the shooter and comes off when it is reloaded; it is aimed over its iron sights")
 	game.team_enabled = true
 	game.start_run()
 
