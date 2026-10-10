@@ -182,6 +182,9 @@ const TYPES := {
 	}
 }
 const CHARGER_BLAST := 4.3
+## Infected that are fights of their own: what a difficulty does to the health of the horde
+## (the rule "brood", see Profile) leaves them as they are.
+const BROOD_APART := ["crusher", "stalker"]
 ## The Medic's gas: how far it reaches at most, the health it gives back per second to
 ## an infected it has strengthened, the share of a hit that still gets through to them,
 ## and how close the Medic comes to its prey before it stops and lets the gas work.
@@ -364,6 +367,9 @@ func _ready() -> void:
 	floor_snap_length = 0.3
 	# A modifier of the round may make everybody tougher.
 	max_health = (float(spec.health) + float(spec.health_per_round) * (wave - 1)) * float(game.rules.get("health", 1.0))
+	# A difficulty may make the horde alone tougher (Profile.ZOMBIE_TEST_HEALTH).
+	if not spec.get("human", false) and not kind in BROOD_APART:
+		max_health *= float(game.rules.get("brood", 1.0))
 	health = max_health
 	# A Crusher that turns up before the last round is not yet fully grown.
 	if kind == "crusher" and wave < int(game.ROUNDS.size()):

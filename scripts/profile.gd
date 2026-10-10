@@ -6,7 +6,13 @@ extends RefCounted
 const PATH := "user://nachtwache_profile.json"
 ## Runs kept per difficulty.
 const KEEP := 10
-const ORDER := ["easy", "normal", "hard", "nightmare"]
+const ORDER := ["easy", "normal", "hard", "nightmare", "zombie_test"]
+## The difficulty "Zombie-Test": a night as on NORMAL in everything - as many come, they are
+## as fast and hit as hard - except that the infected take this many times as much. It is
+## there to try how the weapons feel against bodies that do not fall to the first burst.
+## (Helix's soldiers and operators are no infected, and the Crusher and the Stalker are
+## fights of their own: those four keep their health, see Infected.BROOD_APART.)
+const ZOMBIE_TEST_HEALTH := 2.2
 ## A harder night is not simply tougher skin. horde: how many come. specials: how many of
 ## them are special infected. pace: how fast they move and strike. harm: what a hit does
 ## to a survivor. drops: how often the dead leave supplies. prices: cost of stations and
@@ -14,11 +20,13 @@ const ORDER := ["easy", "normal", "hard", "nightmare"]
 ## hack: how long devices take. events: how often something unplanned happens.
 ## tactics: how sharp the C.R.U. is - how fast it reacts, how well it aims, how often it
 ## dodges, flanks and throws grenades. score: multiplier on everything earned.
+## brood (only where it is not 1): what the infected take, as a factor on their health.
 const DIFFICULTIES := {
 	"easy": {"label": "LEICHT", "horde": 0.8, "specials": 0.75, "pace": 0.95, "harm": 0.7, "drops": 1.5, "prices": 0.85, "healing": 1.25, "gas": 0.6, "hack": 0.85, "events": 0.7, "tactics": 0.75, "score": 0.7},
 	"normal": {"label": "NORMAL", "horde": 1.0, "specials": 1.0, "pace": 1.0, "harm": 1.0, "drops": 1.0, "prices": 1.0, "healing": 1.0, "gas": 1.0, "hack": 1.0, "events": 1.0, "tactics": 1.0, "score": 1.0},
 	"hard": {"label": "SCHWER", "horde": 1.25, "specials": 1.4, "pace": 1.07, "harm": 1.25, "drops": 0.7, "prices": 1.2, "healing": 0.8, "gas": 1.6, "hack": 1.25, "events": 1.3, "tactics": 1.2, "score": 1.5},
-	"nightmare": {"label": "ALBTRAUM", "horde": 1.5, "specials": 1.8, "pace": 1.14, "harm": 1.5, "drops": 0.5, "prices": 1.4, "healing": 0.65, "gas": 2.4, "hack": 1.5, "events": 1.6, "tactics": 1.4, "score": 2.2}
+	"nightmare": {"label": "ALBTRAUM", "horde": 1.5, "specials": 1.8, "pace": 1.14, "harm": 1.5, "drops": 0.5, "prices": 1.4, "healing": 0.65, "gas": 2.4, "hack": 1.5, "events": 1.6, "tactics": 1.4, "score": 2.2},
+	"zombie_test": {"label": "ZOMBIE-TEST", "horde": 1.0, "specials": 1.0, "pace": 1.0, "harm": 1.0, "drops": 1.0, "prices": 1.0, "healing": 1.0, "gas": 1.0, "hack": 1.0, "events": 1.0, "tactics": 1.0, "score": 1.0, "brood": ZOMBIE_TEST_HEALTH}
 }
 
 ## Looks for the player and for the squad. need/count: the career total that unlocks it

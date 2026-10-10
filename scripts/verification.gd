@@ -2419,8 +2419,81 @@ func _threats(game: Node3D) -> void:
 	game.set_render_scale(1.0, false)
 	var first: float = game.default_render_scale()
 	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
+	await _zombie_test(game)
 	game.team_enabled = true
 	game.start_run()
+
+## The difficulty "Zombie-Test": a night as on NORMAL, except that the horde takes more.
+func _zombie_test(game: Node3D) -> void:
+	var normal: Dictionary = Profile.DIFFICULTIES.normal
+	var test: Dictionary = Profile.DIFFICULTIES.zombie_test
+	var same := true
+	for key in normal:
+		if str(key) != "label":
+			same = same and test.has(key) and is_equal_approx(float(test[key]), float(normal[key]))
+	var book := Profile.new()
+	book.stored = false
+	book.difficulty = "nightmare"
+	book.next_difficulty()
+	var reached := book.difficulty == "zombie_test" and str(book.rules().label) == "ZOMBIE-TEST"
+	book.next_difficulty()
+	expect(same and test.size() == normal.size() + 1 and is_equal_approx(float(test.brood), Profile.ZOMBIE_TEST_HEALTH) and Profile.ZOMBIE_TEST_HEALTH >= 1.5 and reached and book.difficulty == "easy" and Profile.ORDER.size() == Profile.DIFFICULTIES.size(), "Zombie-Test is a difficulty of its own, chosen like the others: a night as on NORMAL in everything but what the infected take")
+	# Its nights are filed apart from those of every other difficulty, in each mode.
+	var lists := {}
+	for level in Profile.ORDER:
+		for play in ["story", "endless", "villa"]:
+			lists[Profile.board(str(level), str(play))] = true
+	book.record(Profile.board("zombie_test", "villa"), {"score": 900, "round": 3, "seconds": 300, "victory": false, "kills": 40})
+	book.record(Profile.board("zombie_test", "story"), {"score": 500, "round": 2, "seconds": 200, "victory": false, "kills": 20})
+	expect(lists.size() == Profile.ORDER.size() * 3 and book.best("zombie_test").size() == 1 and book.best("villa_zombie_test").size() == 1 and book.best("endless_zombie_test").is_empty() and book.best("normal").is_empty() and book.best("villa_normal").is_empty(), "Its runs get lists of their own: story, endless night and second mission")
+	# In a night: as many come, the horde takes more, Helix's people and the two giants do not.
+	var level_before: String = game.level
+	var took := {}
+	var hordes: Array = []
+	for level in ["normal", "zombie_test"]:
+		game.level = level
+		game._set_modifier("")
+		for kind in Infected.TYPES:
+			if str(kind) == "ripper" and not ResourceLoader.exists(RipperVisual.SCENE):
+				continue
+			# (As a guest's machine builds them: nobody arrives, nothing is counted.)
+			var one: Infected = game.body_for(str(kind))
+			one.game = game
+			one.kind = str(kind)
+			one.wave = 4
+			one.puppet = true
+			game.enemies.add_child(one)
+			took["%s/%s" % [level, kind]] = one.max_health
+			one._retire()
+			one.queue_free()
+		game.spawn_queue.clear()
+		game.wave = 2
+		game.begin_wave()
+		var horde: Array = game.spawn_queue.duplicate()
+		horde.sort()
+		hordes.append(horde)
+		game.spawn_queue.clear()
+		game.mission.wave_kind = "classic"
+		game.phase = "preparing"
+		game.preparation_left = 9999.0
+		game.gas.clear()
+	game.level = level_before
+	game._set_modifier("")
+	var tougher := true
+	var untouched := true
+	var apart := 0
+	for kind in Infected.TYPES:
+		if not took.has("normal/%s" % kind):
+			continue
+		var plain: float = took["normal/%s" % kind]
+		var tested: float = took["zombie_test/%s" % kind]
+		if Infected.TYPES[kind].get("human", false) or str(kind) in Infected.BROOD_APART:
+			untouched = untouched and is_equal_approx(tested, plain)
+			apart += 1
+		else:
+			tougher = tougher and is_equal_approx(tested, plain * Profile.ZOMBIE_TEST_HEALTH)
+	expect(tougher and untouched and apart >= 13 and is_equal_approx(float(took["zombie_test/mauler"]), (95.0 + 7.0 * 3) * Profile.ZOMBIE_TEST_HEALTH) and hordes[0] == hordes[1] and (hordes[0] as Array).size() > 8, "On Zombie-Test as many come as on NORMAL and the infected take %.1f times as much; the C.R.U., the operators, the Crusher and the Stalker are as they were" % Profile.ZOMBIE_TEST_HEALTH)
+	await frames(3)
 
 ## What came with v0.8: the UMP and the parts for it, ballistic plates, lamps on the C.R.U.
 func _kit(game: Node3D) -> void:
