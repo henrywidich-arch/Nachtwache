@@ -53,7 +53,8 @@ const CHECKPOINTS := {
 }
 ## Who keeps coming while a stage lasts: the kinds (drawn at random), how many may be alive
 ## at once, the seconds between two, and where they come from ("park": over the park's
-## wall; "hidden": anywhere near that the squad cannot see).
+## wall; "hidden": anywhere near that the squad cannot see). Under a roof most of them
+## take a way in instead - a hole in a ceiling or a wall, a window: see HiveEntries.
 const PRESSURE := {
 	# (The first stages are gentle: the squad has only what it landed with.)
 	"landing": [["mauler", "mauler", "mauler", "striker"], 3, 7.0, "park"],
@@ -159,6 +160,8 @@ var leavers: Array = []
 var stalker_sent := false
 ## The Prowler's comings and goings (a node of its own).
 var prowl: HiveProwler
+## The ways in through ceilings, walls and windows, and who comes through them (a node of its own).
+var entries: HiveEntries
 var board_time := 0.0
 
 func _ready() -> void:
@@ -166,6 +169,9 @@ func _ready() -> void:
 	prowl = HiveProwler.new()
 	prowl.director = self
 	add_child(prowl)
+	entries = HiveEntries.new()
+	entries.director = self
+	add_child(entries)
 
 # ---------------------------------------------------------------- begin and end
 
@@ -1170,13 +1176,19 @@ func _run_pressure(delta: float) -> void:
 		return
 	var plan: Array = PRESSURE[stage]
 	pressure_left -= delta
-	if pressure_left > 0.0 or game.alive_count >= int(plan[1]) + game.extra_guns():
+	# (Whoever digs himself in gets them sooner, and a few more at once: see HiveEntries.)
+	if pressure_left > 0.0 or game.alive_count + entries.coming() >= int(plan[1]) + game.extra_guns() + entries.more():
 		return
-	pressure_left = float(plan[2]) * randf_range(0.8, 1.25)
+	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste()
 	var kinds: Array = plan[0]
+	var kind := str(kinds[randi() % kinds.size()])
+	# Most of them come through a way in near the squad - out of a ceiling, out of a wall -,
+	# also in plain sight; the others as they always did, from where nobody looks.
+	if entries.send(kind):
+		return
 	var at := _park_spot() if str(plan[3]) == "park" or (map.level_of(game.player.global_position) == map.ground and not map.is_indoors(game.player.global_position)) else _hidden_spot(13.0, 30.0)
 	if at != Vector3.INF:
-		_spawn(str(kinds[randi() % kinds.size()]), at)
+		_spawn(kind, at)
 
 # ---------------------------------------------------------------- what is said
 
