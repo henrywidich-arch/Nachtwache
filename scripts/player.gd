@@ -24,11 +24,15 @@ const WEAPONS := {
 	# each. punch: how hard the weapon slams back. settle: share of the muzzle climb that
 	# comes back down by itself. push: how fast a blast from close by throws back whoever
 	# it does not kill, in metres a second with every pellet on the body.
-	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 6, "reserve_max": 42, "reload_time": 0.52, "interval": 0.95, "damage": 24.0, "head_multiplier": 1.5, "spread": 0.05, "kick": 0.066, "flash": 2.2, "pellets": 9, "shells": true, "punch": 3.1, "settle": 0.72, "push": 8.5},
+	# A shotgun is the weapon for a pack in a doorway. spread: the edge of its cone, which
+	# the pellets fill evenly (shot_pattern). carry: shot goes on through a soft body - the
+	# share of a pellet's force that reaches the next body behind, and the one behind that
+	# (see _carry; armour, shields and the big ones stop it).
+	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 8, "reserve_max": 48, "reload_time": 0.4, "interval": 0.7, "damage": 24.0, "head_multiplier": 1.5, "spread": 0.1, "kick": 0.066, "flash": 2.2, "pellets": 12, "carry": [0.7, 0.5], "shells": true, "punch": 3.1, "settle": 0.72, "push": 8.5},
 	# group: the shop tab it is sold on. from_round: the round after which the shop has it.
 	"pistol": {"label": "M9 PISTOLE", "slot": 2, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
 	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
-	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 8, "reserve_max": 56, "reload_time": 2.3, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.06, "kick": 0.038, "flash": 2.0, "pellets": 8, "punch": 2.1, "settle": 0.7, "push": 4.5},
+	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 10, "reserve_max": 60, "reload_time": 2.3, "interval": 0.3, "damage": 15.0, "head_multiplier": 1.5, "spread": 0.095, "kick": 0.038, "flash": 2.0, "pellets": 10, "carry": [0.55, 0.3], "punch": 2.1, "settle": 0.7, "push": 4.5},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
 	# through. bolt: the action is worked by hand after every shot.
 	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 3, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
@@ -153,6 +157,17 @@ const RELOAD_CUES := [[0.07, "mag_out"], [0.56, "mag_in"], [0.84, "bolt"]]
 const DRUM := {"open": [2.1, 0.134, "m32_open"], "load": [1.0, 0.4, "m32_shell"], "close": [1.034, 0.067, "m32_close"]}
 ## Seconds after a shot until the drum has turned on to the next chamber.
 const DRUM_TURN := 0.16
+## A blast of shot: SHOT_CORE of its pellets fly in an inner ring that reaches SHOT_CORE_REACH
+## of the cone, the rest in an outer ring up to its edge. Shot has its full force up to
+## SHOT_FULL metres and loses it over the next SHOT_FADE, down to SHOT_LEAST of it.
+const SHOT_CORE := 0.4
+const SHOT_CORE_REACH := 0.45
+const SHOT_FULL := 8.0
+const SHOT_FADE := 18.0
+const SHOT_LEAST := 0.33
+## Scripted checks fire dead centre. A bot night that is to judge weapons against each
+## other lets them scatter as a player's shots do (--bot-scatter sets this).
+static var scatter_in_checks := false
 var current_weapon := "rifle"
 var inventory: Dictionary = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
 var weapon_models: Dictionary = {}
@@ -1174,6 +1189,71 @@ func _bonus(data: Dictionary, enemy: Infected, headshot: bool) -> float:
 		factor *= (enemy as CruSoldier).armour_gain(float(data.get("armour", 1.0)) * game.skills.armour_left())
 	return factor
 
+## Where the pellets of a blast go: offsets across and up from the line of aim (tangents),
+## `spread` being the edge of the cone. Not thrown at random, which left clumps and holes:
+## two rings round the middle, the inner one tight, the outer one wide, every pellet a
+## little off its place. The middle of the cone kills what is aimed at, its rim reaches
+## whoever stands beside.
+static func shot_pattern(pellets: int, spread: float) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var inner := int(round(pellets * SHOT_CORE))
+	for ring: Array in [[inner, SHOT_CORE_REACH], [pellets - inner, 1.0]]:
+		var count: int = ring[0]
+		var turn := randf()
+		for i in range(count):
+			var angle := (turn + (i + randf_range(-0.35, 0.35)) / count) * TAU
+			out.append(Vector2.from_angle(angle) * spread * float(ring[1]) * randf_range(0.55, 1.0))
+	return out
+
+## The share of its force shot still has at a distance.
+static func shot_force(distance: float) -> float:
+	return clampf(1.0 - (distance - SHOT_FULL) / SHOT_FADE, SHOT_LEAST, 1.0)
+
+## Whether shot goes on through a body: through the soft ones. A soldier's armour stops it,
+## and so do the Crusher, the Stalker and the Prowler - too much of them, shell or no shell.
+static func lets_shot_through(enemy: Infected) -> bool:
+	return not enemy.spec.get("human", false) and not enemy.kind in ["crusher", "stalker", "prowler"] and not enemy.hardened()
+
+## Shot goes on through a soft body: each pellet carries a share of its force into the
+## next body behind, and a smaller one into the one behind that (the weapon's `carry`).
+## What it does there is added to that body's part of the blast. A shield turned this way
+## stops it, and a body that lets nothing through is the last one it reaches. Returns
+## where the pellet finally stops.
+func _carry(data: Dictionary, direction: Vector3, first: Infected, struck: Dictionary, origin: Vector3, from: Vector3) -> Vector3:
+	var through: Array[RID] = [get_rid(), first.get_rid(), first.head_box.get_rid()]
+	var pellets := int(data.pellets)
+	var stop := from
+	for share: float in data.carry:
+		var query := PhysicsRayQueryParameters3D.create(from, from + direction * 40.0, 1 | 4 | 8, through)
+		var hit := get_world_3d().direct_space_state.intersect_ray(query)
+		if hit.is_empty():
+			return from + direction * 40.0
+		stop = hit.position
+		var target: Object = hit.collider
+		var head_zone: bool = target.has_meta("infected")
+		if head_zone:
+			target = target.get_meta("infected")
+		if not target is Infected:
+			return stop
+		var enemy := target as Infected
+		if enemy.blocks(direction):
+			return stop
+		var headshot := enemy.head_struck(head_zone, stop)
+		var damage: float = (float(data.damage) + weapon_level * (10.0 / pellets)) * share * shot_force(origin.distance_to(stop))
+		if headshot:
+			damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
+		damage *= _bonus(data, enemy, headshot)
+		var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction, "through": false, "pellets": 0, "near": origin.distance_to(stop)})
+		entry.damage += damage
+		entry.pellets += share
+		entry.headshot = entry.headshot or headshot
+		struck[enemy] = entry
+		if not lets_shot_through(enemy):
+			return stop
+		through.append(enemy.get_rid())
+		through.append(enemy.head_box.get_rid())
+	return stop
+
 ## A heavy bullet goes on through the body it hit: whoever stands behind is struck too,
 ## a little less hard each time. Returns where the bullet finally stops.
 func _pierce(data: Dictionary, passes: int, direction: Vector3, first: Infected, struck: Dictionary, from: Vector3) -> Vector3:
@@ -1409,13 +1489,18 @@ func shoot() -> void:
 	var muzzle := _visible_muzzle()
 	var pellets := int(data.get("pellets", 1))
 	# Scripted checks fire dead centre; live fire scatters from the hip.
-	var spread := 0.0 if game.check_mode else float(data.spread) * ((0.6 if pellets > 1 else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0) * (CROUCH_STEADY if crouched else 1.0)
+	var spread := 0.0 if game.check_mode and not scatter_in_checks else float(data.spread) * ((0.6 if pellets > 1 else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0) * (CROUCH_STEADY if crouched else 1.0)
 	# Everything one blast does to the same infected is added up and lands as a single hit.
 	var struck := {}
 	var endpoint := origin - camera.global_basis.z * 90
 	var marks := 0
+	# A bullet scatters anywhere inside its square; shot has a pattern.
+	var scatter: Array[Vector2] = []
+	if pellets > 1:
+		scatter = shot_pattern(pellets, spread)
 	for pellet in range(pellets):
-		var direction := (-camera.global_basis.z + camera.global_basis.x * randf_range(-spread, spread) + camera.global_basis.y * randf_range(-spread, spread)).normalized()
+		var off: Vector2 = scatter[pellet] if pellets > 1 else Vector2(randf_range(-spread, spread), randf_range(-spread, spread))
+		var direction := (-camera.global_basis.z + camera.global_basis.x * off.x + camera.global_basis.y * off.y).normalized()
 		endpoint = origin + direction * 90
 		var query := PhysicsRayQueryParameters3D.create(origin, endpoint, 1 | 4 | 8, [get_rid()])
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
@@ -1441,7 +1526,7 @@ func shoot() -> void:
 				var damage: float = float(data.damage) + weapon_level * (10.0 / pellets)
 				if pellets > 1:
 					# Shot spreads and slows: full force up close, a third of it at long range.
-					damage *= clampf(1.0 - (origin.distance_to(endpoint) - 8.0) / 18.0, 0.33, 1.0)
+					damage *= shot_force(origin.distance_to(endpoint))
 				if headshot:
 					damage *= maxf(1.0, float(data.head_multiplier) * float(enemy.spec.head_factor))
 				damage *= share * _bonus(data, enemy, headshot)
@@ -1466,6 +1551,8 @@ func shoot() -> void:
 				passes = 1
 			if passes > 0 and target is Infected and (not shielded or share > 0.0):
 				endpoint = _pierce(data, passes, direction, target as Infected, struck, endpoint)
+			elif data.has("carry") and target is Infected and not shielded and lets_shot_through(target as Infected):
+				endpoint = _carry(data, direction, target as Infected, struck, origin, endpoint)
 		if pellet < 8:
 			game.fx.tracer(muzzle, endpoint)
 	var any_head := false
