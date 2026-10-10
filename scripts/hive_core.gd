@@ -40,7 +40,7 @@ const MOODS := {
 	# The terminal, the offices, the canteen: cold and white.
 	"cold": {"ambient": Color(0.5, 0.57, 0.66), "energy": 0.52, "fog": 0.0024, "haze": 0.008, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.14, 0.19, 0.26)},
 	# Where the facility has locked itself down: red, and nothing else.
-	"alarm": {"ambient": Color(0.72, 0.17, 0.12), "energy": 0.46, "fog": 0.004, "haze": 0.015, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.3, 0.05, 0.04)},
+	"alarm": {"ambient": Color(0.74, 0.2, 0.15), "energy": 0.52, "fog": 0.004, "haze": 0.015, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.3, 0.05, 0.04)},
 	# The central hall.
 	"core": {"ambient": Color(0.42, 0.52, 0.66), "energy": 0.36, "fog": 0.003, "haze": 0.011, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.17, 0.24)},
 	# The plant rooms: dim, warm, oily.

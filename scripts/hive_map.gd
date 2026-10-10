@@ -35,6 +35,9 @@ var ride_way := 0.0
 ## What draws the plan of the Hive for the displays (a HiveDisplay).
 const PLAN_SCRIPT := preload("res://scripts/hive_display.gd")
 var plan: Node
+## What the places sound like (see HiveSound and _sounds).
+const SOUND_SCRIPT := preload("res://scripts/hive_sound.gd")
+var sound: Node3D
 ## What drips and what sparks share their looks.
 var drip_look: StandardMaterial3D
 var drip_mesh: QuadMesh
@@ -2429,9 +2432,11 @@ func set_alarm(on: bool) -> void:
 		return
 	alarm_on = on
 	alarm_node.visible = on
+	if sound != null:
+		sound.call("alarm", on)
 	set_zone_mood("cafe", "alarm" if on else "cold")
 	if mats.has("glow_cafe"):
-		var dim := 0.1 if on else 1.0
+		var dim := 0.15 if on else 1.0
 		(mats["glow_cafe"] as StandardMaterial3D).albedo_color = Color(2.42 * dim, 2.42 * dim, 2.42 * dim)
 	for id in ["cafeteria", "kitchen_f"]:
 		var span: Array = room_of[id].get("lights", [0, 0])
@@ -2439,8 +2444,39 @@ func set_alarm(on: bool) -> void:
 			var entry: Dictionary = flickers[index]
 			if not entry.has("full"):
 				entry["full"] = float(entry.energy)
-			entry.energy = float(entry.full) * (0.16 if on else 1.0)
+			entry.energy = float(entry.full) * (0.24 if on else 1.0)
 			(entry.light as Light3D).light_energy = float(entry.energy)
+
+## --hive-figures (pictures only): bodies of infected, standing still, in the two places
+## whose light is hard to fight in - the canteen under the lockdown and the flooded
+## stretch of the laboratory corridor - to judge whether one can see what one shoots at.
+func _figures() -> void:
+	var scene := load("res://assets/models/mauler_female.glb") as PackedScene
+	if scene == null:
+		return
+	for at in [Vector3(-3.0, 0, -418.0), Vector3(3.5, 0, -420.5), Vector3(7.0, 0, -416.0), Vector3(-7.0, 0, -422.0), Vector3(-12.0, 0, -414.0), Vector3(12.0, 0, -426.0), Vector3(0.3, 0, -545.0), Vector3(-1.5, 0, -558.0), Vector3(1.6, 0, -562.5), Vector3(-0.5, 0, -521.0), Vector3(1.0, 0, -530.0)]:
+		var body := scene.instantiate() as Node3D
+		add_child(body)
+		body.position = Vector3(at.x, UNDER, at.z)
+		body.rotation.y = at.x * 0.7
+
+## The voices of the place (see HiveSound). They belong to no zone: what is heard does not
+## stop at a door. Sparks and drips where the laboratory corridor stands under water, a
+## hum in the server room and in the plant rooms, the horn of the lockdown in the canteen
+## (see set_alarm), gusts in the trees of the park.
+func _sounds() -> void:
+	sound = SOUND_SCRIPT.new()
+	add_child(sound)
+	for at in [Vector3(4.7, UNDER + 2.68, -558.8), Vector3(-1.7, UNDER + 3.48, -549.0)]:
+		sound.call("now_and_then", "spark", at, -10.0, 2.2, 5.5, 24.0, 0.18)
+	for at in [Vector3(0.9, UNDER + 0.3, -553.2), Vector3(-2.1, UNDER + 0.3, -562.2), Vector3(1.6, UNDER + 0.3, -566.6), Vector3(10.0, UNDER + 0.3, -563.4), Vector3(18.0, UNDER + 0.3, -568.0), Vector3(3.4, UNDER + 0.3, -573.2), Vector3(3.74, UNDER + 0.4, -545.2)]:
+		sound.call("now_and_then", "drip", at, -13.0, 0.5, 2.6, 16.0, 0.3)
+	sound.call("loop", "hum", Vector3(37.0, UNDER + 1.6, -381.0), -14.0, 24.0)
+	sound.call("loop", "plant", Vector3(50.0, UNDER + 1.4, -446.7), -10.0, 28.0)
+	sound.call("loop", "plant", Vector3(50.0, UNDER + 1.4, -481.0), -14.0, 24.0, 0.84)
+	sound.call("horn", Vector3(0, UNDER + 4.4, -420.0), -12.0, 46.0)
+	for at in [Vector3(-44, 7, 58), Vector3(40, 7, 30), Vector3(6, 9, 92), Vector3(-30, 8, 8)]:
+		sound.call("now_and_then", "gust", at, -14.0, 9.0, 24.0, 60.0, 0.1)
 
 func lock(id: String, instant: bool = false) -> void:
 	var was_open := locked.has(id) and not bool(locked[id])
@@ -2611,7 +2647,7 @@ func _lay_research() -> void:
 	var corridor: Dictionary = room_of["lab_corridor"]
 	_wall_sign("FORSCHUNGSTRAKT  ·  SCHUTZSTUFE  3", _face_point(corridor, WEST, -503.0, 3.3, -0.05), 20, Color("b8452f"), PI / 2)
 	# (Its bays are counted from the north: the first five stand in the water.)
-	_passage("lab_corridor", {"step": 5.63, "light": Color("d6f5e6"), "energy": 2.3, "reach": 10.0, "dead": [1, 3], "fail": [0, 2, 4, 8], "lines": [[-0.9, GUIDE.research], [0.9, GUIDE.research]], "tray": -1})
+	_passage("lab_corridor", {"step": 5.63, "light": Color("d6f5e6"), "energy": 2.3, "reach": 10.0, "dead": [3], "fail": [0, 2, 4, 8], "lines": [[-0.9, GUIDE.research], [0.9, GUIDE.research]], "tray": -1})
 	for z in [-506.0, -524.0]:
 		_floor_arrow(Vector3(0, UNDER, z), 0.0, GUIDE.research)
 	_display(Vector3(0, UNDER + 3.55, -512.47), 0.0, 3.0, "research", "hang", 0.3)
@@ -2861,7 +2897,7 @@ func _lay_flood() -> void:
 	for entry in [[Vector3(10.6, 0, -557.2), 0.7], [Vector3(-1.8, 0, -571.6), 2.0]]:
 		var at: Vector3 = entry[0]
 		_glow_box(Vector3(at.x, surface + 0.02, at.z), Vector3(0.17, 0.026, 0.026), Color("7dff9a"), 4.6, Basis(Vector3.UP, float(entry[1])))
-		_light(Vector3(at.x, surface + 0.4, at.z), Color(0.45, 1.0, 0.6), 1.0, 5.0, false, 0.0, 0.8, LAMP_FADE)
+		_light(Vector3(at.x, surface + 0.4, at.z), Color(0.45, 1.0, 0.6), 1.6, 7.0, false, 0.0, 0.8, LAMP_FADE)
 	# What still has power, and what comes through the ceiling.
 	_hose(Vector3(4.3, UNDER + 4.36, -558.4), Vector3(4.7, UNDER + 2.7, -558.8), 0.02, Color("0d0d0d"), 0.35)
 	_sparks(Vector3(4.7, UNDER + 2.68, -558.8))
@@ -2980,6 +3016,8 @@ func _arrive_terminal() -> void:
 	_hall_ceiling(UNDER, 9.5, -39.8, 39.8, -344.8, -312.2, [-326.0, -334.0], [-30.0, -15.0, 15.0, 30.0], steel, "plate")
 	_round_duct(Vector3(-39.8, UNDER + 8.3, -328.9), 79.6, 0.55, Color(0.5, 0.52, 0.55), UNDER + 9.5)
 	_round_duct(Vector3(-39.8, UNDER + 8.3, -336.2), 79.6, 0.55, Color(0.5, 0.52, 0.55), UNDER + 9.5)
+	# (Air one can see under the ceiling: the lamps hang in it, and the hall gets its height.)
+	_haze(Vector3(0, UNDER + 6.9, -331.5), Vector3(78.0, 4.6, 24.0), 0.016, Color(0.72, 0.82, 0.95))
 	for row in [-326.0, -334.0]:
 		for x in [-30.0, -15.0, 15.0, 30.0]:
 			for face in [-1.0, 1.0]:
@@ -3467,6 +3505,9 @@ func _after_build() -> void:
 	}
 	facings = {"landing": 0.0, "landing_out": 0.0}
 	player_start = Vector3(0, 0.05, 61.5)
+	_sounds()
+	if "--hive-figures" in OS.get_cmdline_user_args():
+		_figures()
 	if "--hive-alarm" in OS.get_cmdline_user_args():
 		set_alarm(true)
 		alarm_hold = true
