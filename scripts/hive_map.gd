@@ -4436,11 +4436,11 @@ func _lay_entries() -> void:
 	_way_drop("cross", -7.9, -575.5, 0)
 	_way_drop("cross", 7.9, -575.5, 0)
 	_way_drop("cross", 27.0, -575.5, 0)
+	# (The hall is being rebuilt. Its ways in are kept simple until it stands: six holes at
+	# the foot of its outer walls - two west, two east, two north -, each one line to move.)
 	_way_hole("containment", WEST, -600.0)
-	_way_duct("containment", WEST, -590.0, {"sill": 2.6, "trunk": 6.0})
 	_way_hole("containment", WEST, -612.0, "vent")
 	_way_hole("containment", EAST, -594.0, "vent")
-	_way_duct("containment", EAST, -604.0, {"sill": 2.6, "trunk": 6.0})
 	_way_hole("containment", EAST, -614.0)
 	_way_hole("containment", NORTH, -18.0)
 	_way_hole("containment", NORTH, 20.0, "vent")
