@@ -3955,7 +3955,6 @@ func _way_stain(frame: Transform3D, front: float, x: float, y: float, wide: floa
 func _way_mouth(at: Vector3, turn: int, shaft: float, tones: Dictionary, real: bool) -> Node3D:
 	var wide := 1.2
 	var half := wide * 0.5
-	var dark: Color = tones.dark
 	var steel: Color = tones.steel
 	var facing := Basis(Vector3.UP, turn * PI / 2)
 	var frame := Transform3D(facing, at)
@@ -4311,7 +4310,7 @@ func _lay_entries() -> void:
 	_way_window("galerie", EAST, 18.0)
 	_way_cellar("kitchen", 11.3, -1.6, 1)
 	# --- the stairs: over the landing half-way down, and in the lobby at their foot
-	_way_hang("descent", Vector3(-0.3, UNDER * 0.5 + 2.6, -19.0), Vector3(0, UNDER * 0.5, -19.0), 3, Vector3(0, -3.59, -15.6))
+	_way_hang("descent", Vector3(-0.3, UNDER * 0.5 + 2.6, -19.0), Vector3(0, UNDER * 0.5, -19.0), 3, Vector3(0, -7.23, -24.5))
 	_way_drop("stair_lobby", -1.4, -31.0, 1)
 	# --- the station: up out of the track on either side of the car, out of the south wall
 	# of the platform, and into each of the rooms off it
@@ -4557,8 +4556,8 @@ func tour() -> Array:
 		["90_way_ceiling", Vector3(-9.5, UNDER, -510.0), Vector3(-14.0, UNDER + 3.2, -513.5)],
 		["91_way_breach", Vector3(-11.5, UNDER, -560.0), Vector3(-15.0, UNDER + 0.8, -564.8)],
 		["92_way_duct", Vector3(4.5, UNDER, -429.5), Vector3(8.0, UNDER + 2.9, -434.8)],
-		["93_way_vent", Vector3(55.5, UNDER, -452.5), Vector3(59.8, UNDER + 0.8, -456.0)],
-		["94_way_ring", Vector3(-27.0, UNDER, -364.0), Vector3(-36.0, UNDER + 1.4, -362.6)],
+		["93_way_vent", Vector3(57.4, UNDER, -451.4), Vector3(59.8, UNDER + 0.8, -456.0)],
+		["94_way_ring", Vector3(-31.0, UNDER, -366.6), Vector3(-35.2, UNDER + 0.9, -361.2)],
 		["95_way_track", Vector3(-17.0, UNDER, -50.5), Vector3(-23.0, UNDER + 0.2, -55.0)],
 		["96_way_window", Vector3(-1.5, 0, 3.5), Vector3(-6.5, 1.9, -3.8)]
 	]

@@ -6,7 +6,8 @@ extends Node
 ##       (--entries-part=<text>: only those whose name contains it), and a line ENTRY for each
 ##   --entries-check --entries-film=<name or number>[,<more>] [--entries-kind=mauler[,<more>]]
 ##       somebody comes through that way in: pictures from the warning to the first steps
-##       (with several kinds, the first film shows the first of them, and so on)
+##       (with several kinds, the first film shows the first of them, and so on;
+##       --entries-eyes: as the survivor sees it, his weapon in the picture)
 ## Nothing attacks otherwise, every door stands open, the squad is out of the picture.
 
 var entries: HiveEntries
@@ -136,9 +137,22 @@ func _film(folder: String, index: int, kind: String) -> void:
 	var entry: Dictionary = map.entries[index]
 	var view := _view(entry, 4.4, 1.6)
 	var from: Vector3 = view[0]
-	var line: Vector3 = (view[1] as Vector3) + Vector3(0, -0.5 if str(entry.kind) in ["drop", "duct"] else 0.2, 0) - (from + Vector3(0, 1.62, 0))
+	var aim: Vector3 = (view[1] as Vector3) + Vector3(0, 0.2, 0)
+	if str(entry.kind) in ["drop", "duct"] and entry.land != Vector3.INF:
+		aim.y = ((entry.at as Vector3).y + (entry.land as Vector3).y) * 0.5 + 0.2
+	var line: Vector3 = aim - (from + Vector3(0, 1.62, 0))
 	game._place_player(from + Vector3(0, 0.05, 0), rad_to_deg(atan2(-line.x, -line.z)), rad_to_deg(atan2(line.y, Vector2(line.x, line.z).length())))
 	game.player.set_physics_process(false)
+	# A camera of its own where his eyes are: a little nearer, and without his weapon in the way.
+	var eye: Camera3D = null
+	if not "--entries-eyes" in OS.get_cmdline_user_args():
+		eye = Camera3D.new()
+		eye.cull_mask = 1
+		eye.fov = 48.0
+		game.add_child(eye)
+		eye.global_position = from + Vector3(0, 1.62, 0)
+		eye.look_at(aim)
+		eye.current = true
 	await get_tree().create_timer(0.8).timeout
 	# Slowly, so that the pictures are taken when they are meant to be.
 	Engine.time_scale = 0.2
@@ -162,4 +176,7 @@ func _film(folder: String, index: int, kind: String) -> void:
 		node.queue_free()
 	game.alive_count = 0
 	game.player.set_physics_process(true)
+	if eye != null:
+		game.player.camera.current = true
+		eye.queue_free()
 	await get_tree().create_timer(0.3).timeout
