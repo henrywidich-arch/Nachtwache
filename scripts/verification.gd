@@ -1938,7 +1938,14 @@ func _loadout(game: Node3D) -> void:
 	# --- one of each kind; a second one is traded for the first
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	# (The shop opens on the list it was left on.)
+	game.hud.shop_tab = "weapons"
 	game.interact()
+	# The picture of the weapon that is picked as the shop opens: its camera stands where the
+	# weapon fills the picture, although the shop was not laid out yet when it was picked.
+	await frames(3)
+	var shop_show: WeaponShow = game.hud.counter.stage
+	expect(shop_show.shown == "rifle" and shop_show.is_visible_in_tree() and shop_show.size.x > 200.0 and shop_show.camera.position.length() > 0.5 and shop_show.camera.position.length() < 5.0, "The shop shows the picture of the first weapon of its list as it opens (its camera stands %.1f m from it)" % shop_show.camera.position.length())
 	var first_cost: int = game.weapon_cost("ak")
 	var swapped: bool = game.buy_weapon("ak") and player.inventory.has("ak") and not player.inventory.has("rifle") and player.current_weapon == "ak" and game.credits == 700
 	var beside: bool = game.buy_weapon("pistol") and game.buy_weapon("sniper") and player.inventory.size() == 3 and game.credits == 700 - 60 - 450
