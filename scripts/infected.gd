@@ -77,7 +77,7 @@ const TYPES := {
 		"label": "PROWLER", "visuals": ["prowler"], "prowler": true,
 		"voice": "prowler_growl", "idle": "prowler_growl", "strike": "prowler_strike", "pain": "prowler_pain", "death": "prowler_death",
 		"health": 3000.0, "health_per_round": 0.0, "speed": 8.6, "speed_per_round": 0.0,
-		"damage": 14.0, "reach": 2.2, "attack_time": 0.7, "attack_gap": 1.0, "strike_at": 0.31,
+		"damage": 17.0, "reach": 2.2, "attack_time": 0.7, "attack_gap": 1.0, "strike_at": 0.31,
 		"radius": 0.5, "height": 1.3, "head": 1.0, "head_size": 0.3, "head_factor": 0.8, "reward": 800, "score": 4000,
 		"stagger": ""
 	},

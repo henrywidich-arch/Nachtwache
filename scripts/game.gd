@@ -397,7 +397,7 @@ func _ready() -> void:
 		var prowler_check := ProwlerCheck.new()
 		prowler_check.game = self
 		add_child(prowler_check)
-		prowler_check.call_deferred("run_map" if "--prowler-map" in args else ("run_moves" if "--prowler-moves" in args else ("run_hive" if "--prowler-hive" in args else "run")))
+		prowler_check.call_deferred("run_map" if "--prowler-map" in args else ("run_attacks" if "--prowler-attacks" in args else "run_moves" if "--prowler-moves" in args else ("run_hive" if "--prowler-hive" in args else "run")))
 	elif "--ripper-check" in args:
 		check_mode = true
 		team_enabled = false
@@ -1634,7 +1634,7 @@ func _spawn_team() -> void:
 
 func interaction_prompt() -> String:
 	if player.clung_by != null:
-		return "[E] SCHNELL DRÜCKEN  ·  Leech abschütteln  %d %%" % int(clampf(player.clung_by.shaken, 0.0, 1.0) * 100.0)
+		return "[E] SCHNELL DRÜCKEN  ·  %s abschütteln  %d %%" % [str(player.clung_by.spec.label).capitalize(), int(clampf(player.clung_by.shaken, 0.0, 1.0) * 100.0)]
 	if player.mist_exposure > 0:
 		if gas.flood_strength > GasField.BITE and absf(player.position.x) < CabinMap.HX and absf(player.position.z) < CabinMap.HZ:
 			return "GIFTGAS · Nach oben!"

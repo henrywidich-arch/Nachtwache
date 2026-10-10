@@ -2390,6 +2390,72 @@ func _later(game: Node3D) -> void:
 	for prowl_stage in ["admin", "security", "cafe", "atrium", "generator", "labs"]:
 		prowl_comes = prowl_comes and HiveProwler.comes_in(prowl_stage, 99.0) and not HiveProwler.comes_in(prowl_stage, 3.0)
 	expect(prowl_never and prowl_comes and not HiveProwler.comes_in("hall", 99.0) and HiveProwler.nerve_on(3) > HiveProwler.nerve_on(0) and HiveProwler.stay_on(9) == HiveProwler.stay_on(HiveProwler.BOLD_MOST) and HiveProwler.end_health(2) < HiveProwler.end_health(0) and HiveProwler.end_health(99) == HiveProwler.end_health(HiveProwler.WEAR_MOST) and game.hive.prowl != null and HiveDirector.ORDER.find(HiveProwler.FIRST_STAGE) > HiveDirector.ORDER.find("ride"), "In mission two it comes from the administration on and not during the hold in the canteen, the lock or the first seconds of a stage, takes more with every visit, and comes to the last fight weakened if it was driven off by force")
+	# --- what it can do: the pin, the charge, the sweep, and getting out of the fire
+	var prowl_d := game.spawn_enemy("prowler") as Prowler
+	prowl_d.position = Vector3(1.2, 0.08, 23.5)
+	prowl_d.set_physics_process(false)
+	prowl_d.prey = player
+	player.health = 100.0
+	prowl_d._start_pin()
+	var prowl_held: bool = prowl_d.mode == "pin" and player.clung_by == prowl_d and game.interaction_prompt().contains("Prowler")
+	for prowl_step in range(45):
+		prowl_d._physics_process(1.0 / 60.0)
+	var prowl_torn: bool = player.health < 100.0 and prowl_d.global_position.distance_to(player.global_position) < Prowler.PIN_STAND + 0.2
+	prowl_d.shaken = 1.0
+	prowl_d.shake()
+	var prowl_shaken: bool = player.clung_by == null and prowl_d.mode == "reel" and prowl_d.pin_cooldown > 5.0
+	prowl_d.held_left = 0.0
+	prowl_d.pin_cooldown = 0.0
+	prowl_d.prey = player
+	prowl_d._start_pin()
+	prowl_d.receive_hit(Prowler.PIN_BREAK * prowl_d.level + 1.0, Vector3.BACK, false)
+	expect(prowl_held and prowl_torn and prowl_shaken and player.clung_by == null and prowl_d.mode == "reel" and not prowl_d.dead, "Its pounce can pin the survivor: it stands over him and tears at him until he has shaken it off with [E] or it has been shot off him")
+	player.health = 100.0
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	prowl_d.global_position = Vector3(0.0, 0.08, 31.0)
+	prowl_d.model.rotation.y = 0.0
+	prowl_d.held_left = 0.0
+	prowl_d.mode = "circle"
+	prowl_d.charge_cooldown = 0.0
+	prowl_d._start_charge(player.global_position)
+	var prowl_winds: bool = prowl_d.mode == "wind" and (prowl_d.model as ProwlerVisual).state == "stagger"
+	var prowl_ran := false
+	for prowl_step in range(150):
+		prowl_d._physics_process(1.0 / 60.0)
+		prowl_ran = prowl_ran or prowl_d.mode == "charge"
+		if prowl_d.mode == "circle":
+			break
+	var prowl_through: bool = prowl_d.charge_hit.has(player) and player.health < 100.0 and Vector2(player.velocity.x, player.velocity.z).length() > 2.0 and prowl_d.global_position.z < 22.0
+	player.health = 100.0
+	player.velocity = Vector3.ZERO
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	prowl_d.global_position = Vector3(0.0, 0.08, 24.4)
+	prowl_d.model.rotation.y = 0.0
+	prowl_d.sweeping = true
+	prowl_d._land_blow(2.4, true, player.global_position)
+	expect(prowl_winds and prowl_ran and prowl_through and player.health < 100.0 and Vector2(player.velocity.x, player.velocity.z).length() > 2.0 and ProwlerVisual.BLOWS.has("sweep") and (prowl_d.model as ProwlerVisual).player.has_animation("pin") and (prowl_d.model as ProwlerVisual).player.has_animation("charge") and (prowl_d.model as ProwlerVisual).player.has_animation("charge_wind") and (prowl_d.model as ProwlerVisual).player.has_animation("sweep"), "It rakes the ground and charges straight through whoever stands in its way, and its sweep hurts and throws aside everybody in front of it")
+	player.health = 100.0
+	player.velocity = Vector3.ZERO
+	prowl_d.global_position = Vector3(0.0, 0.08, 30.0)
+	prowl_d.mode = "circle"
+	prowl_d.leap = ""
+	prowl_d.nerve = 5000.0
+	prowl_d.driven = 0.0
+	prowl_d.stagger_cooldown = 5.0
+	prowl_d.evade_cooldown = 0.0
+	var prowl_side: float = prowl_d.orbit
+	for prowl_step in range(4):
+		prowl_d.receive_hit(50.0, Vector3.BACK, false)
+	var prowl_dodged: bool = prowl_d.mode == "evade" or (prowl_d.mode == "circle" and prowl_d.dash_left > 0.5)
+	player.reload_left = 1.0
+	var prowl_reloading: float = prowl_d.worth(player)
+	player.reload_left = 0.0
+	player.health = 40.0
+	var prowl_hurt: float = prowl_d.worth(player)
+	player.health = 100.0
+	expect(prowl_dodged and prowl_d.orbit == -prowl_side and prowl_d.evade_cooldown > 0.0 and prowl_reloading > prowl_d.worth(player) + 1.0 and prowl_hurt > prowl_d.worth(player) + 0.5, "Hit hard on its way in it does not stand and take it: it breaks off, gets out of the line of fire and comes round the other way; and whoever reloads or is hurt is worth more to it as prey")
+	prowl_d._retire()
+	prowl_d.queue_free()
 	# --- where it has room: the map of mission two
 	var prowl_mission: int = game.profile.mission
 	var prowl_skipped: bool = game.intro_skipped
