@@ -109,6 +109,8 @@ var here_at := Vector3.ZERO
 var shown_at := Vector3(INF, INF, INF)
 var styles: Dictionary = {}
 var model_cache: Dictionary = {}
+## Every model that was set down: [name, its node, its size in metres] (see doorway_faults).
+var model_spots: Array = []
 var tinted: Dictionary = {}
 var hubs: Array[Vector2i] = []
 ## The closed cells of every level as a picture, for the map in the corner of the screen.
@@ -498,6 +500,7 @@ func _model(id: String, pos: Vector3, yaw: float = 0.0, options: Dictionary = {}
 	var centre := bounds.get_center()
 	node.transform = Transform3D(Basis.IDENTITY.scaled(Vector3.ONE * factor), -Vector3(centre.x, bounds.position.y, centre.z) * factor) * node.transform
 	holder.add_child(node)
+	model_spots.append([id, holder, bounds.size * factor])
 	var cast: bool = bool(options.get("shadows", zones.has(zone) and bool(zones[zone].shadows)))
 	var far := float(options.get("far", 70.0))
 	var tint: Variant = options.get("tint", null)
@@ -561,6 +564,44 @@ func _face_glow(room: Dictionary, side: int, a: float, b: float, y0: float, y1: 
 	if b - a < 0.005 or y1 - y0 < 0.005:
 		return
 	_glow_box(_face_centre(room, side, a, b, y0, y1, d0, d1), _face_size(side, a, b, y0, y1, d0, d1), color, strength)
+
+## The stretches of a side of a room between `a` and `b` along it in which nothing is
+## cut out of its wall between the heights y0 and y1: no door, no opening, no pane.
+## `on_skin`: nor is the outside skin of the wall left out there for something built on
+## to it (the room's "skin_skip"; it only reaches as high as the room).
+func _wall_stretches(room: Dictionary, side: int, a: float, b: float, y0: float, y1: float, on_skin: bool = false) -> Array:
+	var cuts: Array = []
+	for gap in room.open[side]:
+		if float(gap[3]) > y0 + 0.01 and float(gap[2]) < y1 - 0.01:
+			cuts.append([float(gap[0]), float(gap[1])])
+	if on_skin and y0 < float(room.height) - 0.01:
+		for skip in room.get("skin_skip", []):
+			cuts.append([float(skip[0]), float(skip[1])])
+	cuts.sort_custom(func(p: Array, q: Array) -> bool: return p[0] < q[0])
+	var stretches: Array = []
+	var cursor := a
+	for cut in cuts:
+		if cursor >= b:
+			break
+		if float(cut[0]) - cursor > 0.01:
+			stretches.append([cursor, minf(b, float(cut[0]))])
+		cursor = maxf(cursor, float(cut[1]))
+	if b - cursor > 0.01:
+		stretches.append([cursor, b])
+	return stretches
+
+## True if a side of a room is whole wall between `a` and `b` along it (and y0 and y1).
+func _wall_whole(room: Dictionary, side: int, a: float, b: float, y0: float = 0.0, y1: float = INF) -> bool:
+	var stretches := _wall_stretches(room, side, a, b, y0, minf(y1, float(room.height)))
+	return stretches.size() == 1 and absf(float(stretches[0][0]) - a) < 0.001 and absf(float(stretches[0][1]) - b) < 0.001
+
+## A band along a side of a room that follows its wall: _face_box from `a` to `b`, but it
+## stops at every opening of that side that reaches into its height (see _wall_stretches).
+## Whatever is laid along a wall - a plinth, a rail, a frieze - goes through here, so
+## that nothing can run on through a doorway.
+func _face_run(room: Dictionary, side: int, material: String, a: float, b: float, y0: float, y1: float, d0: float, d1: float, color: Color, on_skin: bool = false) -> void:
+	for stretch in _wall_stretches(room, side, a, b, y0, y1, on_skin):
+		_face_box(room, side, material, float(stretch[0]), float(stretch[1]), y0, y1, d0, d1, color)
 
 ## A spot on a side of a room: `a` along the wall, `y` above the floor, `d` behind its face.
 func _face_point(room: Dictionary, side: int, a: float, y: float, d: float) -> Vector3:
@@ -796,6 +837,14 @@ func _build_room(room: Dictionary) -> void:
 		for side in range(4):
 			if not (room.bare as Array).has(side):
 				_build_side(room, side, look)
+	# The ribs a passage wants on its walls ([side, place along it], see HiveMap._passage):
+	# only where the wall stands whole. They are set here and not when the passage is
+	# dressed, because only now is every opening known - also one that a room declared
+	# later has cut into this wall.
+	for rib in room.get("ribs", []):
+		var at := float(rib[1])
+		if _wall_whole(room, int(rib[0]), at - 0.42, at + 0.42):
+			_face_box(room, int(rib[0]), "plate", at - 0.16, at + 0.16, 0.0, tall, -0.2, -0.05, Color("1c2023"))
 	# (`glow`: the glass of its lamps is a material of its own, which can be dimmed alone.)
 	var kept := glow_key
 	if room.has("glow"):
@@ -1038,6 +1087,175 @@ func _build_pane(pane: Dictionary) -> void:
 		"hatch":
 			_face_box(room, side, "plate", a, b, sill - 0.09, sill - 0.05, -0.25, depth + 0.25, Color("585d60"))
 			_add_shape(rails, _face_centre(room, side, a, b, sill, head, middle - 0.05, middle + 0.05), _face_size(side, a, b, sill, head, middle - 0.05, middle + 0.05))
+
+# ---------------------------------------------------------------- what stands in doorways
+
+## The clear opening of a doorway as a box of the map: between its jambs, from just over
+## the floor to just under its lintel, through the wall and `reach` metres before both of
+## its faces (where the dressing of a wall sits). The frame of the door itself lies
+## outside it - jambs and lintel reach two centimetres into the opening - and so does what
+## lies flat on the floor: a threshold, a carpet, paint.
+func doorway_box(door: Dictionary, reach: float = 0.25) -> AABB:
+	var pos: Vector3 = door.pos
+	# (A join is as wide as the passage: its sides are the walls of the passage, and what
+	# hangs under the ceiling of the passage hangs under the top of the join.)
+	var join := str(door.kind) == "join"
+	var half := float(door.width) * 0.5 - (0.3 if join else 0.03)
+	var low := pos.y + 0.06
+	var tall := float(door.height) - (0.21 if join else 0.09)
+	# (An outside wall is thicker towards the outside.)
+	var out: Vector2 = OUT[int(door.side)]
+	var skin := _skin_of(room_of[door.a], int(door.side))
+	var from := -(HALF + reach) - (skin if out.x + out.y < 0.0 else 0.0)
+	var to := HALF + reach + (skin if out.x + out.y > 0.0 else 0.0)
+	if bool(door.along_x):
+		return AABB(Vector3(pos.x - half, low, pos.z + from), Vector3(half * 2.0, tall, to - from))
+	return AABB(Vector3(pos.x + from, low, pos.z - half), Vector3(to - from, tall, half * 2.0))
+
+## What a doorway is called in a report: its name, or the rooms it joins and where it is.
+func doorway_label(door: Dictionary) -> String:
+	var pos: Vector3 = door.pos
+	var title := str(door.name) if str(door.name) != "" else "%s|%s" % [door.a, door.b if str(door.b) != "" else "-"]
+	return "%s %s (%.1f, %.1f, %.1f) %.1f x %.1f" % [door.kind, title, pos.x, pos.y, pos.z, float(door.width), float(door.height)]
+
+## Where a node of the map is, in the map's own space (whether the map is in a tree or not).
+func _frame_in_map(node: Node3D) -> Transform3D:
+	var frame := node.transform
+	var up := node.get_parent()
+	while up != null and up != self:
+		if up is Node3D:
+			frame = (up as Node3D).transform * frame
+		up = up.get_parent()
+	return frame
+
+## True if a box that stands square (around `centre`, half as large as `half`) and one
+## that is turned by `basis` (around `middle`, half as large as `reach` along its own
+## axes) take up a common piece of space: no axis keeps them apart.
+static func _boxes_meet(centre: Vector3, half: Vector3, middle: Vector3, reach: Vector3, basis: Basis) -> bool:
+	var apart := middle - centre
+	var axes: Array[Vector3] = [basis.x, basis.y, basis.z]
+	for i in range(3):
+		var span := half[i]
+		for j in range(3):
+			span += reach[j] * absf(axes[j][i])
+		if absf(apart[i]) > span:
+			return false
+	for j in range(3):
+		var axis := axes[j]
+		if absf(apart.dot(axis)) > reach[j] + half.x * absf(axis.x) + half.y * absf(axis.y) + half.z * absf(axis.z):
+			return false
+	for i in range(3):
+		var own := Vector3.ZERO
+		own[i] = 1.0
+		for j in range(3):
+			var cross := own.cross(axes[j])
+			if cross.length_squared() < 0.000001:
+				continue
+			var span := half.x * absf(cross.x) + half.y * absf(cross.y) + half.z * absf(cross.z)
+			for k in range(3):
+				span += reach[k] * absf(cross.dot(axes[k]))
+			if absf(apart.dot(cross)) > span:
+				return false
+	return true
+
+## The doorways doorway_faults looks at: every door and every opening of a room somebody
+## walks in (not the mouths of the tunnels in the pit of a railway line).
+func doorways_tried() -> Array:
+	var tried: Array = []
+	for door in doors:
+		if bool(room_of[door.a].get("nav", true)):
+			tried.append(door)
+	return tried
+
+## What stands in the doorways of the map: every box that was noted while the map was
+## built (`watched`: MeshBatch.watched, see tools/door_check.gd) and every model that
+## reaches into the clear opening of a door or an opening (see doorway_box, and
+## doorways_tried for which of them). The leaves of the doors are not looked at (they are
+## batches without a name, around their own origin), nor is what hangs on a leaf. In a
+## join - no wall at all over its width - only walls and what walls are dressed with
+## count (the chunk "Shell"): posts, steps and frames that stand in a join were put
+## there. Each find is {door, what, kind, low, high}: the doorway, the chunk and material
+## of the box or the name of the model, "box", "turned" (a box that does not stand
+## square) or "model" (only its bounds were tried: a suspect), and the corners of the
+## piece of the opening it takes up (of its bounds, if it is turned).
+func doorway_faults(watched: Array, reach: float = 0.25) -> Array:
+	var names := {}
+	for key in mats:
+		names[mats[key]] = str(key)
+	var lows := PackedVector3Array()
+	var highs := PackedVector3Array()
+	var whats: Array = []
+	var kinds := PackedByteArray()
+	var shell := PackedByteArray()
+	var sources: Array = []
+	for entry in watched:
+		var label := str((entry[0] as MeshBatch).label)
+		if label == "":
+			continue
+		shell.append(1 if label.ends_with("|Shell") else 0)
+		sources.append(entry)
+		var basis: Basis = entry[5]
+		var size: Vector3 = entry[3]
+		var centre: Vector3 = entry[2]
+		var half := (basis.x.abs() * size.x + basis.y.abs() * size.y + basis.z.abs() * size.z) * 0.5
+		var square := true
+		for column in [basis.x, basis.y, basis.z]:
+			if maxf(absf(column.x), maxf(absf(column.y), absf(column.z))) < 0.9999:
+				square = false
+		lows.append(centre - half)
+		highs.append(centre + half)
+		whats.append("%s %s" % [label, str(names.get(entry[1], "?"))])
+		kinds.append(0 if square else 1)
+	var hung := {}
+	for door in doors:
+		for leaf in door.leaves:
+			hung[leaf] = true
+	for spot in model_spots:
+		var holder: Node3D = spot[1] if is_instance_valid(spot[1]) else null
+		if holder == null:
+			continue
+		var on_leaf := false
+		var up := holder.get_parent()
+		while up != null and up != self:
+			if hung.has(up):
+				on_leaf = true
+			up = up.get_parent()
+		if on_leaf:
+			continue
+		var size: Vector3 = spot[2]
+		var bounds: AABB = _frame_in_map(holder) * AABB(Vector3(-size.x * 0.5, 0.0, -size.z * 0.5), size)
+		lows.append(bounds.position)
+		highs.append(bounds.end)
+		whats.append("model %s" % str(spot[0]))
+		kinds.append(2)
+		shell.append(0)
+		sources.append(null)
+	var found: Array = []
+	for door in doorways_tried():
+		var clear := doorway_box(door, reach)
+		var low := clear.position
+		var high := clear.end
+		var join := str(door.kind) == "join"
+		for index in range(lows.size()):
+			var a := lows[index]
+			if a.x >= high.x or a.z >= high.z or a.y >= high.y:
+				continue
+			var b := highs[index]
+			if b.x <= low.x or b.z <= low.z or b.y <= low.y:
+				continue
+			if join and shell[index] == 0:
+				continue
+			if kinds[index] == 1:
+				var turned: Array = sources[index]
+				if not _boxes_meet(clear.get_center(), clear.size * 0.5 - Vector3.ONE * 0.004, turned[2], (turned[3] as Vector3) * 0.5, turned[5]):
+					continue
+			var from := Vector3(maxf(a.x, low.x), maxf(a.y, low.y), maxf(a.z, low.z))
+			var to := Vector3(minf(b.x, high.x), minf(b.y, high.y), minf(b.z, high.z))
+			# (A graze of a few millimetres is no thing in a doorway.)
+			if to.x - from.x < 0.004 or to.y - from.y < 0.004 or to.z - from.z < 0.004:
+				continue
+			found.append({"door": doorway_label(door), "what": whats[index], "kind": ["box", "turned", "model"][kinds[index]], "low": from, "high": to})
+	return found
 
 # ---------------------------------------------------------------- stairs
 

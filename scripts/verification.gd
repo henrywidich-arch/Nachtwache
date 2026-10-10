@@ -5912,6 +5912,21 @@ func _hive(game: Node3D) -> void:
 	expect(home and game.cabin == farm and game.mode == "story" and not hive.on and game.phase == "preparing" and game.credits == 120 and player.global_position.y > -1.0 and not farm.path_between(farm.points.yard_south, farm.points.hall).is_empty(), "Back in the menu the farm is in the world again, and the next night there is an ordinary one")
 	profile.mode = kept_mode
 	profile.mission = kept_mission
+	# --- nothing stands in a doorway of the map: no wall, no plinth or wainscot that runs
+	# on through it, no rib, no model. A second map is built for this, apart from the tree
+	# and with every one of its boxes noted (see HiveCore.doorway_faults, which
+	# tools/door_check.gd prints in full).
+	MeshBatch.watched.clear()
+	MeshBatch.watching = true
+	var probe := HiveMap.new()
+	probe._ready()
+	MeshBatch.watching = false
+	var in_doorways: Array = probe.doorway_faults(MeshBatch.watched)
+	var doorways: int = probe.doorways_tried().size()
+	MeshBatch.watched.clear()
+	probe.free()
+	var first_find := "" if in_doorways.is_empty() else ", the first: %s in %s" % [in_doorways[0].what, in_doorways[0].door]
+	expect(doorways >= 50 and in_doorways.is_empty(), "No doorway of the second mission's map has anything standing in it (%d doorways tried, %d finds%s)" % [doorways, in_doorways.size(), first_find])
 
 ## The bot of --bot-check on the map of the second mission (--bot-mode=villa): it follows
 ## the marker along the map's paths, shoots what it sees, uses what the mission wants
