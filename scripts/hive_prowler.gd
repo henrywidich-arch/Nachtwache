@@ -44,10 +44,15 @@ const END_AFTER := 5.0
 ## While the last fight is on, the horde comes slower: this share of every second is
 ## added to the director's wait for its next one.
 const END_HUSH := 0.6
+## Nearer than this to the survivor it has to have come for a visit to count as one.
+const REACHED := 10.0
 
 var director: HiveDirector
 var game: Node3D
 var beast: Prowler
+## A visit is on. (Not "beast != null": a body that has been freed counts as null, and it
+## is freed when it has run far enough - in a bot run at four times the speed within one frame.)
+var visiting := false
 ## Visits made, and how many of them ended because it had taken enough.
 var visits := 0
 var wounds := 0
@@ -89,6 +94,7 @@ func _ready() -> void:
 func begin(from: String) -> void:
 	game = director.game
 	beast = null
+	visiting = false
 	call_left = -1.0
 	final_sent = false
 	killed = false
@@ -103,13 +109,14 @@ func begin(from: String) -> void:
 
 func end() -> void:
 	beast = null
+	visiting = false
 	call_left = -1.0
 
 func _process(delta: float) -> void:
 	if director == null or not director.on or game == null or not game.is_playing() or director.intro_left > 0.0:
 		return
 	var stage := director.stage
-	if beast != null:
+	if visiting:
 		if not is_instance_valid(beast):
 			# Taken off the field with everybody else (the ride).
 			_close(false, false)
@@ -204,6 +211,7 @@ func _arrive(for_good: bool) -> void:
 		var other := _behind(LAIR.x, LAIR.y)
 		if other != Vector3.INF:
 			lair = other
+	visiting = true
 	beast = Prowler.new()
 	beast.game = game
 	beast.wave = maxi(1, game.wave)
@@ -233,15 +241,14 @@ func _arrive(for_good: bool) -> void:
 	game.boss = beast
 	if game.check_mode:
 		print("PROWLER_VISIT n=%d stage=%s final=%s nerve=%d health=%d gap=%.1f" % [visits, director.stage, str(for_good), int(beast.nerve), int(beast.max_health), lair.distance_to(game.player.global_position)])
-	# The first time somebody says what everybody saw; command says it once its channel is its own.
+	# The first time somebody of the squad says what everybody saw, and command says it once
+	# its channel is its own. Both wait their turn in the mission's one queue of lines.
 	if not told_squad:
 		told_squad = true
-		var speaker: Teammate = game.squad_voice()
-		if speaker != null:
-			game.bark(speaker, speaker.look, "stalker")
-	if not told_command and (director.done.has("radio_clear") or HiveDirector.ORDER.find(director.stage) > HiveDirector.ORDER.find("deal")):
+		director.shout("stalker")
+	if not told_command and not director.channel_taken():
 		told_command = true
-		game.radio("stalker_seen", 8.0)
+		director.line("stalker_seen")
 
 ## Where it runs to when it breaks off.
 func _way_out() -> Vector3:
@@ -265,11 +272,16 @@ func _close(hurt: bool, died: bool) -> void:
 	if game.check_mode:
 		print("PROWLER_GONE n=%d stage=%s after=%.1f hurt=%s died=%s landed=%d nearest=%.1f" % [visits, director.stage, present_for, str(hurt), str(died), beast.landed if is_instance_valid(beast) else -1, nearest])
 	beast = null
+	visiting = false
 	if not last:
-		visits += 1
-		if hurt:
-			wounds += 1
-		wait_left = gap_after(visits)
+		if nearest > REACHED and not hurt:
+			# It never got to them (a door shut between them): that was no visit, and it tries again soon.
+			wait_left = randf_range(8.0, 20.0)
+		else:
+			visits += 1
+			if hurt:
+				wounds += 1
+			wait_left = gap_after(visits)
 	# A Crusher that is still on the field has the bar back.
 	for node in game.enemies.get_children():
 		var other := node as Infected
@@ -291,4 +303,4 @@ func _reward() -> void:
 		mate.revive(true)
 	game.sounds.play_sound("clear")
 	game.hud.announce("DER PROWLER IST TOT", "+%d Vorrat  ·  Trupp versorgt  ·  Westen geflickt" % int(Infected.TYPES.prowler.reward), 5)
-	game.radio("stalker_dead", 8.0)
+	director.line("stalker_dead")

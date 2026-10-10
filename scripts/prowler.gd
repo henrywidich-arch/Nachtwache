@@ -79,6 +79,9 @@ var swap_left := 0.0
 ## Seconds until it comes in again, and how long it has not seen its prey.
 var attack_left := 1.0
 var blind_for := 0.0
+## On its way to its prey: how far off it was a while ago, and when it looks again.
+var far_mark := -1.0
+var far_left := 4.0
 ## What bullets strike besides the capsule in the middle and the head.
 var flanks: Array[Flank] = []
 
@@ -204,6 +207,8 @@ func _set_mode(next: String) -> void:
 		"close":
 			mode_left = 0.0
 			repath_left = 0.0
+			far_mark = -1.0
+			far_left = 4.0
 
 func _pick_prey() -> void:
 	swap_left = randf_range(6.0, 11.0)
@@ -279,6 +284,14 @@ func _physics_process(delta: float) -> void:
 			if held_left <= 0.0:
 				_set_mode("back" if distance < RING.x else "circle")
 		"close":
+			# A way that leads nowhere (a door has shut between them): on a visit it gives up.
+			far_left -= delta
+			if far_left <= 0.0:
+				far_left = 4.0
+				if nerve > 0.0 and far_mark >= 0.0 and distance > far_mark - 2.0:
+					break_off(false)
+					return
+				far_mark = distance
 			var clear := same_floor and _clear_line(target, true)
 			if clear and distance < RING.y:
 				_set_mode("circle")
