@@ -86,11 +86,11 @@ func _build_styles() -> void:
 		"none": {"family": "villa", "dress": "", "floor": ["plain", Color.WHITE], "ceiling": ["plain", Color.WHITE], "core": ["plain", Color.WHITE], "lamp": "none"},
 		"hall": {
 			"family": "villa", "dress": "hall", "floor": ["checker", Color(0.92, 0.92, 0.9)], "ceiling": ["plaster", plaster], "core": ["plaster", Color(0.88, 0.85, 0.77)],
-			"lamp": "chandelier", "lamp_gap": 14.0, "lamp_model": "Chandelier_03", "lamp_size": 2.4, "lamp_drop": 1.4, "light": Color("ffd7a3"), "energy": 3.4, "reach": 17.0
+			"lamp": "chandelier", "lamp_gap": 14.0, "lamp_model": "Chandelier_03", "lamp_size": 2.4, "lamp_drop": 1.4, "light": Color("ffd7a3"), "energy": 2.7, "reach": 16.0
 		},
 		"wood": {
 			"family": "villa", "dress": "wood", "floor": ["parquet", Color(0.82, 0.76, 0.7)], "ceiling": ["plaster", plaster], "core": ["wallpaper", Color(0.66, 0.28, 0.23)], "wood": Color(0.82, 0.74, 0.66),
-			"lamp": "chandelier", "lamp_gap": 12.0, "lamp_size": 1.3, "lamp_drop": 0.5, "light": Color("ffcd96"), "energy": 3.6, "reach": 15.0
+			"lamp": "chandelier", "lamp_gap": 12.0, "lamp_size": 1.3, "lamp_drop": 0.5, "light": Color("ffcd96"), "energy": 2.5, "reach": 12.5
 		},
 		"scullery": {
 			"family": "villa", "dress": "tiles", "floor": ["tiles", Color(0.62, 0.62, 0.6)], "ceiling": ["plaster", plaster], "core": ["plaster", Color(0.8, 0.78, 0.72)],
@@ -230,7 +230,7 @@ func _fireplace(room_id: String, side: int, a: float) -> void:
 	_face_box(room, side, "marble", a - 1.3, a + 1.3, 1.72, float(room.height) - 0.25, -0.2, 0.0, Color(0.84, 0.81, 0.74))
 	_face_glow(room, side, a - 0.4, a + 0.4, 0.05, 0.16, -0.3, -0.14, Color("ff7a2a"), 3.2)
 	_face_box(room, side, "plain", a - 0.55, a + 0.55, 0.0, 0.1, -0.36, -0.12, Color("17120e"))
-	var ember := _light(_face_point(room, side, a, 0.5, -0.7), Color("ff8a3c"), 1.5, 5.5, false, 0.35, 0.6, LAMP_FADE)
+	var ember := _light(_face_point(room, side, a, 0.5, -0.7), Color("ff8a3c"), 2.4, 7.5, false, 0.4, 0.6, LAMP_FADE)
 	ember.omni_attenuation = 1.6
 	_solid(_face_centre(room, side, a - 1.4, a + 1.4, 0.0, 1.72, -0.5, 0.0), _face_size(side, a - 1.4, a + 1.4, 0.0, 1.72, -0.5, 0.0))
 	_model("mantel_clock_01", _face_point(room, side, a, 1.72, -0.25), _model_yaw(side), {"height": 0.3, "solid": false, "far": 30.0})
@@ -705,7 +705,7 @@ func _sconce(room_id: String, side: int, a: float, high: float = 2.3) -> void:
 	var room: Dictionary = room_of[room_id]
 	_face_box(room, side, "metal", a - 0.045, a + 0.045, high - 0.18, high + 0.02, -0.13, 0.0, Color(0.5, 0.4, 0.2))
 	_face_glow(room, side, a - 0.075, a + 0.075, high + 0.02, high + 0.2, -0.21, -0.07, Color("ffcf8f"), 4.4)
-	var lamp := _light(_face_point(room, side, a, high + 0.1, -0.55), Color("ffc27a"), 1.0, 5.5, false, 0.08, 0.5, LAMP_FADE)
+	var lamp := _light(_face_point(room, side, a, high + 0.1, -0.55), Color("ffc27a"), 1.5, 6.2, false, 0.08, 0.5, LAMP_FADE)
 	lamp.omni_attenuation = 1.4
 
 ## A floodlight on a stand, aimed at `target`: its beam stands in the haze of the park.
@@ -774,6 +774,182 @@ func _dress_villa() -> void:
 	_chair(Vector3(4.6, 0, 4.6), 2.2, Color(0.3, 0.22, 0.17), true)
 	_litter(Vector3(-16.4, 0.016, 3.6), 1.2, 9)
 	_litter(Vector3(4.2, 0, 17.2), 0.9, 6)
+	_villa_rich()
+
+# ---------------------------------------------------------------- the rooms, second pass
+
+## Beams under the ceiling of a room, crossing one another: coffers.
+func _coffers(room_id: String, gap: float = 2.8, deep: float = 0.22, wide: float = 0.24, material: String = "panelwood", color: Color = Color(0.3, 0.23, 0.18)) -> void:
+	var room: Dictionary = room_of[room_id]
+	var inner: Rect2 = room.inner
+	var top := float(room.y) + float(room.height)
+	var nx := maxi(1, roundi(inner.size.x / gap))
+	var nz := maxi(1, roundi(inner.size.y / gap))
+	for i in range(1, nx):
+		_part(material, Vector3(inner.position.x + i * inner.size.x / nx, top - deep * 0.5 + 0.01, inner.get_center().y), Vector3(wide, deep + 0.02, inner.size.y + 0.04), color)
+	for k in range(1, nz):
+		_part(material, Vector3(inner.get_center().x, top - deep * 0.5 + 0.016, inner.position.y + k * inner.size.y / nz), Vector3(inner.size.x + 0.04, deep + 0.012, wide - 0.03), color.darkened(0.08))
+
+## Raised panels in the wainscot of a wooden room, on every wall; left out at its doors
+## and windows and where `skip` says ([side, from, to]: e.g. a door that is cut later).
+func _wainscot_panels(room_id: String, skip: Array = []) -> void:
+	var room: Dictionary = room_of[room_id]
+	var inner: Rect2 = room.inner
+	var wood: Color = (_look(room).get("wood", Color(0.62, 0.56, 0.5)) as Color).darkened(0.34)
+	for which in [NORTH, EAST, SOUTH, WEST]:
+		var side: int = which
+		var along_x := side == NORTH or side == SOUTH
+		var from := inner.position.x if along_x else inner.position.y
+		var to := inner.end.x if along_x else inner.end.y
+		var cuts: Array = []
+		for gap in room.open[side]:
+			if float(gap[2]) < 1.2:
+				cuts.append([float(gap[0]) - 0.24, float(gap[1]) + 0.24])
+		for entry in skip:
+			if int(entry[0]) == side:
+				cuts.append([float(entry[1]), float(entry[2])])
+		cuts.sort_custom(func(p: Array, q: Array) -> bool: return float(p[0]) < float(q[0]))
+		cuts.append([to - 0.1, to + 1.0])
+		var cursor := from + 0.1
+		for cut in cuts:
+			var end := minf(float(cut[0]), to - 0.1)
+			if end - cursor > 0.7:
+				var count := maxi(1, roundi((end - cursor) / 1.25))
+				var wide := (end - cursor) / count
+				for i in range(count):
+					var a := cursor + i * wide + 0.12
+					var b := cursor + (i + 1) * wide - 0.12
+					_face_box(room, side, "panelwood", a, a + 0.035, 0.28, 1.12, -0.047, 0.01, wood)
+					_face_box(room, side, "panelwood", b - 0.035, b, 0.28, 1.12, -0.047, 0.01, wood)
+					_face_box(room, side, "panelwood", a + 0.035, b - 0.035, 0.28, 0.315, -0.045, 0.01, wood)
+					_face_box(room, side, "panelwood", a + 0.035, b - 0.035, 1.085, 1.12, -0.045, 0.01, wood)
+			cursor = maxf(cursor, float(cut[1]))
+
+## A carved head over a door, on the face of the wall that looks into a room.
+func _overdoor(room_id: String, side: int, at: float, wide: float, tall: float = DOOR_TALL) -> void:
+	var room: Dictionary = room_of[room_id]
+	var wood := Color(0.3, 0.23, 0.18)
+	var half := wide * 0.5 + 0.27
+	_face_box(room, side, "panelwood", at - half, at + half, tall + 0.2, tall + 0.6, -0.06, 0.01, wood)
+	_face_box(room, side, "panelwood", at - half + 0.1, at + half - 0.1, tall + 0.27, tall + 0.53, -0.075, -0.05, wood.lightened(0.14))
+	_face_box(room, side, "panelwood", at - half - 0.1, at + half + 0.1, tall + 0.58, tall + 0.7, -0.17, 0.01, wood.darkened(0.1))
+
+## The moon through a window of the house: a cold pool on the floor before it, and its
+## shaft in the dust.
+func _moon_pool(room_id: String, side: int, at: float, high: float = 3.0) -> void:
+	var room: Dictionary = room_of[room_id]
+	var out: Vector2 = OUT[side]
+	_spot(_face_point(room, side, at, high, -0.3), Vector3(-out.x, -1.1, -out.y), Color("7fa8ff"), 7.5, 8.5, 26.0, 0.0, 2.2, LAMP_FADE)
+
+## Planks nailed across a window from the inside: somebody tried to hold the house.
+func _boarded(room_id: String, side: int, at: float, wide: float, sill: float, head: float) -> void:
+	var room: Dictionary = room_of[room_id]
+	var count := maxi(3, roundi((head - sill) / 0.55))
+	var a := at - wide * 0.5 - 0.3
+	var b := at + wide * 0.5 + 0.3
+	for i in range(count):
+		var y := sill + (i + 0.5) * (head - sill) / count + random.randf_range(-0.07, 0.07)
+		var front := -0.092 - i * 0.004
+		var tilt := random.randf_range(-7.0, 7.0)
+		_part("panelwood", _face_centre(room, side, a, b, y - 0.09, y + 0.09, front, front + 0.032), _face_size(side, a, b, y - 0.09, y + 0.09, front, front + 0.032), _vary(Color(0.52, 0.44, 0.36), 0.04), Vector3(0, 0, tilt) if (side == NORTH or side == SOUTH) else Vector3(tilt, 0, 0))
+
+## The house inside, second pass: ceilings, panelling, heads over the doors, the moon in
+## the windows, and more of what happened here.
+func _villa_rich() -> void:
+	var hall: Dictionary = room_of["hall"]
+	var stone := Color(0.86, 0.84, 0.8)
+	# --- ceilings: dark coffers in the rooms, white ones high over the hall
+	for id in ["salon", "galerie", "dining", "library"]:
+		_coffers(str(id))
+	_coffers("hall", 3.4, 0.34, 0.36, "plaster", Color(0.8, 0.77, 0.7))
+	# --- panels in the wainscot, heads over the doors
+	_wainscot_panels("salon")
+	_wainscot_panels("galerie")
+	_wainscot_panels("library")
+	_wainscot_panels("dining", [[NORTH, -1.6, 1.6]])
+	for entry in [["hall", NORTH, 0.0, 2.4, 3.0], ["dining", SOUTH, 0.0, 2.4, 3.0], ["hall", WEST, 20.5, 1.8, DOOR_TALL], ["salon", EAST, 20.5, 1.8, DOOR_TALL], ["hall", EAST, 20.5, 1.8, DOOR_TALL], ["galerie", WEST, 20.5, 1.8, DOOR_TALL],
+			["salon", NORTH, -17.0, 1.8, DOOR_TALL], ["library", SOUTH, -17.0, 1.8, DOOR_TALL], ["dining", WEST, 2.0, 1.8, DOOR_TALL], ["library", EAST, 2.0, 1.8, DOOR_TALL], ["dining", EAST, 2.0, 1.8, DOOR_TALL],
+			["galerie", NORTH, 17.0, 1.8, DOOR_TALL]]:
+		_overdoor(str(entry[0]), int(entry[1]), float(entry[2]), float(entry[3]), float(entry[4]))
+	# --- the hall: pilasters and a string course on its long walls, pictures high up
+	for which in [EAST, WEST]:
+		var side: int = which
+		for z in [11.9, 17.2, 21.3]:
+			var at: float = z
+			_face_box(hall, side, "marble", at - 0.24, at + 0.24, 4.5, 8.19, -0.06, 0.02, stone.darkened(0.05))
+			_face_box(hall, side, "marble", at - 0.3, at + 0.3, 7.9, 8.17, -0.11, 0.02, stone)
+			_face_box(hall, side, "marble", at - 0.29, at + 0.29, 4.5, 4.72, -0.1, 0.02, stone)
+		_face_box(hall, side, "marble", 11.62, 21.78, 4.36, 4.51, -0.085, 0.02, stone.darkened(0.1))
+		_painting("hall", side, 14.55, 2.8, 6.3)
+	_face_box(hall, SOUTH, "marble", -6.7, 6.7, 4.366, 4.504, -0.085, 0.02, stone.darkened(0.1))
+	# --- the moon in the windows
+	for entry in [["salon", WEST, 11.5], ["library", WEST, -1.0], ["library", WEST, 5.0], ["library", NORTH, -13.0], ["dining", NORTH, -6.5], ["dining", NORTH, 6.5], ["galerie", EAST, 12.0], ["galerie", EAST, 18.0]]:
+		_moon_pool(str(entry[0]), int(entry[1]), float(entry[2]))
+	for x in [-4.3, 4.3]:
+		_moon_pool("hall", SOUTH, float(x))
+	# --- the hall: its second chandelier has come down, and still burns
+	var wreck := Vector3(3.4, 0, 15.0)
+	var fallen := _model("Chandelier_01", wreck + Vector3(-0.5, 0.42, 0), 0.6, {"height": 1.2, "solid": false, "far": 40.0})
+	fallen.rotation.z = deg_to_rad(-68.0)
+	_solid(wreck + Vector3(0, 0.4, 0), Vector3(1.5, 0.8, 1.3))
+	batch.cylinder(mats["metal"], wreck + Vector3(0, 6.9, 0), 0.02, 0.02, 1.4, Color("15171a"), 6)
+	for k in range(28):
+		var turn := random.randf() * TAU
+		var far := random.randf_range(0.5, 1.9)
+		_part("plain", wreck + Vector3(cos(turn) * far, 0.012, sin(turn) * far), Vector3(random.randf_range(0.03, 0.09), 0.012, random.randf_range(0.02, 0.06)), Color(0.78, 0.82, 0.84), Vector3(0, random.randf_range(0, 180), 0))
+	_light(wreck + Vector3(0, 0.7, 0), Color("ffc27a"), 1.3, 5.0, false, 0.55, 0.6, LAMP_FADE)
+	_blot(wreck + Vector3(-1.3, 0, 1.5), 0.8, 0.55)
+	# --- the dining room: the table was laid for ten, and nobody cleared it
+	_part("velvet", Vector3(0, 0.803, 2.4), Vector3(8.0, 0.018, 0.5), Color(0.34, 0.07, 0.07))
+	for x in [-3.2, -1.6, 0.0, 1.6, 3.2]:
+		for z in [1.92, 2.88]:
+			var seat := Vector3(float(x), 0.795, float(z))
+			batch.cylinder(mats["marble"], seat, 0.14, 0.15, 0.022, Color(0.86, 0.85, 0.82), 12)
+			batch.cylinder(mats["plain"], seat + Vector3(0.24, 0, 0.06 if float(z) < 2.4 else -0.06), 0.03, 0.036, 0.15, Color(0.56, 0.62, 0.66), 6)
+	_blot(Vector3(0.8, 0.806, 2.45), 0.42, 0.2)
+	_smear(Vector3(1.4, 0, 5.3), Vector3(0.5, 0, 7.5), 0.24)
+	_chair(Vector3(-4.6, 0, 4.9), 0.9, Color(0.3, 0.22, 0.17), true)
+	# --- the library: a ladder at the shelves, books on the floor
+	var rail := Color(0.34, 0.26, 0.2)
+	for z in [1.55, 2.05]:
+		_pipe(Vector3(-22.55, 0.0, float(z)), Vector3(-23.3, 2.96, float(z)), 0.025, rail, 6)
+	for k in range(8):
+		var up := (k + 0.6) / 8.6
+		_pipe(Vector3(-22.55, 0.0, 1.55).lerp(Vector3(-23.3, 2.96, 1.55), up), Vector3(-22.55, 0.0, 2.05).lerp(Vector3(-23.3, 2.96, 2.05), up), 0.016, rail, 6)
+	_solid(Vector3(-22.95, 1.0, 1.8), Vector3(0.8, 2.0, 0.6))
+	var spines := [Color("5a1f1c"), Color("23382c"), Color("2a2f4a"), Color("6a5a34"), Color("3d2a1c")]
+	for stack in [Vector3(-19.6, 0, 4.4), Vector3(-15.2, 0, 0.6), Vector3(-21.6, 0, -1.2)]:
+		var foot: Vector3 = stack
+		for k in range(3 + random.randi() % 4):
+			_part("plain", foot + Vector3(random.randf_range(-0.02, 0.02), 0.024 + k * 0.042, random.randf_range(-0.02, 0.02)), Vector3(0.24, 0.04, 0.17), _vary(spines[random.randi() % spines.size()], 0.03), Vector3(0, random.randf_range(-25, 25), 0))
+	# --- the kitchen: white beams, pans over the table, and what was cut up on it last
+	_coffers("kitchen", 2.3, 0.18, 0.2, "plaster", Color(0.7, 0.68, 0.62))
+	_part("metal", Vector3(17.0, 2.5, 2.0), Vector3(2.9, 0.04, 0.06), Color("1b1c1b"))
+	for x in [-1.3, 1.3]:
+		batch.cylinder(mats["metal"], Vector3(17.0 + float(x), 2.5, 2.0), 0.015, 0.015, 1.92, Color("1b1c1b"), 6)
+	for k in range(6):
+		var pan := Vector3(15.85 + k * 0.46, 0, 2.0)
+		batch.cylinder(mats["metal"], pan + Vector3(0, 2.2, 0), 0.008, 0.008, 0.3, Color("1b1c1b"), 4)
+		batch.cylinder(mats["metal"], pan + Vector3(0, 2.1 - (k % 3) * 0.03, 0), 0.11 + (k % 2) * 0.03, 0.14 + (k % 2) * 0.03, 0.17, Color(0.62, 0.36, 0.22) if k % 3 != 1 else Color(0.3, 0.3, 0.31), 10)
+	_part("panelwood", Vector3(17.5, 0.878, 2.05), Vector3(0.6, 0.03, 0.4), Color(0.6, 0.5, 0.38), Vector3(0, 12, 0))
+	_blot(Vector3(16.6, 0.86, 2.0), 0.4, 0.24)
+	_blot(Vector3(18.1, 0, 3.4), 0.7, 0.5)
+	_smear(Vector3(18.4, 0, 3.8), Vector3(20.6, 0, 5.2), 0.26)
+	# --- windows somebody boarded up
+	_boarded("kitchen", NORTH, 14.0, 1.5, 1.1, 3.2)
+	_boarded("kitchen", NORTH, 20.0, 1.5, 1.1, 3.2)
+	_boarded("library", NORTH, -21.0, 1.5, 0.9, 3.4)
+	# --- more that is heavy: cabinets against the flanks of the stairs, a commode between the
+	# garden doors of the salon, plinths in the gallery
+	_model("GothicCabinet_01", Vector3(-4.28, 0, 15.4), PI / 2, {})
+	# --- up on the gallery: a runner, a console with candles between the doors that stay shut
+	_carpet(Vector3(0, STOREY_VILLA + 0.018, 10.2), Vector2(10.4, 1.5), Color(0.42, 0.08, 0.08))
+	_against("gallery", NORTH, 0.0, "ClassicConsole_01")
+	_model("brass_candleholders", _face_point(room_of["gallery"], NORTH, 0.0, 0.95, -0.34), 0.0, {"width": 0.8, "solid": false, "far": 30.0})
+	_model("vintage_cabinet_01", Vector3(4.28, 0, 12.6), -PI / 2, {})
+	_against("salon", SOUTH, -15.75, "GothicCommode_01")
+	for spot in [Vector3(13.6, 0, 21.1), Vector3(17.9, 0, 21.1)]:
+		_plinth(spot, 1.1, "antique_ceramic_vase_01", 0.7, 0.0, 0.55)
 
 # ---------------------------------------------------------------- the park and the front, second pass
 
@@ -1020,6 +1196,14 @@ func _dress_grounds(basin: Vector3) -> void:
 		_topiary(Vector3(-5.2, 0, float(z)), 3.4, 0.9)
 	_topiary(Vector3(5.2, 0, 80.0), 3.4, 0.9)
 	_guard_post(Vector3(8.4, 0, 84.8))
+	# --- flares the guards threw where the wall came down: two still burn with a light, the
+	# others only glow
+	for spot in [Vector3(-35.5, 0, 85.6), Vector3(30.5, 0, 85.6)]:
+		var flare: Vector3 = spot
+		_glow_box(flare + Vector3(0, 0.05, 0), Vector3(0.24, 0.05, 0.05), Color("ff3a1a"), 6.5, Basis(Vector3.UP, 0.7))
+		_light(flare + Vector3(0, 0.5, 0), Color("ff4020"), 1.6, 8.0, false, 0.5, 2.2, 90.0)
+	for spot in [Vector3(-59.6, 0, 0.5), Vector3(-59.6, 0, 40.5), Vector3(59.6, 0, 4.5), Vector3(59.6, 0, 52.5)]:
+		_glow_box((spot as Vector3) + Vector3(0, 0.05, 0), Vector3(0.24, 0.05, 0.05), Color("ff3a1a"), 6.5, Basis(Vector3.UP, 1.9))
 
 # ---------------------------------------------------------------- more of the kit
 
