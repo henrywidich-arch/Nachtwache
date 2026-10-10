@@ -859,6 +859,30 @@ def clip_sweep(P, t):
     P.tail[1][1] = -1.0 * yaw
 
 
+SPIT_T, SPIT_AT = 1.2, 0.8
+
+
+def clip_spit(P, t):
+    """It stands, draws its head back and up while its throat works (the tell, SPIT_AT seconds), then
+    whips it forward with the jaws wide: there the glob leaves it."""
+    draw = key(t, [(0, 0), (0.30, 1), (0.70, 1), (0.80, 0.2), (1.2, 0)])
+    out = key(t, [(0.70, 0), (0.82, 1), (0.95, 0.7), (1.2, 0)])
+    gulp = math.sin(t * 2.0 * math.pi * 3.5) * draw
+    P.d = Vector((0.0, 0.14 * draw - 0.16 * out, -0.08 * draw - 0.04 * out))
+    P.pitch = 7 * draw - 5 * out
+    P.spine[1][0] = 3 * draw
+    P.spine[2][0] = 6 * draw - 5 * out + 1.5 * gulp
+    P.neck[0][0] = 18 * draw - 10 * out + 3 * gulp
+    P.neck[1][0] = 12 * draw - 8 * out
+    P.head[0] = 10 * draw - 4 * out
+    P.head[2] = 4 * gulp
+    P.jaw = 4 + 6 * draw + 4 * gulp + 44 * key(t, [(0.72, 0), (0.80, 1), (0.92, 1), (1.08, 0)])
+    for name in ("FL", "FR"):
+        P.leg[name].curl = 14 * draw
+    P.tail[0][0] = 16 * draw - 8 * out
+    P.tail[1][1] = 10 * gulp
+
+
 DEATH_T = 2.4
 
 
@@ -919,6 +943,7 @@ CLIPS = [
     ("charge_wind", clip_charge_wind, WIND_T, False),
     ("charge", clip_charge, RUN_T, True),
     ("sweep", clip_sweep, SWEEP_T, False),
+    ("spit", clip_spit, SPIT_T, False),
 ]
 
 

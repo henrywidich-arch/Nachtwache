@@ -252,6 +252,52 @@ func run_attacks() -> void:
 	print("PROWLER_CAPTURE_COMPLETE")
 	get_tree().quit()
 
+## Its spit (`--prowler-check --prowler-spit`): the tell, the glob in the air, the pool
+## where it came down - seen from beside it, from inside it and in its last second.
+func run_spit() -> void:
+	var folder: String = game._capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	game.start_run()
+	game.set_process(false)
+	game.hud.banner_left = 0
+	game.hud.radio_left = 0
+	game._place_player(Vector3(-1.5, 0.05, 13.0), 180)
+	var beast := game.spawn_enemy("prowler") as Prowler
+	beast.position = Vector3(-1.5, 0.05, 25.0)
+	beast.set_physics_process(false)
+	beast.model.rotation.y = 0.0
+	beast.prey = game.player
+	var at := beast.position
+	beast._start_spit()
+	for i in range(34):
+		beast.model.animate(1.0 / 60.0, 0.0)
+	await game._capture_from(folder, "spit_tell.png", at + Vector3(2.8, 1.5, -3.4), at + Vector3(0, 0.7, 0), 45)
+	for i in range(18):
+		beast.model.animate(1.0 / 60.0, 0.0)
+	beast.show_cue("spit", [beast.mouth() + beast.facing() * 0.9, game.player.global_position, 0.8, 1.0])
+	var glob: ProwlerPool.Glob = ProwlerPool.globs[0]
+	glob.set_physics_process(false)
+	glob._physics_process(0.4)
+	await game._capture_from(folder, "spit_glob.png", Vector3(4.5, 1.8, 19.0), Vector3(-1.5, 1.2, 19.0), 55)
+	glob._physics_process(0.5)
+	var pool: ProwlerPool = ProwlerPool.pools[0] if not ProwlerPool.pools.is_empty() else null
+	await get_tree().create_timer(0.8).timeout
+	game.player.health = 100.0
+	game.hud.banner_left = 0
+	await game._capture(folder, "spit_pool_inside.png")
+	var spot := Vector3(-1.5, 0.0, 13.0)
+	game._place_player(spot + Vector3(0, 0.05, 3.4), 0, -14.0)
+	await get_tree().create_timer(0.4).timeout
+	await game._capture(folder, "spit_pool_edge.png")
+	await game._capture_from(folder, "spit_pool_above.png", spot + Vector3(4.0, 3.4, 5.5), spot, 55)
+	if pool != null:
+		pool.left = 0.9
+	await get_tree().create_timer(0.45).timeout
+	await game._capture_from(folder, "spit_pool_fading.png", spot + Vector3(4.0, 3.4, 5.5), spot, 55)
+	print("PROWLER_SPIT pool=%s reach=%.1f" % [str(pool != null), pool.reach() if is_instance_valid(pool) else -1.0])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
 ## How it turns (`--prowler-check --prowler-moves`): the clips of turning, braking and
 ## shaking at a telling moment, then a quarter of a minute of it at work with its prey
 ## behind it at the start, and in numbers how often it came round over its haunches,

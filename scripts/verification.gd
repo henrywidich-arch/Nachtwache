@@ -2553,6 +2553,80 @@ func _later(game: Node3D) -> void:
 	expect(prowl_dodged and prowl_d.orbit == -prowl_side and prowl_d.evade_cooldown > 0.0 and prowl_reloading > prowl_d.worth(player) + 1.0 and prowl_hurt > prowl_d.worth(player) + 0.5, "Hit hard on its way in it does not stand and take it: it breaks off, gets out of the line of fire and comes round the other way; and whoever reloads or is hurt is worth more to it as prey")
 	prowl_d._retire()
 	prowl_d.queue_free()
+	# --- its spit, and the pool it leaves
+	player.health = 100.0
+	player.velocity = Vector3.ZERO
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	var prowl_e := game.spawn_enemy("prowler") as Prowler
+	prowl_e.set_physics_process(false)
+	prowl_e.global_position = Vector3(0.0, 0.08, 34.0)
+	prowl_e.model.rotation.y = 0.0
+	prowl_e.prey = player
+	prowl_e.mode = "circle"
+	# (It stands on the ground: a body that was only put somewhere does not know that yet.)
+	prowl_e.velocity = Vector3(0, -9.0, 0)
+	prowl_e.move_and_slide()
+	prowl_e.spit_cooldown = 0.0
+	prowl_e.still_for = 0.0
+	var prowl_moving: bool = not prowl_e._may_spit(player.global_position, 12.0)
+	prowl_e.still_for = Prowler.SPIT_STILL.y + 1.0
+	var prowl_close: bool = not prowl_e._may_spit(player.global_position, Prowler.SPIT_RANGE.x - 1.0)
+	var prowl_may: bool = prowl_e._may_spit(player.global_position, 12.0)
+	prowl_e.clung_to = player
+	var prowl_holding: bool = not prowl_e._may_spit(player.global_position, 12.0)
+	prowl_e.clung_to = null
+	prowl_e._start_spit()
+	var prowl_tell: bool = prowl_e.mode == "spit" and (prowl_e.model as ProwlerVisual).state == "stagger" and ProwlerPool.globs.is_empty() and not prowl_e._may_spit(player.global_position, 12.0) and prowl_e.spit_cooldown == Prowler.SPIT_REST
+	prowl_e.spits = Prowler.SPIT_MOST
+	prowl_e.spit_cooldown = 0.0
+	var prowl_spent: bool = not prowl_e._may_spit(player.global_position, 12.0)
+	for prowl_step in range(int(Prowler.SPIT_WIND * 60.0) + 4):
+		prowl_e._physics_process(1.0 / 60.0)
+	var prowl_stood: Vector3 = player.global_position
+	var prowl_glob: ProwlerPool.Glob = ProwlerPool.globs[0] if ProwlerPool.globs.size() == 1 else null
+	expect(prowl_moving and prowl_close and prowl_may and prowl_holding and prowl_tell and prowl_spent and prowl_glob != null and prowl_glob.to.distance_to(prowl_stood) < 0.1 and ProwlerPool.pools.is_empty(), "The Prowler spits only at somebody who has stayed put, from a distance, not while it holds anybody and not again soon; it shows it first, and the glob flies to where he stood")
+	# The survivor walks on: the glob comes down where he was, and the pool lies there.
+	face(game, Vector3(7.0, 0.05, 22.0), PI)
+	if prowl_glob != null:
+		prowl_glob.set_physics_process(false)
+		for prowl_step in range(90):
+			if is_instance_valid(prowl_glob) and not prowl_glob.is_queued_for_deletion():
+				prowl_glob._physics_process(1.0 / 60.0)
+	var prowl_pool: ProwlerPool = ProwlerPool.pools[0] if ProwlerPool.pools.size() == 1 else null
+	var prowl_missed: bool = prowl_pool != null and player.health == 100.0 and Vector2(prowl_pool.global_position.x - prowl_stood.x, prowl_pool.global_position.z - prowl_stood.z).length() < 0.3
+	var prowl_in := false
+	var prowl_rim := false
+	var prowl_spares := false
+	var prowl_fades := false
+	var prowl_walks := false
+	if prowl_pool != null:
+		prowl_pool.set_physics_process(false)
+		prowl_pool._physics_process(ProwlerPool.TICK + 0.1)
+		prowl_rim = player.health == 100.0 and ProwlerPool.at(player.global_position) == null
+		var prowl_dummy: Infected = game.spawn_enemy("mauler")
+		prowl_dummy.set_physics_process(false)
+		prowl_dummy.global_position = prowl_pool.global_position + Vector3(0.5, 0.05, 0.0)
+		var prowl_was: float = prowl_dummy.health
+		face(game, prowl_pool.global_position + Vector3(0, 0.05, ProwlerPool.RADIUS - 0.4), PI)
+		prowl_pool._physics_process(ProwlerPool.TICK + 0.1)
+		prowl_in = player.health < 100.0 and player.health >= 100.0 - ProwlerPool.HARM * prowl_pool.worth - 0.01 and ProwlerPool.at(player.global_position) == prowl_pool
+		prowl_spares = prowl_dummy.health == prowl_was
+		prowl_dummy._retire()
+		prowl_dummy.queue_free()
+		# Whoever walks by himself is led out of it and not into it.
+		var prowl_inside: Vector3 = player.global_position
+		var prowl_out: Vector3 = ProwlerPool.step_out(prowl_inside, prowl_inside, 0.5)
+		prowl_walks = prowl_out.distance_to(prowl_pool.global_position) > prowl_inside.distance_to(prowl_pool.global_position) + 0.4 and ProwlerPool.step_out(prowl_inside, prowl_stood + Vector3(6, 0, 0), 0.5) == prowl_stood + Vector3(6, 0, 0)
+		# In its last seconds it shrinks, and then it is gone.
+		var prowl_full: float = prowl_pool.reach()
+		prowl_pool.left = ProwlerPool.FADING * 0.5
+		prowl_fades = prowl_full == ProwlerPool.RADIUS and prowl_pool.reach() < prowl_full * 0.8
+		prowl_pool._physics_process(ProwlerPool.FADING)
+		prowl_fades = prowl_fades and ProwlerPool.pools.is_empty()
+	expect(prowl_missed and prowl_rim and prowl_in and prowl_spares and prowl_walks and prowl_fades, "The glob misses who has walked on; the pool hurts who stands in it by ticks and nobody past its rim, does nothing to the infected, a walker is led out of it, and it shrinks and is gone")
+	player.health = 100.0
+	prowl_e._retire()
+	prowl_e.queue_free()
 	# --- where it has room: the map of mission two
 	var prowl_mission: int = game.profile.mission
 	var prowl_skipped: bool = game.intro_skipped
@@ -6781,6 +6855,21 @@ func _hive(game: Node3D) -> void:
 	game.start_run()
 	await frames(4)
 	expect(hive.on and hive.stage == "terminal" and hive.checkpoint == "terminal" and player.global_position.distance_to(map.points.car_b) < 1.5 and not is_instance_valid(hive.nadja) and not map.is_locked("station") and map.is_locked("admin") and map.door_open("car_b") and game.credits >= 900 and game.cabin == map, "A defeat can be taken up at the last checkpoint: the squad stands in the car at the terminal, what lies behind it is open, what lies ahead is shut")
+	# --- nobody hangs on small things on the floor: what the rule of the builders calls
+	# small (CabinMap.snag_kind - low, a post, a pot plant) has no collider, on this map and
+	# on the farm, unless a builder wanted it firm; and the rule has let things go at all.
+	# (tools/snag_check.gd lists them and walks a body over every floor.)
+	var hive_small: Array = map.snags()
+	var farm_small: Array = farm.snags()
+	var hive_gone: int = int(map.snag_dropped.low) + int(map.snag_dropped.thin) + int(map.snag_dropped.small)
+	var farm_gone: int = int(farm.snag_dropped.low) + int(farm.snag_dropped.thin) + int(farm.snag_dropped.small)
+	var plant_at := Vector3(-23.0, 0.4, 21.0)
+	var plant_solid := false
+	for entry in map.floor_solids():
+		if Vector2((entry.at as Vector3).x - plant_at.x, (entry.at as Vector3).z - plant_at.z).length() < 0.3 and float(entry.wide) < 0.7:
+			plant_solid = true
+	var first_small := "" if hive_small.is_empty() and farm_small.is_empty() else ", the first: %s" % str((hive_small + farm_small)[0].at)
+	expect(hive_small.is_empty() and farm_small.is_empty() and hive_gone >= 60 and farm_gone >= 5 and int(farm.snag_dropped.thin) == 0 and not plant_solid, "Small things on the floor are not solid: none of them has a collider in mission two or on the farm, the builders have let %d and %d of them go, and the posts of the farm stand (%d and %d left solid%s)" % [hive_gone, farm_gone, hive_small.size(), farm_small.size(), first_small])
 	# --- what the passes over the map's design added: the plan of the Hive on its walls,
 	# the lockdown's light and horn with the lock of the canteen, the flooded stretch of
 	# the laboratory corridor, the voices of the place
@@ -8014,6 +8103,8 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 				else:
 					here += to_point / gap * budget
 					budget = 0.0
+			# The Prowler's pool: he does not walk into it, and out of it if it lies where he stands.
+			here = ProwlerPool.step_out(here, player.global_position, 5.2 * step)
 			if best == null and here.distance_to(player.global_position) > 0.001:
 				var ahead := here - player.global_position
 				player.rotation.y = atan2(-ahead.x, -ahead.z)

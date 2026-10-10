@@ -22,6 +22,7 @@ const RUN_FROM := 4.9
 const BLOWS := {"slash_l": [0.7, 0.31], "slash_r": [0.7, 0.31], "slam": [0.9, 0.47], "bite": [0.6, 0.24], "sweep": [0.9, 0.5]}
 ## Raking the ground before the charge.
 const WIND_SECONDS := 0.7
+const SPIT_SECONDS := 1.2
 ## The leap: crouch until LEAP_OFF, in the air until LEAP_DOWN, landed at LEAP_END.
 const LEAP_OFF := 0.30
 const LEAP_DOWN := 0.80
@@ -186,6 +187,11 @@ func animate(delta: float, speed: float) -> void:
 func pivot(left: bool) -> void:
 	if not dying:
 		_begin("pivot_l" if left else "pivot_r", 0.07, 1.0, 0.0, PIVOT_SECONDS, "stagger")
+
+## The spit: the head drawn back, the throat working, then forward with the jaws wide.
+func spit() -> void:
+	if not dying:
+		_begin("spit", 0.1, 1.0, 0.0, SPIT_SECONDS, "stagger")
 
 ## Before the charge: back on its haunches, a forepaw rakes the ground.
 func wind() -> void:

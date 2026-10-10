@@ -105,6 +105,25 @@ const EVADE_REST := 5.0
 const EVADE_REACH := Vector2(5.0, 11.0)
 ## Every step of boldness adds this share to what its blows do.
 const BOLD_HARM := 0.1
+## The spit: rare. It stands, draws its head back while its throat works (SPIT_WIND
+## seconds: the tell), and spits a glob in an arc at where its prey stands at that
+## moment - whoever keeps moving is not there any more. Where it comes down a pool
+## lies that one must not stand in (ProwlerPool: how wide, how long, what it does).
+## Only at somebody who has stayed put: within SPIT_STILL.x metres for SPIT_STILL.y seconds.
+const SPIT_STILL := Vector2(2.5, 3.5)
+## Only from this far (never in biting range), and with sight of him.
+const SPIT_RANGE := Vector2(7.0, 20.0)
+const SPIT_WIND := 0.8
+## Seconds it stands after the glob has left it.
+const SPIT_AFTER := 0.4
+## The glob's pace over the ground (m/s) and the least and most seconds it flies.
+const SPIT_PACE := 15.0
+const SPIT_FLIGHT := Vector2(0.55, 1.2)
+## Seconds between two spits, seconds after it came before the first, and how many a
+## visit has at most (the last fight: HiveProwler.END_SPITS).
+const SPIT_REST := 24.0
+const SPIT_FIRST := 7.0
+const SPIT_MOST := 2
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
 const WAIT := Vector2(1.8, 3.4)
 
@@ -162,6 +181,15 @@ var landed := 0
 var blows_left := 0
 var stuck_for := 0.0
 var swap_left := 0.0
+## The spit: seconds until it may, how many it has spat and may spit since it came,
+## where its prey stood when it last moved off, for how long it has stayed there, and
+## whether the glob of the spit that is on has left it.
+var spit_cooldown := SPIT_FIRST
+var spits := 0
+var spit_most := SPIT_MOST
+var still_at := Vector3.INF
+var still_for := 0.0
+var spat := false
 ## How well it fights on this level (the level's "tactics"; who sends it says so).
 var level := 1.0
 var pin_hurt := 0.0
@@ -444,6 +472,24 @@ func release(thrown: bool) -> void:
 	else:
 		_set_mode("back")
 
+# ---------------------------------------------------------------- the spit
+
+## Rare: at somebody who has stayed put, from a distance, with sight of him, not while it
+## holds anybody, not soon after the last one and only so many times a visit.
+func _may_spit(target: Vector3, distance: float) -> bool:
+	return spit_cooldown <= 0.0 and spits < spit_most and still_for >= SPIT_STILL.y and distance >= SPIT_RANGE.x and distance <= SPIT_RANGE.y and clung_to == null and is_on_floor() and _clear_line(target)
+
+func _start_spit() -> void:
+	mode = "spit"
+	mode_left = SPIT_WIND
+	spat = false
+	spits += 1
+	spit_cooldown = SPIT_REST
+	attack_left = randf_range(WAIT.x, WAIT.y) * _haste()
+	attack_clock = -1.0
+	gait_pace = 0.0
+	cue("spit_wind")
+
 # ---------------------------------------------------------------- the charge
 
 func _may_charge(target: Vector3, distance: float) -> bool:
@@ -566,6 +612,16 @@ func _special(delta: float, toward: Vector3) -> void:
 				body.charging = false
 				collision_mask = 1 | 2 | 4 | 16
 				_set_mode("circle")
+		"spit":
+			if not spat and mode_left <= 0.0:
+				# The glob leaves it, for where its prey stands now.
+				spat = true
+				mode_left = SPIT_AFTER
+				var aim: Vector3 = prey.global_position
+				var away := Vector2(aim.x - global_position.x, aim.z - global_position.z).length()
+				cue("spit", [mouth() + facing() * 0.9, aim, clampf(away / SPIT_PACE, SPIT_FLIGHT.x, SPIT_FLIGHT.y), _harm()])
+			elif spat and mode_left <= 0.0:
+				_set_mode("circle")
 		"evade":
 			go = _steer(evade_to, delta)
 			pace = speed
@@ -652,11 +708,18 @@ func _physics_process(delta: float) -> void:
 	if tight and mode in ["close", "circle", "rush"]:
 		_set_mode("lurk")
 	turn_wait -= delta
+	spit_cooldown -= delta
+	# Has its prey stayed where it is?
+	if still_at == Vector3.INF or target.distance_to(still_at) > SPIT_STILL.x:
+		still_at = target
+		still_for = 0.0
+	else:
+		still_for += delta
 	pin_cooldown -= delta
 	charge_cooldown -= delta
 	evade_cooldown -= delta
 	dash_left -= delta
-	if mode in ["pin", "wind", "charge", "evade"]:
+	if mode in ["pin", "wind", "charge", "evade", "spit"]:
 		_special(delta, toward)
 		return
 	match mode:
@@ -714,6 +777,9 @@ func _physics_process(delta: float) -> void:
 			if not tight:
 				lurk_left = 0.0
 				_set_mode("close")
+			elif _may_spit(target, distance):
+				# They sit where it does not follow: then that place is made no place to sit.
+				_start_spit()
 			elif lurk_left <= 0.0 and nerve > 0.0:
 				# They do not come out: then another time. (Nobody drove it off.)
 				break_off(false)
@@ -791,7 +857,9 @@ func _physics_process(delta: float) -> void:
 			if distance > RING.y + 6.0 or blind_for > 0.5:
 				_set_mode("close")
 			elif attack_left <= 0.0 and clear:
-				if _may_charge(target, distance):
+				if _may_spit(target, distance):
+					_start_spit()
+				elif _may_charge(target, distance):
 					_start_charge(target)
 				elif special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target):
 					_start_leap()
@@ -1159,6 +1227,13 @@ func show_cue(action: String, args: Array) -> void:
 			model.attack(float(args[1]), float(args[2]), str(args[0]))
 			game.sounds.play_at("swipe", global_position + Vector3.UP, 2.0, 0.75)
 			game.sounds.play_at("prowler_strike", mouth())
+		"spit_wind":
+			(model as ProwlerVisual).spit()
+			game.sounds.play_at("gurgle", mouth(), 7.0, 0.55)
+		"spit":
+			# (On a guest's side of a co-op match too: the glob and its pool are his own there.)
+			ProwlerPool.spit(game, args[0] as Vector3, args[1] as Vector3, float(args[2]), float(args[3]))
+			game.sounds.play_at("hiss", mouth(), 3.0, 0.7)
 		"pounce":
 			model.pounce()
 			game.sounds.play_at("prowler_leap", mouth(), 2.0)
