@@ -211,6 +211,15 @@ var skills := Skills.new()
 ## What the shop has done for the squad this night: the level of each upgrade
 ## (Survivor.GOODS), and what a level is worth.
 var squad_levels := {"squad_armor": 0, "squad_ammo": 0}
+## Helping somebody up by hand - a companion or a co-op partner - takes holding [E] at
+## his side for this long. Letting go or walking away starts it over.
+const REVIVE_SECONDS := 2.2
+## Seconds [E] has been held at the side of a co-op partner who is down, and how long
+## until that counts as let go.
+var partner_lift := 0.0
+var partner_lift_held := 0.0
+## How often one of the companions has gone down in this night (the bots report it).
+var squad_downs := 0
 const SQUAD_HEALTH := 0.3
 const SQUAD_DAMAGE := 0.2
 ## What the last finished night earned: {xp, level, raised} (see finish).
@@ -628,6 +637,13 @@ func _process(delta: float) -> void:
 	_update_pickups(delta)
 	sounds.set_shelter(cabin.is_indoors(player.global_position))
 	mission.update(delta)
+	# [E] held beside somebody who is down: he is helped up for as long as it is held.
+	if Input.is_action_pressed("interact") and player.controlled and not player.menu_open:
+		help_up(delta)
+	if partner_lift_held > 0.0:
+		partner_lift_held -= delta
+		if partner_lift_held <= 0.0:
+			partner_lift = 0.0
 	# A guest only watches: the host runs the rounds.
 	if net.joined:
 		return
@@ -730,6 +746,7 @@ func start_run(test: bool = false) -> void:
 	_set_modifier("")
 	for key in stats:
 		stats[key] = 0
+	squad_downs = 0
 	last_place = 0
 	operators.clear()
 	if not net.joined and not second:
@@ -1692,9 +1709,9 @@ func interaction_prompt() -> String:
 		return "Am Boden · Dein Mitspieler kann dir mit [E] aufhelfen"
 	var fallen := fallen_mate()
 	if fallen != null:
-		return "[E] %s aufhelfen" % fallen.label
+		return "%s aufhelfen  ·  %d %%" % [fallen.label, int(help_share() * 100.0)] if help_share() > 0.0 else "[E] halten  ·  %s aufhelfen" % fallen.label
 	if partner_needs_help():
-		return "[E] Mitspieler aufhelfen"
+		return "Mitspieler aufhelfen  ·  %d %%" % int(help_share() * 100.0) if help_share() > 0.0 else "[E] halten  ·  Mitspieler aufhelfen"
 	if hive.on:
 		var hint := hive.prompt()
 		if hint != "":
@@ -1715,6 +1732,35 @@ func interaction_prompt() -> String:
 		"gear": return "[E] Ausrüstung: Aufsätze, Schutz, Granaten  ·  Waffen gibt es am Waffenschrank"
 	return ""
 
+## [E] is held at the side of somebody who is down (called every frame while it is): a
+## companion gets up while it is held and stands after REVIVE_SECONDS; a co-op partner is
+## told that he is up when the time is over. True if somebody is being helped.
+func help_up(delta: float) -> bool:
+	if player.down:
+		return false
+	var fallen := fallen_mate()
+	if fallen != null:
+		if fallen.lift(delta):
+			bark(fallen, fallen.look, "thanks")
+			stats.revives += 1
+		return true
+	if partner_needs_help():
+		partner_lift += delta
+		partner_lift_held = Teammate.LIFT_GRACE
+		if partner_lift >= REVIVE_SECONDS:
+			partner_lift = 0.0
+			net.send_revive()
+			stats.revives += 1
+		return true
+	return false
+
+## How far along the help is that the player is giving (0 to 1; 0: he helps nobody).
+func help_share() -> float:
+	var fallen := fallen_mate()
+	if fallen != null:
+		return clampf(fallen.lifted / REVIVE_SECONDS, 0.0, 1.0)
+	return clampf(partner_lift / REVIVE_SECONDS, 0.0, 1.0) if partner_needs_help() else 0.0
+
 ## The co-op partner lies within arm's reach.
 func partner_needs_help() -> bool:
 	return is_instance_valid(net.remote) and net.remote.down and net.remote.global_position.distance_to(player.global_position) < 2.8
@@ -1733,15 +1779,8 @@ func interact() -> void:
 		return
 	if Time.get_ticks_msec() < interact_blocked_until:
 		return
-	var fallen := fallen_mate()
-	if fallen != null:
-		fallen.revive()
-		bark(fallen, fallen.look, "thanks")
-		stats.revives += 1
-		return
-	if partner_needs_help():
-		net.send_revive()
-		stats.revives += 1
+	if fallen_mate() != null or partner_needs_help():
+		# Helping somebody up takes holding the key (see help_up): a press is its beginning.
 		return
 	if hive.on and hive.use():
 		return

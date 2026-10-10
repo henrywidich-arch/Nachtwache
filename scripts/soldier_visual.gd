@@ -559,15 +559,24 @@ func _pelvis() -> Vector3:
 	return skeleton.global_transform * skeleton.get_bone_global_pose(rig.pelvis.index).origin
 
 ## Stands up where the body lies. Returns how long it takes; call settle() afterwards.
-func rise() -> float:
+## `seconds`: how long it is to take (somebody helps it up, and that takes its time);
+## left out, it gets up at its own pace.
+func rise(seconds: float = 0.0) -> float:
 	var before := _pelvis()
 	mode = "rising"
 	legs.speed_scale = 1.0
-	legs.play("get_up", 0.0, RISE_RATE)
+	var rate := RISE_RATE if seconds <= 0.0 else float(sampled.clips.get_up.length) / seconds
+	legs.play("get_up", 0.0, rate)
 	legs.advance(0.0)
 	var after := _pelvis()
 	shift.global_position += Vector3(before.x - after.x, 0.0, before.z - after.z)
-	return float(sampled.clips.get_up.length) / RISE_RATE
+	return float(sampled.clips.get_up.length) / rate
+
+## Whoever was helping it up has let go: it sinks back to where it lay.
+func sink() -> void:
+	mode = "down"
+	if legs.current_animation == "get_up":
+		legs.play("get_up", -1.0, -RISE_RATE * 1.5)
 
 ## Back on its feet: returns how far the body has to be moved so that it stands where
 ## the model is, and puts the model back onto the body.

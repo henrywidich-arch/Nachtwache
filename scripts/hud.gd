@@ -54,6 +54,7 @@ var ammo_label: Label
 var reserve_label: Label
 var rifle_label: Label
 var interaction_label: Label
+var hold_bar: ProgressBar
 var banner_label: Label
 var detail_label: Label
 var radio_panel: PanelContainer
@@ -393,6 +394,11 @@ func _build_play_ui() -> void:
 	interaction_label = label("", 19, AMBER, true)
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_anchored(interaction_label, Control.PRESET_CENTER_BOTTOM, -390, -150, 390, -112)
+	# Under it: how far along something is that takes holding [E] (helping somebody up).
+	hold_bar = _bar(AMBER, 240, 6)
+	hold_bar.max_value = 1.0
+	_anchored(hold_bar, Control.PRESET_CENTER_BOTTOM, -120, -108, 120, -102)
+	hold_bar.hide()
 	reticle = Control.new()
 	reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	reticle.draw.connect(_draw_reticle)
@@ -678,6 +684,9 @@ func _process(delta: float) -> void:
 	reserve_label.text = "/ %03d" % player.reserve
 	rifle_label.text = "NACHLADEN …" if player.reload_left > 0 else ("%s  ·  STUFE %d" % [player.weapon_label(), player.weapon_level] if player.weapon_level > 0 else player.weapon_label())
 	interaction_label.text = game.interaction_prompt()
+	var held: float = game.help_share()
+	hold_bar.visible = held > 0.0
+	hold_bar.value = held
 	armor_label.text = ("" if player.armor <= 0.0 else "RÜSTUNG %d" % ceili(player.armor)) + ("" if player.plate_level <= 0 else "     WESTE %s" % "I".repeat(player.plate_level))
 	loadout_left = maxf(0.0, loadout_left - delta)
 	loadout_box.modulate.a = minf(1.0, loadout_left * 2.0)

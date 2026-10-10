@@ -1119,8 +1119,14 @@ func run(game: Node3D) -> void:
 	game.player.position = mate.global_position + Vector3(0.8, 0, 0)
 	await frames(3)
 	expect(game.fallen_mate() == mate and "aufhelfen" in game.interaction_prompt(), "A fallen teammate can be helped up")
+	# A press alone does not do it any more: [E] has to be held while it gets up.
 	game.interact()
-	expect(not mate.down and mate.health == 60.0 and game.stats.revives == 1, "E helps the teammate back on its feet")
+	var pressed_only: bool = mate.down and game.help_share() == 0.0
+	var held_for := 0.0
+	while mate.down and held_for < 6.0:
+		game.help_up(0.05)
+		held_for += 0.05
+	expect(pressed_only and not mate.down and mate.health == 60.0 and game.stats.revives == 1 and absf(held_for - float(game.REVIVE_SECONDS)) < 0.11, "Holding E for %.1f seconds helps the teammate back on its feet" % held_for)
 	# --- the squad rescues the player
 	game.player.health = 100
 	game.player.receive_damage(500.0)
@@ -2792,6 +2798,59 @@ func _threats(game: Node3D) -> void:
 	await _crusher_guard(game)
 	await _hive_staff(game)
 	game.team_enabled = true
+	game.start_run()
+	await _companions(game)
+
+## The companions: they take more than they did, and helping one up takes holding [E]
+## while it gets up.
+func _companions(game: Node3D) -> void:
+	var player: Survivor = game.player
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	await frames(3)
+	var mate: Teammate = game.team[0]
+	for one in game.team:
+		one.set_physics_process(false)
+	mate.health = mate.max_health
+	mate.receive_damage(100.0)
+	expect(not mate.down and is_equal_approx(mate.health, mate.max_health - 100.0 * Teammate.ARMOUR) and Teammate.ARMOUR <= 0.56 and Teammate.ARMOUR >= 0.45 and mate.max_health / Teammate.ARMOUR >= 143.0 * 1.3, "A companion stands a third more than it did: it goes down after %.0f points of harm, not after 143" % (mate.max_health / Teammate.ARMOUR))
+	# Down, and the survivor beside it: a press does nothing, holding [E] gets it up.
+	var need: float = game.REVIVE_SECONDS
+	var helped: int = int(game.stats.revives)
+	mate.receive_damage(9999.0)
+	face(game, mate.global_position + Vector3(0.9, 0, 0), 0.0)
+	await frames(2)
+	var asks: bool = mate.down and game.fallen_mate() == mate and game.interaction_prompt().contains("[E] halten") and game.help_share() == 0.0
+	game.interact()
+	asks = asks and mate.down and int(game.stats.revives) == helped
+	var held := 0.0
+	while held < need * 0.5:
+		game.help_up(0.05)
+		held += 0.05
+	game.hud._process(0.05)
+	var halfway: bool = mate.down and mate.visual.mode == "rising" and absf(game.help_share() - 0.5) < 0.06 and game.interaction_prompt().contains("%") and game.hud.hold_bar.visible and absf(game.hud.hold_bar.value - game.help_share()) < 0.01
+	# Let go: it sinks back, and the help starts over.
+	mate._recover(Teammate.LIFT_GRACE + 0.05)
+	game.hud._process(0.05)
+	var let_go: bool = mate.down and mate.lifted == 0.0 and game.help_share() == 0.0 and mate.visual.mode == "down" and not game.hud.hold_bar.visible
+	# Walking away does the same.
+	game.help_up(0.6)
+	player.global_position = mate.global_position + Vector3(9.0, 0, 0)
+	var nobody: bool = not game.help_up(0.6)
+	mate._recover(Teammate.LIFT_GRACE + 0.05)
+	var walked_off: bool = nobody and mate.down and mate.lifted == 0.0
+	expect(need >= 2.0 and need <= 2.5 and asks and halfway and let_go and walked_off, "Helping a companion up takes holding [E] for %.1f s: a press does nothing, the HUD shows how far it is, and letting go or walking away starts it over" % need)
+	face(game, mate.global_position + Vector3(0.9, 0, 0), 0.0)
+	held = 0.0
+	while mate.down and held < 6.0:
+		game.help_up(0.05)
+		held += 0.05
+	mate._recover(0.05)
+	expect(not mate.down and absf(held - need) < 0.11 and is_equal_approx(mate.health, mate.max_health * 0.6) and int(game.stats.revives) == helped + 1 and mate.collision_layer == 2 and mate.visual.mode == "stand" and mate.is_targetable(), "Held all the way, it gets up while it is held and stands after %.1f s" % held)
+	# Left alone it still gets up by itself after a while, as before.
+	mate.receive_damage(9999.0)
+	mate._recover(Teammate.DOWN_SECONDS + 0.1)
+	expect(not mate.down and mate.rising_left > 0.0, "Left alone, a companion still gets up by itself after %.0f s" % Teammate.DOWN_SECONDS)
 	game.start_run()
 
 ## The plain infected of the second mission: many of them wear what the Hive's people wore -
@@ -4688,6 +4747,7 @@ func bot(game: Node3D) -> void:
 	var squad_kills := 0
 	for mate in game.team:
 		squad_kills += mate.kills
+	print("BOT_SQUAD downs=%d revives=%d" % [game.squad_downs, int(game.stats.revives)])
 	print("BOT_RESULT state=%s round=%d kills=%d squad_kills=%d score=%d heals=%d seen=%s stuck=%d weather_loops=%s" % [game.state, game.wave, game.kills, squad_kills, game.score, heals, str(seen), stuck.size(), str(game.sounds.rain.playing and game.sounds.ambience.playing)])
 	print("BOT_ROUNDS ", " ".join(PackedStringArray(durations)))
 	print("BOT_TIME %.0f s  harm=%.0f  tree=%s  vest=%s" % [game.elapsed, harm, tree if tree != "" else "-", str(vest)])
@@ -5251,9 +5311,12 @@ func coop(game: Node3D, as_host: bool) -> void:
 					cru_walked += foe.global_position.distance_to(cru_last)
 				cru_last = foe.global_position
 		if as_host and game.partner_needs_help() and not revived:
-			revived = true
-			game.interact()
-			print("MP_HOST helped the partner up")
+			# Helping up takes holding [E] for a moment: the host holds it.
+			var helped_before: int = int(game.stats.revives)
+			game.help_up(get_physics_process_delta_time())
+			if int(game.stats.revives) > helped_before:
+				revived = true
+				print("MP_HOST helped the partner up")
 	# The host calls the night off; the guest has to hear about it.
 	if as_host:
 		game.finish(false)
@@ -7963,6 +8026,7 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 	var squad_kills := 0
 	for mate in game.team:
 		squad_kills += mate.kills
+	print("BOT_SQUAD downs=%d revives=%d" % [game.squad_downs, int(game.stats.revives)])
 	print("BOT_RESULT state=%s stage=%s t=%d kills=%d squad_kills=%d score=%d heals=%d most_alive=%d seen=%s lost=%d paths=%d path_ms_each=%.3f" % [game.state, hive.stage, int(game.elapsed), game.kills, squad_kills, game.score, heals, most_alive, str(seen), lost.size(), map.path_calls, (map.path_usec / 1000.0) / maxf(1.0, float(map.path_calls))])
 	print("BOT_STAGES ", " ".join(PackedStringArray(stages)))
 	var carried: Array[String] = []

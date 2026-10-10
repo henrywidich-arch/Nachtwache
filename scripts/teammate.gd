@@ -15,8 +15,11 @@ const RUN_SPEED := 4.6
 const WALK_SPEED := 1.9
 const DOWN_SECONDS := 14.0
 const GRAVITY := 22.0
-## Share of incoming damage a teammate takes; they are a little tougher than they look.
-const ARMOUR := 0.7
+## Share of incoming damage a teammate takes; they are tougher than they look. (It was 0.7:
+## with 0.525 they stand a third more before they go down.)
+const ARMOUR := 0.525
+## Being helped up by hand: how long the help may pause before it counts as let go.
+const LIFT_GRACE := 0.25
 ## Personal space: closer than KEEP_AWAY metres to the player it makes room. It only
 ## catches up when the player is more than FOLLOW_FAR away and stops FOLLOW_NEAR short.
 const KEEP_AWAY := 2.0
@@ -49,6 +52,10 @@ var health := 100.0
 var down := false
 var down_left := 0.0
 var rising_left := 0.0
+## Seconds somebody has been helping it up (see lift), and how long until that counts as
+## let go.
+var lifted := 0.0
+var lift_held := 0.0
 var gun: Dictionary = GUNS["badger"]
 var ammo := 30
 var pump_left := -1.0
@@ -493,6 +500,8 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = 
 
 func _go_down(from: Vector3) -> void:
 	down = true
+	if game.team.has(self):
+		game.squad_downs += 1
 	down_left = DOWN_SECONDS
 	target = null
 	firing = false
@@ -504,10 +513,18 @@ func _go_down(from: Vector3) -> void:
 	name_tag.modulate = Color("ff8c6e")
 	name_tag.text = label + "  ·  AM BODEN"
 	game.bark(self, look, "down", 2.0)
-	game.hud.announce("%s IST AM BODEN" % label, "Hilf mit [E] auf – oder halte durch, bis sie von selbst wieder steht.", 3.0)
+	lifted = 0.0
+	game.hud.announce("%s IST AM BODEN" % label, "Halte [E], um aufzuhelfen – oder halte durch, bis sie von selbst wieder steht.", 3.0)
 
 func _recover(delta: float) -> void:
-	if down:
+	if down and lifted > 0.0:
+		# Somebody is helping it up. If he lets go or walks off, it sinks back and the
+		# help starts over.
+		lift_held -= delta
+		if lift_held <= 0.0:
+			lifted = 0.0
+			visual.sink()
+	elif down:
 		down_left -= delta
 		if down_left <= 0.0 and not unarmed:
 			revive()
@@ -518,17 +535,40 @@ func _recover(delta: float) -> void:
 			collision_layer = 2
 			facing = rotation.y
 
-## Helps the teammate back on its feet; `full` restores all health (between rounds).
+## Puts the teammate back on its feet by itself; `full` restores all health (between
+## rounds). It gets up at its own pace. (Helping it up by hand is lift.)
 func revive(full: bool = false) -> void:
 	hurt_called = false
 	if not down:
 		if full:
 			health = max_health
 		return
+	_up(full)
+	rising_left = visual.rise()
+
+## Somebody at its side helps it up: called every frame while he does. The getting up IS
+## the help - it rises while it is held, which takes Game.REVIVE_SECONDS, and stands when
+## that time is up (true then). Let go, it sinks back (see _recover).
+func lift(delta: float) -> bool:
+	if not down:
+		return false
+	if lifted <= 0.0:
+		visual.rise(float(game.REVIVE_SECONDS))
+	lifted += delta
+	lift_held = LIFT_GRACE
+	if lifted < float(game.REVIVE_SECONDS):
+		return false
+	_up(false)
+	# (It has risen while it was held: _recover puts it on its feet in the next frame.)
+	rising_left = 0.01
+	return true
+
+func _up(full: bool) -> void:
+	hurt_called = false
 	down = false
+	lifted = 0.0
 	health = max_health if full else max_health * 0.6
 	ammo = int(gun.magazine)
-	rising_left = visual.rise()
 	name_tag.modulate = Color("9fe4ef")
 	name_tag.text = label
 	game.sounds.play_at("equip", eye())
