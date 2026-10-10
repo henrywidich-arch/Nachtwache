@@ -145,6 +145,10 @@ var last_modifier := ""
 ## for a round by its modifier).
 var level := "normal"
 var rules: Dictionary = Profile.DIFFICULTIES["normal"]
+## What a level adds to the health of the infected (the rule "brood") counts. Off only in
+## the checks of the rules, which count damage and kills against the health in
+## Infected.TYPES; the bots and the co-op runs play real nights.
+var brood_on := true
 ## What the whole squad did in this match, for the leaderboard.
 var stats := {"kills": 0, "special_kills": 0, "cru_kills": 0, "revives": 0, "objectives": 0, "phantom": 0, "havoc": 0, "ghost": 0}
 ## Place of the last finished run on the leaderboard, 0 if it did not make the list.

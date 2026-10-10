@@ -42,8 +42,11 @@ func run(game: Node3D) -> void:
 	game.operators_enabled = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	game.set_process(false)
-	# The rule checks below count exact kills and damage, so they run without the squad.
+	# The rule checks below count exact kills and damage, so they run without the squad -
+	# and against the health in Infected.TYPES, without what a level adds to it. (The checks
+	# of that toughness switch it on for themselves, see _toughness.)
 	game.team_enabled = false
+	game.brood_on = false
 	# --only=threats runs one of the later blocks on its own (handy while working on it);
 	# --only=operators,sandbox runs several, one after the other.
 	for arg in OS.get_cmdline_user_args():
@@ -2613,7 +2616,7 @@ func _threats(game: Node3D) -> void:
 	game.set_render_scale(1.0, false)
 	var first: float = game.default_render_scale()
 	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
-	await _zombie_test(game)
+	await _toughness(game)
 	await _hit_answer(game)
 	await _ding_answer(game)
 	await _second_exploder(game)
@@ -3071,35 +3074,49 @@ func _ding_answer(game: Node3D) -> void:
 	_wipe_all(game)
 	await wait(0.5)
 
-## The difficulty "Zombie-Test": a night as on NORMAL, except that the horde takes more.
-func _zombie_test(game: Node3D) -> void:
-	var normal: Dictionary = Profile.DIFFICULTIES.normal
-	var test: Dictionary = Profile.DIFFICULTIES.zombie_test
-	var same := true
-	for key in normal:
-		if str(key) != "label":
-			same = same and test.has(key) and is_equal_approx(float(test[key]), float(normal[key]))
+## How much the infected take: a ladder over the difficulties. What was tried as the
+## difficulty "Zombie-Test" is NORMAL's own now, the easier level asks less, each harder
+## one clearly more; and "Zombie-Test" itself is gone from the menu.
+func _toughness(game: Node3D) -> void:
+	var order: Array = Profile.ORDER
+	var climbs: bool = order == ["easy", "normal", "hard", "nightmare"] and Profile.DIFFICULTIES.size() == order.size()
+	var before := 1.0
+	var steps := ""
+	for level in order:
+		var brood: float = float((Profile.DIFFICULTIES[level] as Dictionary).get("brood", 0.0))
+		# Every step is felt (a quarter of the old health and more), and the hardest is no slog.
+		climbs = climbs and brood >= before + 0.25 and brood <= 3.0
+		before = brood
+		steps += " %.1f" % brood
+	expect(climbs and is_equal_approx(float(Profile.DIFFICULTIES.normal.brood), 1.8) and float(Profile.DIFFICULTIES.easy.brood) >= 1.25, "The toughness of the infected is a ladder over the difficulties (%s ): NORMAL has what Zombie-Test had, the easier level asks less, each harder one clearly more" % steps)
+	# "Zombie-Test" is gone from the menu; a profile that still has it selected comes up on
+	# NORMAL, and the lists of its best runs stay in the file as they were.
 	var book := Profile.new()
 	book.stored = false
-	book.difficulty = "nightmare"
-	book.next_difficulty()
-	var reached := book.difficulty == "zombie_test" and str(book.rules().label) == "ZOMBIE-TEST"
-	book.next_difficulty()
-	expect(same and test.size() == normal.size() + 1 and is_equal_approx(float(test.brood), Profile.ZOMBIE_TEST_HEALTH) and Profile.ZOMBIE_TEST_HEALTH >= 1.5 and reached and book.difficulty == "easy" and Profile.ORDER.size() == Profile.DIFFICULTIES.size(), "Zombie-Test is a difficulty of its own, chosen like the others: a night as on NORMAL in everything but what the infected take")
-	# Its nights are filed apart from those of every other difficulty, in each mode.
-	var lists := {}
-	for level in Profile.ORDER:
-		for play in ["story", "endless", "villa"]:
-			lists[Profile.board(str(level), str(play))] = true
-	book.record(Profile.board("zombie_test", "villa"), {"score": 900, "round": 3, "seconds": 300, "victory": false, "kills": 40})
-	book.record(Profile.board("zombie_test", "story"), {"score": 500, "round": 2, "seconds": 200, "victory": false, "kills": 20})
-	expect(lists.size() == Profile.ORDER.size() * 3 and book.best("zombie_test").size() == 1 and book.best("villa_zombie_test").size() == 1 and book.best("endless_zombie_test").is_empty() and book.best("normal").is_empty() and book.best("villa_normal").is_empty(), "Its runs get lists of their own: story, endless night and second mission")
-	# In a night: as many come, the horde takes more, Helix's people and the two giants do not.
+	var labels := ""
+	var round_trip := true
+	for i in range(order.size()):
+		labels += str(book.rules().label) + " "
+		round_trip = round_trip and order.has(book.difficulty)
+		book.next_difficulty()
+	var old := Profile.new()
+	old.stored = false
+	var its_runs := [{"score": 900.0, "round": 3.0, "seconds": 300.0, "victory": false, "kills": 40.0}]
+	var saved := {"difficulty": "zombie_test", "mission": 2.0, "mode": "endless", "totals": {"kills": 12.0},
+		"runs": {"zombie_test": its_runs, "villa_zombie_test": its_runs, "endless_zombie_test": its_runs, "normal": [{"score": 500.0, "round": 2.0, "seconds": 200.0, "victory": false, "kills": 20.0}], "nonsense": [1.0]}}
+	old.read(saved)
+	var came_up: bool = old.difficulty == "normal" and str(old.rules().label) == "NORMAL" and old.mission == 2 and old.mode == "endless" and int(old.totals.kills) == 12 and old.best("normal").size() == 1
+	old.record(Profile.board("normal", "story"), {"score": 700, "round": 2, "seconds": 250, "victory": false, "kills": 30})
+	var back: Dictionary = old.kept()
+	var lists: Dictionary = back.runs
+	expect(not order.has("zombie_test") and not Profile.DIFFICULTIES.has("zombie_test") and not labels.contains("ZOMBIE") and round_trip and book.difficulty == "normal" and Profile.RETIRED.has("zombie_test") and came_up and str(back.difficulty) == "normal" and lists.get("zombie_test") == its_runs and lists.get("villa_zombie_test") == its_runs and lists.get("endless_zombie_test") == its_runs and (lists.normal as Array).size() == 2 and not lists.has("nonsense"), "Zombie-Test is gone from the menu (%s); a saved profile that still has it comes up on NORMAL, and the lists of its runs stay in the file untouched" % labels.strip_edges())
+	# In a night: the horde takes what its level says; Helix's people and the fights of
+	# their own keep their health on every level.
 	var level_before: String = game.level
 	var took := {}
-	var hordes: Array = []
-	for level in ["normal", "zombie_test"]:
-		game.level = level
+	for level in ["plain"] + order:
+		game.brood_on = str(level) != "plain"
+		game.level = "normal" if str(level) == "plain" else str(level)
 		game._set_modifier("")
 		for kind in Infected.TYPES:
 			if str(kind) == "ripper" and not ResourceLoader.exists(RipperVisual.SCENE):
@@ -3114,33 +3131,36 @@ func _zombie_test(game: Node3D) -> void:
 			took["%s/%s" % [level, kind]] = one.max_health
 			one._retire()
 			one.queue_free()
-		game.spawn_queue.clear()
-		game.wave = 2
-		game.begin_wave()
-		var horde: Array = game.spawn_queue.duplicate()
-		horde.sort()
-		hordes.append(horde)
-		game.spawn_queue.clear()
-		game.mission.wave_kind = "classic"
-		game.phase = "preparing"
-		game.preparation_left = 9999.0
-		game.gas.clear()
-	game.level = level_before
-	game._set_modifier("")
 	var tougher := true
 	var untouched := true
+	var horde := 0
 	var apart := 0
 	for kind in Infected.TYPES:
-		if not took.has("normal/%s" % kind):
+		if not took.has("plain/%s" % kind):
 			continue
-		var plain: float = took["normal/%s" % kind]
-		var tested: float = took["zombie_test/%s" % kind]
-		if Infected.TYPES[kind].get("human", false) or str(kind) in Infected.BROOD_APART:
-			untouched = untouched and is_equal_approx(tested, plain)
-			apart += 1
-		else:
-			tougher = tougher and is_equal_approx(tested, plain * Profile.ZOMBIE_TEST_HEALTH)
-	expect(tougher and untouched and apart >= 13 and is_equal_approx(float(took["zombie_test/mauler"]), (95.0 + 7.0 * 3) * Profile.ZOMBIE_TEST_HEALTH) and hordes[0] == hordes[1] and (hordes[0] as Array).size() > 8, "On Zombie-Test as many come as on NORMAL and the infected take %.1f times as much; the C.R.U., the operators, the Crusher and the Stalker are as they were" % Profile.ZOMBIE_TEST_HEALTH)
+		var plain: float = took["plain/%s" % kind]
+		var own: bool = Infected.TYPES[kind].get("human", false) or str(kind) in Infected.BROOD_APART
+		horde += 0 if own else 1
+		apart += 1 if own else 0
+		for level in order:
+			var tested: float = took["%s/%s" % [level, kind]]
+			if own:
+				untouched = untouched and is_equal_approx(tested, plain)
+			else:
+				tougher = tougher and is_equal_approx(tested, plain * float(Profile.DIFFICULTIES[level].brood))
+	# A night that is played has it switched on by itself.
+	game.brood_on = true
+	game.level = "normal"
+	game._set_modifier("")
+	game.wave = 1
+	var met: Infected = game.spawn_enemy("mauler")
+	met.set_physics_process(false)
+	var standard: bool = is_equal_approx(met.max_health, 95.0 * float(Profile.DIFFICULTIES.normal.brood)) and is_equal_approx(met.health, met.max_health)
+	_take_off(game, met)
+	game.brood_on = false
+	game.level = level_before
+	game._set_modifier("")
+	expect(tougher and untouched and standard and horde >= 6 and apart >= 14 and Infected.BROOD_APART.has("crusher") and Infected.BROOD_APART.has("stalker") and Infected.BROOD_APART.has("prowler"), "In a night the horde (%d kinds) takes what its level says - a Mauler of the first round %.0f on NORMAL - while the C.R.U., the operators, the Crusher, the Stalker and the Prowler (%d kinds) keep their health on every level" % [horde, 95.0 * float(Profile.DIFFICULTIES.normal.brood), apart])
 	await frames(3)
 
 ## What came with v0.8: the UMP and the parts for it, ballistic plates, lamps on the C.R.U.
