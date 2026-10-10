@@ -865,7 +865,7 @@ static func _grind() -> AudioStreamWAV:
 
 ## Finds the displays and the terminals of the map, once.
 func _find_hints() -> void:
-	if is_instance_valid(hints):
+	if is_instance_valid(hints) and hints.get_parent() == map:
 		for board in boards:
 			board.read = false
 		for screen in screens:
