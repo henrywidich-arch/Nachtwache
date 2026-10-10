@@ -19,6 +19,14 @@ const raw = args[0];
 const order = JSON.parse(fs.readFileSync(args[1], 'utf8'));
 const dry = args.includes('--dry');
 const skip = Number((args.find(a => a.startsWith('--skip=')) || '--skip=0').slice(7));
+// --not=<cue>[,<cue>]: lines of an order that are left out (a take that was recorded again
+// in a later order: m2_b_havoc of stimmen8's first order, whose text was changed).
+const not = ((args.find(a => a.startsWith('--not=')) || '--not=').slice(6)).split(',').filter(c => c);
+// --lift=<dB>: a line whose mean level would fall under this is raised towards it - as far
+// as the dB its voice was lowered by (LEVEL) leave room under the peak, and no further.
+// For talk in which several speak in turn (stimmen8: --lift=-18.5), so that a long, calm
+// sentence does not sink between two short loud ones.
+const lift = Number((args.find(a => a.startsWith('--lift=')) || '--lift=NaN').slice(7));
 const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
 // (Since 2026-10-10 the squad, Nadja and Coleman speak with voices the user made himself.)
@@ -50,7 +58,8 @@ const SPEAKER = 'highpass=f=260,lowpass=f=4200,acompressor=threshold=-20dB:ratio
 // harder band than Coleman's, driven a little too hot. What they shout across the yard
 // (every cue that does not begin with op_) stays as it was recorded: their calls as
 // companions, and what they say standing before the squad at the station (m2_p_truce,
-// m2_h_used, m2_g_radio, m2_g_clear, m2_p_tunnel, m2_p_join). What they report from the
+// m2_h_used, m2_g_radio, m2_g_clear, m2_p_tunnel, m2_p_join, and their part of the talk
+// about who goes on from there: m2_a_..., m2_b_..., m2_c_...). What they report from the
 // tunnel later in the second mission comes over the same sets.
 const OVER_RADIO = ['m2_g_list', 'm2_h_tunnel', 'm2_p_alive'];
 const INTRUDER = 'highpass=f=420,lowpass=f=2900,acompressor=threshold=-24dB:ratio=6:attack=3:release=80:makeup=6,volume=3dB,asoftclip=type=tanh,highpass=f=420,lowpass=f=2900';
@@ -118,7 +127,7 @@ let files = fs.readdirSync(raw).filter(f => f.toLowerCase().endsWith('.mp3')).so
 let lines = order;
 if (order.some(line => line.file)) {
   // A final order: every line names its recording; repeats and tests are marked.
-  lines = order.filter(line => !line.skip);
+  lines = order.filter(line => !line.skip && !not.includes(line.cue));
   for (const line of lines) if (!line.file || !fs.existsSync(path.join(raw, line.file))) throw new Error('no recording for ' + line.speaker + '/' + line.cue + '_' + line.n + ': ' + line.file);
   const seen = {};
   for (const line of lines) {
@@ -145,7 +154,8 @@ for (let i = 0; i < files.length; i++) {
   const measured = probe(file, chain);
   // Radio lines sit a little under full level; the calls of people nearby use all of it.
   const sound = line.speaker === 'coleman' ? 'radio' : (intruder ? 'set' : (radio ? 'speaker' : 'clean'));
-  const gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0) + level(line, sound);
+  let gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0) + level(line, sound);
+  if (!isNaN(lift) && lift > measured.mean + gain) gain += Math.min(lift - (measured.mean + gain), Math.max(0, -level(line, sound)));
   const rate = line.text.length / measured.seconds;
   const entry = { file: line.speaker + '/' + line.cue + '_' + line.n, sound, seconds: +measured.seconds.toFixed(2), chars: line.text.length, rate: +rate.toFixed(1), gain: +gain.toFixed(1), mean: measured.mean };
   if (pause.cut > 0) entry.pause_cut = +pause.cut.toFixed(2);

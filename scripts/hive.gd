@@ -96,6 +96,18 @@ const STALE := 45.0
 const VOICE_REACH := 11.0
 ## The rooms of the research wing that stand full of what Nadja has made.
 const LAB_ROOMS := ["lab_corridor", "lab_a", "lab_b", "lab_c", "quarantine", "cryo", "flooded"]
+## What is said at the station when it is settled who goes on with the survivor, for each
+## choice of company (Profile.COMPANIES), in its order. Whoever stays or goes says why.
+## Each: how it is said - "face" in person, "talk" by somebody of the squad, "line" over
+## the radio - and its cue; a third entry names the one of the squad who alone says it.
+## Who is not there is passed over.
+const SETTLED := {
+	"fireteam": [["face", "m2_p_tunnel"], ["face", "m2_a_havoc"], ["face", "m2_a_ghost"], ["talk", "m2_a_viper"], ["talk", "m2_a_scorpion"], ["talk", "m2_a_raven"], ["line", "m2_a_coleman"]],
+	# (Ghost keeps the relay himself here: Raven has her other word for it.)
+	"phantom_havoc": [["face", "m2_p_join"], ["face", "m2_b_phantom"], ["face", "m2_b_havoc"], ["face", "m2_a_ghost"], ["talk", "m2_b_viper"], ["talk", "m2_b_scorpion"], ["talk", "m2_stay", "raven"], ["line", "m2_b_coleman"]],
+	"phantom_ghost": [["face", "m2_p_join"], ["face", "m2_b_phantom"], ["face", "m2_b_ghost"], ["face", "m2_a_havoc"], ["talk", "m2_b_viper"], ["talk", "m2_b_scorpion"], ["talk", "m2_b_raven"], ["line", "m2_b_coleman"]],
+	"havoc_ghost": [["face", "m2_c_havoc"], ["face", "m2_b_ghost"], ["face", "m2_b_havoc"], ["face", "m2_c_phantom"], ["talk", "m2_b_viper"], ["talk", "m2_b_scorpion"], ["talk", "m2_b_raven"], ["line", "m2_b_coleman"]]
+}
 
 var game: Node3D
 var on := false
@@ -150,12 +162,17 @@ var call_wait := 0.0
 ## Seconds until somebody of the squad may make small talk again.
 var idle_left := 45.0
 var puppets: Array = []
-## Who goes on with the survivor from the station: "fireteam" or "operators" (read from
-## the profile when the night begins).
+## Who goes on with the survivor from the station: "fireteam", or two of the three
+## operators (Profile.COMPANIES; read from the profile when the night begins) - and the
+## looks of those two (none with the squad).
 var company := "fireteam"
-## Those of the squad who walk off to hold the tunnel when the operators take their
-## places: {node, left}.
+var pair: Array[String] = []
+## Those who stay at the station when the roads part, on their way to where they said they
+## would be: {node, left, keep}. keep: he stands at the relay until the train has left;
+## the others are gone once they have reached the tunnel.
 var leavers: Array = []
+## The looks of those of the squad who stayed.
+var stayed: Array[String] = []
 var stalker_sent := false
 ## The Prowler's comings and goings (a node of its own).
 var prowl: HiveProwler
@@ -195,7 +212,9 @@ func begin() -> void:
 	heli_clock = -1.0
 	intro_left = 0.0
 	leavers.clear()
-	company = str(game.profile.company)
+	stayed.clear()
+	company = Profile.known_company(str(game.profile.company))
+	pair = Profile.pair_of(company)
 	var from := resume_at if CHECKPOINTS.has(resume_at) else "landing"
 	resume_at = ""
 	checkpoint = from
@@ -210,9 +229,9 @@ func begin() -> void:
 	game.preparation_left = 99999.0
 	game.sounds.dry = true
 	var at: Vector3 = map.points.get(str(start.at), map.player_start)
-	# Taken up behind the station, the operators are already at the survivor's side.
-	if company == "operators" and ORDER.find(from) > ORDER.find("deal"):
-		_operators_join(true)
+	# Taken up behind the station, the two operators are already at the survivor's side.
+	if not pair.is_empty() and ORDER.find(from) > ORDER.find("deal"):
+		_part(true)
 	_place_squad(at, float(map.facings.get(str(start.at), 0.0)))
 	if ORDER.find(from) < ORDER.find("nadja"):
 		_spawn_nadja(at + Vector3(1.4, 0, 2.6))
@@ -473,17 +492,17 @@ func _enter(id: String) -> void:
 			progress = 0.0
 			progress_text = "ZUG FÄHRT HOCH"
 			game.round_called = false
-			# Whoever goes on with the survivor is at his side when the infected come.
-			if company == "operators":
-				_operators_join(false)
-			else:
-				_dismiss_puppets()
+			# Whoever goes on with the survivor is at his side when the infected come, and
+			# whoever stays is on his way - what they still have to say to each other they
+			# say meanwhile, after command's word about the train.
+			_part(false)
 			game.sounds.play_sound("wave")
-			line("m2_power")
+			line("m2_power", true)
 		"board":
 			map.set_door("car_a", true)
 			game.sounds.play_at("shutter_open", _point("car_a"))
-			line("m2_board")
+			line("m2_board", true)
+			_goodbye()
 		"ride":
 			_start_ride()
 		"terminal":
@@ -507,8 +526,7 @@ func _enter(id: String) -> void:
 		"cafe":
 			map.unlock("cafe")
 			game.sounds.play_at("shutter_open", _point("junction"))
-			if company != "operators":
-				line("m2_p_alive")
+			line("m2_p_alive")
 			_post(["mauler", "mauler", "striker", "leech"], [_point("cafeteria") + Vector3(-10, 0, -6), _point("cafeteria") + Vector3(9, 0, -8), _point("cafeteria") + Vector3(0, 0, -11), _point("cafeteria") + Vector3(-15, 0, 4)], false)
 		"lockdown":
 			map.lock("cafe")
@@ -565,7 +583,7 @@ func _update(delta: float) -> void:
 	var room: Dictionary = map.room_at(here)
 	var room_id := "" if room.is_empty() else str(room.id)
 	# From the tunnel they hold the operators report once, when nobody else is talking.
-	if company != "operators" and stage in ["generator", "decon"] and stage_time > 16.0 and not done.has("h_tunnel") and _silent_for(2.0):
+	if not pair.has("havoc") and stage in ["generator", "decon"] and stage_time > 16.0 and not done.has("h_tunnel") and _silent_for(2.0):
 		done["h_tunnel"] = true
 		line("m2_h_tunnel")
 	# A little after the guards have been talked over, Nadja has a word about the house.
@@ -627,12 +645,12 @@ func _update(delta: float) -> void:
 				lines.clear()
 				hold_id = ""
 				done["radio_clear"] = true
-				_dismiss_puppets()
+				_part(false)
 				_enter("power")
 		"hold":
 			progress = minf(1.0, progress + delta / HOLD_STATION)
 			if progress > 0.45 and _once("hold_squad"):
-				line("m2_depot")
+				line("m2_depot", true)
 				_post(["striker", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
 			if progress >= 1.0:
 				_all_clear()
@@ -807,9 +825,10 @@ func _nadja_is_gone() -> void:
 	nadja = null
 
 ## Three operators step out of the tunnel with their weapons down, one of them clears the
-## radio channel, and they leave again. Nobody has to stand still for it: what is said
+## radio channel, and then it is settled who goes on with the survivor: the squad, or two
+## of the three (see SETTLED and _part). Nobody has to stand still for it: what is said
 ## carries it along (see _beat), and the control room can be used as soon as command is
-## back, while the last words are still being said.
+## back, while they are still talking it over.
 func _deal() -> void:
 	var from := _point("ops_from")
 	var stand := _point("ops_stand")
@@ -833,14 +852,15 @@ func _deal() -> void:
 	line("m2_truth")
 	beat("power")
 	talk("m2_colonel")
-	if company == "operators":
-		# A change of plan: the three come along, and the squad holds the tunnel for them.
-		face("m2_p_join")
-		talk("m2_stay")
-		beat("join")
-	else:
-		face("m2_p_tunnel")
-		beat("ops_leave")
+	for part: Array in SETTLED[company]:
+		match str(part[0]):
+			"face":
+				face(str(part[1]))
+			"talk":
+				talk(str(part[1]), str(part[2]) if part.size() > 2 else "")
+			"line":
+				line(str(part[1]))
+	beat("part")
 
 ## The operators at the station walk to where they are wanted, stand there turned to the
 ## survivor, and are gone once they have left the way they came.
@@ -866,57 +886,89 @@ func _run_puppets(delta: float) -> void:
 		body.animate(delta, speed, false, false)
 		if bool(puppet.leaving):
 			puppet.left = float(puppet.left) + delta
-			if gap.length() <= 0.3 or float(puppet.left) > 12.0:
+			# (He is not gone while he still has something to say.)
+			if (gap.length() <= 0.3 or float(puppet.left) > 12.0) and (not _to_say(str(puppet.look)) or float(puppet.left) > 120.0):
 				body.queue_free()
 				gone.append(puppet)
 	for puppet: Dictionary in gone:
 		puppets.erase(puppet)
 
-## Phantom, Havoc and Ghost take the places of the squad: companions like any other, with
-## their own weapons and their own calls. The squad walks off into the tunnel the three
-## came out of, to hold it. `instant`: nobody walks anywhere (a night that is taken up
-## behind the station).
-func _operators_join(instant: bool) -> void:
-	if not _once("joined"):
+## The roads part at the station. Whoever goes on with the survivor is at his side from
+## here on: the squad as it was, or two of the operators in its two places - companions
+## like any other, with their own weapons and their own calls. Whoever stays goes where he
+## said he would: into the tunnel the operators came out of, or to the relay, which Ghost
+## keeps, or Raven when he is one of the two who go. `instant`: nobody walks anywhere (a
+## night that is taken up behind the station).
+func _part(instant: bool) -> void:
+	if not _once("parted"):
 		return
-	for mate: Teammate in game.team.duplicate():
-		game.team.erase(mate)
-		game.survivors.erase(mate)
-		if instant:
-			mate.queue_free()
-			continue
-		if mate.down:
-			mate.revive(true)
-		# (Sent off: who has something to see to is not called back to the survivor's side.)
-		mate.job = {"kind": "post", "pos": _point("ops_from")}
-		mate.order = "hold"
-		mate.hold_point = _point("ops_from")
-		leavers.append({"node": mate, "left": 0.0})
+	if not pair.is_empty():
+		for mate: Teammate in game.team.duplicate():
+			game.team.erase(mate)
+			game.survivors.erase(mate)
+			stayed.append(mate.look)
+			if instant:
+				mate.queue_free()
+			else:
+				_stay(mate, mate.look == "raven" and pair.has("ghost"))
 	var player: Survivor = game.player
-	var looks := ["phantom", "havoc", "ghost"]
-	var slots := [Vector3(-2.0, 0, 2.3), Vector3(2.2, 0, 2.6), Vector3(0.3, 0, 3.9)]
-	for index in range(3):
-		var at: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * (slots[index] as Vector3)
+	var slots := [Vector3(-2.0, 0, 2.3), Vector3(2.2, 0, 2.6)]
+	var walking: Array = []
+	for look: String in ["phantom", "havoc", "ghost"]:
+		var puppet: Dictionary = {}
+		for entry: Dictionary in puppets:
+			if str(entry.look) == look and is_instance_valid(entry.node):
+				puppet = entry
+		var goes := pair.has(look)
+		if not goes and (instant or puppet.is_empty()):
+			continue
+		if not goes and look != "ghost":
+			# Back into the tunnel, on foot.
+			puppet.goal = _point("ops_from")
+			puppet.leaving = true
+			walking.append(puppet)
+			continue
+		# A body that walks by itself takes the place of the one that stood here.
+		var slot: Vector3 = slots[pair.find(look)] if goes else Vector3(0.3, 0, 3.9)
+		var at: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * slot
 		var yaw: float = player.rotation.y
-		# Each goes on from where he stood at the station.
-		for puppet: Dictionary in puppets:
-			if str(puppet.look) == looks[index] and is_instance_valid(puppet.node):
-				at = (puppet.node as Node3D).global_position
-				yaw = (puppet.node as Node3D).rotation.y
-				(puppet.node as Node3D).queue_free()
+		if not puppet.is_empty():
+			at = (puppet.node as Node3D).global_position
+			yaw = (puppet.node as Node3D).rotation.y
+			(puppet.node as Node3D).queue_free()
 		var mate := Teammate.new()
 		mate.game = game
-		mate.look = looks[index]
-		mate.slot = slots[index]
+		mate.look = look
+		mate.slot = slot
 		mate.facing = yaw
 		game.mates.add_child(mate)
 		mate.global_position = at
-		mate.outfit(int(game.squad_levels.squad_armor), int(game.squad_levels.squad_ammo))
-		game.team.append(mate)
-		game.survivors.append(mate)
-	puppets.clear()
+		if goes:
+			mate.outfit(int(game.squad_levels.squad_armor), int(game.squad_levels.squad_ammo))
+			game.team.append(mate)
+			game.survivors.append(mate)
+		else:
+			_stay(mate, true)
+	puppets = walking
 
-## Those of the squad who went to hold the tunnel are gone once they have reached it.
+## Somebody stays at the station. He is out of the fight from here on - nothing about how
+## hard the platform is to hold changes with who stays - and goes to his post: the relay,
+## where he is seen until the train has left, or the tunnel, where he is gone.
+func _stay(mate: Teammate, relay: bool) -> void:
+	if mate.down:
+		mate.revive(true)
+	mate.unarmed = true
+	mate.target = null
+	mate.name_tag.hide()
+	var post := _point("radio") if relay else _point("ops_from") + Vector3(0, 0, 1.4 * (leavers.size() % 3 - 1))
+	# (Sent off: who has something to see to is not called back to the survivor's side.)
+	mate.job = {"kind": "post", "pos": post}
+	mate.order = "hold"
+	mate.hold_point = post
+	leavers.append({"node": mate, "left": 0.0, "keep": relay})
+
+## Those who went to hold the tunnel are gone once they have reached it - but not while
+## they still have something to say.
 func _run_leavers(delta: float) -> void:
 	if leavers.is_empty():
 		return
@@ -925,18 +977,36 @@ func _run_leavers(delta: float) -> void:
 		if not is_instance_valid(leaver.node):
 			gone.append(leaver)
 			continue
+		if bool(leaver.keep):
+			continue
 		var mate: Teammate = leaver.node
 		leaver.left = float(leaver.left) + delta
-		if mate.global_position.distance_to(_point("ops_from")) < 1.6 or float(leaver.left) > 25.0:
+		var there: bool = mate.global_position.distance_to(mate.hold_point) < 1.6 or float(leaver.left) > 25.0
+		if there and (not _to_say(mate.look) or float(leaver.left) > 120.0):
 			mate.queue_free()
 			gone.append(leaver)
 	for leaver: Dictionary in gone:
 		leavers.erase(leaver)
 
-func _dismiss_puppets() -> void:
+## The train has left: nobody who stayed at the station is seen again.
+func _station_left() -> void:
+	for leaver: Dictionary in leavers:
+		if is_instance_valid(leaver.node):
+			(leaver.node as Node).queue_free()
+	leavers.clear()
 	for puppet: Dictionary in puppets:
-		puppet.goal = _point("ops_from")
-		puppet.leaving = true
+		if is_instance_valid(puppet.node):
+			(puppet.node as Node).queue_free()
+	puppets.clear()
+
+## The doors of the train are open. Whoever of the squad stays behind has a last word for
+## the survivor, called over from the tunnel he holds (or said at the relay).
+func _goodbye() -> void:
+	for look: String in ["viper", "raven"]:
+		# (Raven has said hers already when Ghost was the one who stayed.)
+		if stayed.has(look) and not (look == "raven" and company == "phantom_havoc"):
+			lines.append({"kind": "squad", "cue": "m2_stay", "who": look, "at": clock, "from": _point("ops_from")})
+
 
 ## Something that happens when the lines have come to it.
 func _beat(id: String) -> void:
@@ -961,10 +1031,8 @@ func _beat(id: String) -> void:
 		"power":
 			if stage == "deal":
 				_enter("power")
-		"ops_leave":
-			_dismiss_puppets()
-		"join":
-			_operators_join(false)
+		"part":
+			_part(false)
 
 ## Whether what the lines wait for (see until) has come about.
 func _come(id: String) -> bool:
@@ -1002,6 +1070,7 @@ func _run_ride(_delta: float) -> void:
 	if stage_time > 1.6 and _once("ride_jump"):
 		# The car at the terminal is the same car: everybody in it is simply there now.
 		_clear_enemies()
+		_station_left()
 		var player: Survivor = game.player
 		# (Whoever stood in the doorway when it shut is inside the car now.)
 		var car: Vector3 = _point("car_a")
@@ -1185,8 +1254,13 @@ func _run_pressure(delta: float) -> void:
 ## What is not a line but happens between two (see beat and until) waits in it as well.
 
 ## A line over the radio - or, Nadja's once she has the facility, over its loudspeakers.
-func line(cue: String) -> void:
-	lines.append({"kind": "radio", "cue": cue})
+## `first`: it is the next thing said, before whatever else waits (command's word about
+## what happens right now does not wait for a talk to be over).
+func line(cue: String, first: bool = false) -> void:
+	if first:
+		lines.push_front({"kind": "radio", "cue": cue})
+	else:
+		lines.append({"kind": "radio", "cue": cue})
 
 ## A line of somebody who stands there: Nadja while she is with the squad, an operator
 ## at the station.
@@ -1195,10 +1269,12 @@ func face(cue: String) -> void:
 
 ## A short exchange of the squad: whoever of it has a line for this says it, in the order
 ## the lines are written (Radio.BARKS). Who is not there or is down is passed over.
-func talk(cue: String) -> void:
+## `only`: just that one of them.
+func talk(cue: String, only: String = "") -> void:
 	var parts: Dictionary = Radio.BARKS.get(cue, {})
 	for look: String in parts:
-		lines.append({"kind": "squad", "cue": cue, "who": look, "at": clock})
+		if only == "" or look == only:
+			lines.append({"kind": "squad", "cue": cue, "who": look, "at": clock})
 
 ## Somebody of the squad calls something out in his turn (one of its calls, as in a fight:
 ## heard, not read).
@@ -1280,6 +1356,10 @@ func _speak(entry: Dictionary) -> float:
 			return _quiet(game.speak_radio(cue, float(entry.seconds), str(entry.who)))
 		"radio":
 			var speaker := _speaker_of(cue)
+			# An operator who walks at the survivor's side does not call him on the radio:
+			# such a line comes from whoever stayed behind, and only from him.
+			if pair.has(speaker):
+				return 0.0
 			var wait: float = game.speak_radio(cue, _reading(cue), "", INK.get(speaker, Color(0, 0, 0, 0)))
 			# A line that is only read gets the time it takes to read it.
 			if wait > 0.0 and not _recorded(speaker, cue, cue):
@@ -1295,14 +1375,19 @@ func _speak(entry: Dictionary) -> float:
 		"squad":
 			var who := str(entry.who)
 			var mate := _squad_member(who)
-			if mate == null or clock - float(entry.at) > STALE:
+			if clock - float(entry.at) > STALE:
 				return 0.0
+			if mate == null:
+				# Somebody who is out of sight calls it over from where he is.
+				if not entry.has("from"):
+					return 0.0
+				return _quiet(_voice(Radio.bark(who, cue), null, entry.from))
 			return _quiet(_voice(Radio.bark(who, cue), mate))
 	return 0.0
 
 ## Somebody who stands there says a line: it is heard from where he stands, and read on
 ## the radio's panel (without the click of a channel). Returns the seconds it takes.
-func _voice(said: Dictionary, body: Node3D) -> float:
+func _voice(said: Dictionary, body: Node3D, from: Vector3 = Vector3.INF) -> float:
 	if said.is_empty():
 		return 0.0
 	var length := 0.0
@@ -1317,7 +1402,13 @@ func _voice(said: Dictionary, body: Node3D) -> float:
 			voice.volume_db = 1.0
 			add_child(voice)
 		voice.stream = load(path)
-		voice.global_position = (body.global_position if is_instance_valid(body) else game.player.global_position) + Vector3(0, 1.6, 0)
+		# (From where he stands; from where he is known to be; or, if neither, from close by.)
+		var where: Vector3 = game.player.global_position
+		if is_instance_valid(body):
+			where = body.global_position
+		elif from != Vector3.INF:
+			where = from
+		voice.global_position = where + Vector3(0, 1.6, 0)
 		voice.play()
 		length = voice.stream.get_length()
 	var words := str(said.text)
@@ -1361,8 +1452,15 @@ func _reading(cue: String) -> float:
 static func read_seconds(letters: int) -> float:
 	return clampf(1.8 + letters / 15.0, 3.0, 9.5)
 
-## Who of the squad has that look, is there and on his feet - also one who is on his way
-## to the tunnel he is to hold.
+## Whether somebody still has a line waiting to be said.
+func _to_say(look: String) -> bool:
+	for entry: Dictionary in lines:
+		if (str(entry.kind) == "squad" and str(entry.who) == look) or (str(entry.kind) == "person" and _speaker_of(str(entry.cue)) == look):
+			return true
+	return false
+
+## Who of the squad has that look, is there and on his feet - also one who stays at the
+## station and is on his way to his post there.
 func _squad_member(look: String) -> Teammate:
 	for mate: Teammate in game.team:
 		if is_instance_valid(mate) and mate.look == look and not mate.down and mate.visible:

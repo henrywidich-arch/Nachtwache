@@ -3145,7 +3145,11 @@ func _spoken(game: Node3D) -> void:
 	finder.compile("(line|face|talk|radio)\\(\"(m2_[a-z_0-9]+)\"")
 	var used := {}
 	var unknown: Array[String] = []
-	for found in finder.search_all(source):
+	var said_at: Array = finder.search_all(source)
+	# (What is said when it is settled who goes on stands in a table: ["face", "m2_..."].)
+	finder.compile("\\[\"(line|face|talk)\", \"(m2_[a-z_0-9]+)\"")
+	said_at.append_array(finder.search_all(source))
+	for found: RegExMatch in said_at:
 		var cue := found.get_string(2)
 		used[found.get_string(1) + ":" + cue] = true
 		if (found.get_string(1) == "talk" and not Radio.BARKS.has(cue)) or (found.get_string(1) != "talk" and not Radio.LINES.has(cue)):
@@ -3340,33 +3344,35 @@ func _spoken(game: Node3D) -> void:
 	game.start_run()
 	await frames(2)
 
-## The operators as companions (v0.24): chosen in the main menu for the second mission,
-## they take the squad's places at the station.
+## Who goes on from the station of the second mission (v0.29): the squad, or two of the
+## three operators, chosen in the main menu. Whoever stays or goes says why.
 func _company(game: Node3D) -> void:
 	var hive: HiveDirector = game.hive
 	var hud: SurvivalHUD = game.hud
 	var profile: Profile = game.profile
 	var kept: String = profile.company
-	# --- the switch: only for the second mission, and the menu still fits the screen
+	var kept_squad: Array = profile.squad.duplicate()
+	# --- the switch: only for the second mission, four choices, and the menu still fits
 	profile.company = "fireteam"
 	profile.mission = 2
 	game.return_to_menu()
 	await frames(2)
-	var switch_button: Button = null
+	var labels: Array[String] = []
+	var widest := 0.0
 	var bottom := 0.0
-	for node in hud.modal.find_children("*", "Button", true, false):
-		if (node as Button).text.begins_with("BEGLEITER AB BAHNHOF"):
-			switch_button = node as Button
-	for node in hud.modal.get_children():
-		if node is VBoxContainer:
-			bottom = (node as VBoxContainer).position.y + (node as VBoxContainer).get_combined_minimum_size().y
-	var offered: bool = switch_button != null and switch_button.text.ends_with("FIRETEAM")
-	if switch_button != null:
+	for step in range(5):
+		var button: Button = null
+		for node in hud.modal.find_children("*", "Button", true, false):
+			if (node as Button).text.begins_with("BEGLEITER AB BAHNHOF"):
+				button = node as Button
+		if button == null:
+			break
+		labels.append(button.text.trim_prefix("BEGLEITER AB BAHNHOF  ·  "))
+		widest = maxf(widest, button.get_combined_minimum_size().x)
+		for node in hud.modal.get_children():
+			if node is VBoxContainer:
+				bottom = maxf(bottom, (node as VBoxContainer).position.y + (node as VBoxContainer).get_combined_minimum_size().y)
 		hud._next_company()
-	var chosen := false
-	for node in hud.modal.find_children("*", "Button", true, false):
-		if (node as Button).text == "BEGLEITER AB BAHNHOF  ·  OPERATOREN":
-			chosen = true
 	profile.mission = 1
 	hud.show_menu("main")
 	var absent := true
@@ -3374,81 +3380,203 @@ func _company(game: Node3D) -> void:
 		if (node as Button).text.begins_with("BEGLEITER"):
 			absent = false
 	profile.mission = 2
-	expect(offered and chosen and absent and profile.company == "operators" and bottom > 300.0 and bottom <= 720.0, "For the second mission the main menu asks who goes on from the station, the squad or the operators; the first mission is not asked, and the menu still fits the screen (it ends at %d of 720)" % int(bottom))
-	# --- at the station the three take the squad's places
-	game.team_enabled = true
-	game.start_run()
-	await frames(3)
-	await _turn(hive)
-	var before: Array[String] = []
-	var old_mates: Array = []
+	var understood: bool = Profile.known_company("operators") == "phantom_havoc" and Profile.known_company("") == "fireteam" and Profile.known_company("havoc_ghost") == "havoc_ghost" and Profile.pair_of("havoc_ghost") == ["havoc", "ghost"] and Profile.pair_of("fireteam").is_empty()
+	expect(labels == ["FIRETEAM", "PHANTOM + HAVOC", "PHANTOM + GHOST", "HAVOC + GHOST", "FIRETEAM"] and absent and understood and profile.company == "phantom_havoc" and bottom > 300.0 and bottom <= 720.0 and widest <= 430.0, "For the second mission the main menu asks who goes on from the station: the squad, or two of the three operators; the first mission is not asked, a choice kept by an older version is understood, and the menu still fits the screen (it ends at %d of 720, the switch is %d wide, %s)" % [int(bottom), int(widest), str(labels)])
+	# --- the squad goes on: the three operators say why they stay, and Ghost keeps the relay
+	var read: Array[String] = await _settle(game, "fireteam", ["viper", "scorpion"])
+	var plain: bool = _tail(read, [["viper", "m2_colonel"], ["scorpion", "m2_colonel"], ["phantom", "m2_p_tunnel"], ["havoc", "m2_a_havoc"], ["ghost", "m2_a_ghost"], ["viper", "m2_a_viper"], ["scorpion", "m2_a_scorpion"], ["coleman", "m2_a_coleman"]])
+	plain = plain and _looks(game.team) == ["viper", "scorpion"] and hive.puppets.is_empty() and hive.stayed.is_empty() and _posts(hive) == ["ghost:relay"]
+	# --- Phantom and Havoc go: Ghost stays on the relay, the squad says why it holds the station
+	read = await _settle(game, "phantom_havoc", ["viper", "scorpion"])
+	var first: bool = _tail(read, [["viper", "m2_colonel"], ["scorpion", "m2_colonel"], ["phantom", "m2_p_join"], ["phantom", "m2_b_phantom"], ["havoc", "m2_b_havoc"], ["ghost", "m2_a_ghost"], ["viper", "m2_b_viper"], ["scorpion", "m2_b_scorpion"], ["coleman", "m2_b_coleman"]])
+	var armed := true
 	for mate: Teammate in game.team:
-		before.append(mate.look)
-		old_mates.append(mate)
+		armed = armed and not mate.unarmed and game.survivors.has(mate) and mate.label == str(Radio.NAMES[mate.look]) and mate.name_tag.visible
+	var out_of_it := true
+	for leaver: Dictionary in hive.leavers:
+		var stayer: Teammate = leaver.node
+		out_of_it = out_of_it and stayer.unarmed and not game.team.has(stayer) and not game.survivors.has(stayer) and str(stayer.order) == "hold" and not stayer.name_tag.visible
+	first = first and _looks(game.team) == ["phantom", "havoc"] and armed and out_of_it and game.team[1].gun == Teammate.GUNS.shotgun and game.extra_guns() == 2 and hive.stayed == ["viper", "scorpion"] and _posts(hive) == ["viper:tunnel", "scorpion:tunnel", "ghost:relay"] and hive.puppets.is_empty()
+	# Later only the one who stayed calls over the radio.
 	hive.lines.clear()
-	hive._enter("deal")
-	var heard: Array[String] = []
-	var shown := hud.radio_label.text
-	for turn in range(200):
-		if hive.done.has("joined") and hive.lines.is_empty():
-			break
+	var before_calls: String = hud.radio_label.text
+	hive.line("m2_p_alive")
+	hive.line("m2_h_tunnel")
+	hive.line_left = 0.0
+	await _turn(hive)
+	var silent: bool = hud.radio_label.text == before_calls and hive.lines.is_empty()
+	hive.line("m2_g_list")
+	hive.line_left = 0.0
+	await _turn(hive)
+	silent = silent and hud.radio_label.text == _words("ghost", "m2_g_list")
+	# The squad is gone once it has reached the tunnel; when the doors of the train open
+	# Viper calls a last word over from there; and once the train has left nobody is seen.
+	for leaver: Dictionary in hive.leavers:
+		(leaver.node as Teammate).global_position = (leaver.node as Teammate).hold_point
+	hive.line_left = 0.0
+	await _turn(hive)
+	await _turn(hive)
+	var gone: bool = _posts(hive) == ["ghost:relay"]
+	hive.lines.clear()
+	hive._enter("board")
+	read.clear()
+	var shown: String = hud.radio_label.text
+	for turn in range(6):
 		hive.line_left = 0.0
-		hive.hold_left = 0.0
-		game.bark_until.clear()
 		await _turn(hive)
 		if hud.radio_label.text != shown:
 			shown = hud.radio_label.text
-			heard.append(shown.get_slice(":", 0))
-	var order := ",".join(PackedStringArray(heard))
-	var looks: Array[String] = []
-	var armed := true
-	var counted := true
-	for mate: Teammate in game.team:
-		looks.append(mate.look)
-		armed = armed and not mate.unarmed and mate.label == str(Radio.NAMES[mate.look]) and not Radio.bark(mate.look, "reload").is_empty()
-		counted = counted and game.survivors.has(mate)
-	var dropped := true
-	for mate: Teammate in old_mates:
-		dropped = dropped and not game.team.has(mate) and not game.survivors.has(mate) and str(mate.order) == "hold"
-	var shotgun: bool = looks.size() == 3 and game.team[1].gun == Teammate.GUNS.shotgun and game.team[0].gun == Teammate.GUNS.badger
-	game.talk_until = 0
-	game.bark_until.clear()
-	var called: bool = looks.size() == 3 and game.bark(game.team[0], "phantom", "reload") and str(Radio.bark("ghost", "kill").sound) != ""
-	if not order.ends_with("COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,VIPER,SCORPION"):
-		print("COMPANY heard: ", order)
-	expect(before == ["viper", "scorpion"] and looks == ["phantom", "havoc", "ghost"] and armed and counted and dropped and shotgun and called and hive.puppets.is_empty() and hive.stage == "power" and hive.leavers.size() == 2 and order.ends_with("COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,VIPER,SCORPION") and not order.contains("PHANTOM,VIPER,SCORPION,PHANTOM"), "With the operators chosen, Phantom says at the end of the truce that they come along, the squad stays to hold the tunnel, and Phantom, Havoc and Ghost are the survivor's companions - armed like the squad, with their own calls (%s)" % str(looks))
-	# The squad is gone once it has reached the tunnel; a companion who goes down gets up again.
-	for leaver: Dictionary in hive.leavers:
-		(leaver.node as Node3D).global_position = map_point(game, "ops_from")
-	await _turn(hive)
-	await _turn(hive)
-	var ghost: Teammate = game.team[2] if game.team.size() == 3 else null
+			read.append(shown)
+	var parting: bool = read == [_words("coleman", "m2_board"), _words("viper", "m2_stay")]
+	hive._station_left()
+	await frames(2)
+	gone = gone and hive.leavers.is_empty() and hive.puppets.is_empty()
+	# A companion who goes down gets up again by himself: none of them dies.
 	var rises := false
-	if ghost != null:
-		ghost._go_down(Vector3.INF)
-		ghost.down_left = 0.05
+	if game.team.size() == 2:
+		var fallen: Teammate = game.team[1]
+		fallen._go_down(Vector3.INF)
+		fallen.down_left = 0.05
 		for turn in range(30):
 			await get_tree().physics_frame
-			if not ghost.down:
+			if not fallen.down:
 				break
-		rises = not ghost.down and ghost.health > 0.0
-	expect(hive.leavers.is_empty() and rises and game.team.size() == 3 and game.extra_guns() == 3, "The squad has left for the tunnel, and an operator who goes down is back on his feet like any companion: none of them dies")
-	# --- a night taken up behind the station begins with the three at the survivor's side
+		rises = not fallen.down and fallen.health > 0.0
+	if not (plain and first and silent and gone and parting and rises):
+		print("COMPANY plain=%s first=%s silent=%s gone=%s parting=%s rises=%s posts=%s read=%s" % [plain, first, silent, gone, parting, rises, str(_posts(hive)), str(read)])
+	expect(plain and first and silent and gone and parting and rises, "When the squad goes on, the three operators say why they stay and Ghost keeps the relay; when Phantom and Havoc go, they are the survivor's two companions, armed like the squad, Ghost stays on the relay and is the only one who calls later, the squad says why it holds the station, leaves the fight, and Viper calls a last word when the doors of the train open")
+	# --- the other two pairs, with Raven in the squad: she keeps the relay when Ghost goes
+	read = await _settle(game, "phantom_ghost", ["scorpion", "raven"])
+	var second: bool = _tail(read, [["scorpion", "m2_colonel"], ["raven", "m2_colonel"], ["phantom", "m2_p_join"], ["phantom", "m2_b_phantom"], ["ghost", "m2_b_ghost"], ["havoc", "m2_a_havoc"], ["scorpion", "m2_b_scorpion"], ["raven", "m2_b_raven"], ["coleman", "m2_b_coleman"]])
+	second = second and _looks(game.team) == ["phantom", "ghost"] and _posts(hive) == ["scorpion:tunnel", "raven:relay"] and hive.puppets.is_empty()
+	read = await _settle(game, "havoc_ghost", ["viper", "scorpion"])
+	var third: bool = _tail(read, [["viper", "m2_colonel"], ["scorpion", "m2_colonel"], ["havoc", "m2_c_havoc"], ["ghost", "m2_b_ghost"], ["havoc", "m2_b_havoc"], ["phantom", "m2_c_phantom"], ["viper", "m2_b_viper"], ["scorpion", "m2_b_scorpion"], ["coleman", "m2_b_coleman"]])
+	third = third and _looks(game.team) == ["havoc", "ghost"] and _posts(hive) == ["viper:tunnel", "scorpion:tunnel"] and hive.puppets.is_empty()
+	# When Ghost keeps the relay himself, Raven has her other word for staying.
+	read = await _settle(game, "phantom_havoc", ["viper", "raven"])
+	var other: bool = _tail(read, [["viper", "m2_colonel"], ["raven", "m2_colonel"], ["phantom", "m2_p_join"], ["phantom", "m2_b_phantom"], ["havoc", "m2_b_havoc"], ["ghost", "m2_a_ghost"], ["viper", "m2_b_viper"], ["raven", "m2_stay"], ["coleman", "m2_b_coleman"]])
+	other = other and _posts(hive) == ["viper:tunnel", "raven:tunnel", "ghost:relay"]
+	if not (second and third and other):
+		print("COMPANY second=%s third=%s other=%s posts=%s read=%s" % [second, third, other, str(_posts(hive)), str(read)])
+	expect(second and third and other, "Whichever two of the operators go, the talk fits: Phantom and Ghost go and Havoc stays for the tunnel, Havoc and Ghost go and Phantom stays for it, and Raven keeps the relay when Ghost goes - or has another word when he keeps it himself")
+	# --- the train is brought up while they are still talking: command's word about it
+	# comes first, they talk on over it, and nobody is gone before he has said his part
+	profile.company = "fireteam"
+	profile.squad = ["viper", "scorpion"]
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	hive.lines.clear()
+	hive._enter("deal")
+	for turn in range(120):
+		if hive.stage == "power":
+			break
+		hive.line_left = 0.0
+		hive.hold_left = 0.0
+		await _turn(hive)
+	var waiting: int = hive.lines.size()
+	hive._enter("hold")
+	var at_once: bool = hive.stage == "hold" and hive.done.has("parted") and waiting >= 8 and str(hive.lines[0].get("cue", "")) == "m2_power" and hive.puppets.size() == 2 and _posts(hive) == ["ghost:relay"]
+	for puppet: Dictionary in hive.puppets:
+		(puppet.node as Node3D).global_position = puppet.goal
+	hive.line_left = 0.0
+	await _turn(hive)
+	var power_first: bool = hud.radio_label.text == _words("coleman", "m2_power") and hive.puppets.size() == 2
+	read.clear()
+	shown = hud.radio_label.text
+	for turn in range(60):
+		if hive.lines.is_empty() and hive.puppets.is_empty():
+			break
+		hive.line_left = 0.0
+		await _turn(hive)
+		if hud.radio_label.text != shown:
+			shown = hud.radio_label.text
+			read.append(shown)
+	var talked_on: bool = _tail(read, [["phantom", "m2_p_tunnel"], ["havoc", "m2_a_havoc"], ["ghost", "m2_a_ghost"], ["viper", "m2_a_viper"], ["scorpion", "m2_a_scorpion"], ["coleman", "m2_a_coleman"]]) and hive.puppets.is_empty() and hive.stage == "hold"
+	if not (at_once and power_first and talked_on):
+		print("COMPANY at_once=%s power_first=%s talked_on=%s waiting=%d read=%s" % [at_once, power_first, talked_on, waiting, str(read)])
+	expect(at_once and power_first and talked_on, "The train can be brought up while they are still talking it over: the roads part at once, command's word about the train is the next thing said, the talk goes on over the fight, and the two who walk into the tunnel are not gone before they have said their part")
+	# --- a night taken up behind the station begins with the chosen two, before it with the squad
+	profile.company = "havoc_ghost"
 	hive.resume_at = "terminal"
 	game.start_run()
 	await frames(3)
-	looks.clear()
-	for mate: Teammate in game.team:
-		looks.append(mate.look)
-	var fireteam_first := true
+	var resumed: Array[String] = _looks(game.team)
+	var counted: bool = game.team.size() == 2 and game.survivors.has(game.team[0]) and hive.leavers.is_empty()
+	# (A choice kept by v0.25 to v0.28, when all three came along, is Phantom and Havoc.)
+	profile.company = "operators"
 	hive.resume_at = "descent"
 	game.start_run()
 	await frames(3)
-	for mate: Teammate in game.team:
-		fireteam_first = fireteam_first and mate.look in ["viper", "scorpion"]
-	expect(looks == ["phantom", "havoc", "ghost"] and fireteam_first and game.team.size() == 2 and hive.company == "operators", "Taken up behind the station the night begins with the three operators at the survivor's side, taken up before it with the squad")
+	expect(resumed == ["havoc", "ghost"] and counted and _looks(game.team) == ["viper", "scorpion"] and hive.company == "phantom_havoc" and hive.pair == ["phantom", "havoc"], "Taken up behind the station the night begins with the two chosen operators at the survivor's side, taken up before it with the squad")
 	profile.company = kept
+	profile.squad = kept_squad
 	Radio.hijacked = false
+
+## A night of the second mission in which the talk at the station is played for one choice
+## of company and one squad, every line over as soon as it has begun, until the roads have
+## parted. Returns what was read on the radio's panel, in its order.
+func _settle(game: Node3D, company: String, squad: Array) -> Array[String]:
+	var hive: HiveDirector = game.hive
+	var hud: SurvivalHUD = game.hud
+	game.profile.company = company
+	game.profile.squad = squad
+	game.team_enabled = true
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game.start_run()
+	await frames(3)
+	await _turn(hive)
+	hive.lines.clear()
+	hive._enter("deal")
+	var read: Array[String] = []
+	var shown: String = hud.radio_label.text
+	for turn in range(240):
+		if hive.done.has("parted") and hive.lines.is_empty() and hive.puppets.is_empty():
+			break
+		hive.line_left = 0.0
+		hive.hold_left = 0.0
+		for puppet: Dictionary in hive.puppets:
+			if bool(puppet.leaving) and is_instance_valid(puppet.node):
+				(puppet.node as Node3D).global_position = puppet.goal
+		await _turn(hive)
+		if hud.radio_label.text != shown:
+			shown = hud.radio_label.text
+			read.append(shown)
+	return read
+
+## What stands on the radio's panel when a speaker says the first variant of a line.
+func _words(speaker: String, cue: String) -> String:
+	var variants: Array = Radio.BARKS[cue][speaker] if Radio.BARKS.has(cue) and (Radio.BARKS[cue] as Dictionary).has(speaker) else Radio.LINES[cue][1]
+	return "%s:  %s" % [Radio.NAMES[speaker], variants[0]]
+
+## Whether what was read ends with these lines ([speaker, cue] each), in this order.
+func _tail(read: Array[String], parts: Array) -> bool:
+	if read.size() < parts.size():
+		return false
+	for index in range(parts.size()):
+		if read[read.size() - parts.size() + index] != _words(str(parts[index][0]), str(parts[index][1])):
+			return false
+	return true
+
+func _looks(team: Array) -> Array[String]:
+	var looks: Array[String] = []
+	for mate: Teammate in team:
+		looks.append(mate.look)
+	return looks
+
+## Who stays at the station and where his post is: "look:relay" or "look:tunnel".
+func _posts(hive: HiveDirector) -> Array[String]:
+	var posts: Array[String] = []
+	for leaver: Dictionary in hive.leavers:
+		if is_instance_valid(leaver.node):
+			var stayer: Teammate = leaver.node
+			var relay: bool = stayer.hold_point.distance_to(hive._point("radio")) < 0.5
+			posts.append("%s:%s" % [stayer.look, "relay" if relay and bool(leaver.keep) else ("tunnel" if stayer.hold_point.distance_to(hive._point("ops_from")) < 3.0 and not bool(leaver.keep) else "?")])
+	return posts
+
 
 func map_point(game: Node3D, id: String) -> Vector3:
 	return (game.cabin as HiveMap).points[id]
@@ -3613,7 +3741,7 @@ func _near(game: Node3D, reach: float) -> String:
 
 ## Run with -- --bot-check [--bot-seconds=180] [--bot-pos=x,z] [--bot-round=1]
 ## [--bot-speed=4] [--bot-mode=endless] [--bot-level=hard] [--bot-duel=ghost]
-## [--bot-company=operators]. With a window (no --headless)
+## [--bot-company=phantom_havoc|phantom_ghost|havoc_ghost]. With a window (no --headless)
 ## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
 ## position while the real spawner runs, which exercises navigation, special infected and
@@ -3655,7 +3783,8 @@ func bot(game: Node3D) -> void:
 				game.profile.mission = 2
 		if arg.begins_with("--bot-level="):
 			game.profile.difficulty = arg.trim_prefix("--bot-level=")
-		# --bot-company=operators: in the second mission the three operators go on from the station.
+		# --bot-company=phantom_ghost: in the second mission those two operators go on from the
+		# station (also phantom_havoc, havoc_ghost; "operators" is understood as phantom_havoc).
 		if arg.begins_with("--bot-company="):
 			game.profile.company = arg.trim_prefix("--bot-company=")
 	Engine.time_scale = pace
@@ -5235,7 +5364,7 @@ func _sandbox(game: Node3D) -> void:
 	await wait(0.3)
 	var first_of_all: bool = room.now_playing.begins_with("HÄNDLERIN:") and room.queue.size() == queued - 1
 	room.hush()
-	expect(spoken == written and recorded == spoken and room.lines_of("phantom").size() == 83 and taunt and call_heard and taken and honest and queued == 6 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, all recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of a speaker in a row" % spoken)
+	expect(spoken == written and recorded == spoken and room.lines_of("phantom").size() == 85 and taunt and call_heard and taken and honest and queued == 6 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, all recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of a speaker in a row" % spoken)
 	# --- the menu
 	game.open_test()
 	var pages := {}
@@ -5464,11 +5593,12 @@ func _hive(game: Node3D) -> void:
 			heard.append(("~" if shown.contains("#") else "") + shown.get_slice(":", 0))
 	var order := ",".join(PackedStringArray(heard))
 	# (What was said on the way here is still being said: it comes first. A "~" marks words that came through a taken channel.)
-	var told: bool = order.ends_with("NADJA,NADJA,NADJA,SCORPION,VIPER,SCORPION,VIPER,PHANTOM,HAVOC,GHOST,GHOST,COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM") and order.contains("~COLEMAN") and order.rfind("~COLEMAN") < order.find("PHANTOM") and not hive.channel_taken()
+	var told: bool = order.ends_with("NADJA,NADJA,NADJA,SCORPION,VIPER,SCORPION,VIPER,PHANTOM,HAVOC,GHOST,GHOST,COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,HAVOC,GHOST,VIPER,SCORPION,COLEMAN") and order.contains("~COLEMAN") and order.rfind("~COLEMAN") < order.find("PHANTOM") and not hive.channel_taken()
 	if not told:
 		print("HIVE_STATION heard: ", order)
 	expect(reached == ["station"] and guarded >= 6 and leaving and locked_in and dealt and early and hive.stage == "power" and hive.puppets.is_empty(), "At the station the guards have to fall; then Nadja leaves through a door that shuts behind her, the three operators come and go, and the train can be started while the last words are still being said (%d guards)" % guarded)
-	expect(told, "What is said at the station comes in its order, nobody talking over anybody: Nadja through the glass, the squad about her, the three operators, and - once Ghost has cleared the channel - a Coleman whose words come through whole")
+	var relay_kept: bool = hive.leavers.size() == 1 and bool(hive.leavers[0].keep) and str((hive.leavers[0].node as Teammate).look) == "ghost" and game.team.size() == 2
+	expect(told and relay_kept, "What is said at the station comes in its order, nobody talking over anybody: Nadja through the glass, the squad about her, the three operators, - once Ghost has cleared the channel - a Coleman whose words come through whole, and then who stays and who goes, each with his reason; Ghost stays at the relay")
 	player.global_position = (map.points.booth as Vector3) + Vector3(0, 0.05, 0)
 	await frames(4)
 	var asked: bool = hive.prompt() != "" and game.interaction_prompt() == hive.prompt()
@@ -5484,7 +5614,7 @@ func _hive(game: Node3D) -> void:
 	var rolling: bool = hive.stage == "ride" and not map.door_open("car_a")
 	hive.stage_time = 1.7
 	await frames(6)
-	var moved: bool = player.global_position.distance_to(map.points.car_b) < 2.0 and map.riding and map.room_at(game.team[0].global_position).get("id", "") == "car_b"
+	var moved: bool = player.global_position.distance_to(map.points.car_b) < 2.0 and map.riding and map.room_at(game.team[0].global_position).get("id", "") == "car_b" and hive.leavers.is_empty() and hive.puppets.is_empty()
 	hive.stage_time = HiveDirector.RIDE_SECONDS + 0.1
 	await frames(6)
 	expect(asked and holding and boarding and rolling and moved and hive.stage == "terminal" and not map.riding and map.door_open("car_b") and hive.checkpoint == "terminal", "The train is brought up from the control room while the platform is held; then the squad boards, the doors close, and the car is the one at the terminal")
