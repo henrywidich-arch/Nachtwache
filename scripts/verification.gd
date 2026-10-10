@@ -5542,6 +5542,36 @@ func _hive(game: Node3D) -> void:
 	game.start_run()
 	await frames(4)
 	expect(hive.on and hive.stage == "terminal" and hive.checkpoint == "terminal" and player.global_position.distance_to(map.points.car_b) < 1.5 and not is_instance_valid(hive.nadja) and not map.is_locked("station") and map.is_locked("admin") and map.door_open("car_b") and game.credits >= 900 and game.cabin == map, "A defeat can be taken up at the last checkpoint: the squad stands in the car at the terminal, what lies behind it is open, what lies ahead is shut")
+	# --- what the passes over the map's design added: the plan of the Hive on its walls,
+	# the lockdown's light and horn with the lock of the canteen, the flooded stretch of
+	# the laboratory corridor, the voices of the place
+	# (A screen is known by what it shows: two of a name under one node lose theirs.)
+	var plans_shown := 0
+	var wet := false
+	for node in map.find_children("*", "MeshInstance3D", true, false):
+		var drawn := node as MeshInstance3D
+		if drawn.mesh == null or drawn.mesh.get_surface_count() == 0:
+			continue
+		var shows: Material = drawn.mesh.surface_get_material(0)
+		if shows == map.plan.get("material"):
+			plans_shown += 1
+		elif shows == map.mats["flood"] and drawn.get_aabb().grow(0.3).has_point(Vector3(0, HiveMap.UNDER + 0.3, -558.0)):
+			wet = true
+	expect(plans_shown >= 12, "The plan of the Hive is shown in at least twelve places of the map (%d screens)" % plans_shown)
+	map.unlock("cafe", true)
+	await frames(2)
+	var alarm_off: bool = not map.alarm_on and not map.alarm_node.visible
+	map.lock("cafe", true)
+	await frames(2)
+	var alarm_seen: bool = map.alarm_on and map.alarm_node.visible and map.sound != null and bool(map.sound.get("alarm_on"))
+	map.unlock("cafe", true)
+	await frames(2)
+	var alarm_gone: bool = not map.alarm_on and not map.alarm_node.visible and not bool(map.sound.get("alarm_on"))
+	map.lock("cafe", true)
+	map.set_alarm(false)
+	var voices: Vector2i = map.sound.call("count")
+	expect(alarm_off and alarm_seen and alarm_gone and not map.alarm_on, "The lockdown's red light and its horn come with the lock of the canteen and go when it opens")
+	expect(wet and map.room_of.has("flooded") and map.drip_mesh != null and map.spark_mesh != null and voices.x >= 12 and voices.x == voices.y, "Water stands in the laboratory corridor under drips and sparks, and every voice of the map has its sound (%d of %d)" % [voices.y, voices.x])
 	# --- and back to the farm
 	game.return_to_menu()
 	await frames(3)
