@@ -2538,6 +2538,7 @@ func _threats(game: Node3D) -> void:
 	expect(halved and bounded and is_equal_approx(view.scaling_3d_scale, 1.0) and view.scaling_3d_mode == Viewport.SCALING_3D_MODE_BILINEAR and first >= 0.5 and first <= 1.0, "The 3D picture can be drawn with fewer pixels and is blown up again; at full size it is left alone")
 	await _zombie_test(game)
 	await _hit_answer(game)
+	await _ding_answer(game)
 	await _second_exploder(game)
 	await _hive_staff(game)
 	game.team_enabled = true
@@ -2738,6 +2739,10 @@ func _second_exploder(game: Node3D) -> void:
 func _hit_answer(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var sounds: FieldAudio = game.sounds
+	# (The checks hear the game's own answers. A machine may have hit sounds of its owner's
+	# choosing in the project folder, see FieldAudio.OWN_HITS: for the checks there are none.)
+	sounds.own_asked = true
+	sounds.own_hits = []
 	var built := true
 	var brief := true
 	for kind in ["hit_body", "hit_head", "hit_kill"]:
@@ -2765,7 +2770,7 @@ func _hit_answer(game: Node3D) -> void:
 	var in_flesh: bool = target.health < 5000.0 and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) and int(sounds.answers.hit_kill) == int(heard.hit_kill)
 	var playing := false
 	for voice in sounds.voices:
-		playing = playing or (voice.playing and (sounds.clips.hit_body as Array).has(voice.stream) and voice.bus == "SFX")
+		playing = playing or (voice.playing and (sounds.clips[FieldAudio.DING] as Array).has(voice.stream) and voice.bus == "SFX")
 	player.shot_cooldown = 0.0
 	player.shoot()
 	var floored: bool = int(sounds.answers.hit_body) == int(heard.hit_body) + 1
@@ -2838,6 +2843,137 @@ func _hit_answer(game: Node3D) -> void:
 	expect(pellets and fallen == 3 and int(sounds.answers.hit_body) + int(sounds.answers.hit_head) == int(heard.hit_body) + int(heard.hit_head) + 1 and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1, "A blast of shot is one tick, and one bullet through three that fells them all (%d) is one tick and one answer: nothing piles up" % fallen)
 	player.camera.rotation.x = 0.0
 	player.equip_weapon("rifle", true)
+	_wipe_all(game)
+	await wait(0.5)
+
+## True if a voice is playing one of the takes of `kind` right now, dry, and at `pitch`.
+func _sounding(sounds: FieldAudio, kind: String, pitch: float = 0.0) -> bool:
+	for voice in sounds.voices:
+		if voice.playing and (sounds.clips[kind] as Array).has(voice.stream) and voice.bus == "SFX" and (pitch <= 0.0 or absf(voice.pitch_scale / pitch - 1.0) < 0.006):
+			return true
+	return false
+
+## The ding: a hit on an infected is answered with a bell that climbs from hit to hit while
+## they follow each other quickly; a head rings twice and higher; the kill brings the chord
+## the climb comes to rest on. Soldiers keep the fleshy answer, and the player's own files
+## come before all of it.
+func _ding_answer(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var sounds: FieldAudio = game.sounds
+	var ding: String = FieldAudio.DING
+	var families := ["ding_glas", "ding_messing", "ding_tink", "ding_spiel"]
+	var built := true
+	for family in families:
+		for suffix in ["", "_head", "_kill"]:
+			var kind: String = str(family) + str(suffix)
+			var takes: Array = sounds.clips.get(kind, [])
+			built = built and bool(sounds.recorded.get(kind, false)) and takes.size() == (4 if str(suffix) == "" else 3) and FieldAudio.MIX.has(kind) and float(FieldAudio.MIX[kind][0]) <= -3.0 and float(FieldAudio.MIX[kind][1]) <= 0.006
+			for clip in takes:
+				var seconds: float = (clip as AudioStream).get_length()
+				built = built and seconds > 0.08 and seconds < (0.85 if str(suffix) == "_kill" else 0.6)
+	var ladder: Array = FieldAudio.LADDER
+	var top: int = ladder.size() - 1
+	var rising: bool = ladder.size() >= 4 and ladder.size() <= 7 and float(ladder[0]) == 0.0 and float(ladder[top]) <= 7.0
+	for i in range(1, ladder.size()):
+		rising = rising and float(ladder[i]) > float(ladder[i - 1]) and float(ladder[i]) - float(ladder[i - 1]) <= 2.0
+	expect(built and rising and families.has(ding) and FieldAudio.LADDER_PAUSE >= 0.3 and FieldAudio.LADDER_PAUSE <= 1.5, "Four families of dings are built, with takes for a hit, a head and a kill each, and one of them is played; the ladder climbs in small steps")
+	# Hit after hit on an infected: every ding a rung higher, and on the last rung it stays.
+	_wipe_all(game)
+	await wait(FieldAudio.LADDER_PAUSE + 0.4)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	player.ammo = 30
+	var target: Infected = game.spawn_enemy("mauler")
+	target.set_physics_process(false)
+	target.position = Vector3(0, 0.05, 25.0)
+	target.max_health = 5000.0
+	target.health = 5000.0
+	var spare: Infected = game.spawn_enemy("mauler")
+	spare.set_physics_process(false)
+	spare.position = Vector3(0, 0.05, 26.6)
+	spare.max_health = 5000.0
+	spare.health = 5000.0
+	await frames(3)
+	var heard: Dictionary = sounds.answers.duplicate()
+	var climbed := true
+	player.camera.rotation.x = -0.2
+	for i in range(ladder.size() + 2):
+		player.shot_cooldown = 0.0
+		player.shoot()
+		var rung: int = mini(i, top)
+		climbed = climbed and sounds.ladder_step == rung and is_equal_approx(sounds.rung(), pow(2.0, float(ladder[rung]) / 12.0)) and _sounding(sounds, ding, sounds.rung()) and sounds.dinged
+		await wait(FieldAudio.HIT_FLOOR + 0.06)
+	var counted: bool = int(sounds.answers.ding) == int(heard.ding) + ladder.size() + 2 and int(sounds.answers.hit_body) == int(heard.hit_body) + ladder.size() + 2 and int(sounds.answers.ding_head) == int(heard.ding_head) and int(sounds.answers.ding_kill) == int(heard.ding_kill) and not _sounding(sounds, "hit_body")
+	# After a pause the next one starts at the bottom again.
+	await wait(FieldAudio.LADDER_PAUSE + 0.2)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var again: bool = sounds.ladder_step == 0 and _sounding(sounds, ding, 1.0)
+	expect(climbed and counted and again and target.health < 5000.0 and is_equal_approx(sounds.rung(), 1.0), "A hit on an infected is answered with a ding, and hits that follow each other quickly climb the ladder rung by rung (%d rungs, %d semitones) and stay on the last; after a pause it starts at the bottom" % [ladder.size(), int(ladder[top])])
+	# A head: the take for a head, a rung higher. Then the hit that kills: the lower bell on
+	# the rung of the ding that killed - and the next hit starts at the bottom at once.
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	player.camera.rotation.x = 0.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var head: bool = int(sounds.answers.ding_head) == int(heard.ding_head) + 1 and int(sounds.answers.hit_head) == int(heard.hit_head) + 1 and sounds.ladder_step == 1 and _sounding(sounds, ding + "_head", pow(2.0, float(ladder[1]) / 12.0))
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	target.health = 1.0
+	player.camera.rotation.x = -0.2
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var killing: float = pow(2.0, float(ladder[2]) / 12.0)
+	var chord: bool = target.dead and int(sounds.answers.ding_kill) == int(heard.ding_kill) + 1 and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and _sounding(sounds, ding + "_kill", killing) and _sounding(sounds, ding, killing) and not _sounding(sounds, "hit_kill")
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var restarted: bool = spare.health < 5000.0 and sounds.ladder_step == 0 and is_equal_approx(sounds.rung(), 1.0)
+	expect(head and chord and restarted, "A head rings with its own take, a rung higher; the hit that kills brings the lower bell on the rung of its ding, and the next hit starts at the bottom")
+	# A soldier keeps the fleshy answer, for the hit and for the kill.
+	_take_off(game, spare)
+	await wait(FieldAudio.LADDER_PAUSE + 0.2)
+	var soldier := game.spawn_enemy("cru_assault") as CruSoldier
+	soldier.set_physics_process(false)
+	soldier.position = Vector3(0, 0.05, 25.0)
+	soldier.max_health = 5000.0
+	soldier.health = 5000.0
+	await frames(3)
+	heard = sounds.answers.duplicate()
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var fleshy: bool = soldier.health < 5000.0 and int(sounds.answers.ding) == int(heard.ding) and int(sounds.answers.hit_body) == int(heard.hit_body) + 1 and _sounding(sounds, "hit_body") and not sounds.dinged
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	soldier.health = 1.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	fleshy = fleshy and soldier.dead and int(sounds.answers.ding_kill) == int(heard.ding_kill) and int(sounds.answers.ding) == int(heard.ding) and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and _sounding(sounds, "hit_kill")
+	# Hit sounds of the player's own choosing come before the ding - and then the kill is
+	# answered as it was before there were dings.
+	await wait(FieldAudio.LADDER_PAUSE + 0.2)
+	var own: AudioStream = (sounds.clips.click as Array)[0]
+	sounds.own_hits = [own]
+	var last: Infected = game.spawn_enemy("mauler")
+	last.set_physics_process(false)
+	last.position = Vector3(0, 0.05, 25.0)
+	last.max_health = 5000.0
+	last.health = 5000.0
+	await frames(3)
+	heard = sounds.answers.duplicate()
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var theirs := false
+	for voice in sounds.voices:
+		theirs = theirs or (voice.playing and voice.stream == own and voice.bus == "SFX")
+	theirs = theirs and int(sounds.answers.ding) == int(heard.ding) and not sounds.dinged
+	await wait(FieldAudio.HIT_FLOOR + 0.06)
+	last.health = 1.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	theirs = theirs and last.dead and int(sounds.answers.ding_kill) == int(heard.ding_kill) and int(sounds.answers.hit_kill) == int(heard.hit_kill) + 1 and _sounding(sounds, "hit_kill")
+	sounds.own_hits = []
+	expect(fleshy and theirs, "A soldier keeps the fleshy answer for the hit and for the kill; and where the player has hit sounds of his own, they come before the ding")
+	player.camera.rotation.x = 0.0
 	_wipe_all(game)
 	await wait(0.5)
 
@@ -4401,7 +4537,7 @@ func coop(game: Node3D, as_host: bool) -> void:
 	print("%s_TASKS tasks=%d items=%d done=%d props=%d" % [tag, game.mission.tasks.size(), items_total, items_done, game.mission.props.size()])
 	# What this side heard of its own hits: never more ticks than shots fired here, never
 	# more answers to a kill than kills made here.
-	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills])
+	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d dings=%d ding_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills, int(game.sounds.answers.ding) + int(game.sounds.answers.ding_head), int(game.sounds.answers.ding_kill)])
 	# Both sides must name the same look for the same Charger, and both must have seen the
 	# puddle of the one the host set off.
 	var seen_looks: Array = []
