@@ -21,7 +21,7 @@ const STAGES := {
 	"villa": ["DIE VILLA", "Den Speisesaal finden", "dining", 3],
 	"mirror": ["DIE VILLA", "Nadja decken, bis der Zugang offen ist", "keypad", 3],
 	"descent": ["DER ABSTIEG", "Die Treppe hinunter zum Stahltor", "lobby", 4],
-	"station": ["DER BAHNHOF", "Den Bahnsteig von der C.R.U. säubern", "platform", 4],
+	"station": ["DER BAHNHOF", "Den Bahnsteig von den Infizierten säubern", "platform", 4],
 	"nadja": ["DER BAHNHOF", "Bei Nadja bleiben", "nadja_door", 4],
 	"deal": ["DER BAHNHOF", "Abwarten, was die Operatoren wollen", "radio", 4],
 	"power": ["DER BAHNHOF", "Im Stellwerk den Zug hochfahren", "booth", 5],
@@ -53,10 +53,11 @@ const CHECKPOINTS := {
 ## at once, the seconds between two, and where they come from ("park": over the park's
 ## wall; "hidden": anywhere near that the squad cannot see).
 const PRESSURE := {
-	"landing": [["mauler", "mauler", "mauler", "striker"], 5, 4.5, "park"],
-	"villa": [["mauler", "mauler", "striker", "ripper"], 6, 4.0, "hidden"],
-	"mirror": [["mauler", "mauler", "striker", "ripper", "charger"], 9, 2.0, "hidden"],
-	"descent": [["mauler", "ripper"], 4, 5.0, "hidden"],
+	# (The first stages are gentle: the squad has only what it landed with.)
+	"landing": [["mauler", "mauler", "mauler", "striker"], 3, 7.0, "park"],
+	"villa": [["mauler", "mauler", "mauler", "striker"], 4, 6.0, "hidden"],
+	"mirror": [["mauler", "mauler", "striker", "ripper"], 6, 3.0, "hidden"],
+	"descent": [["mauler", "ripper"], 3, 6.0, "hidden"],
 	"hold": [["mauler", "mauler", "striker", "ripper", "charger", "leech"], 11, 1.7, "hidden"],
 	"admin": [["mauler", "mauler", "striker", "ripper"], 6, 5.0, "hidden"],
 	"security": [["mauler", "striker", "ripper", "leech"], 7, 4.5, "hidden"],
@@ -74,6 +75,7 @@ const KEYPAD_SECONDS := 20.0
 const RIDE_SECONDS := 15.0
 const NADJA_HEALTH := 260.0
 const INTRO_SECONDS := 6.5
+const START_ARMOUR := 50.0
 const SPEAKER_TINT := {"COLEMAN": Color(0, 0, 0, 0), "NADJA": Color(0.55, 0.3, 0.42, 0.9), "PHANTOM": Color(0.1, 0.22, 0.34, 0.9), "HAVOC": Color(0.1, 0.22, 0.34, 0.9), "GHOST": Color(0.1, 0.22, 0.34, 0.9)}
 
 var game: Node3D
@@ -107,6 +109,8 @@ var pressure_left := 0.0
 var feel_left := 0.0
 ## Enemies of the stage that have to fall before it is over.
 var guards: Array = []
+## The last guards of the villa and the infected that are on each of them: {guard, pack}.
+var doomed: Array = []
 ## Lines that are still to be read: [speaker, text, seconds].
 var lines: Array = []
 var line_left := 0.0
@@ -125,6 +129,7 @@ func begin() -> void:
 	map = game.cabin as HiveMap
 	done.clear()
 	guards.clear()
+	doomed.clear()
 	lines.clear()
 	line_left = 0.0
 	clock = 0.0
@@ -143,6 +148,8 @@ func begin() -> void:
 	for id in start.open:
 		map.unlock(str(id), true)
 	game.credits = int(start.credits)
+	# Nobody lands at a Helix site in a shirt: half a vest from the start.
+	game.player.armor = maxf(game.player.armor, START_ARMOUR)
 	game.preparation_left = 99999.0
 	game.sounds.dry = true
 	var at: Vector3 = map.points.get(str(start.at), map.player_start)
@@ -223,7 +230,7 @@ func _arrive() -> void:
 	if (game.check_mode and not game.story_in_checks) or game.intro_skipped:
 		heli.global_position = pad + Vector3(0, 0.1, 0)
 		heli_clock = INTRO_SECONDS
-		game.hud.announce("MISSION 2  ·  DIE VILLA", "Die C.R.U. hält das Haus, und aus dem Wald kommen Infizierte. Folgt der Markierung.", 8)
+		game.hud.announce("MISSION 2  ·  DIE VILLA", "Die letzten Wachen der Villa werden gerade überrannt. Folgt der Markierung.", 8)
 		return
 	heli.global_position = pad + Vector3(0, 13.0, 0)
 	intro_left = INTRO_SECONDS
@@ -272,7 +279,7 @@ func _end_intro() -> void:
 	game.player.camera.current = true
 	game.player.controlled = true
 	game.hud.play_ui.show()
-	game.hud.announce("MISSION 2  ·  DIE VILLA", "Die C.R.U. hält das Haus, und aus dem Wald kommen Infizierte. Folgt der Markierung.", 8)
+	game.hud.announce("MISSION 2  ·  DIE VILLA", "Die letzten Wachen der Villa werden gerade überrannt. Folgt der Markierung.", 8)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if intro_left <= 0.0 or INTRO_SECONDS - intro_left < 0.7 or not event.is_pressed() or event.is_echo():
@@ -348,11 +355,10 @@ func _enter(id: String) -> void:
 		"landing":
 			pressure_left = 7.0
 		"villa":
-			_post(["cru_assault", "cru_assault"], [Vector3(-3.5, HiveMap.STOREY_VILLA, 9.8), Vector3(3.5, HiveMap.STOREY_VILLA, 9.8)], false)
 			_post(["mauler", "mauler", "striker"], [Vector3(-14, 0, 12), Vector3(-19, 0, 19), Vector3(-10, 0, 17)], false)
-			_post(["ripper", "ripper"], [Vector3(12, 0, 12), Vector3(20, 0, 18)], false)
+			_post(["ripper"], [Vector3(16, 0, 15)], false)
 			_post(["mauler", "leech"], [Vector3(-13, 0, 5), Vector3(-20, 0, -1)], false)
-			_post(["charger", "mauler"], [Vector3(14, 0, 4), Vector3(20, 0, 0)], false)
+			_post(["mauler"], [Vector3(17, 0, 2)], false)
 		"mirror":
 			say("NADJA", "Hier. Hinter dem Spiegel. Gebt mir einen Moment am Schloss.", 5.0)
 			if is_instance_valid(nadja):
@@ -362,13 +368,13 @@ func _enter(id: String) -> void:
 			say("NADJA", "Offen. Die Treppe führt zu einem Bahnhof, der auf keinem Plan steht.", 6.0)
 			if is_instance_valid(nadja):
 				nadja.order = "follow"
-			_post(["cru_assault", "cru_shotgunner"], [_point("lobby") + Vector3(-1.2, 0, -2.0), _point("lobby") + Vector3(1.2, 0, -2.4)], false)
+			_post(["mauler", "ripper"], [_point("lobby") + Vector3(-1.2, 0, -2.0), _point("lobby") + Vector3(1.2, 0, -2.4)], false)
 		"station":
 			map.unlock("station")
 			game.sounds.play_at("shutter_open", _point("lobby"))
-			say("COLEMAN", "Der Bahnsteig ist besetzt. Räumt ihn, bevor Verstärkung kommt.", 5.5)
+			say("COLEMAN", "Der Bahnsteig ist voll von ihnen. Räumt ihn, bevor es mehr werden.", 5.5)
 			var middle := _point("platform")
-			_post(["cru_assault", "cru_assault", "cru_shotgunner", "cru_shield", "cru_medic", "cru_marksman"], [middle + Vector3(-14, 0, -5), middle + Vector3(12, 0, -6), middle + Vector3(-6, 0, -8), middle + Vector3(18, 0, -3), middle + Vector3(-24, 0, -2), middle + Vector3(27, 0, -7)], true)
+			_post(["mauler", "mauler", "striker", "mauler", "striker", "ripper", "mauler", "charger"], [middle + Vector3(-14, 0, -5), middle + Vector3(12, 0, -6), middle + Vector3(-6, 0, -8), middle + Vector3(18, 0, -3), middle + Vector3(-24, 0, -2), middle + Vector3(27, 0, -7), middle + Vector3(3, 0, -3), middle + Vector3(-30, 0, -8)], true)
 		"nadja":
 			_nadja_leaves()
 		"deal":
@@ -391,8 +397,8 @@ func _enter(id: String) -> void:
 			_checkpoint("terminal", 300)
 			_use("control", "control", "[E] Tor zur Anlage öffnen")
 			var hall := _point("terminal")
-			_post(["cru_assault", "cru_assault", "cru_shield", "cru_heavy"], [hall + Vector3(-14, 0, -8), hall + Vector3(12, 0, -10), hall + Vector3(0, 0, -14), hall + Vector3(18, 0, -4)], false)
-			_post(["cru_marksman", "cru_marksman"], [_point("control") + Vector3(-14, 0, 0.5), _point("control") + Vector3(-24, 0, 0.5)], false)
+			_post(["mauler", "mauler", "striker", "mauler", "charger"], [hall + Vector3(-14, 0, -8), hall + Vector3(12, 0, -10), hall + Vector3(0, 0, -14), hall + Vector3(18, 0, -4), hall + Vector3(-22, 0, -3)], false)
+			_post(["striker", "mauler"], [_point("control") + Vector3(-14, 0, 0.5), _point("control") + Vector3(-24, 0, 0.5)], false)
 		"admin":
 			map.unlock("admin")
 			game.sounds.play_at("shutter_open", _point("gate_admin"))
@@ -418,6 +424,9 @@ func _enter(id: String) -> void:
 			map.unlock("atrium")
 			game.sounds.play_at("shutter_open", _point("cafeteria"))
 			_checkpoint("atrium", 350)
+			say("NADJA", "An alle C.R.U.-Einheiten: Das Fireteam ist im Hive. Wer es mir bringt, bekommt frisches Aerosol – und das Dreifache.", 7.0)
+			say("COLEMAN", "Sie hat das System der Anlage – und jetzt kauft sie sich die C.R.U. Rechnet an jedem Zugang mit Trupps.", 6.5)
+			say("GHOST", "Auf uns schießen sie auch. Sie hat uns von der Liste gestrichen.", 5.0)
 			_post(["cru_elite", "cru_assault", "cru_assault", "cru_marksman"], [_point("atrium") + Vector3(-12, 0, -10), _point("atrium") + Vector3(12, 0, -8), _point("atrium") + Vector3(0, 0, -16), _point("atrium") + Vector3(-15, 0, 6)], false)
 		"generator":
 			_use("generator", "generator", "[E] Notstrom einschalten")
@@ -451,9 +460,10 @@ func _update(delta: float) -> void:
 	var room_id := "" if room.is_empty() else str(room.id)
 	match stage:
 		"landing":
-			# The guards of the house show themselves once the squad comes up the drive.
-			if here.z < 54.0 and _once("terrace_guards"):
-				_post(["cru_assault", "cru_assault", "cru_shotgunner", "cru_marksman"], [Vector3(-9, 0, 26.5), Vector3(9, 0, 26.5), Vector3(-19, 0, 26), Vector3(30, 0, 25)], false)
+			# The last guards of the house show themselves once the squad comes up the drive.
+			if here.z < 56.0 and _once("terrace_guards"):
+				_overrun([Vector3(-9, 0, 27.0), Vector3(8, 0, 27.5), Vector3(-1, 0, 29.5)], ["cru_assault", "cru_shotgunner", "cru_assault"])
+				say("COLEMAN", "Das ist der Rest der Wachmannschaft. Ihr Aerosol ist verbraucht – die Infizierten fallen über sie her.", 6.0)
 			if here.distance_to(_point("front_door")) < 7.0 or bool(map.is_indoors(here)):
 				_enter("villa")
 		"villa":
@@ -491,8 +501,8 @@ func _update(delta: float) -> void:
 		"hold":
 			progress = minf(1.0, progress + delta / HOLD_STATION)
 			if progress > 0.45 and _once("hold_squad"):
-				say("COLEMAN", "C.R.U. aus dem Depot. Sie wollen den Zug zurück.", 4.5)
-				_post(["cru_assault", "cru_assault", "cru_shotgunner", "cru_heavy"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2)], false)
+				say("COLEMAN", "Aus dem Depot kommen mehr. Der Lärm zieht sie an.", 4.5)
+				_post(["striker", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
 			if progress >= 1.0:
 				_enter("board")
 		"board":
@@ -528,6 +538,11 @@ func _update(delta: float) -> void:
 				if progress >= 1.0:
 					_enter("labs")
 		"labs":
+			# Half-way up the corridor a squad comes in through the lock behind them.
+			if here.z < -532.0 and _once("labs_squad"):
+				game.sounds.play_at("shutter_open", _point("decon"))
+				say("COLEMAN", "C.R.U. hinter euch - sie kommen durch die Schleuse.", 4.5)
+				_post(["cru_assault", "cru_assault", "cru_shotgunner", "cru_marksman"], [_point("decon") + Vector3(-1.5, 0, 2.0), _point("decon") + Vector3(1.5, 0, 3.0), _point("decon") + Vector3(0, 0, 5.0), _point("decon") + Vector3(0, 0, 8.0)], false)
 			if not stalker_sent and stage_time > 14.0:
 				stalker_sent = true
 				var lair := _hidden_spot(16.0, 30.0)
@@ -741,16 +756,52 @@ func _spawn(kind: String, at: Vector3) -> Infected:
 ## they are the stage's guards: it is over when they have fallen.
 func _post(kinds: Array, places: Array, keep: bool) -> void:
 	for index in range(kinds.size()):
-		var place: Vector3 = places[index % places.size()]
-		if place == Vector3.INF or not is_finite(place.x):
-			continue
-		var level := map.level_of(place + Vector3(0, 0.3, 0))
-		var cell := map._free_near(level, Vector2(place.x, place.z), 6)
-		if cell.x > 99999:
-			continue
-		var enemy := _spawn(str(kinds[index]), Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL))
+		var enemy := _place(str(kinds[index]), places[index % places.size()])
 		if keep and enemy != null:
 			guards.append(enemy)
+
+## One enemy on the free ground nearest to a place (null if there is none).
+func _place(kind: String, place: Vector3) -> Infected:
+	if place == Vector3.INF or not is_finite(place.x):
+		return null
+	var level := map.level_of(place + Vector3(0, 0.3, 0))
+	var cell := map._free_near(level, Vector2(place.x, place.z), 6)
+	if cell.x > 99999:
+		return null
+	return _spawn(kind, Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL))
+
+## The last guards of the villa: each of them already has infected on him, and they
+## fight each other before either looks at the squad. (Their aerosol is used up - what
+## kept the infected off them in the first mission.)
+func _overrun(places: Array, kinds: Array) -> void:
+	for index in range(places.size()):
+		var spot: Vector3 = places[index]
+		var guard := _place(str(kinds[index % kinds.size()]), spot)
+		if guard == null:
+			continue
+		guard.health = guard.max_health * 0.7
+		var pack: Array = []
+		for k in range(2):
+			var beast := _place("mauler" if k == 0 else "striker", spot + Vector3(randf_range(-5.0, 5.0), 0, randf_range(4.0, 8.0)))
+			if beast != null:
+				beast.quarry = guard
+				beast.alert = true
+				pack.append(beast)
+		doomed.append({"guard": guard, "pack": pack})
+
+## Keeps every such guard busy with whatever of his pack still stands.
+func _run_overrun() -> void:
+	for entry in doomed:
+		var guard: Infected = entry.guard if is_instance_valid(entry.guard) else null
+		if guard == null or guard.dead:
+			continue
+		if is_instance_valid(guard.quarry) and guard.quarry.is_targetable():
+			continue
+		guard.quarry = null
+		for beast in entry.pack:
+			if is_instance_valid(beast) and not (beast as Infected).dead:
+				guard.quarry = beast
+				break
 
 ## Where the guard nearest to the survivor stands (the platform if none is left).
 func _nearest_guard() -> Vector3:
@@ -912,4 +963,5 @@ func _process(delta: float) -> void:
 		return
 	_watch_nadja(delta)
 	_update(delta)
+	_run_overrun()
 	_run_pressure(delta)

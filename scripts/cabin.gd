@@ -1215,14 +1215,16 @@ func _barrel(pos: Vector3, color: Color = Color("4a3a2c")) -> void:
 ## Open shelving with its back against local -z, filled with tins, jars and boxes.
 func _shelf(pos: Vector3, yaw: float, width: float, depth: float, height: float, levels: int, color: Color, filled: float = 0.7) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "siding", Vector3(0, height * 0.5, -depth * 0.5 + 0.015), Vector3(width, height, 0.03), color.darkened(0.25))
+	# (The back stands a little inside the uprights and the boards end in front of it: faces
+	# in one plane flicker.)
+	_placed(frame, "siding", Vector3(0, height * 0.5, -depth * 0.5 + 0.021), Vector3(width - 0.01, height, 0.03), color.darkened(0.25))
 	for edge in [-1.0, 1.0]:
 		var x: float = edge * (width * 0.5 - 0.02)
 		_placed(frame, "plank_v", Vector3(x, height * 0.5, 0), Vector3(0.04, height, depth), color)
 	var goods := [Color("4d5a45"), Color("6b5a3c"), Color("5a4a44"), Color("3f4a52"), Color("70654b"), Color("4b3f33")]
 	for level in range(levels + 1):
 		var y := 0.08 + level * (height - 0.12) / levels
-		_placed(frame, "siding", Vector3(0, y, 0), Vector3(width - 0.04, 0.035, depth), color.lightened(0.05))
+		_placed(frame, "siding", Vector3(0, y, 0.018), Vector3(width - 0.04, 0.035, depth - 0.036), color.lightened(0.05))
 		if level == levels:
 			continue
 		var slots := maxi(1, int(width / 0.42))
@@ -2990,7 +2992,7 @@ func _server_rack(pos: Vector3, yaw: float, filling: String, title: String) -> V
 	_chunk("Lab")
 	_placed(frame, "plain", Vector3(0, 0.04, 0), Vector3(0.8, 0.08, 0.8), Color("0b0d0e"))
 	# The cabinet: its back, its sides, its cap, and a frame round the open front.
-	_placed(frame, "steel", Vector3(0, 1.08, -0.25), Vector3(0.84, 2.0, 0.34), shell)
+	_placed(frame, "steel", Vector3(0, 1.08, -0.25), Vector3(0.76, 2.0, 0.34), shell)
 	for side in [-1.0, 1.0]:
 		_placed(frame, "steel", Vector3(side * 0.405, 1.08, 0.0), Vector3(0.05, 2.0, 0.84), edge)
 	_placed(frame, "steel", Vector3(0, 2.09, 0.0), Vector3(0.86, 0.04, 0.86), Color("15181a"))
