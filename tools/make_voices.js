@@ -59,7 +59,9 @@ const TRIM = 'silenceremove=start_periods=1:start_threshold=-46dB:start_silence=
 // The voices of 2026-10-10 are denser than the ones before them: at the same peak a line
 // is that much louder. This many dB bring each back to how loud its lines were in the game
 // (measured: the median over the lines both voices have recorded).
-const LEVEL = { viper: -4.0, scorpion: -3.0, raven: -3.0 };
+// (Ghost is the quiet one of the three operators: his new lines, most of them a word or
+// two, sit a little under Phantom's and Havoc's.)
+const LEVEL = { viper: -4.0, scorpion: -3.0, raven: -3.0, ghost: -1.5 };
 // Nadja's new voice: what she cries out in person in the first mission is 2 dB denser
 // than it was; and over the loudspeakers of the facility she is a little louder than
 // over the lab's, so that she stands beside Coleman.
