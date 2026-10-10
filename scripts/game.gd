@@ -197,6 +197,9 @@ var fire: FireField
 ## True while a blast is being worked out: a shield does not stop that.
 ## (Also set for a bullet that an ability lets through a shield.)
 var blasting := false
+## Factor on what a blast does to a Crusher behind its shell while it is worked out: more
+## than 1 for the explosives of a breacher with the last ability (Skills.shell_gain).
+var shell_gain := 1.0
 ## While the player's shot is being worked out: the share of what a soldier's armour stops
 ## that it still stops against the weapon that fired (see Survivor.WEAPONS, armour).
 var piercing := 1.0
@@ -1313,7 +1316,7 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 			var query := PhysicsRayQueryParameters3D.create(center, chest, 1)
 			var shielded := not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
 			var falloff := 1.0 - distance / radius
-			survivor.receive_damage(player_damage * float(rules.harm) * (0.35 + 0.65 * falloff) * (0.3 if shielded else 1.0), center, "frag" if style == "frag" else "")
+			survivor.receive_damage(player_damage * float(rules.harm) * (0.35 + 0.65 * falloff) * (0.3 if shielded else 1.0), center, style if style in ["frag", "blast"] else "burst")
 			if survivor == player and style == "growth" and not shielded:
 				hud.flash(Color(1.0, 0.97, 0.82), 0.3 + 0.6 * falloff)
 	player.shake_from(center, 1.0, radius * 4.0)
@@ -1327,16 +1330,35 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 			continue
 		var gap := (enemy.global_position + Vector3(0, 0.9, 0)).distance_to(center)
 		if gap < radius:
-			enemy.receive_hit(infected_damage * (1.0 - 0.6 * gap / radius), (enemy.global_position - center).normalized())
+			enemy.receive_hit(infected_damage * (1.0 - 0.6 * gap / radius) * (shell_gain if enemy.hardened() else 1.0), (enemy.global_position - center).normalized())
 	blasting = false
 
 ## The blast of a grenade or a mine. In a co-op match the host works it out.
 ## `style` is "frag" for a grenade the C.R.U. threw: ballistic plates help against those.
+## What the survivor of this machine sets off is bigger and harder with the breacher's
+## abilities, and goes through the Crusher's shell with his last one.
 func blast(center: Vector3, radius: float, survivor_damage: float, infected_damage: float, style: String = "blast") -> void:
+	var gain := 1.0
+	if style == "blast":
+		radius *= 1.0 + skills.value("blast_reach")
+		infected_damage *= 1.0 + skills.value("blast_power")
+		gain = skills.shell_gain()
 	if net.joined:
 		net.request_blast(center, radius, survivor_damage, infected_damage)
+		if gain > 1.0:
+			# The host knows nothing of a guest's tree, and works the blast out as anybody's
+			# (no wider and no harder than NetLink._blast lets it be). What the shell would
+			# have let through besides is reported as a hit of its own.
+			var reach := minf(radius, 8.0)
+			for node in get_tree().get_nodes_in_group("infected"):
+				var enemy := node as Infected
+				var gap := (enemy.global_position + Vector3(0, 0.9, 0)).distance_to(center)
+				if not enemy.dead and enemy.hardened() and gap < reach:
+					net.report_hit(enemy, minf(infected_damage, 400.0) * (1.0 - 0.6 * gap / reach) * (gain - 1.0), (enemy.global_position - center).normalized(), false, true)
 	else:
+		shell_gain = gain
 		explode(center, radius, survivor_damage, infected_damage, style)
+		shell_gain = 1.0
 
 ## A gas grenade has come to rest: a cloud spreads from it, in a room as well as outside.
 ## In a co-op match the host decides; the guest gets the cloud with the next report.

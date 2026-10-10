@@ -1098,6 +1098,7 @@ func run(game: Node3D) -> void:
 	await _loadout(game)
 	await _squadwork(game)
 	await _overhaul(game)
+	await _breacher(game)
 	await _operators(game)
 	await _sandbox(game)
 	await _hive(game)
@@ -1225,9 +1226,10 @@ func _latest(game: Node3D) -> void:
 			counted = counted and str(skill.id).begins_with(tree + "_") and not ids.has(skill.id) and int(skill.tier) >= tier and int(skill.tier) <= 3 and Skills.note(skill, 1) != "" and not Skills.note(skill, 1).contains("%s")
 			tier = int(skill.tier)
 			ids[skill.id] = true
-		counted = counted and ranks >= Skills.LEVELS - 1 and ranks <= Skills.LEVELS and (Skills.TREES[tree].skills as Array).size() >= 7
+		# (The breacher has more ranks than a player has points: there he chooses.)
+		counted = counted and ranks >= Skills.LEVELS - 1 and ranks <= (20 if tree == "breacher" else Skills.LEVELS) and (Skills.TREES[tree].skills as Array).size() >= 7
 		abilities += (Skills.TREES[tree].skills as Array).size()
-	expect(counted and abilities == 22 and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven or eight abilities each, and levels enough for about one tree; a career gives experience and levels")
+	expect(counted and abilities == 24 and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven to nine abilities each, and levels enough for about one tree; a career gives experience and levels")
 	game.hud.show_menu("skills")
 	var marked := false
 	for node in game.hud.modal.find_children("*", "Label", true, false):
@@ -1270,9 +1272,9 @@ func _latest(game: Node3D) -> void:
 	# --- what they do
 	skills.active = true
 	skills.chosen = "breacher"
-	var early: String = skills.barred("breacher_shield", totals)
+	var early: String = skills.barred("breacher_charge", totals)
 	var bought := 0
-	for id in ["breacher_armour", "breacher_armour", "breacher_armour", "breacher_shield", "breacher_plates"]:
+	for id in ["breacher_armour", "breacher_armour", "breacher_armour", "breacher_charge", "breacher_plates"]:
 		if skills.learn(id, totals):
 			bought += 1
 	var poor: bool = not skills.learn("breacher_plates", totals) and skills.barred("breacher_plates", totals) == "Kein Punkt frei"
@@ -1300,7 +1302,7 @@ func _latest(game: Node3D) -> void:
 	player.bolt_clock = -1.0
 	player.shoot()
 	await frames(2)
-	expect(stopped and bearer.health < sound and not game.blasting and is_equal_approx(skills.shield_share("ak"), 0.0) and skills.shield_share("sniper") == 1.0, "With the ability the sniper rifle shoots through a shield that stops it otherwise")
+	expect(stopped and bearer.health < sound and not game.blasting and is_equal_approx(skills.shield_share("ak"), 0.75) and is_equal_approx(skills.shield_share("sniper"), 0.75), "With the breacher's ability against armour a bullet goes through a shield that stops it otherwise: a quarter of it for each rank")
 	bearer.receive_hit(99999.0, Vector3.FORWARD)
 	# Armour, and what the survivor takes.
 	var elite := game.spawn_enemy("cru_elite") as CruSoldier
@@ -4328,6 +4330,7 @@ func _near(game: Node3D, reach: float) -> String:
 ## [--bot-company=phantom_havoc|phantom_ghost|havoc_ghost] [--bot-weapon=mp7 or
 ## mp7:silencer,reddot: the weapon the bot fights the night with, and what is fitted to
 ## it] [--bot-tree=sweeper|hunter|breacher: every rank of that tree, and it in force]
+## [--bot-ranks=breacher_heavy:3,breacher_frag:3: these ranks of it instead of all]
 ## [--bot-vest: heavy armour, new with every round]. With a window (no --headless)
 ## it also reports the frame rate; use
 ## --bot-speed=1 for numbers that match real play. A simple aim-bot holds a
@@ -4354,12 +4357,15 @@ func bot(game: Node3D) -> void:
 	# --bot-tree=breacher: the bot has every rank of that tree, and that tree is in force.
 	# --bot-vest: it wears heavy armour, bought anew in every break.
 	var tree := ""
+	var build := ""
 	var vest := "--bot-vest" in OS.get_cmdline_user_args()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--bot-weapon="):
 			arm = arg.trim_prefix("--bot-weapon=")
 		if arg.begins_with("--bot-tree="):
 			tree = arg.trim_prefix("--bot-tree=")
+		if arg.begins_with("--bot-ranks="):
+			build = arg.trim_prefix("--bot-ranks=")
 		if arg.begins_with("--bot-round="):
 			first_round = int(arg.trim_prefix("--bot-round="))
 		if arg.begins_with("--bot-seconds="):
@@ -4391,6 +4397,14 @@ func bot(game: Node3D) -> void:
 		game.skills.ranks.clear()
 		for skill in Skills.TREES[tree].skills:
 			game.skills.ranks[str(skill.id)] = int(skill.ranks)
+		if build != "":
+			# Only what a player of the last level can have: the ranks named, no more of each
+			# than there are.
+			game.skills.adopt({}, tree)
+			for entry in build.split(","):
+				var pair: PackedStringArray = entry.split(":")
+				if pair.size() == 2 and not Skills.find(pair[0]).is_empty():
+					game.skills.ranks[pair[0]] = clampi(int(pair[1]), 0, int(Skills.find(pair[0]).ranks))
 		game.skills.chosen = tree
 		print("BOT_TREE %s ranks=%d" % [tree, game.skills.spent(tree)])
 	game.start_run()
@@ -4862,6 +4876,9 @@ func coop(game: Node3D, as_host: bool) -> void:
 	var giant_seen := false
 	var giant_dulls := -1
 	var giant_gone := false
+	# The guest as a breacher: see below, where his blast goes off on the shell.
+	var cracker_wait := 0.0
+	var cracker_sent := false
 	while clock < seconds and game.state == "playing":
 		await get_tree().physics_frame
 		clock += get_physics_process_delta_time()
@@ -5057,6 +5074,21 @@ func coop(game: Node3D, as_host: bool) -> void:
 						giant_step = 1
 						giant_wait = 0.0
 						game.net.report_hit(giant, GIANT_PROBE, way, true)
+				elif giant_step == 1 and giant.hardened() and not cracker_sent:
+					# The guest as a breacher with the last ability: half a second after his
+					# first hit a blast of his, as hard as that hit, right on the shell. The
+					# host knows nothing of his tree, and three times as much of it must
+					# still arrive there (in one drop or in two).
+					cracker_wait += get_physics_process_delta_time()
+					if cracker_wait > 0.5:
+						cracker_sent = true
+						var ranks_then: Dictionary = game.skills.ranks.duplicate()
+						var tree_then: String = game.skills.chosen
+						game.skills.ranks = {"breacher_shell": 1}
+						game.skills.chosen = "breacher"
+						game.blast(giant.global_position + Vector3(0, 0.9, 0), 1.5, 0.0, GIANT_PROBE)
+						game.skills.ranks = ranks_then
+						game.skills.chosen = tree_then
 				elif giant_step == 1 and giant.shell == "" and not giant.guard:
 					giant_wait += get_physics_process_delta_time()
 					if giant_wait > 0.7:
@@ -5119,7 +5151,7 @@ func coop(game: Node3D, as_host: bool) -> void:
 		if as_host:
 			print("MP_HOST_CRUSHER placed=%s steps=%d probes=%s" % [str(giant_placed), giant_step, ",".join(PackedStringArray(giant_drops))])
 		else:
-			print("MP_GUEST_CRUSHER seen=%s states=%s shell=%.2f arm=%.2f bar=%s dull_answers=%d head_shot_dull=%s probes=%d gone=%s" % [str(giant_seen), ",".join(PackedStringArray(giant_states)), giant_shell, giant_guard, str(giant_bar), giant_dulls, str(giant_dull), giant_step, str(giant_gone)])
+			print("MP_GUEST_CRUSHER seen=%s states=%s shell=%.2f arm=%.2f bar=%s dull_answers=%d head_shot_dull=%s probes=%d gone=%s breacher_blast=%s" % [str(giant_seen), ",".join(PackedStringArray(giant_states)), giant_shell, giant_guard, str(giant_bar), giant_dulls, str(giant_dull), giant_step, str(giant_gone), str(cracker_sent)])
 	# The weapon this side ended with, and which weapons of the partner it was shown shots
 	# of (by their sound, as they come across) and how many.
 	var partner_shots: Array = []
@@ -5248,7 +5280,7 @@ func _squadwork(game: Node3D) -> void:
 	expect(guarded and started and stalled and str(engine.items[0].state) == "running" and theirs, "The breacher's squad holds a marked position, starts the generator and starts it again when it stands still; the hack module it only starts again")
 	engine.state = "done"
 	skills.reset()
-	# --- shotguns go through a shield with the breacher's last ability
+	# --- shotguns go through a shield with the breacher's ability against armour
 	skills.chosen = "breacher"
 	var bounced: bool = skills.shield_share("shotgun") == 0.0 and skills.shield_share("autoshotgun") == 0.0
 	var bearer := game.spawn_enemy("cru_shield") as CruSoldier
@@ -5263,7 +5295,7 @@ func _squadwork(game: Node3D) -> void:
 	player.shoot()
 	await frames(2)
 	var stopped: bool = bearer.health == sound and bearer.blocks(Vector3.BACK)
-	skills.ranks = {"breacher_shield2": 1}
+	skills.ranks = {"breacher_armour": 2}
 	face(game, stand, PI)
 	player.climb = 0.0
 	player.shot_cooldown = 0.0
@@ -5271,7 +5303,7 @@ func _squadwork(game: Node3D) -> void:
 	player.shoot()
 	await frames(2)
 	var through: float = sound - bearer.health
-	expect(bounced and stopped and through > 0.0 and through <= 9 * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.5 + 0.01 and bearer.knock == Vector3.ZERO and skills.shield_share("shotgun") == 0.5 and skills.shield_share("autoshotgun") == 0.5 and skills.shield_share("rifle") == 0.0, "With the breacher's last ability both shotguns shoot through a shield with half their force (%.0f), and it throws nobody back" % through)
+	expect(bounced and stopped and through > 0.0 and through <= 9 * float(Survivor.WEAPONS.shotgun.damage) * 1.5 * 0.5 + 0.01 and bearer.knock == Vector3.ZERO and skills.shield_share("shotgun") == 0.5 and skills.shield_share("autoshotgun") == 0.5 and skills.shield_share("rifle") == 0.5, "With two ranks of the breacher's ability against armour both shotguns shoot through a shield with half their force (%.0f), and it throws nobody back" % through)
 	bearer.receive_hit(99999.0, Vector3.FORWARD)
 	skills.reset()
 	# --- the squad finds its feet over the first rounds
@@ -5474,7 +5506,7 @@ func _overhaul(game: Node3D) -> void:
 	game.state = "playing"
 	var hunting: bool = skills.chosen == "hunter" and is_equal_approx(skills.value("damage_special"), 0.24) and skills.value("squad_switch") == 1.0 and skills.value("damage_common") == 0.0 and skills.value("fire_tame") == 0.0 and skills.spent() == 12
 	# A row of a tree opens by the points in that tree, however many are in the others.
-	var rows: bool = skills.barred("breacher_shield", {"victories": 9999}).begins_with("Erst 3 Punkte") and skills.barred("hunter_trophy", {"victories": 9999}).begins_with("Erst 7 Punkte") and skills.barred("sweeper_pierce", {"victories": 9999}) == ""
+	var rows: bool = skills.barred("breacher_charge", {"victories": 9999}).begins_with("Erst 3 Punkte") and skills.barred("hunter_trophy", {"victories": 9999}).begins_with("Erst 7 Punkte") and skills.barred("sweeper_pierce", {"victories": 9999}) == ""
 	game.hud.show_menu("main")
 	var named := ""
 	for node in game.hud.modal.find_children("*", "Button", true, false):
@@ -5752,6 +5784,160 @@ func _overhaul(game: Node3D) -> void:
 	# An answer that comes after the match was closed changes nothing.
 	link._forwarded("203.0.113.7", "open")
 	expect(sorted and truthful and link.forward == "" and link.public_address == "" and link.router == null and not link.hosting, "The host's lobby says what the router said to the request for the port - opened, refused, or no address of its own - and nothing of it outlasts the match")
+
+## What a blast of this style, set off two metres in front of the survivor, takes off his
+## health ("blast": an explosive of his own; anything else: somebody else's).
+func _blast_harm(game: Node3D, style: String) -> float:
+	var player: Survivor = game.player
+	player.health = 100.0
+	player.armor = 0.0
+	var centre: Vector3 = player.global_position + Vector3(0, 0.9, 0) - player.global_basis.z * 2.0
+	if style == "blast":
+		game.blast(centre, Throwable.BLAST[0], Throwable.BLAST[1], 0.0)
+	else:
+		game.explode(centre, Throwable.BLAST[0], Throwable.BLAST[1], 0.0, style)
+	var lost: float = 100.0 - player.health
+	player.health = 100.0
+	return lost
+
+## The breacher's tree: heavy gear, explosives and armour - his own blasts are a scratch to
+## him, and his are the only hits that go through the Crusher's shell.
+func _breacher(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var skills: Skills = game.skills
+	game.profile.mode = "survival"
+	game.profile.modifiers = false
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	skills.reset()
+	skills.active = true
+	_wipe(game)
+	await frames(4)
+	var stand := Vector3(0, 0.05, 22.0)
+	face(game, stand, PI)
+	await frames(2)
+	# --- the tree, and what a profile saved with the old one keeps of it
+	var entries: Array = Skills.TREES.breacher.skills
+	var full := {}
+	var all_ranks := 0
+	for entry: Dictionary in entries:
+		full[str(entry.id)] = int(entry.ranks)
+		all_ranks += int(entry.ranks)
+	var old := Skills.new()
+	old.adopt({"breacher_armour": 3, "breacher_plates": 2, "breacher_frag": 3, "breacher_shield": 1, "breacher_head": 3, "breacher_shield2": 1, "breacher_squad": 1}, "breacher")
+	var moved: bool = old.chosen == "breacher" and old.rank("breacher_armour") == 3 and old.rank("breacher_plates") == 2 and old.rank("breacher_frag") == 3 and old.rank("breacher_squad") == 1 and old.spent("breacher") == 9 and old.ranks.size() == 4
+	var texts: bool = Skills.note(Skills.find("breacher_frag"), 3) == "Eigene Explosionen schaden dir 90 % weniger, fremde 36 %" and Skills.note(Skills.find("breacher_frag"), 1) == "Eigene Explosionen schaden dir 30 % weniger, fremde 12 %" and Skills.note(Skills.find("breacher_plates"), 3) == "Westen fangen 60 % mehr ab, Kugeln schaden 24 % weniger" and Skills.note(Skills.find("breacher_charge"), 2) == "Deine Sprengsätze: +30 % Schaden, +20 % Radius" and Skills.note(Skills.find("breacher_shell"), 1) == "Schweres Gerät und Sprengsätze schlagen durch den Panzer des Crushers: 75 % statt 25 %" and Skills.note(Skills.find("sweeper_damage"), 3) == "+24 % Schaden gegen gewöhnliche Infizierte"
+	var gear: bool = Skills.heavy_gear("mg") and Skills.heavy_gear("mg2") and Skills.heavy_gear("minigun") and Skills.heavy_gear("launcher") and Skills.heavy_gear("shotgun") and Skills.heavy_gear("autoshotgun") and Skills.heavy_gear("sniper") and Skills.heavy_gear("fifty") and not Skills.heavy_gear("rifle") and not Skills.heavy_gear("ak") and not Skills.heavy_gear("revolver") and not Skills.heavy_gear("nonsense")
+	expect(entries.size() == 9 and all_ranks == 20 and str(Skills.TREES.breacher.focus) == "Schweres Gerät, Sprengstoff, Panzerung" and moved and texts and gear, "The breacher's tree is one of heavy gear, explosives and armour: nine abilities with more ranks than a player has points; a profile saved with the old tree keeps its points in the abilities that are still there and has the others free; heavy gear is the shotguns and whatever is carried as a heavy weapon")
+	# --- his own explosives are a scratch to him, and other blasts hurt him less
+	player.plate_level = 0
+	skills.chosen = "breacher"
+	var plain_harm: float = _blast_harm(game, "blast")
+	skills.ranks = {"breacher_frag": 1}
+	var first_harm: float = _blast_harm(game, "blast")
+	skills.ranks = {"breacher_frag": 3}
+	var own_harm: float = _blast_harm(game, "blast")
+	var charger_harm: float = _blast_harm(game, "charger")
+	var frag_harm: float = _blast_harm(game, "frag")
+	var shares: bool = is_equal_approx(skills.harm_factor("blast", ""), Skills.OWN_BLAST_LEFT) and is_equal_approx(skills.harm_factor("burst", ""), 0.64) and is_equal_approx(skills.harm_factor("frag", "cru"), 0.64) and is_equal_approx(skills.harm_factor("", "common"), 1.0)
+	skills.chosen = "sweeper"
+	var other_harm: float = _blast_harm(game, "blast")
+	skills.chosen = "breacher"
+	expect(plain_harm > 20.0 and is_equal_approx(first_harm, plain_harm * 0.7) and is_equal_approx(own_harm, plain_harm * 0.1) and own_harm < 5.0 and is_equal_approx(charger_harm, plain_harm * 0.64) and is_equal_approx(frag_harm, plain_harm * 0.64) and is_equal_approx(other_harm, plain_harm) and shares and is_equal_approx(Skills.OWN_BLAST_LEFT, 0.1), "A shell of his own two metres away takes %.1f off a breacher with every rank of the ability, a tenth of the %.1f it takes off anybody else (seven tenths with one rank); a Charger's blast and a grenade of the C.R.U. hurt him 36 %% less; with another tree in force none of it counts" % [own_harm, plain_harm])
+	# --- his explosives reach further and hit harder
+	var dummy: Infected = game.spawn_enemy("mauler")
+	var rim: Infected = game.spawn_enemy("mauler")
+	for foe: Infected in [dummy, rim]:
+		foe.set_physics_process(false)
+		foe.max_health = 5000.0
+		foe.health = 5000.0
+	dummy.position = Vector3(0, 0.05, 44.0)
+	rim.position = Vector3(7.0, 0.05, 44.0)
+	await frames(2)
+	var at := Vector3(0, 0.95, 44.0)
+	skills.ranks = {}
+	game.blast(at, 6.5, 0.0, 280.0)
+	var small_hit: float = 5000.0 - dummy.health
+	var small_rim: float = 5000.0 - rim.health
+	dummy.health = 5000.0
+	skills.ranks = {"breacher_charge": 2}
+	game.blast(at, 6.5, 0.0, 280.0)
+	var big_hit: float = 5000.0 - dummy.health
+	var big_rim: float = 5000.0 - rim.health
+	# (A grenade thrown at the survivors is nobody's own: it stays as it is.)
+	dummy.health = 5000.0
+	rim.health = 5000.0
+	game.blast(at, 6.5, 0.0, 280.0, "frag")
+	var foreign: bool = is_equal_approx(5000.0 - dummy.health, 280.0) and rim.health == 5000.0
+	dummy.health = 5000.0
+	expect(is_equal_approx(small_hit, 280.0) and small_rim == 0.0 and is_equal_approx(big_hit, 364.0) and is_equal_approx(big_rim, 364.0 * (1.0 - 0.6 * 7.0 / 7.8)) and foreign and game.shell_gain == 1.0, "With the bigger charge a breacher's blast hits 30 %% harder (%.0f against %.0f) and reaches a fifth further: an infected seven metres away, out of reach before, takes %.0f" % [big_hit, small_hit, big_rim])
+	# --- heavy gear in his hands
+	skills.ranks = full
+	var harder: bool = is_equal_approx(skills.damage_factor(dummy, false, "mg"), 1.24) and is_equal_approx(skills.damage_factor(dummy, true, "shotgun"), 1.24) and is_equal_approx(skills.damage_factor(dummy, false, "rifle"), 1.0) and is_equal_approx(skills.damage_factor(dummy, false), 1.0)
+	var loaded: bool = player.reserve_cap("launcher") == 25 and player.reserve_cap("mg") == 560 and player.reserve_cap("rifle") == 180 and is_equal_approx(player.reload_of("mg"), float(Survivor.WEAPONS.mg.reload_time) * 0.7) and is_equal_approx(player.reload_of("rifle"), float(Survivor.WEAPONS.rifle.reload_time))
+	var steady: bool = is_equal_approx(skills.steadier("minigun"), 0.5) and is_equal_approx(skills.steadier("shotgun"), 0.5) and skills.steadier("rifle") == 0.0 and is_equal_approx(skills.value("carry"), 0.5)
+	player.unlock("launcher")
+	await frames(2)
+	var drum: bool = player.current_weapon == "launcher" and player.max_reserve() == 25 and is_equal_approx(player.drum_time("load"), float(Survivor.DRUM.load[0]) * 0.7)
+	face(game, stand, PI)
+	player.climb = 0.0
+	player.shot_cooldown = 0.0
+	player.shoot()
+	var kicked: float = player.camera.rotation.x
+	var shell_boost := 0.0
+	for node in game.ordnance.get_children():
+		if node is Throwable and (node as Throwable).impact:
+			shell_boost = (node as Throwable).boost
+			node.queue_free()
+	skills.chosen = "sweeper"
+	var resting: bool = player.reserve_cap("launcher") == 18 and is_equal_approx(player.reload_of("mg"), float(Survivor.WEAPONS.mg.reload_time)) and is_equal_approx(skills.damage_factor(dummy, false, "mg"), 1.0) and skills.steadier("minigun") == 0.0
+	skills.chosen = "breacher"
+	expect(harder and loaded and steady and drum and absf(kicked - float(Survivor.WEAPONS.launcher.kick) * 0.5) < 0.002 and is_equal_approx(shell_boost, 1.24) and resting, "Heavy gear in a breacher's hands: a quarter more damage (the launcher's shell too), loaded 30 %% faster - its drum as well -, 40 %% more in reserve (25 shells for 18), half the kick (%.3f); the carbine stays as it is, and so does all of it with another tree in force" % kicked)
+	# --- his vest takes the same share of a hit and lasts longer
+	skills.chosen = "sweeper"
+	player.health = 100.0
+	player.armor = 100.0
+	player.receive_damage(50.0, Vector3.INF, "")
+	var worn: float = 100.0 - player.armor
+	var through: float = 100.0 - player.health
+	skills.chosen = "breacher"
+	player.health = 100.0
+	player.armor = 100.0
+	player.receive_damage(50.0, Vector3.INF, "")
+	expect(is_equal_approx(worn, 30.0) and is_equal_approx(through, 20.0) and is_equal_approx(100.0 - player.armor, 30.0 / 1.6) and is_equal_approx(100.0 - player.health, 20.0), "A breacher's vest takes the same share of a hit and gives 60 %% more before it is used up (%.2f armour for a hit that costs anybody else %.0f)" % [100.0 - player.armor, worn])
+	player.armor = 0.0
+	player.health = 100.0
+	# --- the Crusher's shell: only his heavy gear and his explosives go through it
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.set_physics_process(false)
+	giant.position = Vector3(-14.0, 0.05, 44.0)
+	await frames(3)
+	giant.set_shell("on")
+	var whole: float = giant.health
+	var chest: Vector3 = giant.global_position + Vector3(0, 0.9, 0)
+	skills.ranks = {"breacher_heavy": 3}
+	var held: bool = giant.hardened() and is_equal_approx(skills.damage_factor(giant, false, "mg"), 1.24) and is_equal_approx(skills.shell_gain(), 1.0)
+	game.blast(chest, 6.5, 0.0, 280.0)
+	var dulled: float = whole - giant.health
+	giant.health = whole
+	skills.ranks = {"breacher_heavy": 3, "breacher_shell": 1}
+	var breaks: bool = is_equal_approx(skills.shell_gain(), 3.0) and is_equal_approx(skills.damage_factor(giant, false, "mg"), 1.24 * 3.0) and is_equal_approx(skills.damage_factor(giant, true, "launcher"), 1.24 * 3.0) and is_equal_approx(skills.damage_factor(giant, false, "rifle"), 1.0) and is_equal_approx(skills.damage_factor(giant, false), 1.0)
+	game.blast(chest, 6.5, 0.0, 280.0)
+	var cracked: float = whole - giant.health
+	giant.health = whole
+	# Open, it takes what it always took.
+	giant.set_shell("")
+	var open: bool = not giant.hardened() and is_equal_approx(skills.damage_factor(giant, false, "mg"), 1.24)
+	game.blast(chest, 6.5, 0.0, 280.0)
+	var bare: float = whole - giant.health
+	expect(held and breaks and open and is_equal_approx(dulled, 280.0 * Infected.SHELL_SHARE) and is_equal_approx(cracked, 280.0 * 0.75) and is_equal_approx(bare, 280.0) and game.shell_gain == 1.0, "Behind its shell the Crusher takes a quarter of a blast (%.0f) - of a breacher's with the last ability three quarters (%.0f), and of his heavy gear as well; the carbine rings off as ever, and an open Crusher takes what it always took (%.0f)" % [dulled, cracked, bare])
+	_wipe(game)
+	skills.reset()
+	player.inventory.erase("launcher")
+	player.equip_weapon("rifle", true)
+	await frames(3)
 
 ## What came with v0.19: the operators Phantom, Havoc and Ghost - tough, never killed, gone
 ## behind a flashbang and back from somewhere else, loud on the Fireteam's radio -, their

@@ -1679,7 +1679,7 @@ func _menu_skills(column: VBoxContainer) -> Control:
 		for skill in tree.skills:
 			if int(skill.tier) != tier:
 				tier = int(skill.tier)
-				_gap(list, 4)
+				_gap(list, 1)
 				var need: int = Skills.TIER_NEEDS[tier - 1]
 				list.add_child(label("REIHE %d%s" % [tier, "" if need == 0 else "   ·   ab %d Punkten in diesem Weg" % need], 12, AMBER, true))
 			var have := skills.rank(str(skill.id))
@@ -1691,7 +1691,12 @@ func _menu_skills(column: VBoxContainer) -> Control:
 			row.add_child(label("●".repeat(have) + "○".repeat(int(skill.ranks) - have), 14, tree.color))
 			if Skills.IN_SERVICE:
 				var more := _chip("+", _learn.bind(str(skill.id)), false, 34)
-				more.custom_minimum_size = Vector2(34, 23)
+				more.custom_minimum_size = Vector2(34, 22)
+				# (Flat, so that a row is no taller than its name: nine abilities must fit.)
+				for state in ["normal", "hover", "pressed", "disabled"]:
+					var flat := more.get_theme_stylebox(state) as StyleBoxFlat
+					flat.content_margin_top = 0
+					flat.content_margin_bottom = 0
 				more.disabled = skills.barred(str(skill.id), totals) != ""
 				more.tooltip_text = skills.barred(str(skill.id), totals)
 				row.add_child(more)

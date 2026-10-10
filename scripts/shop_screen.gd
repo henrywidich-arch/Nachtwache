@@ -635,10 +635,10 @@ func line_effect(id: String, line: String) -> String:
 		"mags":
 			return "Magazin  %d" % player.magazine_of(id) + ("" if full else "   →   %d" % (int(data.magazine) * 3 / 2))
 		"pouch":
-			var base: float = int(data.reserve_max) * (1.0 + float(game.skills.value("reserve")))
+			var base: float = int(data.reserve_max) * (1.0 + float(game.skills.deeper(id)))
 			return "Reserve  %d" % player.reserve_cap(id) + ("" if full else "   →   %d" % int(round(base + int(data.reserve_max) * step * (have + 1))))
 		"drill":
-			var quick: float = float(data.reload_time) * (1.0 - minf(0.6, float(game.skills.value("reload")) + step * (have + 1)))
+			var quick: float = float(data.reload_time) * (1.0 - minf(0.6, float(game.skills.quicker(id)) + step * (have + 1)))
 			if data.has("drum"):
 				return "Pro Granate  %s s" % _plain(player.reload_of(id)) + ("" if full else "   →   %s s" % _plain(quick))
 			return "Nachladen  %s s" % _plain(player.reload_of(id)) + ("" if full else "   →   %s s" % _plain(quick))

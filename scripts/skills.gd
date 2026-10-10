@@ -1,7 +1,8 @@
 class_name Skills
 extends RefCounted
 ## Three trees of abilities, each with a focus of its own: against the mass of the
-## infected, against the special ones, and against the soldiers of the C.R.U.
+## infected, against the special ones, and the breacher's - heavy gear, explosives and
+## armour: his own, the C.R.U.'s and the Crusher's shell.
 ##
 ## Only one tree is in force at a time (chosen): only its abilities count, only its weapon
 ## is on sale. So a point earned counts in ALL three trees: each tree has the full number
@@ -15,7 +16,8 @@ extends RefCounted
 ## gives levels, every level after the first one point. A point buys one rank of an
 ## ability in each tree. The abilities of a tree come in three tiers; a tier opens once
 ## enough points have gone into that tree. The last level leaves a player with LEVELS - 1
-## points for each tree: about enough for every rank of it.
+## points for each tree: about enough for every rank of it (the breacher has more ranks
+## than that to choose from).
 ##
 ## Each tree also has a weapon of its own, which the shop only sells while that tree is in
 ## force and WEAPON_NEEDS points are in it.
@@ -70,20 +72,35 @@ const TREES := {
 		]
 	},
 	"breacher": {
-		"label": "BRECHER", "focus": "Gegen die Soldaten der C.R.U.", "color": Color("74d8ea"), "weapons": ["fifty"],
+		# The breacher was a tree against the C.R.U. alone, and so the weakest of the three:
+		# its soldiers are a small part of a night on the farm and no part of the second
+		# mission. Now it is the tree of heavy gear (heavy_gear: the shotguns and whatever
+		# is carried as a heavy weapon), of explosives and of armour. What it had against the
+		# C.R.U. is one ability (armour and shields); the others keep the ids they had where
+		# an ability of that kind was there before, so that a saved profile keeps its points
+		# in them, and has those free again that went into abilities which are gone.
+		"label": "BRECHER", "focus": "Schweres Gerät, Sprengstoff, Panzerung", "color": Color("74d8ea"), "weapons": ["fifty"],
 		"skills": [
-			{"id": "breacher_armour", "label": "PANZERBRECHEND", "tier": 1, "ranks": 3, "gives": {"armour_pierce": 0.25}, "note": "Die Panzerung der C.R.U. hält %s %% weniger ab"},
-			{"id": "breacher_plates", "label": "PLATTENTRÄGER", "tier": 1, "ranks": 3, "gives": {"harm_bullet": 0.08}, "note": "%s %% weniger Schaden durch Kugeln"},
-			{"id": "breacher_frag", "label": "SPLITTERSCHUTZ", "tier": 2, "ranks": 3, "gives": {"harm_frag": 0.12}, "note": "%s %% weniger Schaden durch Granaten"},
-			{"id": "breacher_shield", "label": "SCHILDBRECHER", "tier": 2, "ranks": 1, "gives": {"shield_sniper": 1.0}, "note": "Das Scharfschützengewehr schießt durch den Schild"},
-			{"id": "breacher_head", "label": "SAUBERER SCHUSS", "tier": 2, "ranks": 3, "gives": {"head_cru": 0.12}, "note": "+%s %% Kopfschuss-Schaden gegen die C.R.U."},
+			{"id": "breacher_heavy", "label": "SCHWERES GERÄT", "tier": 1, "ranks": 3, "gives": {"damage_heavy": 0.08}, "note": "+%s %% Schaden mit Schrotflinten und schweren Waffen"},
+			# His own blasts - a shell from the launcher above all, a grenade, a mine - leave
+			# him OWN_BLAST_LEFT of their harm at the last rank; everybody else's (a grenade
+			# of the C.R.U., a Charger, a growth) hurt him less as well.
+			{"id": "breacher_frag", "label": "SPRENGMEISTER", "tier": 1, "ranks": 3, "gives": {"harm_blast": 0.3, "harm_burst": 0.12}, "note": "Eigene Explosionen schaden dir %s %% weniger, fremde %s %%"},
+			{"id": "breacher_plates", "label": "PLATTENTRÄGER", "tier": 1, "ranks": 3, "gives": {"armour_hold": 0.2, "harm_bullet": 0.08}, "note": "Westen fangen %s %% mehr ab, Kugeln schaden %s %% weniger"},
+			{"id": "breacher_armour", "label": "PANZERBRECHEND", "tier": 1, "ranks": 3, "gives": {"armour_pierce": 0.25, "shield_pierce": 0.25}, "note": "C.R.U.: Panzerung und Schilde halten %s %% weniger ab"},
+			{"id": "breacher_charge", "label": "GROSSE LADUNG", "tier": 2, "ranks": 2, "gives": {"blast_power": 0.15, "blast_reach": 0.1}, "note": "Deine Sprengsätze: +%s %% Schaden, +%s %% Radius"},
+			{"id": "breacher_drum", "label": "LADESCHÜTZE", "tier": 2, "ranks": 2, "gives": {"reload_heavy": 0.15, "reserve_heavy": 0.2}, "note": "Schweres Gerät: %s %% schneller geladen, +%s %% Reserve"},
+			# (carry: how much of what the rotary gun slows its bearer is taken off.)
+			{"id": "breacher_stance", "label": "STANDFEST", "tier": 2, "ranks": 2, "gives": {"brace_heavy": 0.25, "carry": 0.25}, "note": "Schweres Gerät: %s %% weniger Rückstoß und Gewicht"},
 			{"id": "breacher_squad", "label": "WACHPOSTEN", "tier": 2, "ranks": 1, "gives": {"squad_guard": 1.0}, "note": "Begleiter halten Stellungen, Generator und Hack"},
-			{"id": "breacher_shield2", "label": "SCHILDBRECHER II", "tier": 3, "ranks": 1, "gives": {"shield_heavy": 0.5}, "note": "Magnum, AK-47 und Schrotflinten: 50 % durch Schilde"}
+			# What no other tree can do: behind its shell the Crusher takes SHELL_SHARE of a
+			# hit (Infected) - of the breacher's heavy gear and explosives it takes this much.
+			{"id": "breacher_shell", "label": "SCHALENBRECHER", "tier": 3, "ranks": 1, "gives": {"shell_crack": 0.75}, "note": "Schweres Gerät und Sprengsätze schlagen durch den Panzer des Crushers: %s %% statt 25 %%"}
 		]
 	}
 }
-## Weapons that the second shield ability counts as heavy enough.
-const HEAVY := ["revolver", "ak", "shotgun", "autoshotgun"]
+## What is left of the harm of his own blast to a breacher with every rank of that ability.
+const OWN_BLAST_LEFT := 0.1
 ## Weapons whose bullets the sweeper's last ability sends through a body.
 const RIFLES := ["rifle", "ak", "g36", "badger"]
 
@@ -233,13 +250,16 @@ func adopt(stored: Variant, tree: String = "") -> void:
 				most = spent(id)
 				chosen = id
 
-## The note of an ability for the menu, with the amount it gives at `at_rank`.
+## The note of an ability for the menu, with the amounts it gives at `at_rank`: one for
+## each %s, in the order of `gives`.
 static func note(skill: Dictionary, at_rank: int) -> String:
 	var text := str(skill.note)
-	if not text.contains("%s"):
-		return text
-	var amount: float = float((skill.gives as Dictionary).values()[0]) * maxi(1, at_rank)
-	return text % (str(int(round(amount))) if amount > 3.0 else str(int(round(amount * 100.0))))
+	var given: Array = (skill.gives as Dictionary).values()
+	var amounts: Array = []
+	for i in range(mini(text.count("%s"), given.size())):
+		var amount: float = float(given[i]) * maxi(1, at_rank)
+		amounts.append(str(int(round(amount))) if amount > 3.0 else str(int(round(amount * 100.0))))
+	return text if amounts.is_empty() else text % amounts
 
 # ---------------------------------------------------------------- what the game asks
 
@@ -261,8 +281,18 @@ static func kind_of(enemy: Infected) -> String:
 		return "cru"
 	return "common" if enemy.kind == "mauler" else "special"
 
-## Factor on what a survivor's bullet does to an enemy.
-func damage_factor(enemy: Infected, headshot: bool) -> float:
+## What the breacher's abilities count as heavy gear: the shotguns, and whatever is carried
+## as a heavy weapon (Survivor.KINDS: key 3 - the machine guns, the launcher, the rifles of
+## the big calibres, a tree's own weapon).
+static func heavy_gear(weapon: String) -> bool:
+	if not Survivor.WEAPONS.has(weapon):
+		return false
+	var data: Dictionary = Survivor.WEAPONS[weapon]
+	return int(data.slot) == 3 or data.has("pellets")
+
+## Factor on what a survivor's hit does to an enemy. `weapon`: what it was dealt with (""
+## for a blow). A guest of a co-op match works this out himself and reports the damage.
+func damage_factor(enemy: Infected, headshot: bool, weapon: String = "") -> float:
 	if not active:
 		return 1.0
 	var kind := kind_of(enemy)
@@ -271,30 +301,50 @@ func damage_factor(enemy: Infected, headshot: bool) -> float:
 		factor += value("damage_" + kind)
 	if headshot and kind != "special":
 		factor += value("head_" + kind)
+	if heavy_gear(weapon):
+		factor += value("damage_heavy")
+		if enemy.hardened():
+			factor *= shell_gain()
 	return factor
 
+## Factor on what heavy gear and explosives do to a Crusher behind its shell: with the
+## breacher's last ability that much more of them arrives than the shell lets through.
+func shell_gain() -> float:
+	return maxf(1.0, value("shell_crack") / Infected.SHELL_SHARE)
+
 ## Share of a bullet's damage that goes through a shield (0: it rings off).
-func shield_share(weapon: String) -> float:
-	if not active:
-		return 0.0
-	if weapon == "sniper" and value("shield_sniper") > 0.0:
-		return 1.0
-	if weapon in HEAVY:
-		return value("shield_heavy")
-	return 0.0
+func shield_share(_weapon: String) -> float:
+	return clampf(value("shield_pierce"), 0.0, 1.0)
+
+## Share by which a weapon is loaded faster, by which more ammunition for it fits into the
+## pockets, and by which it kicks less: what the trees give, the breacher's only for heavy
+## gear.
+func quicker(weapon: String) -> float:
+	return value("reload") + (value("reload_heavy") if heavy_gear(weapon) else 0.0)
+
+func deeper(weapon: String) -> float:
+	return value("reserve") + (value("reserve_heavy") if heavy_gear(weapon) else 0.0)
+
+func steadier(weapon: String) -> float:
+	return clampf(value("brace_heavy"), 0.0, 0.8) if heavy_gear(weapon) else 0.0
 
 ## How much of what a soldier's armour stops is left (1: all of it, 0: none).
 func armour_left() -> float:
 	return clampf(1.0 - value("armour_pierce"), 0.0, 1.0)
 
-## Factor on harm done to the survivor. `kind`: "bullet", "frag", "gas", "acid" or "" for
-## a blow; `from`: what kind of enemy struck the blow ("common", "special", "cru" or "").
+## Factor on harm done to the survivor. `kind`: "bullet", "gas", "acid", "blast" (an
+## explosive of the survivors: a shell, a grenade, a mine - his own or his partner's),
+## "frag" and "burst" (somebody else's blast: a grenade of the C.R.U., a Charger, a
+## growth) or "" for a blow; `from`: what kind of enemy struck the blow ("common",
+## "special", "cru" or "").
 func harm_factor(kind: String, from: String) -> float:
 	if not active:
 		return 1.0
 	var less := 0.0
-	if kind in ["bullet", "frag", "gas", "acid"]:
+	if kind in ["bullet", "gas", "acid", "blast"]:
 		less += value("harm_" + kind)
+	if kind in ["frag", "burst"]:
+		less += value("harm_burst")
 	if from in ["common", "special"]:
 		less += value("harm_" + from)
-	return clampf(1.0 - less, 0.25, 1.0)
+	return clampf(1.0 - less, OWN_BLAST_LEFT if kind == "blast" else 0.25, 1.0)

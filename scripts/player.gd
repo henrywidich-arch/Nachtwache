@@ -450,7 +450,7 @@ func reload_of(id: String) -> float:
 
 ## Share of its time a reload of a weapon still takes.
 func _quicker(id: String) -> float:
-	return 1.0 - minf(0.6, game.skills.value("reload") + float(UPGRADES.drill.step) * upgrade(id, "drill"))
+	return 1.0 - minf(0.6, game.skills.quicker(id) + float(UPGRADES.drill.step) * upgrade(id, "drill"))
 
 ## Seconds one step of loading the drum takes (see DRUM).
 func drum_time(step: String) -> float:
@@ -612,7 +612,7 @@ func max_reserve() -> int:
 
 ## How much ammunition for a weapon fits into the pockets; an ability makes them deeper.
 func reserve_cap(id: String) -> int:
-	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.value("reserve") + float(UPGRADES.pouch.step) * upgrade(id, "pouch"))))
+	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.deeper(id) + float(UPGRADES.pouch.step) * upgrade(id, "pouch"))))
 
 ## The weapon in hand as it shoots now: its values from the table, changed by whatever is
 ## fitted to it.
@@ -996,8 +996,8 @@ func _physics_process(delta: float) -> void:
 	if crouched:
 		speed = minf(speed, CROUCH_SPEED)
 	if WEAPONS[current_weapon].has("spin"):
-		# The rotary gun weighs as much as a small child.
-		speed *= 0.72
+		# The rotary gun weighs as much as a small child (less to a breacher who stands firm).
+		speed *= lerpf(0.72, 1.0, minf(1.0, game.skills.value("carry")))
 	if clung_by != null:
 		# With a Leech hanging on, every step is a struggle.
 		speed *= 0.55
@@ -1085,12 +1085,12 @@ func _launch(data: Dictionary) -> void:
 	shell.game = game
 	shell.kind = "grenade"
 	shell.impact = true
-	shell.boost = 1.0 + UPGRADE_SHARE * weapon_level
+	shell.boost = 1.0 + UPGRADE_SHARE * weapon_level + game.skills.value("damage_heavy")
 	game.ordnance.add_child(shell)
 	shell.global_position = camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12
 	shell.linear_velocity = -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT
 	game.fx.launch_smoke(shell.global_position, -camera.global_basis.z)
-	var kick: float = float(data.kick)
+	var kick: float = float(data.kick) * (1.0 - game.skills.steadier(current_weapon))
 	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
 	climb += kick * float(data.get("settle", 0.0))
 	if game.net.active:
@@ -1167,7 +1167,7 @@ func _show_flame(on: bool) -> void:
 ## whose hits the host works out, also reports here what his weapon and his abilities
 ## take off a soldier's armour.
 func _bonus(data: Dictionary, enemy: Infected, headshot: bool) -> float:
-	var factor: float = game.skills.damage_factor(enemy, headshot)
+	var factor: float = game.skills.damage_factor(enemy, headshot, current_weapon)
 	if Skills.kind_of(enemy) == "special":
 		factor *= float(data.get("special", 1.0))
 	if game.net.joined and enemy is CruSoldier:
@@ -1513,7 +1513,7 @@ func shoot() -> void:
 		game.alarm(origin, -camera.global_basis.z)
 	if game.net.active:
 		game.net.send_shot(origin, endpoint, str(data.sound))
-	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0) * (CROUCH_STEADY if crouched else 1.0)
+	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0) * (CROUCH_STEADY if crouched else 1.0) * (1.0 - game.skills.steadier(current_weapon))
 	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
 	climb += kick * float(data.get("settle", 0.0))
 	rotate_y(randf_range(-kick, kick) * 0.35)
@@ -1577,12 +1577,16 @@ func _work_drum(delta: float) -> void:
 func drum_done() -> float:
 	return clampf(drum_clock / maxf(0.001, drum_time(drum_phase)), 0.0, 1.0) if drum_phase != "" else 1.0
 
-## `kind`: "bullet" and "frag" (the C.R.U.'s), "gas", "acid", or "" for a blow. `by`: what
-## kind of enemy dealt it ("common", "special", "cru"), where that is known.
+## `kind`: "bullet" and "frag" (the C.R.U.'s), "gas", "acid", "blast" (an explosive of
+## the survivors), "burst" (any other blast), or "" for a blow. `by`: what kind of enemy
+## dealt it ("common", "special", "cru"), where that is known.
 func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "", by: String = "") -> void:
 	if not controlled or health <= 0:
 		return
 	amount *= game.skills.harm_factor(kind, by)
+	# (From here on a blast is a blow like any other: armour takes its share of it.)
+	if kind in ["blast", "burst"]:
+		kind = ""
 	# Ballistic plates take the edge off whatever the C.R.U. shoot and throw.
 	var hostile := kind in ["bullet", "frag"]
 	if hostile:
@@ -1592,7 +1596,8 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 	var spared: bool = game.sandbox.on and game.sandbox.god
 	if armor > 0.0 and kind == "" and not spared:
 		var absorbed := minf(armor, amount * ARMOR_SHARE)
-		armor -= absorbed
+		# (A breacher's vest takes the same share of a hit and wears more slowly.)
+		armor -= absorbed / (1.0 + game.skills.value("armour_hold"))
 		amount -= absorbed
 	health = maxf(0, health - (0.0 if spared else amount))
 	hurt_amount = minf(1.0, hurt_amount + 0.45 + amount * 0.02)
