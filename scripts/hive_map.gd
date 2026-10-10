@@ -61,8 +61,8 @@ func _ready() -> void:
 	ground = _floor("ground", "", 0.0, Rect2(-72, -34, 144, 130))
 	upper = _floor("gallery", "GALERIE", STOREY_VILLA, Rect2(-8, 7, 16, 16))
 	under = _floor("station", "BAHNHOF", UNDER, Rect2(-66, -76, 132, 52))
-	deep = _floor("facility", "ANLAGE", UNDER, Rect2(-60, -626, 132, 322))
-	deck = _floor("deck", "GALERIE", DECK, Rect2(-60, -626, 132, 322))
+	deep = _floor("facility", "ANLAGE", UNDER, Rect2(-60, -644, 132, 340))
+	deck = _floor("deck", "GALERIE", DECK, Rect2(-60, -644, 132, 340))
 	areas = ["descent", "station", "nadja", "admin", "cafe", "atrium", "decon", "research", "hall"]
 	var shop_sign := Label3D.new()
 	shop_sign.name = "WeaponShopLabel"
@@ -2978,6 +2978,7 @@ func _sounds() -> void:
 	sound.call("horn", Vector3(0, UNDER + 4.4, -420.0), -15.0, 46.0)
 	for at in [Vector3(-44, 7, 58), Vector3(40, 7, 30), Vector3(6, 9, 92), Vector3(-30, 8, 8)]:
 		sound.call("now_and_then", "gust", at, -7.0, 9.0, 24.0, 60.0, 0.1)
+	_hall_voices()
 
 func lock(id: String, instant: bool = false) -> void:
 	var was_open := locked.has(id) and not bool(locked[id])
@@ -3218,39 +3219,10 @@ func _lay_research() -> void:
 	_stores(Vector3(22.0, UNDER, -574.6), 3)
 	_shared_dice()
 	_end_zone()
-	# --- the containment hall
-	_own_dice(71011)
-	_begin_zone("hall", "deep", ["research"])
-	area = "hall"
-	_room("containment", deep, Rect2(-30, -619, 60, 42), 14.0, "bighall", {"look": {"light": Color("ffe1c8"), "energy": 1.7, "lamp_gap": 12.0}})
-	_door("cross", "containment", 0.0, 5.0, {"kind": "gate", "area": "hall", "name": "gate_hall", "height": 3.6})
-	_chunk("Kit", false)
-	for spot in [Vector3(-16, UNDER, -588), Vector3(16, UNDER, -588), Vector3(-16, UNDER, -606), Vector3(16, UNDER, -606)]:
-		_vessel(spot, 3.4, 11.0, Color(1.0, 0.42, 0.3) if spot.x * (spot.z + 597.0) > 0.0 else Color(0.5, 1.0, 0.62))
-	for spot in [Vector3(-6, UNDER, -584), Vector3(7, UNDER, -598), Vector3(-7, UNDER, -600), Vector3(0, UNDER, -590), Vector3(24, UNDER, -597), Vector3(-25, UNDER, -596), Vector3(-24, UNDER, -581), Vector3(24, UNDER, -581)]:
-		_stores(spot, 3)
-	for x in [-9.0, 9.0]:
-		_pillar(Vector3(x, UNDER, -582.0), 0.9, 14.0)
-		_pillar(Vector3(x, UNDER, -611.0), 0.9, 14.0)
-	# The freight lift at the far end: a platform in a frame, lamps turning.
-	var lift := Vector3(0, UNDER, -615.0)
-	_part("tread", lift + Vector3(0, 0.03, 0), Vector3(6.0, 0.06, 6.0), Color(0.4, 0.42, 0.44))
-	_hazard(lift + Vector3(-3.0, 0.065, 3.0), lift + Vector3(3.0, 0.065, 3.0), Vector3(0.5, 0.01, 0.3), 12)
-	for corner in [Vector3(-3.1, 0, -3.1), Vector3(3.1, 0, -3.1), Vector3(-3.1, 0, 3.1), Vector3(3.1, 0, 3.1)]:
-		_part("plate", lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3), Color("c9a227"))
-		_add_shape(body, lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3))
-	_part("plate", lift + Vector3(0, 6.1, 0), Vector3(6.5, 0.3, 6.5), Color("1c2023"))
-	for x in [-2.6, 2.6]:
-		_glow_box(lift + Vector3(x, 5.9, 3.1), Vector3(0.3, 0.2, 0.3), Color("ffb347"), 5.0)
-		_light(lift + Vector3(x, 5.4, 3.3), Color("ffb347"), 1.6, 9.0, false, 0.5, 1.0, 70.0)
-	var hall: Dictionary = room_of["containment"]
-	_wall_sign("FRACHTAUFZUG  ·  EBENE  U3", _face_point(hall, NORTH, 0.0, 7.2, -0.05), 48, Color("c9a227"))
-	_display(_face_point(hall, NORTH, 9.2, 2.3, 0.0), _model_yaw(NORTH), 3.4, "hall")
-	_display(Vector3(6.4, UNDER, -583.6), 0.0, 2.6, "hall", "stele")
-	_dress_hall()
-	_wall_sign("EINDÄMMUNGSHALLE", _face_point(hall, SOUTH, 0.0, 6.2, -0.05), 56, Color("cfe6ff"), PI)
-	_shared_dice()
-	_end_zone()
+	# --- the containment hall is the tower hall (see _lay_hall); with it come the terminals
+	# in the walls of the facility
+	_lay_hall()
+	_lay_terminals()
 
 ## A sheet of standing water over a rectangle of a floor at `y`, `depth` metres deep. With
 ## `shore` (a side) it runs out to nothing along that edge of the rectangle, as on a
@@ -3801,59 +3773,945 @@ func _dress_labs() -> void:
 	_stencil("decon", EAST, -495.0, 3.25, "SCHLEUSE  B2 · 06", 76, Color(0.2, 0.42, 0.44))
 	_haze(Vector3(0, UNDER + 1.4, -495.0), Vector3(7.4, 2.8, 11.4), 0.04, Color(0.8, 0.82, 1.0))
 
-## The containment hall: a service bridge hung from the roof and a walk around every
-## vessel (nobody gets up there), a desk before each of them, mist over the floor.
-func _dress_hall() -> void:
+# ---------------------------------------------------------------- the tower hall
+
+## The containment hall: sixty metres square under a ceiling of fourteen. Ranks of the
+## house's containment towers (the user's models) stand on either side of a nave that
+## runs from the gate to the freight lift; in its middle a clearing with the desk they
+## were watched from. Helix grew here what hunts in the facility now: one tower stands
+## torn open from inside, and the tracks lead away from it, towards the gate.
+const HALL_PLAN := Rect2(-30, -637, 60, 60)
+const HALL_TALL := 14.0
+## How far the three files of towers stand from the axis of the hall, and where its five
+## ranks stand (z). The nave is ten metres wide and the lanes more than four: room enough
+## for the Prowler, which does not pass anything narrower than two and a half.
+const HALL_FILES := [7.2, 15.6, 24.0]
+const HALL_RANKS := [-586.5, -595.0, -603.5, -612.0, -620.5]
+## The middle of the clearing, and where the freight lift stands.
+const HALL_MIDDLE := Vector3(0, UNDER, -603.5)
+const HALL_LIFT := Vector3(0, UNDER, -632.0)
+## What stands where: for every rank the three places west of the nave and the three east
+## of it, each from the nave outwards. "" is open ground, "units" a pump with its stores.
+## (":" and what follows is what the frosted pane high on a tower's front shows: see SIGHT.)
+const HALL_RANKS_WEST := [
+	["shaft", "cage:adrift", "tank"],
+	["cage:reaching", "tank", "units"],
+	["", "burst", "cage:curled"],
+	["cage:beast", "tank", "tank"],
+	["shaft", "cage:empty", "units"]
+]
+const HALL_RANKS_EAST := [
+	["shaft", "cage:curled", "tank"],
+	["cage:adrift", "tank", "cage:dark"],
+	["", "tank", "units"],
+	["cage:broken", "tank", "cage:reaching"],
+	["shaft", "cage:beast", "tank"]
+]
+## The towers by kind: the model, how tall it stands, how far before the middle of its
+## footprint its front lies and how high on that front its display sits, what the plate
+## on it says, and the boxes one bumps into ([centre, size], its front towards +z).
+const TOWERS := {
+	"shaft": {
+		"model": "tower_shaft", "tall": 11.5, "front": 1.68, "display": 6.3, "letter": "S", "plate": "NÄHRLÖSUNG  ·  HOCHDRUCK",
+		"boxes": [[Vector3(0, 0.4, 0), Vector3(5.9, 0.8, 6.0)], [Vector3(0.05, 1.55, 0.22), Vector3(4.9, 1.5, 5.2)], [Vector3(-0.4, 4.0, 0.42), Vector3(3.5, 3.5, 3.6)], [Vector3(-0.42, 8.6, 0.45), Vector3(2.5, 5.8, 2.45)]]
+	},
+	"cage": {
+		"model": "tower_cage", "tall": 6.4, "front": 1.4, "display": 2.75, "letter": "T", "plate": "BRUTTURM  ·  STUFE 4",
+		"boxes": [[Vector3(0, 0.8, 0), Vector3(4.1, 1.6, 4.0)], [Vector3(0.02, 4.0, -0.18), Vector3(2.95, 4.8, 3.3)]]
+	},
+	"tank": {
+		"model": "tower_tank", "tall": 5.6, "front": 1.5, "display": 2.55, "letter": "K", "plate": "KRYOSTASE  ·  −80 °C",
+		"boxes": [[Vector3(0, 0.7, 0), Vector3(3.9, 1.4, 3.9)], [Vector3(0, 3.5, -0.07), Vector3(3.36, 4.2, 3.15)]]
+	},
+	"burst": {
+		"model": "tower_tank_burst", "tall": 5.6, "front": 1.5, "display": 2.55, "letter": "K", "plate": "PROBE  P-01  ·  PROWLER",
+		"boxes": [[Vector3(0, 0.7, 0), Vector3(3.9, 1.4, 3.9)], [Vector3(0, 3.5, -0.07), Vector3(3.36, 4.2, 3.15)]]
+	},
+	"unit": {
+		"model": "tower_unit", "tall": 1.5, "front": 1.2, "display": 0.9, "letter": "P", "plate": "",
+		"boxes": [[Vector3(0, 0.75, -0.05), Vector3(3.0, 1.5, 2.3)]]
+	}
+}
+## What a frosted pane shows, by name (the number the programme SIGHT reads).
+const SHAPES := {"empty": 0, "adrift": 1, "reaching": 2, "curled": 3, "beast": 4}
+## A frosted pane with something behind it. The four corners of a pane carry, as their
+## colour, where they are on it (red and green: 0,0 is its upper left corner), what is
+## behind it (blue, in eighths: see SHAPES; from 5 on the same shapes in a failing light)
+## and a number that makes it differ from the others (alpha). What is behind the glass is
+## only ever a blur - except where it touches it.
+const SIGHT := """shader_type spatial;
+render_mode unshaded, shadows_disabled;
+uniform float power = 1.0;
+uniform vec3 mist : source_color = vec3(0.3, 0.7, 0.58);
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float cloud(vec2 p) {
+	vec2 cell = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(cell), hash(cell + vec2(1.0, 0.0)), f.x), mix(hash(cell + vec2(0.0, 1.0)), hash(cell + vec2(1.0, 1.0)), f.x), f.y);
+}
+// Distance to a limb: a line from a to b, r thick.
+float limb(vec2 p, vec2 a, vec2 b, float r) {
+	vec2 pa = p - a;
+	vec2 ba = b - a;
+	return length(pa - ba * clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0)) - r;
+}
+void fragment() {
+	vec2 uv = COLOR.rg;
+	float kind = floor(COLOR.b * 8.0 + 0.5);
+	float failing = step(4.5, kind);
+	kind -= failing * 5.0;
+	float seed = COLOR.a;
+	// A space in which the pane is 0.65 wide and 1 tall, its middle on x = 0. The glass is
+	// not even: what is behind it is bent a little, differently on every pane.
+	vec2 p = vec2((uv.x - 0.5) * 0.65, uv.y);
+	p += 0.022 * (vec2(cloud(uv * 4.6 + seed * 13.0), cloud(uv * 4.6 + 7.3 + seed * 5.0)) - 0.5);
+	// Nothing hangs straight.
+	float lean = (seed - 0.5) * 0.3;
+	p = vec2(p.x * cos(lean) - (p.y - 0.45) * sin(lean), p.x * sin(lean) + (p.y - 0.45) * cos(lean) + 0.45);
+	float slow = TIME * 0.31 + seed * 40.0;
+	// Now and then whatever it is moves all at once.
+	float beat = fract(TIME * (0.05 + 0.04 * seed) + seed * 7.0);
+	float jerk = step(0.4, seed) * smoothstep(0.0, 0.012, beat) * (1.0 - smoothstep(0.012, 0.09, beat));
+	vec2 sway = vec2(0.014 * sin(slow) + 0.02 * jerk, 0.008 * sin(slow * 0.7 + 1.0));
+	float far = 1.0;
+	float near = 1.0;
+	if (kind > 0.5 && kind < 1.5) {
+		// Adrift: it hangs there, head low, arms down.
+		vec2 q = p - sway;
+		far = min(far, length(q - vec2(0.012, 0.21)) - 0.066);
+		far = min(far, limb(q, vec2(-0.095, 0.325), vec2(0.095, 0.325), 0.05));
+		far = min(far, limb(q, vec2(0.0, 0.34), vec2(0.0, 0.62), 0.1));
+		far = min(far, limb(q, vec2(-0.14, 0.34), vec2(-0.165, 0.6), 0.034));
+		far = min(far, limb(q, vec2(-0.165, 0.6), vec2(-0.15, 0.83), 0.028));
+		far = min(far, limb(q, vec2(0.14, 0.34), vec2(0.17, 0.6), 0.034));
+		far = min(far, limb(q, vec2(0.17, 0.6), vec2(0.16, 0.82), 0.028));
+		far = min(far, limb(q, vec2(-0.058, 0.64), vec2(-0.07, 1.1), 0.052));
+		far = min(far, limb(q, vec2(0.058, 0.64), vec2(0.075, 1.1), 0.052));
+	} else if (kind > 1.5 && kind < 2.5) {
+		// Reaching: one hand flat on the glass, the face close behind it.
+		vec2 q = p - sway * 0.6;
+		far = min(far, length(q - vec2(-0.03, 0.27)) - 0.078);
+		far = min(far, limb(q, vec2(-0.13, 0.4), vec2(0.08, 0.4), 0.055));
+		far = min(far, limb(q, vec2(-0.03, 0.42), vec2(-0.04, 0.72), 0.108));
+		far = min(far, limb(q, vec2(-0.17, 0.42), vec2(-0.2, 0.7), 0.036));
+		far = min(far, limb(q, vec2(-0.2, 0.7), vec2(-0.17, 0.94), 0.03));
+		far = min(far, limb(q, vec2(0.12, 0.41), vec2(0.21, 0.31), 0.036));
+		far = min(far, limb(q, vec2(0.21, 0.31), vec2(0.185, 0.17), 0.03));
+		far = min(far, limb(q, vec2(-0.09, 0.74), vec2(-0.1, 1.1), 0.055));
+		far = min(far, limb(q, vec2(0.03, 0.74), vec2(0.05, 1.1), 0.055));
+		// The hand: on the glass, and sharp.
+		vec2 hand = vec2(0.18, 0.115) + sway * 0.25;
+		near = min(near, length((p - hand) * vec2(1.0, 0.82)) - 0.034);
+		for (int finger = 0; finger < 4; finger++) {
+			float turn = (float(finger) - 1.5) * 0.3;
+			vec2 tip = hand + vec2(sin(turn), -cos(turn)) * 0.082;
+			near = min(near, limb(p, hand + vec2(sin(turn), -cos(turn)) * 0.03, tip, 0.0085));
+		}
+		near = min(near, limb(p, hand + vec2(-0.028, 0.0), hand + vec2(-0.062, -0.022), 0.0095));
+	} else if (kind > 2.5 && kind < 3.5) {
+		// Curled up at the bottom of the pane.
+		vec2 q = p - sway * 0.4;
+		far = min(far, length((q - vec2(0.02, 0.8)) * vec2(1.0, 1.25)) - 0.19);
+		far = min(far, length(q - vec2(-0.13, 0.63)) - 0.068);
+		far = min(far, limb(q, vec2(0.12, 0.72), vec2(0.2, 0.93), 0.045));
+		far = min(far, limb(q, vec2(-0.1, 0.9), vec2(0.1, 0.96), 0.05));
+	} else if (kind > 3.5) {
+		// Not a man any more: a back too broad, a head too low, arms too long - and claws on the glass.
+		vec2 q = p - sway * 0.8;
+		far = min(far, length((q - vec2(0.0, 0.5)) * vec2(0.8, 1.0)) - 0.2);
+		far = min(far, length(q - vec2(0.05, 0.34)) - 0.062);
+		far = min(far, limb(q, vec2(-0.2, 0.38), vec2(0.16, 0.36), 0.07));
+		far = min(far, limb(q, vec2(-0.22, 0.4), vec2(-0.3, 0.72), 0.04));
+		far = min(far, limb(q, vec2(-0.3, 0.72), vec2(-0.23, 1.02), 0.032));
+		far = min(far, limb(q, vec2(0.2, 0.38), vec2(0.27, 0.2), 0.04));
+		far = min(far, limb(q, vec2(-0.08, 0.66), vec2(-0.1, 1.1), 0.06));
+		far = min(far, limb(q, vec2(0.08, 0.66), vec2(0.1, 1.1), 0.06));
+		for (int claw = 0; claw < 3; claw++) {
+			float turn = (float(claw) - 1.0) * 0.34 + 0.25;
+			vec2 root = vec2(0.275, 0.165) + sway * 0.3;
+			near = min(near, limb(p, root, root + vec2(sin(turn), -cos(turn)) * 0.1, 0.0075));
+		}
+	}
+	// The fluid behind the glass: brightest where the lamps of the tower stand, in slow clouds.
+	float depth = 0.4 + 0.6 * smoothstep(1.1, 0.0, uv.y) * (1.0 - 0.9 * abs(uv.x - 0.5));
+	float veil = cloud(vec2(uv.x * 2.4 + seed * 9.0, uv.y * 3.2 - TIME * 0.035)) * 0.6 + cloud(vec2(uv.x * 6.0 - TIME * 0.02, uv.y * 7.0 + seed * 3.0)) * 0.4;
+	vec3 glow = mist * (0.3 + 0.6 * veil) * depth;
+	// What is behind it: a soft dark, no outline - only where it touches the glass is it sharp.
+	float shade = 1.0 - smoothstep(-0.1, 0.085, far + 0.03 * (veil - 0.5));
+	glow *= 1.0 - 0.74 * shade;
+	float touch = 1.0 - smoothstep(-0.004, 0.009, near);
+	glow *= 1.0 - 0.9 * touch;
+	// Rime that grows in from the edges, and water that runs down the pane.
+	float rim = min(min(uv.x, 1.0 - uv.x) * 0.65, min(uv.y, 1.0 - uv.y));
+	float rime = smoothstep(0.23, 0.0, rim + 0.13 * cloud(uv * vec2(8.0, 12.0) + seed * 20.0) - 0.04) * (0.5 + 0.5 * hash(floor(uv * vec2(80.0, 124.0))));
+	float runs = smoothstep(0.93, 1.0, cloud(vec2(uv.x * 40.0 + seed * 11.0, uv.y * 1.6 - TIME * 0.045 * (0.5 + hash(vec2(floor(uv.x * 40.0), seed))))));
+	glow = mix(glow, vec3(0.5, 0.64, 0.66) * (0.2 + 0.26 * depth), rime * 0.9);
+	glow += vec3(0.5, 0.75, 0.7) * runs * 0.1 * (1.0 - shade);
+	float light = mix(1.0, 0.2 + 0.8 * step(0.35, cloud(vec2(TIME * 7.0, seed * 50.0))) * (0.7 + 0.3 * sin(TIME * 31.0)), failing);
+	ALBEDO = glow * power * light * 0.92;
+}
+"""
+## The mist over the floor of the hall: thick at the ankles, gone at the chest, drifting.
+const GROUND_MIST := """shader_type fog;
+uniform sampler3D wisps : repeat_enable, filter_linear;
+uniform float density = 0.5;
+uniform float floor_y = -9.6;
+uniform float deep = 1.5;
+uniform vec3 tint : source_color = vec3(0.62, 0.72, 0.82);
+void fog() {
+	float high = clamp(1.0 - (WORLD_POSITION.y - floor_y) / deep, 0.0, 1.0);
+	vec3 at = WORLD_POSITION * vec3(0.05, 0.16, 0.05) + vec3(TIME * 0.011, TIME * 0.004, TIME * 0.007);
+	float wisp = texture(wisps, at).r * 0.65 + texture(wisps, at * 2.7 + vec3(0.37, TIME * 0.006, 0.11)).r * 0.35;
+	DENSITY = density * high * high * smoothstep(0.3, 0.72, wisp);
+	ALBEDO = tint;
+}
+"""
+
+## The surfaces of the towers as the hall wants them: [kind][dead] -> what a mesh of that
+## kind wears. Their displays and lamps glow more than they came (a dead one's are out).
+var tower_looks: Dictionary = {}
+## What moves in the hall (a HiveHall): the beacons of the lift.
+const HALL_SCRIPT := preload("res://scripts/hive_hall.gd")
+var hall_life: Node3D
+## How many towers stand in the hall, by kind (for the checks).
+var tower_count: Dictionary = {}
+## The screens of the terminals in the walls (a HiveTerminal).
+const TERMINAL_SCRIPT := preload("res://scripts/hive_terminal.gd")
+var terminals: Node3D
+## Where the terminals are: [room, side, where along that wall, loop].
+var terminal_places: Array = []
+## While true, a wall is built into nothing (see _build_side).
+var wall_ghost := false
+
+func _lay_hall() -> void:
+	# (The screens of the terminals belong to no zone: one film may be seen in several.)
+	terminals = TERMINAL_SCRIPT.new()
+	add_child(terminals)
+	_own_dice(71011)
+	_begin_zone("hall", "deep", ["research"])
+	area = "hall"
+	_room("containment", deep, HALL_PLAN, HALL_TALL, "bighall", {"lamps": "none", "look": {
+		"dress": "concrete", "floor": ["darkfloor", Color(0.44, 0.46, 0.5)], "ceiling": ["beton", Color(0.2, 0.2, 0.22)], "core": ["formwork", Color(0.46, 0.47, 0.5)], "stripe": GUIDE.hall
+	}})
+	_door("cross", "containment", 0.0, 5.0, {"kind": "gate", "area": "hall", "name": "gate_hall", "height": 3.6})
 	_chunk("Kit", false)
-	var steel := Color("23282b")
-	var top := UNDER + 7.0
-	var across := -596.4
-	_part("tread", Vector3(0, top - 0.06, across), Vector3(59.4, 0.12, 1.8), Color(0.34, 0.36, 0.38))
-	for edge in [-1.0, 1.0]:
-		_part("plate", Vector3(0, top + 1.0, across + edge * 0.88), Vector3(59.4, 0.05, 0.05), steel)
-		_part("plate", Vector3(0, top + 0.5, across + edge * 0.88), Vector3(59.4, 0.035, 0.035), steel)
-		for i in range(11):
-			var x := -27.0 + i * 5.4
-			_part("plate", Vector3(x, top + 0.5, across + edge * 0.88), Vector3(0.05, 1.0, 0.05), steel)
-			_part("plate", Vector3(x, top + 4.0, across + edge * 0.88), Vector3(0.045, 6.0, 0.045), steel)
-	var number := 1
-	for spot in [Vector2(-16, -588), Vector2(16, -588), Vector2(-16, -606), Vector2(16, -606)]:
-		var out := signf(spot.x)
-		var near := 1.0 if spot.y > across else -1.0
-		for edge in [-1.0, 1.0]:
-			_part("tread", Vector3(spot.x, top - 0.06, spot.y + edge * 4.28), Vector3(9.2, 0.12, 0.64), Color(0.34, 0.36, 0.38))
-			_part("tread", Vector3(spot.x + edge * 4.28, top - 0.06, spot.y), Vector3(0.64, 0.12, 7.92), Color(0.34, 0.36, 0.38))
-			_part("plate", Vector3(spot.x, top + 1.0, spot.y + edge * 4.57), Vector3(9.2, 0.05, 0.05), steel)
-			_part("plate", Vector3(spot.x + edge * 4.57, top + 1.0, spot.y), Vector3(0.05, 0.05, 9.2), steel)
-			for corner in [-1.0, 1.0]:
-				_part("plate", Vector3(spot.x + corner * 4.57, top + 0.5, spot.y + edge * 4.57), Vector3(0.05, 1.0, 0.05), steel)
-		# The way from the walk to the bridge.
-		var from: float = spot.y - near * 4.6
-		var to := across + near * 0.9
-		_part("tread", Vector3(spot.x, top - 0.06, (from + to) * 0.5), Vector3(1.2, 0.12, absf(from - to)), Color(0.34, 0.36, 0.38))
-		# A desk that watches the vessel, a hose to it, its number on the floor.
-		var desk := Vector3(spot.x - out * 6.2, UNDER, spot.y)
-		var frame := Transform3D(Basis(Vector3.UP, -out * PI / 2), desk)
-		_placed(frame, "steel", Vector3(0, 0.5, 0), Vector3(1.1, 1.0, 0.5), Color("2f3539"))
-		_placed(frame, "steel", Vector3(0, 1.06, 0.0), Vector3(1.14, 0.12, 0.54), Color("454c51"))
-		_placed(frame, "plain", Vector3(0, 1.2215, 0.0102), Vector3(0.92, 0.46, 0.03), Color("0c0e0f"), Vector3(-62, 0, 0))
-		_screen(frame, Vector3(0, 1.24, 0.02), Vector2(0.86, 0.4), 9 if number % 2 == 0 else 1, 0.1 + number * 0.08, 62.0)
-		for k in range(4):
-			_led(frame * Vector3(-0.36 + k * 0.24, 0.84, 0.256), Vector3(0.05, 0.05, 0.012), [Color("5ee07a"), Color("ffb347"), Color("ff3a2a"), Color("5ee07a")][k], 3.0, [1.0, 0.7, 0.4, 0.3][k], frame.basis)
-		_solid(desk + Vector3(0, 0.55, 0), Vector3(0.6, 1.1, 1.2))
-		_hose(Vector3(spot.x - out * 3.8, UNDER + 0.07, spot.y + 0.6), desk + Vector3(out * 0.3, 0.07, 0.3), 0.06, Color("15171a"), 0.0, Vector3(0, 0, 1.1), 7)
-		_floor_text("V-0%d" % number, Vector3(spot.x - out * 8.6, UNDER, spot.y), 96, Color("c9a227"), -out * PI / 2)
-		number += 1
-	for x in [-9.0, 9.0]:
-		for z in [-582.0, -611.0]:
-			for face in [-1.0, 1.0]:
-				_glow_box(Vector3(x + face * 0.456, UNDER + 4.2, z), Vector3(0.012, 0.5, 0.2), Color("ff3a2a"), 3.4)
-	_haze(Vector3(0, UNDER + 0.7, -598.0), Vector3(59.0, 1.4, 41.0), 0.05, Color(0.76, 0.8, 0.9))
 	var hall: Dictionary = room_of["containment"]
-	for side in [WEST, EAST]:
-		if _house_prop("steel_door", _face_point(hall, side, -586.0, 0.0, -0.56), _model_yaw(side), {"far": 70.0}) != null:
-			_face_glow(hall, side, -586.3, -585.7, 2.5, 2.56, -0.2, -0.17, Color("ff3a2a"), 3.0)
-			_stencil("containment", side, -586.0, 3.5, "LAGER  U3", 96, Color(0.5, 0.12, 0.1))
+	mats["sight"] = _programme(SIGHT)
+	lone_glows.append(mats["sight"])
+	# The fluid of the tanks where it has been trodden about: the same glow, much fainter.
+	var faint := (mats["wet"] as ShaderMaterial).duplicate() as ShaderMaterial
+	faint.set_shader_parameter("low", UNDER + TANK_LOW)
+	faint.set_shader_parameter("power", 0.36)
+	mats["tracks"] = faint
+	lone_glows.append(faint)
+	hall_life = HALL_SCRIPT.new()
+	add_child(hall_life)
+	_hall_frame(hall)
+	_hall_towers()
+	_hall_clearing()
+	_hall_lift(hall)
+	_hall_light()
+	_hall_floor()
+	_hall_air()
+	# Inside the gate: the plan of the Hive, the name of the place, stores nobody fetched.
+	_display(Vector3(-5.2, UNDER, -580.4), 0.0, 2.6, "hall", "stele")
+	_wall_sign("EINDÄMMUNGSHALLE", _face_point(hall, SOUTH, 0.0, 6.2, -0.05), 56, Color("cfe6ff"), PI)
+	_stencil("containment", SOUTH, -15.0, 3.4, "E-01", 220, Color(0.5, 0.12, 0.1))
+	_stencil("containment", SOUTH, 15.5, 3.1, "BIOGEFAHR  ·  STUFE  4", 110, Color(0.5, 0.12, 0.1))
+	for spot: Vector3 in [Vector3(-13.5, UNDER, -580.2), Vector3(12.6, UNDER, -579.8), Vector3(22.0, UNDER, -580.6), Vector3(-26.4, UNDER, -629.5), Vector3(13.4, UNDER, -628.6)]:
+		_stores(spot, 3)
+	_pallet(Vector3(-21.5, UNDER, -580.0), 0.2)
+	_pallet(Vector3(24.6, UNDER, -629.6), -0.3, -1, 1.5)
+	if "--hive-figures" in OS.get_cmdline_user_args():
+		_hall_figures()
+	_shared_dice()
+	_end_zone()
+
+## A material drawn by a programme of its own.
+func _programme(code: String) -> ShaderMaterial:
+	var shader := Shader.new()
+	shader.code = code
+	var material := ShaderMaterial.new()
+	material.shader = shader
+	return material
+
+## The bones of the hall: pilasters and beams at every rank, a girder along either side of
+## the nave, a service gallery along both side walls and a bridge between them before the
+## lift (nobody gets up there), pipes along the walls.
+func _hall_frame(hall: Dictionary) -> void:
+	var steel := Color("1c2023")
+	var concrete := Color(0.5, 0.5, 0.52)
+	var top := UNDER + HALL_TALL
+	for z: float in HALL_RANKS:
+		_part("plate", Vector3(0, top - 0.4, z), Vector3(59.3, 1.0, 0.5), steel)
+		for side: int in [WEST, EAST]:
+			_face_box(hall, side, "formwork", z - 0.5, z + 0.5, -0.1, HALL_TALL + 0.1, -0.55, 0.1, concrete)
+			_hazard(_face_point(hall, side, z, 0.15, -0.556), _face_point(hall, side, z, 1.35, -0.556), Vector3(0.012, 0.3, 1.0), 4)
+			_face_glow(hall, side, z - 0.1, z + 0.1, 4.0, 4.5, -0.562, -0.55, Color("ff3a2a"), 3.2)
+	for x: float in [-5.4, 5.4]:
+		_part("plate", Vector3(x, top - 0.25, HALL_PLAN.get_center().y), Vector3(0.4, 0.7, 59.3), steel)
+	# The gallery, at the height of the towers' roofs.
+	var deck_y := 7.6
+	for side: int in [WEST, EAST]:
+		_face_box(hall, side, "tread", -635.6, -578.4, deck_y - 0.12, deck_y, -1.9, 0.05, Color(0.34, 0.36, 0.38))
+		_face_box(hall, side, "plate", -635.6, -578.4, deck_y - 0.3, deck_y - 0.12, -1.86, -1.74, steel)
+		_face_box(hall, side, "plate", -635.6, -578.4, deck_y + 1.0, deck_y + 1.05, -1.88, -1.83, steel)
+		_face_box(hall, side, "plate", -635.6, -578.4, deck_y + 0.5, deck_y + 0.535, -1.875, -1.84, steel)
+		for i in range(21):
+			var z := -635.4 + i * 2.84
+			_face_box(hall, side, "plate", z - 0.025, z + 0.025, deck_y, deck_y + 1.0, -1.88, -1.83, steel)
+		for z: float in HALL_RANKS:
+			_face_box(hall, side, "plate", z - 0.08, z + 0.08, deck_y - 0.75, deck_y - 0.12, -1.8, -0.5, steel)
+		# Pipes and a tray of cables along the wall under it, and a thicker main over it.
+		for run: Array in [[6.7, 0.11, Color("4d5357")], [6.35, 0.07, Color("6d4a2c")], [6.05, 0.05, Color("3a3f42")]]:
+			_pipe(_face_point(hall, side, -635.9, float(run[0]), -0.75), _face_point(hall, side, -578.1, float(run[0]), -0.75), float(run[1]), run[2], 8, "steel")
+		_pipe(_face_point(hall, side, -635.9, 10.6, -0.5), _face_point(hall, side, -578.1, 10.6, -0.5), 0.2, Color("31373b"), 10, "steel")
+	# The bridge between the two galleries, before the lift.
+	var across := -625.6
+	_part("tread", Vector3(0, UNDER + deck_y - 0.06, across), Vector3(55.8, 0.12, 1.5), Color(0.34, 0.36, 0.38))
+	for edge: float in [-1.0, 1.0]:
+		_part("plate", Vector3(0, UNDER + deck_y - 0.21, across + edge * 0.69), Vector3(55.8, 0.18, 0.12), steel)
+		_part("plate", Vector3(0, UNDER + deck_y + 1.02, across + edge * 0.72), Vector3(55.8, 0.05, 0.05), steel)
+		_part("plate", Vector3(0, UNDER + deck_y + 0.52, across + edge * 0.72), Vector3(55.8, 0.035, 0.035), steel)
+		for i in range(12):
+			var x := -27.5 + i * 5.0
+			_part("plate", Vector3(x, UNDER + deck_y + 0.5, across + edge * 0.72), Vector3(0.05, 1.0, 0.05), steel)
+			_part("plate", Vector3(x, UNDER + (deck_y + 1.0 + HALL_TALL) * 0.5, across + edge * 0.72), Vector3(0.045, HALL_TALL - deck_y - 0.9, 0.045), steel)
+	# Doors to the stores in both side walls, shut for good.
+	for side: int in [WEST, EAST]:
+		if _house_prop("steel_door", _face_point(hall, side, -590.75, 0.0, -0.56), _model_yaw(side), {"far": 70.0}) != null:
+			_face_glow(hall, side, -591.05, -590.45, 2.5, 2.56, -0.2, -0.17, Color("ff3a2a"), 3.0)
+			_stencil("containment", side, -590.75, 3.5, "LAGER  U3", 96, Color(0.5, 0.12, 0.1))
+		_stencil("containment", side, -607.75, 3.3, "TÜRME  NICHT  ÖFFNEN", 100, Color(0.5, 0.12, 0.1))
+		_stencil("containment", side, -616.25, 4.6, "KRYOGENE  GASE", 120, Color(0.2, 0.42, 0.62))
+
+## Every tower of the hall, and what stands with the pumps.
+func _hall_towers() -> void:
+	var number := 0
+	for rank in range(HALL_RANKS.size()):
+		for way: float in [-1.0, 1.0]:
+			var row: Array = HALL_RANKS_WEST[rank] if way < 0.0 else HALL_RANKS_EAST[rank]
+			for file in range(HALL_FILES.size()):
+				var what := str(row[file])
+				if what == "":
+					continue
+				var kind := what.get_slice(":", 0)
+				var pos := Vector3(way * float(HALL_FILES[file]), UNDER, float(HALL_RANKS[rank]))
+				# Everything looks at the nave.
+				var yaw := -way * PI / 2
+				if kind == "units":
+					_hall_pump(pos, yaw, way)
+					continue
+				number += 1
+				if kind == "shaft":
+					# The four tall ones stand a little nearer to the nave and frame the gate and the lift.
+					pos += Vector3(-way * 0.2, 0, 0.6 if rank == 0 else -0.6)
+				var options := {"tag": "%s-%02d" % [str(TOWERS[kind].letter), number]}
+				if what.contains(":"):
+					options["window"] = what.get_slice(":", 1)
+				if kind == "tank":
+					options["frost"] = true
+				# (One in three has lost its desk, or never had one.)
+				if kind != "shaft" and (rank * 3 + file + (0 if way < 0.0 else 1)) % 3 != 1:
+					options["desk"] = true
+				_tower(kind, pos, yaw, options)
+
+## The surface a mesh of a tower wears: the model's own, glowing as the hall wants it. A
+## dead tower's displays and lamps are out. (The torn tower has no pictures of its own:
+## its skin is the intact tank's.)
+func _tower_look(kind: String, own: Material, dead: bool) -> Material:
+	var key := "%s %s" % [kind, str(dead)]
+	if tower_looks.has(key):
+		return tower_looks[key]
+	var source := own
+	if kind == "burst":
+		source = null
+		var whole := load("res://assets/hive/user/tower_tank.glb") as PackedScene
+		if whole != null:
+			var probe := whole.instantiate()
+			for part in probe.find_children("*", "MeshInstance3D", true, false):
+				source = (part as MeshInstance3D).mesh.surface_get_material(0)
+			probe.free()
+	var look: Material = source
+	if source is BaseMaterial3D:
+		var copy := source.duplicate() as BaseMaterial3D
+		copy.emission_enabled = not dead
+		copy.emission_energy_multiplier = 3.4
+		look = copy
+	tower_looks[key] = look
+	return look
+
+## One of the towers on the floor at `pos`, its front (displays) looking along `yaw` (0
+## looks south). Options: tag (its number: on the plate on its front and on the floor
+## before it), window (what the frosted pane high on its front shows: a name of SHAPES,
+## "dark" for one whose light is failing, "broken" for one that has burst), dead (nothing
+## on it glows any more), frost (rime and cold air around its foot), desk (a desk that
+## watches it stands before it).
+func _tower(kind: String, pos: Vector3, yaw: float, options: Dictionary = {}) -> void:
+	var data: Dictionary = TOWERS[kind]
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var tall := float(data.tall)
+	var front := float(data.front)
+	var dead := bool(options.get("dead", false)) or str(options.get("window", "")) == "broken"
+	tower_count[kind] = int(tower_count.get(kind, 0)) + 1
+	var holder := _house_prop(str(data.model), pos, yaw, {"solid": false, "far": 95.0, "shadows": true})
+	if holder == null:
+		# (Without the model: steel of its size.)
+		for box: Array in data.boxes:
+			_placed(frame, "plate", box[0], box[1], Color("23282b"))
+	else:
+		for part in holder.find_children("*", "MeshInstance3D", true, false):
+			var piece := part as MeshInstance3D
+			for surface in range(piece.mesh.get_surface_count()):
+				var own := piece.mesh.surface_get_material(surface)
+				if own != null and not str(own.resource_name).ends_with("_inside"):
+					piece.set_surface_override_material(surface, _tower_look(kind, own, dead))
+	for box: Array in data.boxes:
+		_solid(frame * (box[0] as Vector3), box[1], true, yaw)
+	if kind == "unit":
+		if not dead:
+			_light(frame * Vector3(1.9, 1.0, 0.3), Color("7fe8dc"), 0.5, 3.4, false, 0.05, 0.5, LAMP_FADE + 6.0)
+		return
+	# Its light: the cold of its displays, and the amber of the lamps at its foot.
+	if not dead:
+		_light(frame * Vector3(0.1, float(data.display) + 0.1, front + 1.0), Color("7fe8dc"), 0.95, 5.6, false, 0.08, 0.6, LAMP_FADE + 10.0)
+		_light(frame * Vector3(0.0, 0.9, front + 1.5), Color("ffa64d"), 0.55, 4.2, false, 0.0, 0.5, LAMP_FADE + 4.0)
+	# Pipes and a bundle of cables from its roof up into the ceiling.
+	var axis := Vector3(-0.42, 0, 0.45) if kind == "shaft" else Vector3(0, 0, -0.15)
+	var roof := HALL_TALL + 0.05
+	_pipe(frame * (axis + Vector3(-0.45, tall - 0.15, -0.3)), frame * (axis + Vector3(-0.45, roof, -0.3)), 0.16, Color("2b3034"), 8, "steel")
+	_pipe(frame * (axis + Vector3(0.4, tall - 0.15, -0.5)), frame * (axis + Vector3(0.4, roof, -0.5)), 0.09, Color("3d2a20"), 6, "steel")
+	_pipe(frame * (axis + Vector3(0.1, tall - 0.15, 0.45)), frame * (axis + Vector3(0.1, roof, 0.45)), 0.05, Color("14171a"), 6, "plain")
+	batch.cylinder(mats["steel"], frame * (axis + Vector3(-0.45, tall + 0.9, -0.3)), 0.24, 0.24, 0.16, Color("1c2023"), 10)
+	# Its number: on a plate on its front, and on the floor before it.
+	var tag := str(options.get("tag", ""))
+	if tag != "":
+		var half := (data.boxes[0][1] as Vector3).z * 0.5
+		_floor_text(tag, frame * Vector3(0, 0, half + 1.5), 100, Color(0.72, 0.58, 0.16), yaw)
+		var plate_at := Vector3(-0.82, 2.05, front + 0.03) if kind != "shaft" else Vector3(-1.3, 2.75, 2.3)
+		_placed(frame, "plate", plate_at, Vector3(0.9, 0.42, 0.03), Color("0d0f10"))
+		_placed(frame, "plain", plate_at + Vector3(0, 0.185, 0.004), Vector3(0.9, 0.05, 0.03), Color("a8322c") if kind == "burst" else Color("c9a227"))
+		var first := _wall_sign(tag, frame * (plate_at + Vector3(0, 0.04, 0.02)), 30, Color(0.88, 0.9, 0.92), yaw)
+		first.name = "TowerTag"
+		_wall_sign(str(data.plate), frame * (plate_at + Vector3(0, -0.12, 0.02)), 11, Color(0.74, 0.77, 0.8), yaw)
+	# The frosted pane high on its front.
+	var window := str(options.get("window", ""))
+	if window == "broken":
+		_broken_sight(frame, Vector3(0.02, 4.5, front + 0.02), Vector2(1.0, 1.55))
+	elif window != "":
+		var failing := window == "dark"
+		_sight(frame, Vector3(0.02, 4.5, front + 0.02), Vector2(1.0, 1.55), int(SHAPES.get(window, 1)) + (5 if failing else 0))
+		_light(frame * Vector3(0.02, 4.4, front + 1.3), Color("6fe0b4"), 0.25 if failing else 0.55, 4.6, false, 0.5 if failing else 0.1, 0.6, LAMP_FADE + 10.0)
+	if bool(options.get("frost", false)):
+		_frost(frame, (data.boxes[0][1] as Vector3).x * 0.5)
+	if bool(options.get("desk", false)):
+		_watch_desk(frame * Vector3(1.75, 0, (data.boxes[0][1] as Vector3).z * 0.5 + 0.9), yaw, frame * Vector3(1.2, 0.3, (data.boxes[0][1] as Vector3).z * 0.5 - 0.1), dead)
+	# The torn tower: no light of its own but what is left of its fluid.
+	if kind == "burst":
+		_light(frame * Vector3(0.3, 2.6, front + 0.4), Color(0.42, 1.0, 0.5), 0.9, 4.5, false, 0.35, 0.8, LAMP_FADE + 10.0)
+
+## A frosted pane on a tower, in the frame of the tower: its middle at `at`, `size` metres,
+## seen from +z. `shape` is what is behind it (see SIGHT).
+func _sight(frame: Transform3D, at: Vector3, size: Vector2, shape: int) -> void:
+	var steel := Color("14171a")
+	var half := size * 0.5
+	_placed(frame, "plate", at + Vector3(0, 0, 0.02), Vector3(size.x + 0.26, size.y + 0.26, 0.1), steel)
+	_placed(frame, "plain", at + Vector3(0, 0, 0.074), Vector3(size.x + 0.04, size.y + 0.04, 0.008), Color("050607"))
+	for edge: float in [-1.0, 1.0]:
+		_placed(frame, "plate", at + Vector3(edge * (half.x + 0.07), 0, 0.11), Vector3(0.1, size.y + 0.24, 0.1), steel)
+		_placed(frame, "plate", at + Vector3(0, edge * (half.y + 0.07), 0.11), Vector3(size.x + 0.04, 0.1, 0.1), steel)
+		for k in range(3):
+			_placed(frame, "steel", at + Vector3(edge * (half.x + 0.07), (k - 1) * size.y * 0.36, 0.165), Vector3(0.05, 0.05, 0.02), Color("3a4044"))
+	var plane := frame * Transform3D(Basis.IDENTITY, at + Vector3(0, 0, 0.086))
+	var number := random.randf()
+	var code := shape / 8.0
+	batch.quad_tinted(mats["sight"], plane * Vector3(-half.x, -half.y, 0), plane * Vector3(half.x, -half.y, 0), plane * Vector3(half.x, half.y, 0), plane * Vector3(-half.x, half.y, 0), [Color(0, 1, code, number), Color(1, 1, code, number), Color(1, 0, code, number), Color(0, 0, code, number)])
+
+## The same pane, burst from inside: teeth of glass in the frame, the dark behind them,
+## what ran out of it on the floor.
+func _broken_sight(frame: Transform3D, at: Vector3, size: Vector2) -> void:
+	var steel := Color("14171a")
+	var half := size * 0.5
+	_placed(frame, "plate", at + Vector3(0, 0, 0.02), Vector3(size.x + 0.26, size.y + 0.26, 0.1), steel)
+	_placed(frame, "plain", at + Vector3(0, 0, 0.074), Vector3(size.x + 0.04, size.y + 0.04, 0.008), Color("020303"))
+	for edge: float in [-1.0, 1.0]:
+		_placed(frame, "plate", at + Vector3(edge * (half.x + 0.07), 0, 0.11), Vector3(0.1, size.y + 0.24, 0.1), steel, Vector3(0, 0, edge * 2.0))
+		_placed(frame, "plate", at + Vector3(0, edge * (half.y + 0.07), 0.11), Vector3(size.x + 0.04, 0.1, 0.1), steel)
+	var kept := batch
+	_chunk("Glass", false)
+	var plane := frame * Transform3D(Basis.IDENTITY, at + Vector3(0, 0, 0.1))
+	var teeth := 22
+	for i in range(teeth):
+		# Around the frame: the foot of a tooth on its edge, its point towards the middle.
+		var t := float(i) / teeth * 4.0
+		var side := int(t)
+		var along := (t - side) * 2.0 - 1.0
+		var foot := Vector3(along * half.x, half.y, 0) if side == 0 else (Vector3(half.x, -along * half.y, 0) if side == 1 else (Vector3(-along * half.x, -half.y, 0) if side == 2 else Vector3(-half.x, along * half.y, 0)))
+		var inward := -foot.normalized()
+		var wide := random.randf_range(0.05, 0.13)
+		var long := random.randf_range(0.08, 0.5 if side == 2 else 0.3)
+		var across := Vector3(-inward.y, inward.x, 0)
+		batch.triangle(mats["shard"], plane * (foot - across * wide), plane * (foot + across * wide), plane * (foot + inward * long + Vector3(0, 0, random.randf_range(0.0, 0.07))))
+	batch = kept
+	# What ran out of it.
+	var low := frame * Vector3(at.x, 0, at.z + 0.9)
+	_blot(low, 0.9, 0.6, Color(0.05, 0.16, 0.09, 0.7), frame.basis.get_euler().y)
+
+## Rime on the floor around the foot of a tower.
+func _frost(frame: Transform3D, half: float) -> void:
+	var turn := frame.basis.get_euler().y
+	for i in range(7):
+		var angle := random.randf() * TAU
+		var far := half + random.randf_range(-0.3, 0.7)
+		_blot(frame * Vector3(cos(angle) * far, 0, sin(angle) * far), random.randf_range(0.4, 1.0), random.randf_range(0.3, 0.6), Color(0.72, 0.84, 0.9, random.randf_range(0.05, 0.12)), turn + angle)
+
+## A desk that watches a tower: a slanted screen and lamps on a steel foot, a hose to the
+## tower's foot. Its screen looks along `face` (as the front of a model does), at whoever
+## stands before it.
+func _watch_desk(pos: Vector3, face: float, hose_to: Vector3, dead: bool = false) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, face), pos)
+	_placed(frame, "steel", Vector3(0, 0.5, 0), Vector3(0.8, 1.0, 0.44), Color("2a3034"))
+	_placed(frame, "steel", Vector3(0, 1.06, 0.0), Vector3(0.84, 0.12, 0.48), Color("3f464b"))
+	_placed(frame, "plain", Vector3(0, 1.2215, 0.0102), Vector3(0.68, 0.42, 0.03), Color("0c0e0f"), Vector3(-62, 0, 0))
+	if not dead:
+		_screen(frame, Vector3(0, 1.24, 0.02), Vector2(0.62, 0.36), [1, 9, 2, 1][random.randi() % 4], random.randf(), 62.0)
+	for k in range(4):
+		_led(frame * Vector3(-0.27 + k * 0.18, 0.84, 0.226), Vector3(0.05, 0.05, 0.012), [Color("5ee07a"), Color("ffb347"), Color("ff3a2a"), Color("5ee07a")][k], 3.0, 0.1 if dead else [1.0, 0.7, 0.4, 0.3][k], frame.basis)
+	_solid(pos + Vector3(0, 0.55, 0), Vector3(0.84, 1.1, 0.5), true, face)
+	_hose(pos + Vector3(0, 0.07, 0) + frame.basis * Vector3(0.2, 0, -0.3), hose_to, 0.045, Color("121416"), 0.0, frame.basis * Vector3(0.5, 0, 0), 6)
+
+## A pump of the hall with what belongs to it: the unit, a desk, stores, thick hoses to
+## the towers on either side of it. (`way` is the side of the hall: -1 west.)
+func _hall_pump(pos: Vector3, yaw: float, way: float) -> void:
+	_tower("unit", pos + Vector3(way * 0.5, 0, 0.9), yaw)
+	_tower("unit", pos + Vector3(way * 0.9, 0, -2.1), yaw + PI / 2)
+	_stores(pos + Vector3(-way * 1.7, 0, -1.6), 3)
+	_watch_desk(pos + Vector3(-way * 1.6, 0, 2.0), yaw, pos + Vector3(way * 0.2, 0.3, 1.2))
+	for target: float in [-8.5, 8.5]:
+		_floor_hose(pos + Vector3(-way * 0.75, 0, 0.9 + signf(target) * 0.9), pos + Vector3(-way * 0.3, 0, target * 0.76), 0.13, Vector3(-way * 1.3, 0, 0))
+
+## A thick hose that lies on a floor from one spot to another, bent aside by `bow`.
+func _floor_hose(from: Vector3, to: Vector3, radius: float, bow: Vector3, tint: Color = Color("101214")) -> void:
+	var up := Vector3(0, radius, 0)
+	_hose(from + up, to + up, radius, tint, 0.0, bow, 9)
+	for end: Vector3 in [from, to]:
+		batch.cylinder(mats["steel"], end + Vector3(0, 0.0, 0), radius + 0.05, radius + 0.05, radius * 2.0 + 0.04, Color("2a2f33"), 8)
+
+## The clearing in the middle of the hall: the desk the towers were watched from, with the
+## wall of screens it looks at; the tower that is torn open, and what came out of it.
+func _hall_clearing() -> void:
+	var steel := Color("16191b")
+	# --- the watch: a wall with the great screen on it, a long desk before it
+	var wall_x := 12.9
+	var mid := HALL_MIDDLE.z
+	for z: float in [mid - 2.2, mid + 2.2]:
+		_part("plate", Vector3(wall_x + 0.12, UNDER + 2.0, z), Vector3(0.16, 4.0, 0.16), steel)
+		_solid(Vector3(wall_x + 0.12, UNDER + 2.0, z), Vector3(0.2, 4.0, 0.2))
+	_part("plate", Vector3(wall_x + 0.1, UNDER + 2.62, mid), Vector3(0.1, 2.5, 4.3), Color("0b0d0e"))
+	_part("plate", Vector3(wall_x + 0.12, UNDER + 4.0, mid), Vector3(0.2, 0.14, 4.7), steel)
+	_part("plate", Vector3(wall_x + 0.12, UNDER + 1.3, mid), Vector3(0.2, 0.14, 4.7), steel)
+	var great: MeshInstance3D = terminals.call("screen", "specimen", Vector2(3.6, 2.025))
+	great.transform = Transform3D(Basis(Vector3.UP, -PI / 2), Vector3(wall_x + 0.04, UNDER + 2.72, mid))
+	add_child(great)
+	terminal_places.append(["containment", -1, mid, "specimen"])
+	_glow_box(Vector3(wall_x + 0.042, UNDER + 1.56, mid), Vector3(0.012, 0.03, 3.4), Color("59d8e6"), 2.4)
+	_wall_sign("PROBENÜBERWACHUNG  ·  HALLE  E-01", Vector3(wall_x + 0.012, UNDER + 4.0, mid), 18, Color(0.75, 0.8, 0.84), -PI / 2)
+	_light(Vector3(wall_x - 1.6, UNDER + 2.4, mid), Color("6fd0e2"), 1.1, 6.5, false, 0.03, 0.4, LAMP_FADE + 10.0)
+	# The desk: a slanted board of screens over a steel foot, open towards the middle of the hall.
+	var desk_x := 10.5
+	_part("steel", Vector3(desk_x, UNDER + 0.4, mid), Vector3(0.7, 0.8, 4.4), Color("2f3539"))
+	_part("plain", Vector3(desk_x, UNDER + 0.05, mid), Vector3(0.74, 0.1, 4.44), Color("0d0f10"))
+	_part("steel", Vector3(desk_x, UNDER + 0.83, mid), Vector3(0.78, 0.06, 4.48), Color("454c51"))
+	_part("steel", Vector3(desk_x + 0.26, UNDER + 1.1, mid), Vector3(0.22, 0.5, 4.4), Color("272c30"))
+	for i in range(5):
+		var z := mid - 1.76 + i * 0.88
+		_screen(Transform3D(Basis(Vector3.UP, -PI / 2), Vector3(desk_x + 0.144, UNDER + 1.1, z)), Vector3.ZERO, Vector2(0.7, 0.4), [9, 1, 2, 1, 3][i], 0.11 + i * 0.17)
+		for k in range(4):
+			_led(Vector3(desk_x - 0.1, UNDER + 0.866, z - 0.24 + k * 0.16), Vector3(0.05, 0.012, 0.05), [Color("5ee07a"), Color("ffb347"), Color("5ee07a"), Color("ff3a2a")][k], 3.0, [1.0, 0.7, 1.0, 0.4][k])
+	_solid(Vector3(desk_x + 0.02, UNDER + 0.68, mid), Vector3(0.82, 1.36, 4.5))
+	_lab_chair(Vector3(9.5, UNDER, mid - 1.2), PI / 2)
+	_lab_chair(Vector3(9.2, UNDER, mid + 1.5), 2.3, true)
+	_litter(Vector3(9.0, UNDER, mid + 0.4), 1.6, 9)
+	_floor_text("LEITSTAND", Vector3(8.2, UNDER, mid), 90, Color(0.72, 0.58, 0.16), -PI / 2)
+	# --- pumps at two corners of the clearing: something to stand behind
+	_tower("unit", Vector3(-8.2, UNDER, mid + 4.6), PI)
+	_tower("unit", Vector3(6.4, UNDER, mid - 4.4), 0.0)
+	# --- the torn tower stands at the west side of the clearing and looks into it
+	var hole := Vector3(-13.4, UNDER, mid - 0.3)
+	_chunk("Glass", false)
+	for i in range(26):
+		var angle := random.randf_range(-1.2, 1.2)
+		var at := hole + Vector3(cos(angle), 0, sin(angle)) * random.randf_range(0.2, 3.4) + Vector3(0, 0.01, 0)
+		var turn := Basis(Vector3.UP, random.randf() * TAU)
+		var size := random.randf_range(0.05, 0.16)
+		batch.triangle(mats["shard"], at + turn * Vector3(-size, 0, 0), at + turn * Vector3(size * 0.6, 0, -size * 0.5), at + turn * Vector3(size * 0.2, random.randf_range(0.0, 0.04), size))
+	# What is left of its fluid, and where that ran.
+	for pool: Array in [[Vector3(0.9, 0, 0.2), 1.1], [Vector3(2.3, 0, -0.5), 0.7], [Vector3(1.7, 0, 1.2), 0.55], [Vector3(3.3, 0, 0.5), 0.4], [Vector3(0.4, 0, -1.3), 0.45]]:
+		batch.cylinder(mats["wet"], hole + (pool[0] as Vector3) + Vector3(0, 0.005, 0), float(pool[1]), float(pool[1]), 0.003, Color.WHITE, 20)
+	_chunk("Kit", false)
+	# Steel it threw out, hoses it tore off.
+	for piece: Array in [[Vector3(1.6, 0.05, -1.4), Vector3(1.1, 0.06, 0.5), 24.0], [Vector3(2.9, 0.04, 1.3), Vector3(0.8, 0.05, 0.36), -51.0], [Vector3(4.2, 0.04, -0.2), Vector3(0.5, 0.05, 0.3), 12.0]]:
+		_part("plate", hole + (piece[0] as Vector3), piece[1], Color("191c1e"), Vector3(4.0, float(piece[2]), 3.0))
+	_hose(hole + Vector3(-0.5, 3.4, 0.9), hole + Vector3(0.8, 0.12, 1.9), 0.09, Color("101214"), 0.4, Vector3(0.5, 0, 0.3), 8)
+	_hose(hole + Vector3(-0.5, 2.2, -1.0), hole + Vector3(1.5, 0.1, -2.2), 0.07, Color("101214"), 0.3, Vector3(0.2, 0, -0.4), 7)
+	_haze(hole + Vector3(0.6, 0.8, 0), Vector3(6.0, 1.6, 6.0), 0.16, Color(0.6, 0.95, 0.72), true)
+	# The tracks: out of the tower, across the clearing and down the nave to the gate.
+	_chunk("Glass", false)
+	_paw_tracks([hole + Vector3(0.6, 0, 0.2), Vector3(-7.0, UNDER, mid + 1.6), Vector3(-2.2, UNDER, mid + 6.5), Vector3(-0.6, UNDER, -588.5), Vector3(0.8, UNDER, -583.0)])
+	_chunk("Kit", false)
+	_smear(hole + Vector3(0.8, 0, 0.1), hole + Vector3(4.6, 0, 1.0), 0.5)
+
+## The tracks of something four-legged and heavy, in the fluid of a tank, from point to
+## point: pads with claws before them, in pairs, fainter with every stride. (They are
+## drawn in the fluid's own material and glow like it; the batch is the caller's.)
+func _paw_tracks(route: Array) -> void:
+	var strides := 0.0
+	var whole := 0.0
+	for i in range(1, route.size()):
+		whole += (route[i] as Vector3).distance_to(route[i - 1])
+	var done := 0.0
+	for i in range(1, route.size()):
+		var from: Vector3 = route[i - 1]
+		var to: Vector3 = route[i]
+		var heading := (to - from).normalized()
+		var across := heading.cross(Vector3.UP)
+		var turn := Basis(Vector3.UP, atan2(heading.x, heading.z))
+		var leg := from.distance_to(to)
+		while strides < leg:
+			var fade := 1.0 - 0.8 * (done + strides) / whole
+			var at := from + heading * strides
+			# Hind feet land where the fore feet were: two pairs to a stride.
+			for pair: Array in [[0.0, 0.42], [0.95, 0.34]]:
+				for side: float in [-1.0, 1.0]:
+					var spot := at + heading * (float(pair[0]) + side * 0.12 + random.randf_range(-0.12, 0.12)) + across * (side * float(pair[1]) + random.randf_range(-0.06, 0.06)) + Vector3(0, 0.005, 0)
+					var skew := turn * Basis(Vector3.UP, random.randf_range(-0.3, 0.3))
+					batch.ellipsoid(mats["tracks"], spot, Vector3(random.randf_range(0.09, 0.13), 0.002, random.randf_range(0.11, 0.17)) * fade, Color.WHITE, skew, 8, 3)
+					for claw in range(4):
+						var out := (claw - 1.5) * 0.06
+						batch.ellipsoid(mats["tracks"], spot + skew * Vector3(out, 0, 0.2 - absf(out) * 0.35) * fade, Vector3(0.02, 0.002, random.randf_range(0.04, 0.09)) * fade, Color.WHITE, skew * Basis(Vector3.UP, -out * 4.0), 6, 3)
+					# What dripped off it between two steps.
+					if random.randf() < 0.5:
+						batch.ellipsoid(mats["tracks"], spot - heading * random.randf_range(0.3, 0.9) + across * random.randf_range(-0.15, 0.15), Vector3(random.randf_range(0.02, 0.05), 0.002, random.randf_range(0.03, 0.12)) * fade, Color.WHITE, skew, 6, 3)
+			strides += 2.5
+		strides -= leg
+		done += leg
+
+## The freight lift at the far end: a platform in a frame under two beacons that turn, the
+## shaft doors behind it, a row of early tanks on either side, and the terminal that shows
+## how deep it goes.
+func _hall_lift(hall: Dictionary) -> void:
+	var lift := HALL_LIFT
+	_part("tread", lift + Vector3(0, 0.03, 0), Vector3(6.0, 0.06, 6.0), Color(0.4, 0.42, 0.44))
+	_hazard(lift + Vector3(-3.0, 0.065, 3.0), lift + Vector3(3.0, 0.065, 3.0), Vector3(0.5, 0.01, 0.3), 12)
+	_hazard(Vector3(-6.0, UNDER + 0.008, lift.z + 4.4), Vector3(6.0, UNDER + 0.008, lift.z + 4.4), Vector3(0.5, 0.016, 0.3), 24)
+	for corner: Vector3 in [Vector3(-3.1, 0, -3.1), Vector3(3.1, 0, -3.1), Vector3(-3.1, 0, 3.1), Vector3(3.1, 0, 3.1)]:
+		_part("plate", lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3), Color("c9a227"))
+		_add_shape(body, lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3))
+	_part("plate", lift + Vector3(0, 6.1, 0), Vector3(6.5, 0.3, 6.5), Color("1c2023"))
+	# The doors of the shaft in the wall behind it, with their stripes.
+	_face_box(hall, NORTH, "shutter", -2.9, 2.9, 0.0, 5.4, -0.09, 0.03, Color(0.36, 0.38, 0.4))
+	_hazard(_face_point(hall, NORTH, -2.9, 0.4, -0.1), _face_point(hall, NORTH, 2.9, 0.4, -0.1), Vector3(0.48, 0.5, 0.012), 12)
+	_face_box(hall, NORTH, "plate", -0.04, 0.04, 0.0, 5.4, -0.12, -0.09, Color("15181a"))
+	for x: float in [-2.6, 2.6]:
+		_glow_box(lift + Vector3(x, 5.9, 3.1), Vector3(0.3, 0.2, 0.3), Color("ffb347"), 5.0)
+		_light(lift + Vector3(x, 5.4, 3.3), Color("ffb347"), 1.5, 9.0, false, 0.4, 1.0, 76.0)
+		_beacon(lift + Vector3(x * 1.19, 6.25, 3.1), Color("ff9a3a"), 1.25 * signf(x))
+	_wall_sign("FRACHTAUFZUG  ·  EBENE  U3", _face_point(hall, NORTH, 0.0, 7.4, -0.05), 48, Color("c9a227"))
+	_floor_text("FRACHTAUFZUG", lift + Vector3(0, 0, 5.4), 110, Color(0.72, 0.58, 0.16), 0.0)
+	# The early steps: specimen tanks in a row on either side of the lift, their hoses to a main on the wall.
+	var kinds := ["leech", "striker", "normalzombie", "stalker", "striker", "leech"]
+	var poses := ["curled", "adrift", "reaching", "adrift", "curled", "reaching"]
+	var slot := 0
+	var first := specimens.size()
+	for way: float in [-1.0, 1.0]:
+		for i in range(3):
+			_tank(Vector3(way * (11.4 + i * 2.1), UNDER, -635.85), "E-%02d" % (slot + 1), kinds[slot], poses[slot], 150.0 + slot * 23.0, [0.5, 1.0, 0.4, 0.8, 0.6, 0.3][slot], slot % 2 == 1, 0.1 + 0.08 * (slot % 3))
+			slot += 1
+		_chunk("Kit", false)
+		_pipe(_face_point(hall, NORTH, way * 9.6, 8.78, -0.2), _face_point(hall, NORTH, way * 17.6, 8.78, -0.2), 0.12, Color("5c6a6e"), 8, "steel")
+		_stencil("containment", NORTH, way * 13.5, 3.5, "VORSTUFEN", 80, Color(0.2, 0.42, 0.44))
+	# (What floats in them is not drawn from across the hall: nobody could make it out
+	# from there, and a body is as heavy as six towers.)
+	for index in range(first, specimens.size()):
+		for part in specimens[index].find_children("*", "MeshInstance3D", true, false):
+			(part as MeshInstance3D).visibility_range_end = 30.0
+	_terminal("containment", NORTH, -6.0, "crucible", "E-02", "AUFZUG  ·  LAGEPLAN")
+
+## A beacon: a lamp in a cage and a beam that turns, `speed` radians a second.
+func _beacon(pos: Vector3, tint: Color, speed: float) -> void:
+	batch.cylinder(mats["plate"], pos, 0.16, 0.16, 0.06, Color("15181a"), 10)
+	batch.cylinder(mats[glow_key], pos + Vector3(0, 0.06, 0), 0.11, 0.09, 0.2, Color(tint.r * 0.9, tint.g * 0.9, tint.b * 0.9), 10)
+	batch.cylinder(mats["plate"], pos + Vector3(0, 0.26, 0), 0.13, 0.13, 0.03, Color("15181a"), 10)
+	var pivot := Node3D.new()
+	pivot.name = "Beacon"
+	pivot.position = pos + Vector3(0, 0.16, 0)
+	add_child(pivot)
+	var beam := SpotLight3D.new()
+	beam.basis = Basis.looking_at(Vector3(0, -0.2, -1).normalized(), Vector3.UP)
+	beam.light_color = tint
+	beam.light_energy = 3.4
+	beam.spot_range = 40.0
+	beam.spot_angle = 15.0
+	beam.spot_attenuation = 0.8
+	beam.spot_angle_attenuation = 1.4
+	beam.shadow_enabled = true
+	beam.shadow_bias = 0.1
+	beam.light_volumetric_fog_energy = 1.2
+	beam.distance_fade_enabled = true
+	beam.distance_fade_begin = 80.0
+	beam.distance_fade_length = 14.0
+	beam.distance_fade_shadow = 70.0
+	pivot.add_child(beam)
+	hall_life.call("beacon", pivot, speed)
+
+## The light of the hall: lamps on long cords over the nave and the lanes, most of them
+## dead, a few with a beam one sees in the mist and shadows behind everything it meets.
+func _hall_light() -> void:
+	var top := Vector3(0, UNDER + HALL_TALL, 0)
+	var cold := Color("cfe2ff")
+	# [x, z, what]: "beam" throws shadows, "pool" does not, "weak" is giving up, "dead" is dark.
+	var lamps := [
+		[0.0, -581.6, "beam"], [0.0, -590.75, "dead"], [0.0, -599.25, "weak"], [-4.6, -603.5, "beam"], [4.6, -603.5, "pool"],
+		[0.0, -607.75, "dead"], [0.0, -616.25, "beam"], [0.0, -627.0, "pool"],
+		[-11.4, -590.75, "pool"], [11.4, -590.75, "dead"], [-19.8, -599.25, "dead"], [19.8, -599.25, "weak"],
+		[-11.4, -607.75, "dead"], [11.4, -607.75, "dead"], [-19.8, -616.25, "pool"], [19.8, -616.25, "dead"],
+		[-19.8, -582.0, "dead"], [19.8, -582.0, "pool"], [-11.4, -624.0, "dead"], [11.4, -624.0, "weak"]
+	]
+	for entry: Array in lamps:
+		var what := str(entry[2])
+		var at := top + Vector3(float(entry[0]), 0, float(entry[1]))
+		var lamp := _pendant(at, 4.6, cold, 5.0 if what == "weak" else 8.0, 15.0, 52.0, 0.9 if what == "weak" else 0.04, what != "dead")
+		if lamp == null:
+			continue
+		lamp.light_volumetric_fog_energy = 1.5
+		if what == "beam":
+			lamp.shadow_enabled = true
+			lamp.shadow_bias = 0.12
+			lamp.shadow_blur = 1.6
+			lamp.distance_fade_shadow = 60.0
+	# Red on the walls, as everywhere in the facility where something went wrong.
+	var hall: Dictionary = room_of["containment"]
+	for side: int in [WEST, EAST]:
+		for z: float in [-586.5, -603.5, -620.5]:
+			_light(_face_point(hall, side, z, 4.2, -1.4), Color("ff3a2a"), 0.9, 7.5, false, 0.2, 0.7, LAMP_FADE + 6.0)
+		# Under the galleries a cold lamp between every two pilasters: enough to see who comes
+		# along the wall, and the backs of the towers that stand there.
+		for z: float in [-582.0, -590.75, -599.25, -607.75, -616.25, -626.0]:
+			_face_box(hall, side, "plate", z - 0.3, z + 0.3, 7.38, 7.48, -1.5, -0.9, Color("1b1c1b"))
+			var failing := is_equal_approx(z, -607.75) if side == WEST else is_equal_approx(z, -590.75)
+			_face_glow(hall, side, z - 0.24, z + 0.24, 7.35, 7.38, -1.4, -1.0, cold, 2.4 if failing else 5.0)
+			var under := _light(_face_point(hall, side, z, 6.6, -1.5), cold, 0.8 if failing else 1.5, 11.5, false, 0.85 if failing else 0.05, 0.9, LAMP_FADE + 8.0)
+			under.omni_attenuation = 1.0
+
+## What lies on the floor of the hall: gratings over the cable trenches along the nave,
+## drains, and the hoses from the trenches to the towers.
+func _hall_floor() -> void:
+	for x: float in [-4.55, 4.55]:
+		_part("tread", Vector3(x, UNDER + 0.008, -602.3), Vector3(0.9, 0.016, 46.0), Color(0.3, 0.32, 0.34))
+	for z: float in [-590.75, -599.25, -607.75, -616.25]:
+		for x: float in [-11.4, 11.4, -19.8, 19.8]:
+			_part("tread", Vector3(x, UNDER + 0.008, z), Vector3(0.7, 0.016, 0.7), Color(0.2, 0.21, 0.22))
+			_part("plain", Vector3(x, UNDER + 0.019, z), Vector3(0.5, 0.006, 0.5), Color("070808"))
+	# Hoses: from the trench along the nave to every tower beside it, and between the files.
+	for rank in range(HALL_RANKS.size()):
+		var z: float = HALL_RANKS[rank]
+		for way: float in [-1.0, 1.0]:
+			var row: Array = HALL_RANKS_WEST[rank] if way < 0.0 else HALL_RANKS_EAST[rank]
+			if str(row[0]) != "":
+				_floor_hose(Vector3(way * 4.6, UNDER, z + 1.2), Vector3(way * 5.4, UNDER, z + 0.5), 0.11, Vector3(0, 0, 0.5))
+				_floor_hose(Vector3(way * 4.6, UNDER, z - 1.5), Vector3(way * 5.5, UNDER, z - 0.8), 0.08, Vector3(0, 0, -0.4), Color("1c1410"))
+			if str(row[1]) != "" and str(row[1]) != "units" and str(row[0]) != "":
+				_floor_hose(Vector3(way * 9.3, UNDER, z + 0.9), Vector3(way * 13.6, UNDER, z + 1.3), 0.1, Vector3(0, 0, 0.9))
+			if str(row[2]) != "" and str(row[2]) != "units" and str(row[1]) != "" and str(row[1]) != "units":
+				_floor_hose(Vector3(way * 17.7, UNDER, z - 1.0), Vector3(way * 22.0, UNDER, z - 1.4), 0.1, Vector3(0, 0, -0.9))
+
+## The air of the hall: a mist over the whole floor that one wades through, thicker
+## around the lift, and the sounds are HiveMap._hall_voices'.
+func _hall_air() -> void:
+	var grain := FastNoiseLite.new()
+	grain.seed = 71011
+	grain.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	grain.frequency = 0.06
+	grain.fractal_octaves = 2
+	var wisps := NoiseTexture3D.new()
+	wisps.width = 48
+	wisps.height = 48
+	wisps.depth = 48
+	wisps.seamless = true
+	wisps.noise = grain
+	var mist := _programme(GROUND_MIST)
+	mist.set_shader_parameter("wisps", wisps)
+	mist.set_shader_parameter("floor_y", UNDER)
+	var cloud := FogVolume.new()
+	cloud.name = "GroundMist"
+	cloud.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
+	cloud.size = Vector3(59.2, 2.2, 59.2)
+	cloud.material = mist
+	cloud.position = Vector3(HALL_PLAN.get_center().x, UNDER + 1.0, HALL_PLAN.get_center().y)
+	add_child(cloud)
+	_haze(HALL_LIFT + Vector3(0, 2.6, 1.0), Vector3(14.0, 5.2, 9.0), 0.035, Color(0.9, 0.78, 0.6))
+
+## --hive-figures (pictures only): bodies of infected standing still in the hall, ten to
+## fifteen metres from where the pictures are taken, to judge whether one sees what one
+## shoots at.
+func _hall_figures() -> void:
+	var scene := load("res://assets/models/mauler_female.glb") as PackedScene
+	if scene == null:
+		return
+	for at: Vector3 in [Vector3(-1.5, 0, -591.5), Vector3(2.2, 0, -594.0), Vector3(-3.0, 0, -611.0), Vector3(3.5, 0, -614.5), Vector3(-11.4, 0, -612.0), Vector3(1.0, 0, -620.0), Vector3(-20.0, 0, -603.0), Vector3(11.4, 0, -596.0)]:
+		var figure := scene.instantiate() as Node3D
+		add_child(figure)
+		figure.position = Vector3(at.x, UNDER, at.z)
+		figure.rotation.y = at.x * 0.7
+
+## What the hall sounds like (see HiveSound): a deep hum from everywhere, valves that let
+## off pressure, and now and then something that knocks from inside a tower.
+func _hall_voices() -> void:
+	sound.call("loop", "deep", HALL_MIDDLE + Vector3(0, 6.0, 0), -8.0, 52.0)
+	sound.call("loop", "deep", HALL_LIFT + Vector3(0, 3.0, 0), -12.0, 30.0, 1.5)
+	for at: Vector3 in [Vector3(-24.0, UNDER + 1.2, -594.0), Vector3(24.5, UNDER + 1.2, -603.0), Vector3(-7.4, UNDER + 5.0, -612.0), Vector3(15.6, UNDER + 4.6, -586.5)]:
+		sound.call("now_and_then", "hiss", at, -11.0, 6.0, 17.0, 26.0, 0.18)
+	for at: Vector3 in [Vector3(-7.2, UNDER + 3.2, -595.0), Vector3(24.0, UNDER + 3.2, -612.0)]:
+		sound.call("now_and_then", "knock", at, -6.0, 9.0, 26.0, 24.0, 0.07)
+
+# ---------------------------------------------------------------- terminals in the walls
+
+## A terminal let into a wall of a room, `a` along that wall: a niche with a steel collar,
+## in it a screen that plays one of the two loops (see HiveTerminal), under the screen a
+## ledge with keys, over the niche a plate with its number and what it is for, and the
+## glow of the screen on whoever stands before it. Call it while the zone of the room is
+## being built and before the map is compiled: the niche is cut into the wall then.
+## Returns false where a doorway or a pane is in the way.
+func _terminal(room_id: String, side: int, a: float, loop: String, code: String, title: String) -> bool:
+	var room: Dictionary = room_of[room_id]
+	var a0 := a - 0.62
+	var a1 := a + 0.62
+	var sill := 0.96
+	var head := 2.08
+	if not _wall_free(room, side, a0 - 0.3, a1 + 0.3):
+		push_warning("HiveMap._terminal: no free wall in '%s' at %.1f" % [room_id, a])
+		return false
+	(room.open[side] as Array).append([a0, a1, sill, head, "niche"])
+	var kept := batch
+	_chunk("Kit", false)
+	var steel := Color("16191b")
+	var look := _look(room)
+	# The collar: it stands a little proud of the wall, reaches back to the end of the niche
+	# and covers the edges of what was cut.
+	_face_box(room, side, "plate", a0 - 0.07, a1 + 0.07, head - 0.03, head + 0.07, -0.06, 0.17, steel)
+	_face_box(room, side, "plate", a0 - 0.07, a1 + 0.07, sill - 0.07, sill + 0.03, -0.06, 0.17, steel)
+	_face_box(room, side, "plate", a0 - 0.07, a0 + 0.03, sill + 0.02, head - 0.02, -0.06, 0.17, steel)
+	_face_box(room, side, "plate", a1 - 0.03, a1 + 0.07, sill + 0.02, head - 0.02, -0.06, 0.17, steel)
+	# The back of the niche; nothing gets through it.
+	_face_box(room, side, "plain", a0 - 0.02, a1 + 0.02, sill - 0.02, head + 0.02, 0.15, 0.195, Color("0b0d0e"))
+	_part_shape(_face_centre(room, side, a0, a1, sill, head, 0.14, 0.2), _face_size(side, a0, a1, sill, head, 0.14, 0.2))
+	# The screen in its bezel, a line of light under it.
+	var wide := 0.96
+	var tall := 0.54
+	var middle := head - 0.11 - tall * 0.5
+	_face_box(room, side, "plain", a - wide * 0.5 - 0.05, a + wide * 0.5 + 0.05, middle - tall * 0.5 - 0.05, middle + tall * 0.5 + 0.05, 0.085, 0.15, Color("050607"))
+	var pane: MeshInstance3D = terminals.call("screen", loop, Vector2(wide, tall))
+	pane.transform = Transform3D(Basis(Vector3.UP, _model_yaw(side)), _face_point(room, side, a, middle, 0.079))
+	add_child(pane)
+	terminal_places.append([room_id, side, a, loop])
+	var glow := Color("6fd8e2") if loop == "specimen" else Color("5cc0e8")
+	_face_glow(room, side, a - 0.4, a + 0.4, middle - tall * 0.5 - 0.035, middle - tall * 0.5 - 0.02, 0.078, 0.09, glow, 2.0)
+	# The ledge under it: keys, a slot, three lamps.
+	_face_box(room, side, "steel", a0 + 0.04, a1 - 0.04, sill + 0.14, sill + 0.19, -0.13, 0.15, Color("2a2f33"))
+	_face_box(room, side, "plate", a0 + 0.04, a1 - 0.04, sill + 0.03, sill + 0.14, -0.02, 0.15, Color("1d2124"))
+	_face_box(room, side, "plain", a - 0.4, a - 0.02, sill + 0.19, sill + 0.202, -0.1, 0.05, Color("0b0d0e"))
+	for row in range(3):
+		for column in range(6):
+			_face_box(room, side, "plain", a - 0.385 + column * 0.06, a - 0.34 + column * 0.06, sill + 0.202, sill + 0.21, -0.088 + row * 0.045, -0.055 + row * 0.045, Color("3b4246"))
+	_face_box(room, side, "plain", a + 0.1, a + 0.34, sill + 0.19, sill + 0.2, -0.06, -0.035, Color("050607"))
+	for k in range(3):
+		var along := a + 0.14 + k * 0.08
+		_led(_face_point(room, side, along, sill + 0.196, 0.02), Vector3(0.03, 0.012, 0.03), [Color("5ee07a"), Color("ffb347"), Color("5ee07a")][k], 3.0, [1.0, 0.7, 0.35][k])
+	# Its number, over the niche.
+	_face_box(room, side, "plate", a - 0.4, a + 0.4, head + 0.13, head + 0.4, -0.052, 0.0, Color("101214"))
+	_face_box(room, side, "plain", a - 0.4, a + 0.4, head + 0.37, head + 0.4, -0.058, -0.052, glow.darkened(0.25))
+	var number := _wall_sign(code, _face_point(room, side, a, head + 0.285, -0.06), 22, Color(0.82, 0.9, 0.94), _model_yaw(side))
+	number.name = "TerminalTag"
+	_wall_sign(title, _face_point(room, side, a, head + 0.185, -0.06), 10, Color(0.7, 0.74, 0.78), _model_yaw(side))
+	# What the wall has above the niche goes on over it.
+	var room_tall := float(room.height)
+	match str(look.get("dress", "")):
+		"panel":
+			if room_tall > 3.1 and bool(look.get("strip", true)):
+				_face_glow(room, side, a0, a1, 2.72, 2.76, -0.014, 0.0, look.get("strip_color", Color("bfe0ff")), float(look.get("strip_glow", 2.0)))
+		"tech":
+			for run: Array in [[0.5, 0.07, Color("6d6f6c")], [0.74, 0.05, Color("8a5a2c")], [0.94, 0.04, Color("4d5357")]]:
+				_pipe(_face_point(room, side, a0, room_tall - float(run[0]), -0.16), _face_point(room, side, a1, room_tall - float(run[0]), -0.16), float(run[1]), run[2], 8)
+			_face_box(room, side, "plate", a0, a1, room_tall - 1.34, room_tall - 1.26, -0.3, 0.0, Color("2b2f31"))
+	# The glow of the screen on the floor and on whoever stands before it: no lamp, a glimmer.
+	_light(_face_point(room, side, a, 0.75, -0.95), glow, 0.42, 2.3, false, 0.05, 0.25, LAMP_FADE)
+	batch = kept
+	return true
+
+## A wall with a niche in it is built twice: first as it was without the niche, into
+## nothing - so that the dice of the map are rolled exactly as often as before and no room
+## that is built later changes - and then with the niche, with dice of its own.
+func _build_side(room: Dictionary, side: int, look: Dictionary) -> void:
+	var gaps: Array = room.open[side]
+	var plain: Array = gaps.filter(func(gap: Array) -> bool: return gap.size() < 5 or str(gap[4]) != "niche")
+	if plain.size() == gaps.size():
+		super._build_side(room, side, look)
+		return
+	var real := batch
+	batch = MeshBatch.new()
+	wall_ghost = true
+	room.open[side] = plain
+	super._build_side(room, side, look)
+	room.open[side] = gaps
+	wall_ghost = false
+	batch = real
+	var after := random.state
+	random.seed = hash(str(room.id)) + side * 7919
+	super._build_side(room, side, look)
+	random.state = after
+
+func _part_shape(centre: Vector3, size: Vector3) -> void:
+	if not wall_ghost:
+		super._part_shape(centre, size)
+
+## The terminals in the walls of the facility, zone by zone: where the staff looked up
+## where it was (the loop "crucible": the facility in the earth), and where the laboratory
+## watched what it kept (the loop "specimen"). The two of the tower hall are built with it.
+func _lay_terminals() -> void:
+	_own_dice(71012)
+	# [room, side, where along that wall, loop, number, what it is for]
+	var places := [
+		["terminal", NORTH, 11.5, "crucible", "A-01", "ANLAGE  ·  LAGEPLAN"],
+		["checkpoint", NORTH, 4.0, "crucible", "A-02", "ANLAGE  ·  LAGEPLAN"],
+		["ring_s", SOUTH, 5.8, "crucible", "A-03", "ANLAGE  ·  LAGEPLAN"],
+		["security", SOUTH, 25.6, "crucible", "S-03", "SICHERHEIT  ·  SEKTOREN"],
+		["spine", WEST, -396.0, "crucible", "A-04", "ANLAGE  ·  LAGEPLAN"],
+		["north_link", WEST, -442.6, "crucible", "B-01", "ZENTRALRAUM  ·  LAGEPLAN"],
+		["atrium", SOUTH, 6.5, "crucible", "B-02", "ANLAGE  ·  LAGEPLAN"],
+		["maint", NORTH, 33.0, "crucible", "T-02", "TECHNIK  ·  SCHÄCHTE"],
+		["lab_corridor", WEST, -537.5, "specimen", "L-05", "PROBENÜBERWACHUNG"],
+		["lab_a", SOUTH, -14.0, "specimen", "L-06", "PROBE  ·  ANALYSE"],
+		["cryo", SOUTH, 17.0, "specimen", "L-07", "KRYOLAGER  ·  PROBEN"],
+		["quarantine", SOUTH, -12.0, "specimen", "Q-07", "QUARANTÄNE  ·  PROBEN"],
+		["cross", NORTH, 4.2, "specimen", "E-00", "EINDÄMMUNG  ·  STATUS"]
+	]
+	var by_zone := {}
+	for entry: Array in places:
+		if not room_of.has(str(entry[0])):
+			continue
+		var zone_id := str(room_of[str(entry[0])].zone)
+		if not by_zone.has(zone_id):
+			by_zone[zone_id] = []
+		(by_zone[zone_id] as Array).append(entry)
+	for zone_id: String in by_zone:
+		_begin_zone(zone_id)
+		for entry: Array in by_zone[zone_id]:
+			_terminal(str(entry[0]), int(entry[1]), float(entry[2]), str(entry[3]), str(entry[4]), str(entry[5]))
+		_end_zone()
+	_shared_dice()
 
 # ---------------------------------------------------------------- after the build
 
@@ -3953,9 +4811,22 @@ func tour() -> Array:
 		["70e_front", Vector3(-2.8, UNDER, -565.5), Vector3(8.0, UNDER + 1.5, -560.0)],
 		["71_cross", Vector3(0, UNDER, -566.0), Vector3(0, UNDER + 1.8, -577.0)],
 		["71b_cross_east", Vector3(-20, UNDER, -573.0), Vector3(20, UNDER + 1.8, -573.4)],
-		["72_hall_in", Vector3(0, UNDER, -579.0), Vector3(0, UNDER + 5.0, -612.0)],
-		["73_hall_side", Vector3(-27, UNDER, -598.0), Vector3(14, UNDER + 4.0, -600.0)],
-		["74_lift", Vector3(0, UNDER, -604.0), Vector3(0, UNDER + 2.5, -616.0)],
+		["72_hall_in", Vector3(0, UNDER, -578.6), Vector3(0, UNDER + 4.5, -620.0)],
+		["72b_hall_pylon", Vector3(2.0, UNDER, -580.5), Vector3(-12.0, UNDER + 5.0, -590.0)],
+		["72c_hall_nave", Vector3(0, UNDER, -590.0), Vector3(0, UNDER + 3.0, -632.0)],
+		["72d_hall_clearing", Vector3(-2.5, UNDER, -597.5), Vector3(11.0, UNDER + 2.2, -603.5)],
+		["72e_hall_burst", Vector3(-4.0, UNDER, -601.0), Vector3(-15.6, UNDER + 2.6, -603.8)],
+		["72f_hall_tracks", Vector3(0.5, UNDER, -586.0), Vector3(-6.0, UNDER + 0.2, -600.0)],
+		["72g_hall_window", Vector3(-1.5, UNDER, -593.0), Vector3(-5.8, UNDER + 4.6, -595.0)],
+		["72h_hall_lane", Vector3(-11.4, UNDER, -586.0), Vector3(-11.4, UNDER + 2.5, -625.0)],
+		["72i_hall_aisle", Vector3(-27.8, UNDER, -583.0), Vector3(-27.0, UNDER + 4.0, -630.0)],
+		["72j_hall_lift", Vector3(0, UNDER, -617.5), Vector3(0, UNDER + 3.0, -634.0)],
+		["72k_hall_tanks", Vector3(5.0, UNDER, -629.5), Vector3(13.5, UNDER + 1.4, -636.0)],
+		["72l_hall_terminal", Vector3(-4.0, UNDER, -631.5), Vector3(-6.0, UNDER + 1.6, -637.0)],
+		["72m_hall_back", Vector3(0, UNDER, -627.0), Vector3(0, UNDER + 4.0, -580.0)],
+		["72n_hall_watch", Vector3(8.6, UNDER, -603.5), Vector3(13.0, UNDER + 2.4, -603.5)],
+		["72o_hall_across", Vector3(20.0, UNDER, -599.25), Vector3(-20.0, UNDER + 3.0, -599.25)],
+		["72p_hall_air", Vector3(-22.0, UNDER + 11.0, -582.0), Vector3(6.0, UNDER + 1.0, -612.0), true],
 		["75_lab_tables", Vector3(-9.0, UNDER, -514.5), Vector3(-22.0, UNDER + 1.0, -508.5)],
 		["76_work_place", Vector3(-21.0, UNDER, -511.5), Vector3(-27.4, UNDER + 1.1, -514.6)],
 		["77_microscope", Vector3(-20.7, UNDER, -513.5), Vector3(-21.6, UNDER + 1.2, -515.0)],
@@ -3967,7 +4838,20 @@ func tour() -> Array:
 		["84_plan_station", Vector3(2.0, UNDER, -37.0), Vector3(5.2, UNDER + 1.7, -40.4)],
 		["85_terminal_wait", Vector3(-30.0, UNDER, -331.0), Vector3(-40.0, UNDER + 1.0, -333.5)],
 		["86_reception", Vector3(-3.5, UNDER, -453.0), Vector3(1.0, UNDER + 1.0, -462.0)],
-		["87_hall_bridge", Vector3(-4.0, UNDER, -590.0), Vector3(-18.0, UNDER + 6.0, -604.0)],
+		["90_term_terminal", Vector3(10.5, UNDER, -341.6), Vector3(11.5, UNDER + 1.6, -344.8)],
+		["91_term_checkpoint", Vector3(2.4, UNDER, -356.6), Vector3(4.0, UNDER + 1.6, -360.8)],
+		["92_term_ring", Vector3(4.6, UNDER, -364.5), Vector3(5.8, UNDER + 1.6, -361.2)],
+		["93_term_security", Vector3(23.5, UNDER, -372.5), Vector3(25.6, UNDER + 1.6, -369.2)],
+		["94_term_spine", Vector3(-0.5, UNDER, -394.5), Vector3(-3.8, UNDER + 1.6, -396.0)],
+		["95_term_link", Vector3(-0.6, UNDER, -441.0), Vector3(-3.8, UNDER + 1.6, -442.6)],
+		["96_term_atrium", Vector3(5.0, UNDER, -448.6), Vector3(6.5, UNDER + 1.6, -445.2)],
+		["97_term_maint", Vector3(31.6, UNDER, -468.2), Vector3(33.0, UNDER + 1.6, -471.8)],
+		["98_term_labs", Vector3(0.5, UNDER, -535.5), Vector3(-3.8, UNDER + 1.6, -537.5)],
+		["98b_term_lab_a", Vector3(-12.0, UNDER, -504.0), Vector3(-14.0, UNDER + 1.6, -501.2)],
+		["98c_term_cryo", Vector3(15.4, UNDER, -522.4), Vector3(17.0, UNDER + 1.6, -519.2)],
+		["98d_term_quarantine", Vector3(-10.2, UNDER, -540.5), Vector3(-12.0, UNDER + 1.6, -537.2)],
+		["99_term_cross", Vector3(1.6, UNDER, -573.2), Vector3(4.2, UNDER + 1.6, -576.8)],
+		["99b_term_far", Vector3(0.6, UNDER, -522.0), Vector3(-3.8, UNDER + 1.6, -537.5)],
 		["88_cold_frost", Vector3(6.5, UNDER, -527.0), Vector3(22.0, UNDER + 0.8, -536.0)],
 		["89_hood", Vector3(-12.0, UNDER, -506.5), Vector3(-27.5, UNDER + 1.3, -510.0)],
 		["17_post", Vector3(-1.0, 0, 14.5), Vector3(-5.2, 0.9, 9.4)],
@@ -4021,7 +4905,7 @@ func _after_build() -> void:
 		"security": Vector3(21.0, UNDER, -383.3), "server": Vector3(37.0, UNDER, -381.0), "spine": Vector3(0, UNDER, -387.0), "cafeteria": Vector3(0, UNDER, -420.0),
 		"atrium_south": Vector3(0, UNDER, -448.5), "atrium": Vector3(0, UNDER, -457.0), "supply_atrium": Vector3(-12.0, UNDER, -448.0), "maint": Vector3(30.0, UNDER, -469.0),
 		"pump": Vector3(50.0, UNDER, -481.0), "generator": Vector3(50.0, UNDER, -446.7), "decon": Vector3(0, UNDER, -495.0), "labs_south": Vector3(0, UNDER, -505.0),
-		"labs": Vector3(0, UNDER, -535.0), "cross": Vector3(0, UNDER, -573.0), "hall_end": Vector3(0, UNDER, -596.0), "lift": Vector3(0, UNDER, -615.0)
+		"labs": Vector3(0, UNDER, -535.0), "cross": Vector3(0, UNDER, -573.0), "hall_end": HALL_MIDDLE, "lift": HALL_LIFT
 	}
 	facings = {"landing": 0.0, "landing_out": 0.0}
 	player_start = Vector3(0, 0.05, 61.5)

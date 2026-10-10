@@ -47,8 +47,9 @@ const MOODS := {
 	"plant": {"ambient": Color(0.56, 0.45, 0.32), "energy": 0.44, "fog": 0.004, "haze": 0.014, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.14, 0.08)},
 	# The research wing: a sick green.
 	"sick": {"ambient": Color(0.38, 0.56, 0.52), "energy": 0.44, "fog": 0.005, "haze": 0.01, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.2, 0.18)},
-	# The containment hall: dark, with what glows in it.
-	"deep": {"ambient": Color(0.3, 0.36, 0.46), "energy": 0.2, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.12, 0.16)}
+	# The containment hall, the tower hall: darker and colder than anywhere else in the
+	# facility, with what glows in it and a haze the lamps stand in.
+	"deep": {"ambient": Color(0.28, 0.36, 0.5), "energy": 0.3, "fog": 0.006, "haze": 0.022, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.07, 0.1, 0.14)}
 }
 ## The moods of places under the ground (no moon, no shadows of it).
 const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep"]

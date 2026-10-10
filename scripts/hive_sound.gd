@@ -8,7 +8,9 @@ extends Node3D
 const FILES := {
 	"drip": "res://assets/sounds/hive_drip.wav", "spark": "res://assets/sounds/hive_spark.wav",
 	"hum": "res://assets/sounds/hive_hum.wav", "plant": "res://assets/sounds/hive_plant.wav",
-	"klaxon": "res://assets/sounds/hive_klaxon.wav", "gust": "res://assets/sounds/hive_gust.wav"
+	"klaxon": "res://assets/sounds/hive_klaxon.wav", "gust": "res://assets/sounds/hive_gust.wav",
+	# The tower hall: its deep hum, a valve that lets off pressure, something that knocks inside a tower.
+	"deep": "res://assets/sounds/hive_deep.wav", "hiss": "res://assets/sounds/hive_hiss.wav", "knock": "res://assets/sounds/hive_knock.wav"
 }
 
 var streams: Dictionary = {}
