@@ -2071,7 +2071,7 @@ func _loadout(game: Node3D) -> void:
 	for id in Survivor.ORDER:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
-		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int(Survivor.KINDS[kind].key)
+		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int({"primary": 1, "secondary": 2, "heavy": 3}[kind]) and int(Survivor.KINDS.primary.key) == 1 and int(Survivor.KINDS.heavy.key) == 2 and int(Survivor.KINDS.secondary.key) == 3
 	expect(keyed and int(kinds.primary) == 9 and int(kinds.secondary) == 2 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
 	# --- one of each kind; a second one is traded for the first
 	game.credits = 1000
@@ -2099,15 +2099,93 @@ func _loadout(game: Node3D) -> void:
 	var back: bool = game.buy_weapon("rifle") and player.inventory.has("rifle") and not player.inventory.has("p90") and game.credits == 240 + 50
 	expect(first_cost == 300 and swapped and beside and offer == 100 - 150 and goes == "ak" and traded and listed and back and game.trade_in("sniper") == 225 and game.trade_in("rifle") == 0, "A survivor carries one weapon of each kind: a second one takes the place of the first, which is traded in for half its price")
 	# The keys.
-	player._select_slot(2)
-	var sidearm: String = player.current_weapon
 	player._select_slot(3)
+	var sidearm: String = player.current_weapon
+	player._select_slot(2)
 	var heavy: String = player.current_weapon
 	player._select_slot(1)
 	var primary: String = player.current_weapon
 	player._select_slot(7)
 	player._cycle(1)
-	expect(sidearm == "pistol" and heavy == "sniper" and primary == "rifle" and player.current_weapon == "pistol", "Keys 1, 2 and 3 take the primary, the secondary and the heavy weapon in hand; the wheel goes through all of them")
+	var wheel: String = player.current_weapon
+	var key_inventory: Dictionary = player.inventory.duplicate(true)
+	var key_slots: int = player.extra_slots
+	# --- the number keys by group: 1 primary, 2 heavy, 3 sidearms, 4 what is thrown
+	var key_blank := {"ammo": 5, "reserve": 10, "level": 0}
+	var key_items: Dictionary = player.items.duplicate()
+	player.extra_slots = 3
+	player.inventory = {"rifle": key_blank.duplicate(), "ak": key_blank.duplicate(), "sniper": key_blank.duplicate(), "mg": key_blank.duplicate()}
+	player.equip_weapon("rifle", true)
+	player.last_of = {"primary": "rifle"}
+	for key_item in Survivor.THROWABLES:
+		player.items[key_item] = 0
+	player.items.molotov = 1
+	player.items.heal = 1
+	player.put_away()
+	player.last_throw = "grenade"
+	player.throw_cooldown = 0.0
+	var key_walk: Array = []
+	for key_press in [1, 1, 1, 2, 2, 1, 2]:
+		player._select_slot(key_press)
+		key_walk.append(player.current_weapon)
+	# No sidearm: 3 takes the throwables as 4 does; the weapon stays what it was.
+	var key_throws: Array = []
+	for key_press in [3, 4, 4]:
+		player._select_slot(key_press)
+		key_throws.append("%s/%s/%s" % [player.throw_kind, str(player.throw_in_hand), player.current_weapon])
+	var key_lines: Array = game.hud.group_lines()
+	var key_shown: bool = key_lines.size() == 4 and str(key_lines[0].key) == "1" and str(key_lines[1].kind) == "heavy" and str(key_lines[1].key) == "2" and str(key_lines[2].kind) == "secondary" and bool(key_lines[2].empty) and str(key_lines[3].key) == "4" and bool(key_lines[3].held) and not bool(key_lines[1].held) and int(key_lines[0].more) == 1 and str(key_lines[0].text).contains("+1") and str(key_lines[0].text).contains("AK-47") and int(key_lines[3].more) == 1
+	# A weapon's key puts the throwable away without stepping on; 4 comes back to the last one.
+	player._select_slot(2)
+	var key_back: bool = player.current_weapon == "mg" and not player.throw_in_hand and player.throw_kind == "" and bool(game.hud.group_lines()[1].held)
+	player._select_slot(4)
+	player._select_slot(4)
+	var key_again: bool = player.throw_kind == "heal" and player.throw_in_hand
+	# The trigger throws what is in the hand.
+	# (By the survivor's own steps: the shop is open here and the night stands still.)
+	player._hold_throw(0.02)
+	var key_waits: bool = player.throw_kind == "heal" and player.throw_swing < 0.0
+	Input.action_press("fire")
+	player._hold_throw(0.02)
+	player._hold_throw(Survivor.THROW_SWING + 0.02)
+	Input.action_release("fire")
+	player._hold_throw(0.02)
+	var key_thrown: bool = key_waits and int(player.items.heal) == 0 and not player.throw_in_hand and player.throw_kind == ""
+	# Empty groups change nothing; with a sidearm 3 is the sidearms' key.
+	player.items.molotov = 0
+	player._select_slot(3)
+	player._select_slot(4)
+	var key_empty: bool = player.current_weapon == "mg" and player.throw_kind == "" and player.throwables().is_empty()
+	player.inventory = {"rifle": key_blank.duplicate(), "pistol": key_blank.duplicate()}
+	player.equip_weapon("rifle", true)
+	player.items.molotov = 1
+	player._select_slot(2)
+	var key_none: bool = player.current_weapon == "rifle"
+	player._select_slot(3)
+	var key_side: bool = player.current_weapon == "pistol" and player.throw_kind == ""
+	player.put_away()
+	player.items = key_items
+	expect(key_walk == ["ak", "rifle", "ak", "sniper", "mg", "ak", "mg"] and key_throws == ["molotov/true/mg", "heal/true/mg", "molotov/true/mg"] and key_shown and key_back and key_again and key_thrown and key_empty and key_none and key_side, "The number keys go by group: 1 steps through the primary weapons, 2 through the heavy ones, 3 the sidearms - or what is thrown, for whoever has none - and 4 what is thrown, which the trigger throws; another group's key takes what was last in hand of it (%s, %s)" % [str(key_walk), str(key_throws)])
+	# One key, one meaning; the help names every action once and reads its keys from the bindings.
+	var key_helped := {}
+	var key_twice := false
+	for key_entry in SurvivalHUD.KEY_HELP:
+		for key_action: String in key_entry[0]:
+			if not key_action.begins_with("#"):
+				key_twice = key_twice or key_helped.has(key_action)
+				key_helped[key_action] = true
+	var key_whole := true
+	for key_action: String in game.BINDINGS:
+		key_whole = key_whole and key_helped.has(key_action) and InputMap.has_action(key_action) and InputMap.action_get_events(key_action).size() == (game.BINDINGS[key_action] as Array).size()
+	var key_rows: Array = game.hud.key_rows()
+	var key_orders := false
+	for key_row in key_rows:
+		key_orders = key_orders or (str(key_row[0]) == "6, X" and str(key_row[1]).contains("halten"))
+	expect((game.key_clashes() as Array).is_empty() and key_whole and not key_twice and key_helped.size() == (game.BINDINGS as Dictionary).size() and key_rows.size() == SurvivalHUD.KEY_HELP.size() and key_orders and game.keys_of("squad_follow") == "5" and game.keys_of("squad_free") == "7" and game.keys_of("weapon_4") == "4" and not InputMap.has_action("weapon_5") and not InputMap.has_action("weapon_0"), "No key means two things (%s); the squad's orders lie on 5, 6 and 7, and the help of the keys is written from the bindings, every action once" % str(game.key_clashes()))
+	player.inventory = key_inventory
+	player.extra_slots = key_slots
+	player.equip_weapon(wheel, true)
+	expect(sidearm == "pistol" and heavy == "sniper" and primary == "rifle" and wheel == "pistol" and player.current_weapon == "pistol", "Keys 1, 2 and 3 take the primary, the heavy and the secondary weapon in hand; the wheel goes through all of them")
 	# --- slings make room
 	game.credits = 2000
 	var sling_price: int = game.item_price("sling")
@@ -2306,7 +2384,7 @@ func _loadout(game: Node3D) -> void:
 			if event is InputEventKey:
 				codes.append((event as InputEventKey).physical_keycode)
 		bound[action] = codes
-	expect(bound.syringe == [KEY_Q] and bound.melee == [KEY_V] and bound.crouch == [KEY_C] and bound.flashlight == [KEY_F] and bound.squad_follow == [KEY_5] and bound.squad_free == [KEY_6] and bound.squad_hold == [KEY_X, KEY_4], "Q is the syringe, V the blow, C ducks; the orders for the squad lie on 4, 5 and 6 (and X still holds)")
+	expect(bound.syringe == [KEY_Q] and bound.melee == [KEY_V] and bound.crouch == [KEY_C] and bound.flashlight == [KEY_F] and bound.squad_follow == [KEY_5] and bound.squad_free == [KEY_7] and bound.squad_hold == [KEY_6, KEY_X], "Q is the syringe, V the blow, C ducks; the orders for the squad lie on 5, 6 and 7 (and X still holds)")
 	game.team_enabled = true
 	game.start_run()
 

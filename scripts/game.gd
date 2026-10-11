@@ -585,18 +585,51 @@ func _warm_up() -> void:
 	fade.tween_property(curtain, "color:a", 0.0, 0.7)
 	fade.tween_callback(curtain.queue_free)
 
+## Every key of the game: what it does -> the keys that do it (the first is the one the
+## interface names). One key, one meaning: key_clashes() says which key two things share,
+## and the help in the settings and on the HUD is written from this table (keys_of).
+## 1 to 4 take the groups of what is carried in hand (Survivor.select_group); the squad's
+## three orders lie beside them on 5, 6 and 7.
+const BINDINGS := {
+	"move_forward": [KEY_W], "move_left": [KEY_A], "move_back": [KEY_S], "move_right": [KEY_D], "sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "crouch": [KEY_C],
+	"reload": [KEY_R], "interact": [KEY_E], "flashlight": [KEY_F], "melee": [KEY_V], "syringe": [KEY_Q],
+	"weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3], "weapon_4": [KEY_4],
+	"throw_grenade": [KEY_G], "throw_flash": [KEY_T], "throw_molotov": [KEY_H], "throw_heal": [KEY_J], "place_claymore": [KEY_B],
+	"squad_follow": [KEY_5], "squad_hold": [KEY_6, KEY_X], "squad_free": [KEY_7],
+	"next_wave": [KEY_N], "pause": [KEY_ESCAPE], "fullscreen": [KEY_F11], "test_menu": [KEY_F1], "skip_round": [KEY_F2]
+}
+## What a key is called where its name on the keyboard is not what OS.get_keycode_string says.
+const KEY_NAMES := {KEY_SPACE: "Leertaste", KEY_ESCAPE: "Esc", KEY_SHIFT: "Shift"}
+
+## Keys that more than one action of BINDINGS uses: "KEY: action, action". Empty is right.
+static func key_clashes() -> Array:
+	var users := {}
+	for action in BINDINGS:
+		for key: int in BINDINGS[action]:
+			if not users.has(key):
+				users[key] = []
+			(users[key] as Array).append(action)
+	var out: Array = []
+	for key: int in users:
+		if (users[key] as Array).size() > 1:
+			out.append("%s: %s" % [OS.get_keycode_string(key), ", ".join(PackedStringArray(users[key]))])
+	return out
+
+## The keys of an action as the interface names them ("6, X"); `most`: how many of them.
+static func keys_of(action: String, most: int = 9) -> String:
+	var names: Array = []
+	for key: int in (BINDINGS.get(action, []) as Array).slice(0, most):
+		names.append(str(KEY_NAMES.get(key, OS.get_keycode_string(key))))
+	return ", ".join(PackedStringArray(names))
+
 func _configure_input() -> void:
-	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_5, "squad_free": KEY_6, "crouch": KEY_C, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "throw_heal": KEY_J, "melee": KEY_V, "syringe": KEY_Q, "test_menu": KEY_F1}
-	for action in bindings:
+	for action in BINDINGS:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
-		var event := InputEventKey.new()
-		event.physical_keycode = bindings[action]
-		InputMap.action_add_event(action, event)
-	# The three orders for the squad lie side by side on 4, 5 and 6; X still holds as well.
-	var also_holds := InputEventKey.new()
-	also_holds.physical_keycode = KEY_4
-	InputMap.action_add_event("squad_hold", also_holds)
+		for key: int in BINDINGS[action]:
+			var event := InputEventKey.new()
+			event.physical_keycode = key
+			InputMap.action_add_event(action, event)
 	for action in ["fire", "aim"]:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)

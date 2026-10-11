@@ -25,14 +25,29 @@ const SHOP_NOTES := {
 const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "SCHWER"], ["class", "KLASSE"], ["mods", "AUFSÄTZE"], ["gear", "AUSRÜSTUNG"], ["use", "VERBRAUCH"], ["team", "TEAM"]]
 ## What is carried in the pockets and used with one key: item, key, short name. The
 ## syringe is not counted: its tile shows the seconds until it is ready again.
-const TILES := [["syringe", "Q", "SPRITZE"], ["grenade", "G", "FRAG"], ["flashbang", "T", "BLEND"], ["molotov", "H", "BRAND"], ["heal", "J", "HEIL"], ["claymore", "B", "MINE"]]
-## The keys, as the settings list them.
-const KEYS := [
-	["W A S D", "Bewegen"], ["Maus", "Umsehen"], ["Linke Maustaste", "Schießen"], ["Rechte Maustaste", "Zielen"],
-	["R", "Nachladen"], ["Shift", "Sprinten"], ["Leertaste, C", "Springen, ducken (an / aus)"], ["E", "Benutzen, aufhelfen, Shop"],
-	["F", "Taschenlampe"], ["1, 2, 3, Mausrad", "Primär-, Sekundär-, schwere Waffe"], ["G, T, H, B", "Granate, Blend, Molotow, Mine"], ["Q, V", "Heilspritze, Nahkampf"], ["4, 5, 6", "Team: halten, folgen, frei"],
-	["N", "Nächste Runde sofort"], ["Esc", "Pause"], ["F11, Alt+Enter", "Vollbild"], ["F1", "Testmenü (nur im Testraum)"]
+## (The key is read from the game's bindings: item, the action of its key, short name.)
+const TILES := [["syringe", "syringe", "SPRITZE"], ["grenade", "throw_grenade", "FRAG"], ["flashbang", "throw_flash", "BLEND"], ["molotov", "throw_molotov", "BRAND"], ["heal", "throw_heal", "HEIL"], ["claymore", "place_claymore", "MINE"]]
+## The keys, as the settings list them: the actions of Game.BINDINGS whose keys a line
+## names (key_rows writes the names from the bindings; "#..." is said as it stands - the
+## mouse has no binding in that table), and what they do. Every action of the bindings
+## stands in exactly one line (a check holds that).
+const KEY_HELP := [
+	[["move_forward", "move_left", "move_back", "move_right"], "Bewegen"], [["#Maus"], "Umsehen"],
+	[["#Linke Maustaste"], "Schießen · wirft, was in der Hand liegt"], [["#Rechte Maustaste"], "Zielen"],
+	[["reload"], "Nachladen"], [["sprint"], "Sprinten"], [["jump"], "Springen"], [["crouch"], "Ducken (an / aus)"],
+	[["interact"], "Benutzen, aufhelfen, Shop"], [["flashlight"], "Taschenlampe"], [["syringe"], "Heilspritze"], [["melee"], "Nahkampf"],
+	[["weapon_1"], "Primärwaffen durchwechseln"], [["weapon_2"], "Schwere Waffen durchwechseln"],
+	[["weapon_3"], "Sekundärwaffen (ohne: Wurfzeug)"], [["weapon_4"], "Wurfzeug in die Hand nehmen"], [["#Mausrad"], "Nächste / vorige Waffe"],
+	[["throw_grenade"], "Splittergranate (halten, loslassen)"], [["throw_flash"], "Blendgranate"], [["throw_molotov"], "Molotow"],
+	[["throw_heal"], "Heilgranate"], [["place_claymore"], "Mine legen"],
+	[["squad_follow"], "Team: folgen"], [["squad_hold"], "Team: halten"], [["squad_free"], "Team: frei"],
+	[["next_wave"], "Nächste Runde sofort"], [["pause"], "Pause"], [["fullscreen"], "Vollbild (auch Alt+Enter)"],
+	[["test_menu"], "Testmenü (nur im Testraum)"], [["skip_round"], "Runde überspringen (nur allein)"]
 ]
+## What a throwable is called in the line of its group.
+const THROW_WORDS := {"grenade": "FRAG", "flashbang": "BLEND", "molotov": "BRAND", "heal": "HEIL", "claymore": "MINE"}
+## How much of the groups' lines stays on the screen while nothing changes (0 to 1).
+const LOADOUT_DIM := 0.6
 
 var game: Node3D
 var root: Control
@@ -64,6 +79,8 @@ var boss_bar: ProgressBar
 var feed: VBoxContainer
 var team_box: VBoxContainer
 var team_rows: Array = []
+## The squad's three orders under its rows, in the order of Game.ORDERS.
+var order_marks: Array = []
 var reticle: Control
 var damage_overlay: TextureRect
 var tint_overlay: ColorRect
@@ -102,6 +119,8 @@ var settings_back := "main"
 ## The weapons carried, shown for a moment whenever another one is taken in hand.
 var loadout_box: VBoxContainer
 var loadout_left := 0.0
+var loadout_clock := 0.0
+var loadout_mark := ""
 ## The map in the top right corner.
 var minimap: Minimap
 ## The open counter: the shop's or the workbench's.
@@ -373,7 +392,7 @@ func _build_play_ui() -> void:
 		var stack := VBoxContainer.new()
 		stack.add_theme_constant_override("separation", -5)
 		tile.add_child(stack)
-		stack.add_child(label(str(entry[1]), 12, AMBER, true))
+		stack.add_child(label(game.keys_of(str(entry[1]), 1), 12, AMBER, true))
 		var count := label("0", 24, IVORY, true)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		stack.add_child(count)
@@ -515,18 +534,59 @@ func _draw_reticle() -> void:
 		for direction in [Vector2(-1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1)]:
 			reticle.draw_line(centre + direction * 9, centre + direction * 16, color, 2)
 
-## Lists the weapons carried, the one in hand marked; it fades after a moment.
-func loadout() -> void:
+## The groups of what is carried, one line for each number key: the key, the group, what
+## of it is in hand (or would come with the key) and how many more the key steps through.
+## The line of what is in hand is lit. It stays on the screen, dimmed (LOADOUT_DIM).
+func loadout(lit: bool = true) -> void:
 	for child in loadout_box.get_children():
 		child.queue_free()
-	for id in Survivor.ORDER:
-		if not game.player.inventory.has(id):
-			continue
-		var held: bool = id == game.player.current_weapon
-		var row := label("%s     %d" % [Survivor.WEAPONS[id].label, int(Survivor.WEAPONS[id].slot) % 10], 17 if held else 14, AMBER if held else MUTED, true)
+	var player: Survivor = game.player
+	var lines: Array = group_lines()
+	loadout_mark = str(lines)
+	if lit:
+		loadout_left = 2.4
+	for line in lines:
+		var row := label(str(line.text), 16 if line.held else 13, AMBER if line.held else (MUTED if line.empty else IVORY), true)
 		row.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		loadout_box.add_child(row)
-	loadout_left = 2.4
+	if player.carried("secondary").is_empty() and not player.throwables().is_empty():
+		var also := label("%s  ebenfalls: Werfen" % game.keys_of("weapon_%d" % int(Survivor.KINDS.secondary.key), 1), 11, MUTED, true)
+		also.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		loadout_box.add_child(also)
+
+## What loadout() shows, as data (the checks read it): for each group its key, its text,
+## whether it is in hand and whether it is empty.
+func group_lines() -> Array:
+	var player: Survivor = game.player
+	var out: Array = []
+	for kind in Survivor.KINDS:
+		var key: String = game.keys_of("weapon_%d" % int(Survivor.KINDS[kind].key), 1)
+		var owned: Array = player.carried(kind)
+		var held: bool = owned.has(player.current_weapon) and not player.throw_in_hand
+		var shown := player.current_weapon if owned.has(player.current_weapon) else str(player.last_of.get(kind, ""))
+		if not owned.has(shown):
+			shown = "" if owned.is_empty() else str(owned[0])
+		var text := "%s   %s   %s" % [ShopScreen.KIND_WORDS[kind], "–" if shown == "" else str(player.weapon_title(shown)), key]
+		if owned.size() > 1:
+			text = "+%d   %s" % [owned.size() - 1, text]
+		out.append({"key": key, "kind": kind, "text": text, "held": held, "empty": owned.is_empty(), "more": maxi(0, owned.size() - 1)})
+	var have: Array = player.throwables()
+	var chosen := player.throw_kind if player.throw_in_hand else (player.last_throw if have.has(player.last_throw) else ("" if have.is_empty() else str(have[0])))
+	var thrown := "WURF   %s   %s" % ["–" if chosen == "" else "%s ×%d" % [THROW_WORDS[chosen], int(player.items[chosen])], game.keys_of("weapon_%d" % Survivor.THROW_GROUP_KEY, 1)]
+	if have.size() > 1:
+		thrown = "+%d   %s" % [have.size() - 1, thrown]
+	out.append({"key": game.keys_of("weapon_%d" % Survivor.THROW_GROUP_KEY, 1), "kind": "throw", "text": thrown, "held": player.throw_in_hand, "empty": have.is_empty(), "more": maxi(0, have.size() - 1)})
+	return out
+
+## The help of the keys, written from the game's bindings: [keys, what they do].
+func key_rows() -> Array:
+	var out: Array = []
+	for entry in KEY_HELP:
+		var names: Array = []
+		for action: String in entry[0]:
+			names.append(action.trim_prefix("#") if action.begins_with("#") else game.keys_of(action))
+		out.append([" ".join(PackedStringArray(names)) if (entry[0] as Array).size() > 2 else ", ".join(PackedStringArray(names)), str(entry[1])])
+	return out
 
 ## The cross that shows a hit. `answered`: whoever calls plays the sound of it himself
 ## (a bullet's hit has its own answer, see FieldAudio.confirm_hit). `dull`: it landed on
@@ -688,8 +748,17 @@ func _process(delta: float) -> void:
 	hold_bar.visible = held > 0.0
 	hold_bar.value = held
 	armor_label.text = ("" if player.armor <= 0.0 else "RÜSTUNG %d" % ceili(player.armor)) + ("" if player.plate_level <= 0 else "     WESTE %s" % "I".repeat(player.plate_level)) + ("" if player.buff_left <= 0.0 else "     GESTÄRKT %d s" % ceili(player.buff_left))
+	# The four groups stay on the screen, dimmed; a change of weapon lights them for a moment.
 	loadout_left = maxf(0.0, loadout_left - delta)
-	loadout_box.modulate.a = minf(1.0, loadout_left * 2.0)
+	loadout_box.modulate.a = clampf(loadout_left * 2.0, LOADOUT_DIM, 1.0)
+	# What is bought, found, thrown or used up changes them too: looked at four times a second.
+	loadout_clock -= delta
+	if loadout_clock <= 0.0:
+		loadout_clock = 0.25
+		if str(group_lines()) != loadout_mark:
+			loadout(false)
+	for i in range(order_marks.size()):
+		(order_marks[i] as Label).add_theme_color_override("font_color", AMBER if str(game.ORDERS.keys()[i]) == str(game.squad_order) else MUTED)
 	# The pockets: one tile per key, dim when it is empty, lit while it is in the hand.
 	for entry in TILES:
 		var tile: Array = tiles[entry[0]]
@@ -727,6 +796,16 @@ func _process(delta: float) -> void:
 			row.add_child(mate_bar)
 			team_box.add_child(row)
 			team_rows.append([mate_name, mate_bar])
+		# Under them the three orders with their keys; the one in force is lit (see above).
+		order_marks.clear()
+		if not game.team.is_empty():
+			var orders := HBoxContainer.new()
+			orders.add_theme_constant_override("separation", 12)
+			for order in game.ORDERS:
+				var mark := label("%s %s" % [game.keys_of("squad_" + str(order), 1), game.ORDERS[order]], 12, MUTED, true)
+				orders.add_child(mark)
+				order_marks.append(mark)
+			team_box.add_child(orders)
 	for i in range(team_rows.size()):
 		var mate: Teammate = game.team[i]
 		(team_rows[i][1] as ProgressBar).max_value = mate.max_health
@@ -1454,15 +1533,15 @@ func _menu_settings(column: VBoxContainer) -> Control:
 		game.keep_setting("controls", "sensitivity", value)
 	_slider(column, "Mausempfindlichkeit", game.player.sensitivity / 0.0022, 0.4, 2.2, turns, steer)
 	var keys := GridContainer.new()
-	keys.columns = 4
+	keys.columns = 6
 	keys.add_theme_constant_override("h_separation", 16)
 	keys.add_theme_constant_override("v_separation", 1)
-	for entry in KEYS:
-		var key := label(str(entry[0]), 14, AMBER, true)
-		key.custom_minimum_size.x = 130
+	for entry in key_rows():
+		var key := label(str(entry[0]), 13, AMBER, true)
+		key.custom_minimum_size.x = 118
 		keys.add_child(key)
-		var what := label(str(entry[1]), 14, MUTED)
-		what.custom_minimum_size.x = 250
+		var what := label(str(entry[1]), 13, MUTED)
+		what.custom_minimum_size.x = 232
 		keys.add_child(what)
 	column.add_child(keys)
 	# What the next night is can only be set before it begins.

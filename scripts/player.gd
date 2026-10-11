@@ -71,9 +71,14 @@ const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "sho
 ## kind, and as many more of any kind as slings were bought (extra_slots).
 const KINDS := {
 	"primary": {"key": 1, "label": "PRIMÄRWAFFE", "groups": ["weapons"]},
-	"secondary": {"key": 2, "label": "SEKUNDÄRWAFFE", "groups": ["sidearms"]},
-	"heavy": {"key": 3, "label": "SCHWERE WAFFE", "groups": ["heavy", "class"]}
+	"heavy": {"key": 2, "label": "SCHWERE WAFFE", "groups": ["heavy", "class"]},
+	"secondary": {"key": 3, "label": "SEKUNDÄRWAFFE", "groups": ["sidearms"]}
 }
+## The fourth group, on key 4 (and on 3 for whoever carries no sidearm): what is thrown or
+## laid, in the order the key steps through it. One of them is taken in hand and thrown
+## (the mine: laid) with the trigger; each still has its own key as well (THROW_KEYS, B).
+const THROW_GROUP_KEY := 4
+const THROWABLES := ["grenade", "flashbang", "molotov", "heal", "claymore"]
 const CARRY := 1
 ## What the workbench does to a weapon, line by line. key: where the weapon's record keeps
 ## the level of the line ("level" is the damage, as it always was). prices: one for each
@@ -258,6 +263,14 @@ const ROUND_AMMO := 0.5
 const FLAME_REACH := 10.0
 const FLAME_CONE := 0.962
 var throw_kind := ""
+## The throwable was taken in hand with the group's key: the trigger throws it (taken with
+## its own key it flies when that key is let go).
+var throw_in_hand := false
+var fire_was := false
+## What each group's key comes back to: kind -> the weapon of it last in hand, and the
+## throwable last taken.
+var last_of := {}
+var last_throw := "grenade"
 var throw_held := 0.0
 var throw_swing := -1.0
 var throw_pose := 0.0
@@ -510,6 +523,9 @@ func take_item(id: String) -> void:
 ## Takes a grenade, a flashbang or a Molotov cocktail in the hand. It is thrown when the
 ## key is let go; while it is held, a line shows where it will fly.
 func ready_throw(kind: String) -> void:
+	# (Its own key takes it over from whatever the group's key had put in the hand.)
+	if throw_in_hand and throw_swing < 0.0:
+		put_away()
 	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0 or throw_kind != "":
 		return
 	throw_kind = kind
@@ -550,21 +566,34 @@ func launch_path() -> PackedVector3Array:
 	return _flight(camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12, -camera.global_basis.z * LAUNCH_SPEED + Vector3.UP * LAUNCH_LIFT, LAUNCH_SHOWN, Throwable.SHELL_PULL, Throwable.SHELL_DAMP, 1 | 4 | 16)
 
 func _hold_throw(delta: float) -> void:
+	# (The trigger counts when it is pulled, not while it is still held from a shot.)
+	var pulled := Input.is_action_pressed("fire") and not fire_was
+	fire_was = Input.is_action_pressed("fire")
 	if throw_kind == "":
 		return
 	if down:
 		throw_kind = ""
+		throw_in_hand = false
 		return
 	throw_held += delta
-	if throw_swing < 0.0 and not Input.is_action_pressed(str(THROW_KEYS[throw_kind])):
+	# In the hand it goes with the trigger; taken with its own key, when that key is let go.
+	var let_go: bool = (pulled and throw_cooldown <= 0.0) if throw_in_hand else not Input.is_action_pressed(str(THROW_KEYS[throw_kind]))
+	if throw_swing < 0.0 and let_go:
 		throw_swing = THROW_SWING
 	if throw_swing >= 0.0:
 		throw_swing -= delta
 		if throw_swing <= 0.0:
 			var kind := throw_kind
+			var from_hand := throw_in_hand
 			throw_kind = ""
 			throw_swing = -1.0
-			throw(kind)
+			throw_in_hand = false
+			if kind == "claymore":
+				place_claymore()
+			else:
+				throw(kind)
+			if from_hand and game.hud != null:
+				game.hud.loadout()
 
 ## Throws a grenade, a flashbang or a Molotov cocktail where the survivor looks.
 func throw(kind: String) -> void:
@@ -713,7 +742,11 @@ func _show_parts() -> void:
 	flash.position = muzzle
 
 func weapon_label() -> String:
-	return ("★ " if inventory.has(current_weapon) and inventory[current_weapon].has("rare") else "") + str(WEAPONS[current_weapon].label)
+	return weapon_title(current_weapon)
+
+## The name of a carried weapon as the interface shows it (a rare one with its star).
+func weapon_title(id: String) -> String:
+	return ("★ " if inventory.has(id) and inventory[id].has("rare") else "") + str(WEAPONS[id].label)
 
 ## "primary", "secondary" or "heavy": the kind a weapon is of.
 static func kind_of(id: String) -> String:
@@ -842,6 +875,8 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 	shot_cooldown = float(WEAPONS[id].get("draw", 0.25))
 	weapon.hide()
 	current_weapon = id
+	last_of[kind_of(id)] = id
+	throw_in_hand = false
 	weapon = weapon_models[id]
 	weapon.show()
 	# The new weapon rises into view from below.
@@ -856,17 +891,64 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 			game.hud.loadout()
 	return true
 
-## Number keys 1 to 3: the weapon of that kind, or a hint where to get one. Several
-## weapons of a kind (carried with slings) take turns.
+## Number keys 1 to 4, one for each group of what is carried: 1 the primary weapons, 2
+## the heavy ones, 3 the sidearms, 4 what is thrown or laid. The key of the group that is
+## in hand steps on to the next of it; the key of another group takes what was last in
+## hand of that one. Whoever carries no sidearm has the throwables on 3 as well. An empty
+## group says so and changes nothing.
 func _select_slot(slot: int) -> void:
+	if slot == THROW_GROUP_KEY:
+		select_throwable()
+		return
 	for kind in KINDS:
 		if int(KINDS[kind].key) != slot:
 			continue
 		var owned := carried(kind)
 		if owned.is_empty():
-			game.hud.announce("KEINE %s" % KINDS[kind].label, "Im Waffenshop im Hauptraum neben dem Flur · offen zwischen den Runden", 2.5)
+			if kind == "secondary":
+				select_throwable()
+			else:
+				game.hud.announce("KEINE %s" % KINDS[kind].label, "Im Waffenshop im Hauptraum neben dem Flur · offen zwischen den Runden", 2.5)
 			return
-		equip_weapon(owned[(owned.find(current_weapon) + 1) % owned.size()])
+		var back := str(last_of.get(kind, ""))
+		if throw_in_hand:
+			# Out of the throwables: back to the weapon, without stepping on.
+			put_away()
+			if owned.has(current_weapon):
+				return
+		elif owned.has(current_weapon):
+			back = str(owned[(owned.find(current_weapon) + 1) % owned.size()])
+		equip_weapon(back if owned.has(back) else str(owned[0]))
+
+## The throwables the survivor has, in the order of their key.
+func throwables() -> Array:
+	return THROWABLES.filter(func(kind: String) -> bool: return int(items[kind]) > 0)
+
+## Key 4: takes a throwable in hand - the one last taken, or the next one if one is in
+## hand already. The trigger throws it; a weapon's key puts it away again.
+func select_throwable() -> void:
+	var have := throwables()
+	if have.is_empty():
+		game.hud.announce("NICHTS ZUM WERFEN", "Granaten und Minen: im Waffenshop unter VERBRAUCH", 2.0)
+		return
+	if down or throw_swing >= 0.0 or (throw_kind != "" and not throw_in_hand):
+		return
+	var pick := str(have[(have.find(throw_kind) + 1) % have.size()]) if throw_in_hand else (last_throw if have.has(last_throw) else str(have[0]))
+	throw_kind = pick
+	throw_in_hand = true
+	last_throw = pick
+	throw_held = 0.0
+	throw_swing = -1.0
+	game.sounds.play_sound("equip", -6.0, 1.5)
+	if game.hud != null:
+		game.hud.loadout()
+
+## Puts a throwable that was taken in hand away again: the weapon is in hand as before.
+func put_away() -> void:
+	throw_kind = ""
+	throw_in_hand = false
+	if game.hud != null:
+		game.hud.loadout()
 
 ## Mouse wheel: the next weapon the survivor owns.
 func _cycle(step: int) -> void:
@@ -897,7 +979,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		game.sounds.play_sound("click", -6.0, 1.5)
 	if event.is_action_pressed("interact"):
 		game.interact()
-	for slot in range(10):
+	for slot in range(1, THROW_GROUP_KEY + 1):
 		if event.is_action_pressed("weapon_%d" % slot):
 			_select_slot(slot)
 	if event.is_action_pressed("throw_grenade"):
@@ -941,7 +1023,7 @@ func _physics_process(delta: float) -> void:
 	_hold_throw(delta)
 	throw_pose = move_toward(throw_pose, 1.0 if throw_kind != "" else 0.0, delta * (9.0 if throw_kind != "" else 4.5))
 	# The line of the throw, once the key has been held for a moment.
-	if throw_kind != "" and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
+	if throw_kind != "" and throw_kind != "claymore" and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
 		game.fx.show_arc(throw_path(throw_kind))
 	elif controlled and not down and not menu_open and WEAPONS[current_weapon].has("grenade") and ammo > 0 and reload_left <= 0.0 and Input.is_action_pressed("aim"):
 		# Aiming with the launcher shows the arc of its shell.
