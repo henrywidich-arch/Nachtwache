@@ -5905,7 +5905,7 @@ func _squadwork(game: Node3D) -> void:
 	dummy.receive_hit(999999.0, Vector3.BACK)
 	game.wave = 0
 	var body_shot: float = float(mate.gun.damage)
-	expect(is_equal_approx(by_round[1], Teammate.GREEN_DAMAGE) and by_round[4] > by_round[1] and by_round[4] < 1.0 and by_round[7] == 1.0 and by_round[12] == 1.0 and is_equal_approx(least[1], body_shot * Teammate.GREEN_DAMAGE) and is_equal_approx(least[7], body_shot) and waits and Teammate.GREEN_DAMAGE < 0.6, "In the first round the squad's shots do %d %% of what they do from round %d on, and it holds its fire for a moment on somebody new (%s, %s, %s, factor %.2f)" % [int(Teammate.GREEN_DAMAGE * 100.0), Teammate.SEASONED_ROUND, str(least), str(by_round), str(waits), mate.damage_factor])
+	expect(is_equal_approx(by_round[1], Teammate.GREEN_DAMAGE) and by_round[4] > by_round[1] and by_round[4] < 1.0 and by_round[7] == 1.0 and by_round[12] == 1.0 and is_equal_approx(least[1], body_shot * Teammate.GREEN_DAMAGE) and is_equal_approx(least[7], body_shot * (1.0 + Teammate.ARMS_STEP * Teammate.arms_level(7))) and waits and Teammate.GREEN_DAMAGE < 0.6, "In the first round the squad's shots do %d %% of what they do from round %d on, and it holds its fire for a moment on somebody new (%s, %s, %s, factor %.2f)" % [int(Teammate.GREEN_DAMAGE * 100.0), Teammate.SEASONED_ROUND, str(least), str(by_round), str(waits), mate.damage_factor])
 	# --- the last round
 	expect(float(game.FINAL_SHARE) > 0.7 and float(game.FINAL_SHARE) < 0.9, "The last round brings a little more than it did, and still less than its table says")
 	_wipe(game)
