@@ -7833,6 +7833,9 @@ func _hive_caches(game: Node3D) -> void:
 	expect(ask.contains("durchsuchen") and searching and not_yet and lies_ready and got and fired and carried and swap_note and swapped and back, "A plain cache is searched in a few seconds beside it and gives what it holds: the weapon is the survivor's like a bought one - loaded, in the hand, on the lockers' list -, and one he has no place for trades places with the one he carries")
 	# --- a sealed one opens only while he stays, and they come for it
 	_wipe_all(game)
+	# (Nobody is on his way any more from the checks before: what was announced there and has
+	# not come yet would count against the pack that answers the cache, now more, now less.)
+	hive.entries.due.clear()
 	var cage: Dictionary = sites[caches._index_of("depot")]
 	face(game, (cage.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
 	var warns := hive.prompt()
@@ -7854,7 +7857,9 @@ func _hive_caches(game: Node3D) -> void:
 	player.down = false
 	held = held and is_equal_approx(float(cage.left), half - 1.0)
 	half = float(cage.left)
-	face(game, (cage.stand as Vector3) + (cage.frame as Transform3D).basis.x * -9.0 + Vector3(0, 0.05, 0), 0.0)
+	# (Nine metres off, into the room. Along the wall it used to be: through the wall of the
+	# depot and out of the map, from where the game puts him back on the landing ground.)
+	face(game, (cage.stand as Vector3) + (cage.frame as Transform3D).basis.z * 9.0 + Vector3(0, 0.05, 0), 0.0)
 	for k in range(10):
 		caches._process(0.5)
 	var stopped: bool = is_equal_approx(float(cage.left), half) and not bool(cage.near) and caches.answered == came and " ".join(PackedStringArray(caches.summary())).contains("UNTERBROCHEN") and not caches.markers().is_empty()
@@ -7987,7 +7992,7 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 		heaviest = maxi(heaviest, triangles)
 		looks_ok = looks_ok and meshes == 1 and surfaces == 1 and lit and triangles > 8000 and triangles < 30000 and size.y > 2.05 and size.y < 2.45 and size.x > 1.5 and size.x < 2.9 and size.z > 0.5 and size.z < 1.2
 	expect(looks_ok and HiveStations.LOOKS.size() == 4, "The four station models load - two workbenches, two equipment stations -, each one mesh with one lit surface whose lamps and displays glow, a little over man-high and at most %d triangles" % heaviest)
-	# --- where they stand: at seven places between the supply points, each walked to, with
+	# --- where they stand: at three places between the supply points, each walked to, with
 	# free ground before it, and none where something of the mission or a cache is used
 	var posts: Array = HiveStations.outposts(map)
 	var places := {}
@@ -8042,7 +8047,54 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 		shops += 1 if str(station.kind) == "shop" else 0
 		if str(station.kind) == "upgrade" and not station.get("outpost", false):
 			supply_looks.append(str(station.get("look", "")))
-	expect(posts.size() == 10 and benches == 5 and counters == 5 and places.size() == 7 and cut_off == "" and cramped == "" and crowded == "" and deaf == "" and beside_way >= 5 and furthest < 30.0 and shops == 4 and " ".join(PackedStringArray(supply_looks)) == "bay bench bay bench", "Between the four supply points stand five workbenches and five equipment stations at seven places (%s): each can be walked to and answers there, stands before plain wall - no door, no window, no terminal behind it - with a lane of two and a half metres before it, clear of the caches and of what the mission has used; %d of the ten within eight metres of the main way, none more than %.0f m off; the workbench of each supply point is one of the two upgrade models in turn%s" % [", ".join(PackedStringArray(places.keys())), beside_way, furthest, "" if cut_off + cramped + crowded + deaf == "" else " (cut off: %s; cramped: %s; crowded: %s; deaf: %s)" % [cut_off, cramped, crowded, deaf]])
+	expect(posts.size() == 6 and benches == 3 and counters == 3 and places.size() == 3 and cut_off == "" and cramped == "" and crowded == "" and deaf == "" and beside_way >= 4 and furthest < 30.0 and shops == 4 and " ".join(PackedStringArray(supply_looks)) == "bay bench bay bench", "Between the four supply points stand three workbenches and three equipment stations at three places (%s): each can be walked to and answers there, stands before plain wall - no door, no window, no terminal behind it - with a lane of two and a half metres before it, clear of the caches and of what the mission has used; %d of the six within eight metres of the main way, none more than %.0f m off; the workbench of each supply point is one of the two upgrade models in turn%s" % [", ".join(PackedStringArray(places.keys())), beside_way, furthest, "" if cut_off + cramped + crowded + deaf == "" else " (cut off: %s; cramped: %s; crowded: %s; deaf: %s)" % [cut_off, cramped, crowded, deaf]])
+	# --- they come at a distance: no two workbenches and no two counters that sell stand
+	# nearer to each other than HiveStations.MIN_APART on foot (a workbench and a counter
+	# side by side are one stop), and before every place that is held there is one of each
+	var functions := {"workbench": [], "counter": []}
+	for station in map.stations:
+		var kind := str(station.kind)
+		if kind not in ["upgrade", "gear", "shop"]:
+			continue
+		var before_it: Vector3 = station.get("stand", Vector3.INF)
+		if before_it == Vector3.INF:
+			before_it = (station.view.position as Vector3) - Vector3(0, 1.55, 0)
+		(functions["workbench" if kind == "upgrade" else "counter"] as Array).append(before_it)
+	var closest := INF
+	var closest_of := ""
+	var doubled := 0
+	for function: String in functions:
+		var spots: Array = functions[function]
+		for a in range(spots.size()):
+			for b in range(a + 1, spots.size()):
+				# (Between the station and the terminal lies the train: no way on foot.)
+				var steps := map.path_between(spots[a], spots[b])
+				if steps.is_empty():
+					continue
+				var gap := (spots[a] as Vector3).distance_to(steps[0])
+				for k in range(1, steps.size()):
+					gap += steps[k].distance_to(steps[k - 1])
+				doubled += 1 if gap < HiveStations.MIN_APART else 0
+				if gap < closest:
+					closest = gap
+					closest_of = function
+	var unready := ""
+	var longest := 0.0
+	for fight: String in ["platform", "cafeteria", "hall_end"]:
+		for function: String in functions:
+			var nearest_stop := INF
+			for spot: Vector3 in functions[function]:
+				var steps := map.path_between(spot, map.points[fight])
+				if steps.is_empty():
+					continue
+				var gap := spot.distance_to(steps[0])
+				for k in range(1, steps.size()):
+					gap += steps[k].distance_to(steps[k - 1])
+				nearest_stop = minf(nearest_stop, gap)
+			longest = maxf(longest, nearest_stop)
+			if nearest_stop > HiveStations.BEFORE_FIGHT:
+				unready += "%s/%s " % [fight, function]
+	expect((functions.workbench as Array).size() == 7 and (functions.counter as Array).size() == 7 and doubled == 0 and closest >= HiveStations.MIN_APART and unready == "" and longest <= HiveStations.BEFORE_FIGHT, "The stops come at a distance: seven workbenches and seven counters that sell on the whole way, no two of a kind nearer to each other than %d m on foot (the nearest two: %s, %.0f m), and before each place that is held - the platform, the canteen, the hall of towers - one of each within %d m (the furthest: %.0f m)%s" % [int(HiveStations.MIN_APART), closest_of, closest, int(HiveStations.BEFORE_FIGHT), longest, "" if unready == "" else " (none before: %s)" % unready])
 	# --- a workbench between the supply points is a workbench: the same screen, the same
 	# prices, the gold line of a rare weapon - and nothing else is sold there
 	var bench: Dictionary = {}
@@ -8136,7 +8188,7 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 	hive.prowl.set_process(false)
 	_wipe_all(game)
 	face(game, (bench.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
-	var still: bool = map.stations.size() == count_then and HiveStations.outposts(map).size() == 10 and game.interaction_prompt().begins_with("[E] Werkbank") and is_instance_valid(bench.sign) and (bench.sign as Label3D).text == HiveStations.BENCH_WORD
+	var still: bool = map.stations.size() == count_then and HiveStations.outposts(map).size() == 6 and game.interaction_prompt().begins_with("[E] Werkbank") and is_instance_valid(bench.sign) and (bench.sign as Label3D).text == HiveStations.BENCH_WORD
 	expect(int(shapes.get("box", 0)) >= 1 and int(at_supply.get("box", 0)) == 1 and int(at_supply.get("plus", 0)) == 1 and int(at_supply.get("dot", 0)) == 2 and still, "The map in the corner shows the stations of the second mission as far as it reaches - a workbench a hollow square, a counter that sells a cross, ammunition and first aid a dot - and a defeat taken up again leaves every station as it was")
 
 ## Rare weapons in the caches of the second mission (HiveCaches.rare_of): how often there
