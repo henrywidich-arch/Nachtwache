@@ -1072,6 +1072,8 @@ func show_menu(mode: String) -> void:
 	var version := label("SOLO + KOOP   ·   v" + NetLink.VERSION, 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-190, -34)
+	# (The page of abilities fills the screen down to its foot: no room for it there.)
+	version.visible = mode != "skills"
 	modal.add_child(version)
 	if mode == "join" and address_field.editable:
 		address_field.grab_focus()
@@ -1591,6 +1593,10 @@ func _menu_skins(column: VBoxContainer) -> Control:
 	column.add_child(back)
 	return back
 
+func _next_wish(tree: String) -> void:
+	game.set_wish(tree, game.skills.next_wish(tree))
+	show_menu("skills")
+
 func _learn(id: String) -> void:
 	game.learn_skill(id)
 	show_menu("skills")
@@ -1716,6 +1722,22 @@ func _menu_skills(column: VBoxContainer) -> Control:
 				more.tooltip_text = skills.barred(str(skill.id), totals)
 				row.add_child(more)
 			list.add_child(row)
+			if Skills.IN_SERVICE and have > 0 and (skill.gives as Dictionary).has("wish"):
+				# The wish: in place of its note the weapon that is named, and a click names
+				# the next one of the list.
+				var named: String = str(skills.wishes.get(tree_id, ""))
+				if not skills.wish_list(tree_id).has(named):
+					named = ""
+				var pick := _chip("WUNSCH  ·  %s  ▸" % ("KEINE GEWÄHLT" if named == "" else str(Survivor.WEAPONS[named].label)), _next_wish.bind(tree_id), named != "", 0)
+				pick.custom_minimum_size = Vector2(0, 21)
+				pick.add_theme_font_size_override("font_size", 13)
+				pick.tooltip_text = "%s. Klick: nächste Waffe der Liste. In Mission 2 liegt sie sicher in einem frühen Waffenlager, auf dem Hof kostet sie %d %% weniger und kommt %d Runden früher." % [Skills.note(skill, have), int(Skills.WISH_CUT * 100.0), Skills.WISH_ROUNDS]
+				for state in ["normal", "hover", "pressed", "disabled"]:
+					var slim := pick.get_theme_stylebox(state) as StyleBoxFlat
+					slim.content_margin_top = 0
+					slim.content_margin_bottom = 0
+				list.add_child(pick)
+				continue
 			var note := label(Skills.note(skill, maxi(1, have)), 13, MUTED)
 			note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			note.custom_minimum_size.x = 346

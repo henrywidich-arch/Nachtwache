@@ -56,6 +56,9 @@ const TREES := {
 			# The flamethrower is this tree's weapon. What it sets alight goes off without harm to
 			# the survivors (Infected.burn_tame): a Charger's blast, a Striker's growths.
 			{"id": "sweeper_fire", "label": "AUSGEBRANNT", "tier": 2, "ranks": 1, "gives": {"fire_tame": 1.0}, "note": "Flammenwerfer entschärft Charger und Wucherungen"},
+			# The wish (WISHES): one weapon of this tree's list that is found more often and
+			# earlier; the second rank opens the heavy ones of the list.
+			{"id": "sweeper_wish", "label": "LEIBWAFFE", "tier": 2, "ranks": 2, "gives": {"wish": 1.0}, "note": "Wunschwaffe: öfter, früher – ab Rang 2 auch schwere"},
 			{"id": "sweeper_pierce", "label": "DURCHSCHLAG", "tier": 3, "ranks": 1, "gives": {"pierce_common": 1.0}, "note": "Gewehrkugeln durchschlagen gewöhnliche Infizierte"}
 		]
 	},
@@ -68,6 +71,9 @@ const TREES := {
 			{"id": "hunter_acid", "label": "SÄUREFEST", "tier": 2, "ranks": 3, "gives": {"harm_acid": 0.2}, "note": "%s %% weniger Schaden durch Säure"},
 			{"id": "hunter_grip", "label": "LOSREISSEN", "tier": 2, "ranks": 2, "gives": {"shake": 0.3}, "note": "Einen Leech %s %% schneller abschütteln"},
 			{"id": "hunter_squad", "label": "TECHNIKER", "tier": 2, "ranks": 1, "gives": {"squad_switch": 1.0}, "note": "Begleiter bedienen Sicherungen, Funkmast und Kisten"},
+			# The wish (WISHES): one weapon of this tree's list that is found more often and
+			# earlier; the second rank opens the heavy ones of the list.
+			{"id": "hunter_wish", "label": "HANDVERLESEN", "tier": 2, "ranks": 2, "gives": {"wish": 1.0}, "note": "Wunschwaffe: öfter, früher – ab Rang 2 auch schwere"},
 			{"id": "hunter_trophy", "label": "TROPHÄE", "tier": 3, "ranks": 1, "gives": {"trophy": 12.0}, "note": "+%s Leben für jeden erlegten Spezial-Infizierten"}
 		]
 	},
@@ -93,14 +99,35 @@ const TREES := {
 			# (carry: how much of what the rotary gun slows its bearer is taken off.)
 			{"id": "breacher_stance", "label": "STANDFEST", "tier": 2, "ranks": 2, "gives": {"brace_heavy": 0.25, "carry": 0.25}, "note": "Schweres Gerät: %s %% weniger Rückstoß und Gewicht"},
 			{"id": "breacher_squad", "label": "WACHPOSTEN", "tier": 2, "ranks": 1, "gives": {"squad_guard": 1.0}, "note": "Begleiter halten Stellungen, Generator und Hack"},
+			# The wish (WISHES): one weapon of this tree's list that is found more often and
+			# earlier; the second rank opens the heavy ones of the list.
+			{"id": "breacher_wish", "label": "SONDERBESTELLUNG", "tier": 2, "ranks": 2, "gives": {"wish": 1.0}, "note": "Wunschwaffe: öfter, früher – ab Rang 2 auch schwere"},
 			# What no other tree can do: behind its shell the Crusher takes SHELL_SHARE of a
 			# hit (Infected) - of the breacher's heavy gear and explosives it takes this much.
-			{"id": "breacher_shell", "label": "SCHALENBRECHER", "tier": 3, "ranks": 1, "gives": {"shell_crack": 0.75}, "note": "Schweres Gerät und Sprengsätze schlagen durch den Panzer des Crushers: %s %% statt 25 %%"}
+			{"id": "breacher_shell", "label": "SCHALENBRECHER", "tier": 3, "ranks": 1, "gives": {"shell_crack": 0.75}, "note": "Crusher-Panzer: schweres Gerät, Sprengsätze %s %% durch"}
 		]
 	}
 }
 ## What is left of the harm of his own blast to a breacher with every rank of that ability.
 const OWN_BLAST_LEFT := 0.1
+## The weapons a player may wish for, tree by tree: with the first rank of the tree's
+## wish one of "plain", with the second also one of "heavy" (what is carried as a heavy
+## weapon). Only weapons that are not simply sold everywhere (HiveCaches.STANDARD) and
+## none that is a tree's own. The lists fit their trees - the sweeper's for the crowd at
+## close range, the hunter's the precise ones, the breacher's heavy gear - and a weapon
+## that fits two is in both.
+## What a wish does: in the second mission the night's caches are dealt with it
+## (HiveCaches.deal: one cache early on the way holds it for certain); on the farm it
+## costs WISH_CUT less and, where the shop has it only from a round on, it is there
+## WISH_ROUNDS rounds earlier (Game.shelf, Game.weapon_round). The wish that counts is
+## that of the tree in force. It never makes a weapon a rare one.
+const WISHES := {
+	"sweeper": {"plain": ["p90", "mp7", "shotgun"], "heavy": ["autoshotgun", "minigun"]},
+	"hunter": {"plain": ["m14", "badger", "revolver"], "heavy": ["sniper", "svd"]},
+	"breacher": {"plain": ["g36", "shotgun"], "heavy": ["launcher", "mg", "mg2", "minigun"]}
+}
+const WISH_CUT := 0.25
+const WISH_ROUNDS := 2
 ## Weapons whose bullets the sweeper's last ability sends through a body.
 const RIFLES := ["rifle", "ak", "g36", "badger"]
 
@@ -108,6 +135,9 @@ const RIFLES := ["rifle", "ak", "g36", "badger"]
 var ranks: Dictionary = {}
 ## The tree that is in force ("" until one is: the first point puts its tree in force).
 var chosen := ""
+## Tree -> the weapon wished for in it ("" or missing: none). Kept whatever the ranks are;
+## what counts is asked through wish().
+var wishes: Dictionary = {}
 ## While false, nothing here has any effect. The checks switch it on for themselves.
 var active := IN_SERVICE
 
@@ -209,6 +239,47 @@ func reset(tree: String = "") -> void:
 	for id in ranks.keys():
 		if tree_of(str(id)) == tree:
 			ranks.erase(id)
+
+## The weapons that may be wished for in a tree with the ranks its wish has now.
+func wish_list(tree: String) -> Array[String]:
+	var out: Array[String] = []
+	var have := rank(tree + "_wish")
+	if WISHES.has(tree) and have >= 1:
+		out.assign(WISHES[tree].plain)
+		if have >= 2:
+			out.append_array(WISHES[tree].heavy)
+	return out
+
+## The weapon wished for that counts: that of the tree in force (or of `tree`), if its
+## wish has the rank for it. "" for none.
+func wish(tree: String = "") -> String:
+	if tree == "":
+		tree = chosen
+	var id := str(wishes.get(tree, ""))
+	return id if active and wish_list(tree).has(id) else ""
+
+## Names the weapon wished for in a tree ("" for none). True if it could be named.
+func set_wish(tree: String, id: String) -> bool:
+	if not active or not TREES.has(tree) or (id != "" and not wish_list(tree).has(id)):
+		return false
+	wishes[tree] = id
+	return true
+
+## The wish after the one named now, through the list and back to none.
+func next_wish(tree: String) -> String:
+	var list := wish_list(tree)
+	var at := list.find(str(wishes.get(tree, "")))
+	return list[at + 1] if at + 1 < list.size() else ""
+
+## Takes over the wishes a profile holds: only for trees and weapons that exist in their
+## lists (the rank is asked when the wish is, not here).
+func adopt_wishes(stored: Variant) -> void:
+	wishes.clear()
+	if stored is Dictionary:
+		for tree in stored:
+			var id := str(stored[tree])
+			if WISHES.has(str(tree)) and ((WISHES[str(tree)].plain as Array).has(id) or (WISHES[str(tree)].heavy as Array).has(id)):
+				wishes[str(tree)] = id
 
 ## The tree a weapon belongs to, or "" for one that anybody may buy.
 static func weapon_tree(id: String) -> String:

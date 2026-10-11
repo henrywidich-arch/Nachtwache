@@ -44,6 +44,9 @@ extends Node
 const STANDARD := ["rifle", "ak", "ump", "pistol", "flamer", "nitro", "fifty"]
 ## The share of the places of each part of the map that holds a cache in a night.
 const SHARE := 0.45
+## How deep in at the most the cache lies that holds the weapon wished for (0 the villa,
+## 1 the station under it).
+const WISH_DEPTH := 1
 ## Seconds beside a plain cache until it is searched, beside a sealed one until it is open.
 const PLAIN_SECONDS := 3.0
 const SEALED_SECONDS := 25.0
@@ -159,6 +162,9 @@ var map: HiveMap
 var on := false
 ## What the night was dealt from (a night taken up again is dealt from the same).
 var night := 0
+## The weapon the night was dealt with as the survivor's wish (it stays the night's own
+## when he changes the tree in force, and when the night is taken up again).
+var wish := ""
 ## The places of the map (HiveMap.caches): what was built there, and for the night its
 ## state ("none" nothing tonight, "shut", "opening", "open", "empty"), what it holds, the
 ## seconds still to stay, and whether the survivor knows of it.
@@ -228,7 +234,14 @@ static func part_of(at: Vector3) -> String:
 ## Which places hold a cache in the night of a seed, and what: index of the place ->
 ## weapon. Of every part of the map SHARE of its places (at least one), at random; the
 ## weapons by depth and lock, each only once for as long as there are enough.
-static func deal(seed_value: int, places: Array) -> Dictionary:
+## `wish`: the weapon the survivor has wished for (Skills.wish), "" for none. It lies in
+## the first cache of the way that suits it - one of the villa or the station (depth up
+## to WISH_DEPTH); a plain one, or for a heavy weapon a sealed one where one of those
+## holds a cache tonight. Where no suiting place of that stretch holds a cache, the first
+## plain one of it does tonight. The rest of the night is dealt as ever (no second one
+## of it: each weapon lies only once), and whether it is a rare one is left to the dice
+## as for any other.
+static func deal(seed_value: int, places: Array, wish: String = "") -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 	var groups: Dictionary = {}
@@ -257,11 +270,20 @@ static func deal(seed_value: int, places: Array) -> Dictionary:
 		var da := int(places[a].depth) * 2 + (1 if bool(places[a].sealed) else 0)
 		var db := int(places[b].depth) * 2 + (1 if bool(places[b].sealed) else 0)
 		return da < db if da != db else a < b
-	live.sort_custom(earlier)
 	var pool := found_only()
 	var taken: Dictionary = {}
 	var out: Dictionary = {}
+	if pool.has(wish):
+		var spot := wish_place(places, live, wish)
+		if spot >= 0:
+			if not live.has(spot):
+				live.append(spot)
+			out[spot] = wish
+			taken[wish] = true
+	live.sort_custom(earlier)
 	for index in live:
+		if out.has(index):
+			continue
 		var window: Array = (SEALED_WORTH if bool(places[index].sealed) else PLAIN_WORTH)[clampi(int(places[index].depth), 0, 3)]
 		var fitting: Array[String] = []
 		var free: Array[String] = []
@@ -289,6 +311,27 @@ static func deal(seed_value: int, places: Array) -> Dictionary:
 			taken[pick] = true
 			out[index] = pick
 	return out
+
+## The place that holds the wished weapon: of the places up to WISH_DEPTH the first on
+## the way that holds a cache tonight (`live`) and suits - sealed for a heavy weapon if
+## there is one, plain otherwise; failing that the first plain place of that stretch,
+## whether it held a cache or not. -1 if the map has none.
+static func wish_place(places: Array, live: Array[int], wish: String) -> int:
+	var heavy: bool = int(Survivor.WEAPONS[wish].slot) == 3
+	var plain_live := -1
+	var plain_any := -1
+	for index in range(places.size()):
+		if int(places[index].depth) > WISH_DEPTH:
+			continue
+		var sealed := bool(places[index].sealed)
+		if heavy and sealed and live.has(index):
+			return index
+		if not sealed:
+			if plain_any < 0:
+				plain_any = index
+			if plain_live < 0 and live.has(index):
+				plain_live = index
+	return plain_live if plain_live >= 0 else plain_any
 
 # ---------------------------------------------------------------- rare weapons
 
@@ -395,6 +438,7 @@ func begin(from: String) -> void:
 	if saved.is_empty():
 		kept.clear()
 		night = randi()
+		wish = game.skills.wish()
 	else:
 		night = int(saved.night)
 	told.clear()
@@ -407,7 +451,7 @@ func begin(from: String) -> void:
 	clock = 0.0
 	look_left = 0.0
 	_quiet()
-	var dealt := deal(night, sites)
+	var dealt := deal(night, sites, wish)
 	var rares := deal_rare(night, sites, dealt)
 	for index in range(sites.size()):
 		var site := sites[index]

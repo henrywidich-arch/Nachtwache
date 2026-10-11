@@ -67,6 +67,8 @@ var squad: Array = ["viper", "scorpion"]
 var skills: Dictionary = {}
 ## The tree of abilities the player has specialised in ("" for none).
 var skill_tree := ""
+## Tree -> the weapon wished for in it (see Skills.WISHES); checked by Skills.adopt_wishes.
+var wishes: Dictionary = {}
 ## Who goes on with the survivor from the station of the second mission: "fireteam", the
 ## two who came with him, or two of the three operators, named by their looks - while the
 ## squad and the third of them stay behind at the station.
@@ -110,6 +112,8 @@ func read(parsed: Dictionary) -> void:
 	if parsed.get("skills") is Dictionary:
 		skills = parsed.skills
 	skill_tree = str(parsed.get("skill_tree", ""))
+	if parsed.get("wishes") is Dictionary:
+		wishes = parsed.wishes
 	company = known_company(str(parsed.get("company", "")))
 
 func save() -> void:
@@ -126,6 +130,8 @@ func kept() -> Dictionary:
 		out["skills"] = skills
 	if skill_tree != "":
 		out["skill_tree"] = skill_tree
+	if not wishes.is_empty():
+		out["wishes"] = wishes
 	if company != "fireteam":
 		out["company"] = company
 	return out

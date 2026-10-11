@@ -1163,6 +1163,7 @@ func run(game: Node3D) -> void:
 	await _squadwork(game)
 	await _overhaul(game)
 	await _breacher(game)
+	await _wish(game)
 	await _operators(game)
 	await _sandbox(game)
 	await _hive(game)
@@ -1291,9 +1292,9 @@ func _latest(game: Node3D) -> void:
 			tier = int(skill.tier)
 			ids[skill.id] = true
 		# (The breacher has more ranks than a player has points: there he chooses.)
-		counted = counted and ranks >= Skills.LEVELS - 1 and ranks <= (20 if tree == "breacher" else Skills.LEVELS) and (Skills.TREES[tree].skills as Array).size() >= 7
+		counted = counted and ranks >= Skills.LEVELS - 1 and ranks <= (22 if tree == "breacher" else Skills.LEVELS + 2) and (Skills.TREES[tree].skills as Array).size() >= 7
 		abilities += (Skills.TREES[tree].skills as Array).size()
-	expect(counted and abilities == 24 and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven to nine abilities each, and levels enough for about one tree; a career gives experience and levels")
+	expect(counted and abilities == 27 and Skills.TREES.size() == 3 and Skills.experience(totals) == 8263 and Skills.level_of(0) == 1 and Skills.level_of(499) == 1 and Skills.level_of(500) == 2 and Skills.level_of(8263) == 6 and Skills.level_of(9999999) == Skills.LEVELS, "Three trees of abilities with seven to nine abilities each, and levels enough for about one tree; a career gives experience and levels")
 	game.hud.show_menu("skills")
 	var marked := false
 	for node in game.hud.modal.find_children("*", "Label", true, false):
@@ -4948,7 +4949,15 @@ func bot(game: Node3D) -> void:
 				if pair.size() == 2 and not Skills.find(pair[0]).is_empty():
 					game.skills.ranks[pair[0]] = clampi(int(pair[1]), 0, int(Skills.find(pair[0]).ranks))
 		game.skills.chosen = tree
-		print("BOT_TREE %s ranks=%d" % [tree, game.skills.spent(tree)])
+		# The bot names a weapon as its wish: --bot-wish=mg, or the first of the tree's list.
+		var wished := ""
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--bot-wish="):
+				wished = arg.trim_prefix("--bot-wish=")
+		if not game.skills.wish_list(tree).has(wished) and not game.skills.wish_list(tree).is_empty():
+			wished = game.skills.wish_list(tree)[0]
+		game.skills.wishes[tree] = wished
+		print("BOT_TREE %s ranks=%d wish=%s shelf=%d from_round=%d" % [tree, game.skills.spent(tree), game.skills.wish(), game.shelf(wished) if game.skills.wish() != "" else 0, game.weapon_round(wished) if game.skills.wish() != "" else 0])
 	game.start_run()
 	# On the map of the second mission the bot walks instead (--bot-mode=villa).
 	if game.hive.on:
@@ -6364,6 +6373,173 @@ func _blast_harm(game: Node3D, style: String) -> float:
 	player.health = 100.0
 	return lost
 
+## The wish of a tree of abilities: one weapon of the tree's list, named by the player,
+## that is cheaper and earlier in the farm's shop. (What it does to the caches of the
+## second mission: _hive_wish.)
+func _wish(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var skills: Skills = game.skills
+	game.profile.mode = "survival"
+	game.profile.modifiers = false
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	skills.reset()
+	skills.wishes.clear()
+	skills.active = true
+	_wipe(game)
+	await frames(3)
+	# --- the lists: one ability with two ranks in each tree, lists that differ
+	var shaped := true
+	var all_plain := {}
+	var all_heavy := {}
+	for tree: String in Skills.TREES:
+		var skill: Dictionary = Skills.find(tree + "_wish")
+		var plain: Array = Skills.WISHES[tree].plain
+		var heavy: Array = Skills.WISHES[tree].heavy
+		shaped = shaped and not skill.is_empty() and int(skill.ranks) == 2 and Skills.tree_of(tree + "_wish") == tree and plain.size() >= 2 and heavy.size() >= 2
+		for id: String in plain:
+			shaped = shaped and Survivor.WEAPONS.has(id) and int(Survivor.WEAPONS[id].slot) != 3 and not HiveCaches.sells(id)
+			all_plain[id] = int(all_plain.get(id, 0)) + 1
+		for id: String in heavy:
+			shaped = shaped and Survivor.WEAPONS.has(id) and int(Survivor.WEAPONS[id].slot) == 3 and not HiveCaches.sells(id) and Skills.weapon_tree(id) == ""
+			all_heavy[id] = int(all_heavy.get(id, 0)) + 1
+		for other: String in Skills.TREES:
+			if other != tree:
+				var shared := 0
+				for id: String in plain + heavy:
+					shared += 1 if (Skills.WISHES[other].plain as Array).has(id) or (Skills.WISHES[other].heavy as Array).has(id) else 0
+				# (Two trees may share a weapon that fits both; no list is half another's.)
+				shaped = shaped and shared * 2 < plain.size() + heavy.size()
+	var covered := true
+	for id: String in HiveCaches.found_only():
+		covered = covered and (all_plain.has(id) or all_heavy.has(id))
+	expect(shaped and covered, "Each tree has a wish with two ranks and a list of its own - light weapons for the first rank, heavy ones for the second -; a weapon is in two lists at the most where it fits both, and every weapon that has to be found can be wished for in some tree")
+	# --- naming it: by rank, by tree in force, and safely from a profile
+	var none: bool = skills.wish_list("sweeper").is_empty() and not skills.set_wish("sweeper", "shotgun") and skills.wish() == ""
+	skills.ranks = {"sweeper_damage": 3, "sweeper_wish": 1, "breacher_heavy": 3, "breacher_wish": 2}
+	skills.chosen = "sweeper"
+	var first: bool = skills.wish_list("sweeper") == (["p90", "mp7", "shotgun"] as Array[String]) and not skills.set_wish("sweeper", "minigun") and not skills.set_wish("sweeper", "m14") and skills.set_wish("sweeper", "shotgun") and skills.wish() == "shotgun"
+	var second: bool = skills.wish_list("breacher").has("mg") and skills.set_wish("breacher", "mg") and skills.wish() == "shotgun" and skills.wish("breacher") == "mg"
+	skills.chosen = "breacher"
+	var switched: bool = skills.wish() == "mg"
+	# (A rank taken back: the heavy wish rests, and counts again with the rank.)
+	skills.ranks["breacher_wish"] = 1
+	var rests: bool = skills.wish() == ""
+	skills.ranks["breacher_wish"] = 2
+	var cycled: Array[String] = []
+	skills.wishes["hunter"] = ""
+	skills.ranks["hunter_wish"] = 2
+	for i in range(6):
+		skills.wishes["hunter"] = skills.next_wish("hunter")
+		cycled.append(str(skills.wishes["hunter"]))
+	var kept := Skills.new()
+	kept.adopt({"sweeper_wish": 2, "hunter_wish": 5}, "sweeper")
+	kept.adopt_wishes({"sweeper": "minigun", "hunter": "launcher", "breacher": "nonsense", "nobody": "mg", "x": 7})
+	var safe: bool = kept.wish() == "minigun" and kept.wish("hunter") == "" and kept.wishes.size() == 1 and kept.rank("hunter_wish") == 2
+	kept.adopt_wishes("nonsense")
+	safe = safe and kept.wishes.is_empty() and kept.wish() == ""
+	var written: bool = game.set_wish("breacher", "launcher") and str(game.profile.wishes.get("breacher", "")) == "launcher" and (game.profile.kept().wishes as Dictionary).has("breacher") and not game.set_wish("breacher", "sniper")
+	expect(none and first and second and switched and rests and cycled == (["m14", "badger", "revolver", "sniper", "svd", ""] as Array[String]) and safe and written, "A wish is named out of the tree's list - a heavy weapon only with the second rank -, the one that counts is that of the tree in force, a click goes through the list and back to none, it is kept with the profile, and what a profile holds that is no wish is left out")
+	# --- on the farm: cheaper, and where the shop has it from a round on, earlier
+	skills.set_wish("breacher", "launcher")
+	var early: bool = game.weapon_round("launcher") == int(Survivor.WEAPONS.launcher.from_round) - Skills.WISH_ROUNDS and game.weapon_round("mg") == int(Survivor.WEAPONS.mg.from_round) and game.weapon_round("rifle") == 0
+	var cheap: bool = game.shelf("launcher") == game.price(int(round(int(Survivor.WEAPONS.launcher.price) * (1.0 - Skills.WISH_CUT)))) and game.shelf("mg") == game.price(int(Survivor.WEAPONS.mg.price))
+	skills.open_all = false
+	game.credits = 5000
+	game.wave = int(Survivor.WEAPONS.launcher.from_round) - Skills.WISH_ROUNDS
+	game.cabin.set_shop_open(true, true)
+	player.position = beside(game, "shop", Vector3.ZERO)
+	game.open_shop()
+	var before: int = game.credits
+	var bought: bool = game.state == "shop" and not game.buy_weapon("mg2") and game.buy_weapon("launcher") and before - game.credits == game.price(int(round(int(Survivor.WEAPONS.launcher.price) * (1.0 - Skills.WISH_CUT))))
+	game.resume_run()
+	skills.chosen = "sweeper"
+	var others: bool = game.weapon_round("launcher") == int(Survivor.WEAPONS.launcher.from_round) and game.shelf("launcher") == game.price(int(Survivor.WEAPONS.launcher.price)) and game.shelf("shotgun") < game.price(int(Survivor.WEAPONS.shotgun.price))
+	expect(early and cheap and bought and others, "On the farm the weapon wished for costs a quarter less and is in the shop two rounds earlier (the launcher from round %d); with another tree in force it is that tree's wish that counts" % game.weapon_round("launcher"))
+	# --- the page: the wish is named there, by a click
+	game.state = "menu"
+	skills.chosen = "breacher"
+	game.hud.show_menu("skills")
+	var shown := 0
+	var chip: Button = null
+	for node in game.hud.modal.find_children("*", "Button", true, false):
+		if (node as Button).text.begins_with("WUNSCH"):
+			shown += 1
+			if (node as Button).text.contains(str(Survivor.WEAPONS.launcher.label)):
+				chip = node as Button
+	var had_chip: bool = chip != null
+	if had_chip:
+		chip.pressed.emit()
+	await frames(2)
+	var clicked: bool = had_chip and skills.wish() == "mg" and str(game.profile.wishes.get("breacher", "")) == "mg"
+	game.hud.hide_menu()
+	game.state = "playing"
+	expect(shown == 3 and clicked, "The page of abilities shows the wish of every tree that has the rank with the weapon's name, and a click on it names the next of the list")
+	_wipe(game)
+	skills.reset()
+	skills.wishes.clear()
+	game.profile.wishes = {}
+	game.wave = 0
+	player.inventory.erase("launcher")
+	player.equip_weapon("rifle", true)
+	await frames(3)
+
+## What a wish does to the caches of the second mission (called with its map loaded):
+## dealt 200 nights with and without it.
+func _hive_wish(game: Node3D, sites: Array) -> void:
+	var caches: HiveCaches = game.hive.caches
+	var skills: Skills = game.skills
+	var certain := true
+	var report: Array[String] = []
+	for wish: String in ["shotgun", "m14", "mg", "minigun"]:
+		var heavy: bool = int(Survivor.WEAPONS[wish].slot) == 3
+		var plain_early := 0
+		var anywhere := 0
+		var sealed_with := 0
+		for night in range(1, 201):
+			var without: Dictionary = HiveCaches.deal(night, sites)
+			var with: Dictionary = HiveCaches.deal(night, sites, wish)
+			var places: Array = []
+			for index: int in with:
+				if str(with[index]) == wish:
+					places.append(index)
+			# Exactly one cache holds it, in the villa or the station; a light one never
+			# behind a lock.
+			certain = certain and places.size() == 1 and with == HiveCaches.deal(night, sites, wish)
+			if places.size() == 1:
+				var place: Dictionary = sites[places[0]]
+				certain = certain and int(place.depth) <= HiveCaches.WISH_DEPTH and (heavy or not bool(place.sealed)) and with.size() >= without.size() and with.size() <= without.size() + 1
+				sealed_with += 1 if bool(place.sealed) else 0
+			for index: int in without:
+				if str(without[index]) == wish:
+					anywhere += 1
+					plain_early += 1 if int(sites[index].depth) <= HiveCaches.WISH_DEPTH else 0
+		# (Without the wish: not in every night, and that early in fewer than three of
+		# four - for a heavy one in none: the dice put those deep into the facility.)
+		certain = certain and anywhere < 200 and plain_early < 150
+		report.append("%s %d/%d" % [wish, anywhere, plain_early])
+	var plain_deal: Dictionary = HiveCaches.deal(7, sites)
+	var no_wish: bool = HiveCaches.deal(7, sites, "") == plain_deal and HiveCaches.deal(7, sites, "rifle") == plain_deal and HiveCaches.deal(7, sites, "nonsense") == plain_deal
+	# A night that begins: the wish of the tree in force is the night's own.
+	var ranks_then: Dictionary = skills.ranks.duplicate()
+	var tree_then: String = skills.chosen
+	var wishes_then: Dictionary = skills.wishes.duplicate()
+	skills.ranks = {"hunter_damage": 3, "hunter_wish": 1}
+	skills.chosen = "hunter"
+	skills.wishes = {"hunter": "m14"}
+	caches.begin("landing")
+	var lies := 0
+	for site: Dictionary in caches.sites:
+		lies += 1 if str(site.holds) == "m14" and str(site.state) == "shut" and int(site.depth) <= HiveCaches.WISH_DEPTH and not bool(site.sealed) else 0
+	var begun: bool = caches.wish == "m14" and lies == 1
+	skills.ranks = ranks_then
+	skills.chosen = tree_then
+	skills.wishes = wishes_then
+	caches.begin("landing")
+	expect(certain and no_wish and begun and caches.wish == "", "In 200 nights of the second mission the weapon wished for lies every time in exactly one cache of the villa or the station - a light one never behind a lock -, where the dice alone leave it out of some nights and put it that early in far fewer (of 200 nights without the wish, with it at all / that early: %s); no wish and a weapon that cannot be wished for deal the night as ever, and a night that begins takes the wish of the tree in force" % ", ".join(PackedStringArray(report)))
+
 ## The breacher's tree: heavy gear, explosives and armour - his own blasts are a scratch to
 ## him, and his are the only hits that go through the Crusher's shell.
 func _breacher(game: Node3D) -> void:
@@ -6392,9 +6568,9 @@ func _breacher(game: Node3D) -> void:
 	var old := Skills.new()
 	old.adopt({"breacher_armour": 3, "breacher_plates": 2, "breacher_frag": 3, "breacher_shield": 1, "breacher_head": 3, "breacher_shield2": 1, "breacher_squad": 1}, "breacher")
 	var moved: bool = old.chosen == "breacher" and old.rank("breacher_armour") == 3 and old.rank("breacher_plates") == 2 and old.rank("breacher_frag") == 3 and old.rank("breacher_squad") == 1 and old.spent("breacher") == 9 and old.ranks.size() == 4
-	var texts: bool = Skills.note(Skills.find("breacher_frag"), 3) == "Eigene Explosionen schaden dir 90 % weniger, fremde 36 %" and Skills.note(Skills.find("breacher_frag"), 1) == "Eigene Explosionen schaden dir 30 % weniger, fremde 12 %" and Skills.note(Skills.find("breacher_plates"), 3) == "Westen fangen 60 % mehr ab, Kugeln schaden 24 % weniger" and Skills.note(Skills.find("breacher_charge"), 2) == "Deine Sprengsätze: +30 % Schaden, +20 % Radius" and Skills.note(Skills.find("breacher_shell"), 1) == "Schweres Gerät und Sprengsätze schlagen durch den Panzer des Crushers: 75 % statt 25 %" and Skills.note(Skills.find("sweeper_damage"), 3) == "+24 % Schaden gegen gewöhnliche Infizierte"
+	var texts: bool = Skills.note(Skills.find("breacher_frag"), 3) == "Eigene Explosionen schaden dir 90 % weniger, fremde 36 %" and Skills.note(Skills.find("breacher_frag"), 1) == "Eigene Explosionen schaden dir 30 % weniger, fremde 12 %" and Skills.note(Skills.find("breacher_plates"), 3) == "Westen fangen 60 % mehr ab, Kugeln schaden 24 % weniger" and Skills.note(Skills.find("breacher_charge"), 2) == "Deine Sprengsätze: +30 % Schaden, +20 % Radius" and Skills.note(Skills.find("breacher_shell"), 1) == "Crusher-Panzer: schweres Gerät, Sprengsätze 75 % durch" and Skills.note(Skills.find("sweeper_damage"), 3) == "+24 % Schaden gegen gewöhnliche Infizierte"
 	var gear: bool = Skills.heavy_gear("mg") and Skills.heavy_gear("mg2") and Skills.heavy_gear("minigun") and Skills.heavy_gear("launcher") and Skills.heavy_gear("shotgun") and Skills.heavy_gear("autoshotgun") and Skills.heavy_gear("sniper") and Skills.heavy_gear("fifty") and not Skills.heavy_gear("rifle") and not Skills.heavy_gear("ak") and not Skills.heavy_gear("revolver") and not Skills.heavy_gear("nonsense")
-	expect(entries.size() == 9 and all_ranks == 20 and str(Skills.TREES.breacher.focus) == "Schweres Gerät, Sprengstoff, Panzerung" and moved and texts and gear, "The breacher's tree is one of heavy gear, explosives and armour: nine abilities with more ranks than a player has points; a profile saved with the old tree keeps its points in the abilities that are still there and has the others free; heavy gear is the shotguns and whatever is carried as a heavy weapon")
+	expect(entries.size() == 10 and all_ranks == 22 and str(Skills.TREES.breacher.focus) == "Schweres Gerät, Sprengstoff, Panzerung" and moved and texts and gear, "The breacher's tree is one of heavy gear, explosives and armour: nine abilities with more ranks than a player has points; a profile saved with the old tree keeps its points in the abilities that are still there and has the others free; heavy gear is the shotguns and whatever is carried as a heavy weapon")
 	# --- his own explosives are a scratch to him, and other blasts hurt him less
 	player.plate_level = 0
 	skills.chosen = "breacher"
@@ -7962,6 +8138,7 @@ func _hive_caches(game: Node3D) -> void:
 	expect(way.size() > 400 and nearest >= 5.0 and in_way_rooms <= 1 and cut_off == "", "No cache stands on the main way - the nearest (%s) is %.1f m beside it, at the dead end of a gallery; no other is in a room the way leads through - and every one can be walked to%s" % [nearest_id, nearest, "" if cut_off == "" else " (not: %s)" % cut_off])
 	# --- the workbenches and equipment stations between the supply points
 	await _hive_stations(game, way)
+	_hive_wish(game, map.caches)
 	hive.prowl.set_process(true)
 	hive.set_process(true)
 
@@ -8486,6 +8663,11 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 		if player.inventory.has(id):
 			carried.append(id)
 	print("BOT_CACHES opened=%d carries=%s" % [hive.caches.opened, ",".join(PackedStringArray(carried))])
+	var wish_at := "-"
+	for site: Dictionary in hive.caches.sites:
+		if hive.caches.wish != "" and str(site.holds) == hive.caches.wish or (site.has("held") and str(site.get("held", "")) == hive.caches.wish and hive.caches.wish != ""):
+			wish_at = "%s depth=%d sealed=%s state=%s" % [str(site.id), int(site.depth), str(site.sealed), str(site.state)]
+	print("BOT_WISH wish=%s lies=%s carried=%s" % [hive.caches.wish if hive.caches.wish != "" else "-", wish_at, str(player.inventory.has(hive.caches.wish))])
 	var company: Array[String] = []
 	for mate in game.team:
 		company.append("%s:%d%s@%dm" % [mate.look, mate.kills, " down" if mate.down else "", int(mate.global_position.distance_to(player.global_position))])

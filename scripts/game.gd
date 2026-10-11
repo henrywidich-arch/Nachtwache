@@ -367,6 +367,8 @@ func _ready() -> void:
 		profile.stored = false
 	profile.open()
 	skills.adopt(profile.skills, profile.skill_tree)
+	skills.adopt_wishes(profile.wishes)
+	profile.wishes = skills.wishes.duplicate()
 	# A profile that names no tree in force: what adopt() made of it is kept from the next
 	# save on.
 	profile.skill_tree = skills.chosen
@@ -2125,11 +2127,27 @@ func outgoing(id: String, instead_of: String = "") -> String:
 	var old: String = player.to_replace(id)
 	return instead_of if old != "" and instead_of != "" and player.replaceable(id).has(instead_of) else old
 
+## Names the weapon a tree's wish is for and keeps it in the profile. True if it could.
+func set_wish(tree: String, id: String) -> bool:
+	if not skills.set_wish(tree, id):
+		return false
+	profile.wishes = skills.wishes.duplicate()
+	profile.save()
+	return true
+
+## What a weapon costs on the shelf: the one wished for (Skills.wish) a share less.
+func shelf(id: String) -> int:
+	return price(int(round(int(Survivor.WEAPONS[id].price) * (1.0 - (Skills.WISH_CUT if id == skills.wish() else 0.0)))))
+
+## The round from which the shop has a weapon: the one wished for some rounds earlier.
+func weapon_round(id: String) -> int:
+	return maxi(0, int(Survivor.WEAPONS[id].get("from_round", 0)) - (Skills.WISH_ROUNDS if id == skills.wish() else 0))
+
 ## What buying a weapon costs right now: its price, less what the weapon is worth that has
 ## to go because there is no place for both.
 func weapon_cost(id: String, instead_of: String = "") -> int:
 	var old := outgoing(id, instead_of)
-	return price(int(Survivor.WEAPONS[id].price)) - (0 if old == "" else trade_in(old))
+	return shelf(id) - (0 if old == "" else trade_in(old))
 
 ## Buys a weapon at the open shop counter. A survivor carries one weapon of each kind, and
 ## more with slings: without a place for it, the new one takes the place of another, which
@@ -2142,7 +2160,7 @@ func buy_weapon(id: String, instead_of: String = "") -> bool:
 	# The lockers of the second mission sell the standard weapons only: the others are found.
 	if hive.on and not HiveCaches.sells(id): return false
 	# The heaviest weapons only reach the shop once the night is well under way.
-	if int(Survivor.WEAPONS[id].get("from_round", 0)) > wave and not sandbox.on: return false
+	if weapon_round(id) > wave and not sandbox.on: return false
 	var old := outgoing(id, instead_of)
 	var cost := weapon_cost(id, instead_of)
 	if credits < cost: return false
@@ -4256,10 +4274,18 @@ func _run_trees_check() -> void:
 	# One point less in the hunter's tree, so that the main menu has one to announce.
 	for tree in Skills.TREES:
 		var left := Skills.points(profile.totals) - (1 if tree == "hunter" else 0)
+		# (The wish first, with both its ranks: three points open its row.)
+		for id in [str(Skills.TREES[tree].skills[0].id), str(Skills.TREES[tree].skills[0].id), str(Skills.TREES[tree].skills[0].id), str(tree) + "_wish", str(tree) + "_wish"]:
+			if learn_skill(id):
+				left -= 1
 		for skill in Skills.TREES[tree].skills:
 			for i in range(int(skill.ranks)):
 				if left > 0 and learn_skill(str(skill.id)):
 					left -= 1
+	# Each tree names a wish, where its ranks allow one (the last of its list).
+	for tree in Skills.TREES:
+		if not skills.wish_list(tree).is_empty():
+			set_wish(tree, skills.wish_list(tree)[-1])
 	choose_tree("hunter")
 	hud.show_menu("main")
 	await tick.call(0.3)

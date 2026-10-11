@@ -128,9 +128,9 @@ func weapon_state(id: String, instead_of: String = "") -> Array:
 	var barred: String = game.skills.weapon_barred(id)
 	if barred != "":
 		return ["GESPERRT", SurvivalHUD.MUTED, false]
-	if int(data.get("from_round", 0)) > game.wave and not game.sandbox.on:
-		return ["AB RUNDE %d" % int(data.from_round), SurvivalHUD.MUTED, false]
-	var shelf: int = game.price(int(data.price))
+	if game.weapon_round(id) > game.wave and not game.sandbox.on:
+		return ["AB RUNDE %d" % game.weapon_round(id), SurvivalHUD.MUTED, false]
+	var shelf: int = game.shelf(id)
 	if game.credits < game.weapon_cost(id, instead_of):
 		return [_money(shelf), SurvivalHUD.DANGER, false]
 	return [_money(shelf), SurvivalHUD.AMBER, true]
