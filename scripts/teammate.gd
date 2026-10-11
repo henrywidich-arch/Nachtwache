@@ -34,21 +34,23 @@ const THROW_REST := Vector2(40.0, 70.0)
 const SQUAD_THROW_REST := 14.0
 ## A heal field for whoever is hurt: thrown to the feet of the player or of a companion
 ## whose health is below this share, if he is within this many metres. The rests as above.
-const TREAT_BELOW := 0.45
+const TREAT_BELOW := 0.35
 const TREAT_RANGE := 14.0
-const TREAT_REST := 70.0
-const SQUAD_TREAT_REST := 40.0
+const TREAT_REST := 150.0
+const SQUAD_TREAT_REST := 90.0
 ## Their weapons improve by themselves as the night goes on (no money, no workbench): a
 ## step every ARMS_EVERY rounds - the stages of the second mission count as its rounds -
 ## each worth ARMS_STEP of their damage, ARMS_TOP steps at the most. And of what a
 ## level's infected take more than plain ones (Profile "brood") they make up this share
 ## from the start, so that they keep up on the harder levels.
 const ARMS_EVERY := 2
-const ARMS_STEP := 0.15
+const ARMS_STEP := 0.07
 const ARMS_TOP := 4
-const ARMS_BROOD := 0.5
+const ARMS_BROOD := 0.25
 ## How close an enemy may be while it goes to help a fallen companion up.
 const TEND_CLEAR := 2.4
+## A companion needs longer to help another one up than the player does by hand.
+const TEND_SECONDS := 3.6
 ## Personal space: closer than KEEP_AWAY metres to the player it makes room. It only
 ## catches up when the player is more than FOLLOW_FAR away and stops FOLLOW_NEAR short.
 const KEEP_AWAY := 2.0
@@ -183,7 +185,7 @@ func outfit(armor: int, rounds: int) -> void:
 ## The factor on what its shots do: the shop's ammunition, how far along the night is,
 ## and whether it is strengthened.
 func strength() -> float:
-	return damage_factor * arms() * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (HealField.BUFF_DAMAGE if buff_left > 0.0 else 1.0)
+	return damage_factor * arms() * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (HealField.BUFF_DAMAGE if buff_left > 0.0 else 1.0) * game.heal.aim_at(global_position)
 
 ## The step its weapon has reached by itself in a round (or a stage of the second mission).
 static func arms_level(wave: int) -> int:
@@ -304,7 +306,7 @@ func _may_tend(threat: float) -> bool:
 ## At the side of the fallen companion: helps it up for as long as it is called. True when
 ## it stands.
 func _lift_friend(delta: float) -> bool:
-	if tending == null or not tending.lift(delta):
+	if tending == null or not tending.lift(delta * float(game.REVIVE_SECONDS) / TEND_SECONDS):
 		return false
 	game.bark(self, look, "rescue")
 	game.hud.kill_feed("%s hilft %s auf" % [label, tending.label], 0, false, true)

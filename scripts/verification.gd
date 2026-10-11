@@ -3114,7 +3114,7 @@ func _squad_awake(game: Node3D) -> void:
 		mate._lift_friend(0.05)
 		held += 0.05
 	other._recover(0.05)
-	expect(goes and holds and as_ever and covers and frees and not other.down and absf(held - float(game.REVIVE_SECONDS)) < 0.11 and mate.tending == null, "A companion goes to help a fallen one up (%.1f s at its side) unless it was told to hold or something is at its throat; a Leech on the survivor is shot before anything else, and whoever comes near somebody who is being helped before what is merely nearer" % held)
+	expect(goes and holds and as_ever and covers and frees and not other.down and absf(held - Teammate.TEND_SECONDS) < 0.2 and mate.tending == null, "A companion goes to help a fallen one up (%.1f s at its side) unless it was told to hold or something is at its throat; a Leech on the survivor is shot before anything else, and whoever comes near somebody who is being helped before what is merely nearer" % held)
 	for one in [far, nearer, leech]:
 		_take_off(game, one)
 	game.wave = 1

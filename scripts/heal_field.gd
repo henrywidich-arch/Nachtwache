@@ -27,6 +27,8 @@ const RAISE_SECONDS := 1.5
 const BUFF_SECONDS := 12.0
 const BUFF_WARD := 0.7
 const BUFF_DAMAGE := 1.25
+## The price of it: whoever stands in a field does only this share of his damage.
+const INSIDE_DAMAGE := 0.7
 ## The last seconds of a field: it fades and does nothing any more.
 const DYING := 1.0
 const COLOR := Color(0.32, 0.82, 1.0)
@@ -139,6 +141,10 @@ func field_at(pos: Vector3) -> Dictionary:
 		if float(field.left) > DYING and rise > -1.0 and rise < 2.2 and Vector2(pos.x - center.x, pos.z - center.z).length() < RADIUS:
 			return field
 	return {}
+
+## The factor on the damage of somebody who stands at `pos` (INSIDE_DAMAGE in a field).
+func aim_at(pos: Vector3) -> float:
+	return 1.0 if field_at(pos).is_empty() else INSIDE_DAMAGE
 
 func clear() -> void:
 	for field in fields:
