@@ -18,6 +18,13 @@ const GRAVITY := 22.0
 ## Share of incoming damage a teammate takes; they are tougher than they look. (It was 0.7:
 ## with 0.525 they stand a third more before they go down.)
 const ARMOUR := 0.525
+## A companion that is left alone gets its breath back: after MEND_AFTER seconds without a
+## hit its health comes back by MEND_RATE of its full health a second, up to MEND_TOP of
+## it - the rest takes a station, a heal field or the end of a round. A hit stops it at
+## once; whoever is down does not mend. (Staying power only: their damage is untouched.)
+const MEND_AFTER := 5.0
+const MEND_RATE := 0.02
+const MEND_TOP := 0.75
 ## Being helped up by hand: how long the help may pause before it counts as let go.
 const LIFT_GRACE := 0.25
 ## --- what makes them do a little more; all of it rare, and with rests in between.
@@ -81,6 +88,8 @@ var visual: SoldierVisual
 var name_tag: Label3D
 var health := 100.0
 var down := false
+## Seconds since the last hit (see MEND_AFTER).
+var unhurt := 0.0
 var down_left := 0.0
 var rising_left := 0.0
 ## Seconds somebody has been helping it up (see lift), and how long until that counts as
@@ -444,6 +453,7 @@ func _physics_process(delta: float) -> void:
 		_recover(delta)
 		visual.animate(delta, Vector3.ZERO, false, false)
 		return
+	mend(delta)
 	shot_left -= delta
 	throw_rest -= delta
 	treat_rest -= delta
@@ -708,9 +718,17 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 	visual.shot()
 	game.sounds.play_at(str(visual.config.shot), muzzle, -7.0 if pellets == 1 else -5.0)
 
+## Health that comes back by itself while nothing hits (MEND_AFTER, MEND_RATE, MEND_TOP).
+func mend(delta: float) -> void:
+	unhurt += delta
+	if down or unhurt < MEND_AFTER or health >= max_health * MEND_TOP:
+		return
+	health = minf(max_health * MEND_TOP, health + max_health * MEND_RATE * delta)
+
 func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
 	if not is_targetable():
 		return
+	unhurt = 0.0
 	health = maxf(0.0, health - amount * ARMOUR * (HealField.BUFF_WARD if buff_left > 0.0 else 1.0))
 	var side := 1.0
 	if from != Vector3.INF:

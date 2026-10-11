@@ -4806,7 +4806,7 @@ func _newer(game: Node3D) -> void:
 	player.unlock("autoshotgun")
 	player.shot_cooldown = 0.0
 	player.shoot()
-	expect(player.ammo == int(Survivor.WEAPONS.autoshotgun.magazine) - 1 and int(Survivor.WEAPONS.autoshotgun.magazine) == 10 and player.pump_clock < 0.0, "The automatic shotgun needs no pump stroke")
+	expect(player.ammo == int(Survivor.WEAPONS.autoshotgun.magazine) - 1 and int(Survivor.WEAPONS.autoshotgun.magazine) == 12 and player.pump_clock < 0.0, "The automatic shotgun needs no pump stroke")
 	expect(player.unlock("pistol") and player.ammo == 15 and player.unlock("revolver") and player.ammo == 6 and int(Survivor.WEAPONS.minigun.from_round) > int(Survivor.WEAPONS.launcher.from_round), "Two handguns are on sale, the heaviest weapons only late in the night")
 	# --- holding a position
 	game.start_run()
@@ -5782,6 +5782,30 @@ func _squadwork(game: Node3D) -> void:
 	skills.reset()
 	skills.active = true
 	face(game, stand, PI)
+	# --- a companion that is left alone gets its breath back (no clock: its own steps)
+	var mender: Teammate = game.team[0]
+	var mend_from: float = mender.max_health * 0.4
+	mender.health = mend_from
+	mender.unhurt = 0.0
+	mender.mend(Teammate.MEND_AFTER - 0.5)
+	var mend_waits: bool = is_equal_approx(mender.health, mend_from)
+	mender.mend(1.0)
+	mender.mend(4.0)
+	var mend_gains: bool = is_equal_approx(mender.health, mend_from + mender.max_health * Teammate.MEND_RATE * 5.0)
+	var mend_before: float = mender.health
+	mender.receive_damage(10.0)
+	var mend_hit: float = mender.health
+	mender.mend(Teammate.MEND_AFTER - 0.5)
+	var mend_stops: bool = mend_hit < mend_before and mender.unhurt < Teammate.MEND_AFTER and is_equal_approx(mender.health, mend_hit)
+	mender.down = true
+	mender.mend(60.0)
+	var mend_not_down: bool = is_equal_approx(mender.health, mend_hit)
+	mender.down = false
+	mender.mend(600.0)
+	var mend_capped: bool = is_equal_approx(mender.health, mender.max_health * Teammate.MEND_TOP)
+	mender.health = mender.max_health
+	mender.mend(600.0)
+	expect(mend_waits and mend_gains and mend_stops and mend_not_down and mend_capped and is_equal_approx(mender.health, mender.max_health) and Teammate.MEND_AFTER >= 3.0 and Teammate.MEND_RATE <= 0.03 and Teammate.MEND_TOP <= 1.0, "A companion that has not been hit for five seconds gets health back slowly, up to three quarters; a hit stops it at once, and whoever is down does not mend")
 	var team: Array = game.team
 	for i in range(team.size()):
 		(team[i] as Teammate).global_position = stand + Vector3(-1.8 + i * 3.6, 0, -2.0)
