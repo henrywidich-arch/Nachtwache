@@ -102,6 +102,9 @@ var hold_fire := 0.0
 var crowd := 0
 ## Has called out that the survivor is down; it does so once for every time he falls.
 var leader_called := false
+## Seconds it is still strengthened (a heal field has put it back on its feet): it takes
+## less and its shots do more, see HealField.
+var buff_left := 0.0
 
 func _ready() -> void:
 	# The player's layer: bullets of the squad pass through, the infected bump into it.
@@ -142,6 +145,16 @@ func outfit(armor: int, rounds: int) -> void:
 	max_health = 100.0 * (1.0 + float(game.SQUAD_HEALTH) * armor)
 	health += max_health - before
 	damage_factor = 1.0 + float(game.SQUAD_DAMAGE) * rounds
+
+## The factor on what its shots do: the shop's ammunition, how far along the night is,
+## and whether it is strengthened.
+func strength() -> float:
+	return damage_factor * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (HealField.BUFF_DAMAGE if buff_left > 0.0 else 1.0)
+
+## Strengthened for `seconds` (a heal field has put it back on its feet).
+func strengthen(seconds: float) -> void:
+	buff_left = maxf(buff_left, seconds)
+	name_tag.text = label + "  ·  GESTÄRKT"
 
 func is_targetable() -> bool:
 	return not down and rising_left <= 0.0
@@ -222,6 +235,10 @@ func _physics_process(delta: float) -> void:
 	if not game.is_playing():
 		return
 	hurt_sound_left -= delta
+	if buff_left > 0.0:
+		buff_left -= delta
+		if buff_left <= 0.0 and not down:
+			name_tag.text = label
 	if down or rising_left > 0.0:
 		_recover(delta)
 		visual.animate(delta, Vector3.ZERO, false, false)
@@ -450,7 +467,7 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 			if body is Infected:
 				var enemy := body as Infected
 				var headshot := enemy.head_struck(head_zone, hit.position)
-				var damage := float(gun.damage) * damage_factor * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
+				var damage := float(gun.damage) * strength() * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0)
 				if pellets > 1:
 					damage *= clampf(1.0 - (muzzle.distance_to(endpoint) - 7.0) / 18.0, 0.33, 1.0)
 				var entry: Dictionary = struck.get(enemy, {"damage": 0.0, "headshot": false, "direction": direction})
@@ -481,7 +498,7 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
 	if not is_targetable():
 		return
-	health = maxf(0.0, health - amount * ARMOUR)
+	health = maxf(0.0, health - amount * ARMOUR * (HealField.BUFF_WARD if buff_left > 0.0 else 1.0))
 	var side := 1.0
 	if from != Vector3.INF:
 		side = 1.0 if to_local(from).x > 0.0 else -1.0

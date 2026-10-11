@@ -333,6 +333,9 @@ func stock(id: String) -> String:
 	elif id == "sling":
 		have = player.extra_slots
 		most = (goods.prices as Array).size()
+	elif id == "heal_kit":
+		have = player.heal_level
+		most = (goods.prices as Array).size()
 	elif game.squad_levels.has(id):
 		have = int(game.squad_levels[id])
 		most = (goods.prices as Array).size()
@@ -630,6 +633,8 @@ func _detail_good(id: String) -> void:
 		have = "Rüstung jetzt: %d" % ceili(player.armor)
 	elif game.squad_levels.has(id):
 		have = "Stufe %d von %d" % [int(game.squad_levels[id]), (goods.prices as Array).size()]
+	elif id == "heal_kit":
+		have = "Eingebaut" if player.heal_level > 0 else "Noch nicht eingebaut   ·   gilt für jede Heilgranate, auch die der Begleiter"
 	elif id == "sling":
 		have = "Gurte: %d von %d   ·   Platz für %d Waffen" % [player.extra_slots, (goods.prices as Array).size(), Survivor.KINDS.size() * Survivor.CARRY + player.extra_slots]
 	else:

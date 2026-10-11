@@ -612,6 +612,24 @@ func send_fire(center: Vector3) -> void:
 func _fire(center: Vector3) -> void:
 	game.fire.ignite(center)
 
+## A guest's heal grenade has come to rest: the host opens its field for both.
+func request_heal(center: Vector3, level: int) -> void:
+	if joined:
+		_heal_request.rpc_id(1, center, level)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _heal_request(center: Vector3, level: int) -> void:
+	if hosting:
+		game.heal_burst(center, clampi(level, 0, 1))
+
+func send_heal(center: Vector3, level: int) -> void:
+	if hosting and partner != 0:
+		_heal.rpc_id(partner, center, level)
+
+@rpc("authority", "call_remote", "reliable")
+func _heal(center: Vector3, level: int) -> void:
+	game.heal.open(center, level)
+
 ## A guest struck an enemy with his weapon: the host throws it back.
 func report_shove(enemy: Infected, direction: Vector3, damage: float) -> void:
 	_shove.rpc_id(1, enemy.net_id, direction, damage)

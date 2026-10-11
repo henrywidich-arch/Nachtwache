@@ -117,7 +117,7 @@ func _physics_process(delta: float) -> void:
 			player.inventory[id].reserve = player.reserve_cap(id)
 		if ammo == "magazine":
 			player.inventory[player.current_weapon].ammo = player.magazine_of(player.current_weapon)
-		for item in ["grenade", "flashbang", "molotov", "claymore"]:
+		for item in ["grenade", "flashbang", "molotov", "claymore", "heal"]:
 			player.items[item] = int(Survivor.GOODS[item].max)
 	# Whoever is frozen stands and breathes; nothing else of him runs.
 	for node in get_tree().get_nodes_in_group("infected"):
@@ -272,7 +272,7 @@ func alive() -> int:
 ## Everything the shop sells besides weapons, at its best.
 func kit() -> void:
 	var player: Survivor = game.player
-	for item in ["grenade", "flashbang", "molotov", "claymore", "revive"]:
+	for item in ["grenade", "flashbang", "molotov", "claymore", "revive", "heal"]:
 		player.items[item] = int(Survivor.GOODS[item].max)
 	player.armor = 100.0
 	player.plate_level = Survivor.PLATE_SHARES.size() - 1

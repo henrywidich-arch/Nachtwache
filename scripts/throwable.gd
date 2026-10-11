@@ -10,7 +10,9 @@ const KINDS := {
 	# Thrown by the C.R.U. Elite: no blast, but a cloud of gas where it comes to rest.
 	"gas": {"fuse": 2.0, "color": Color("5d6a3c"), "glow": Color("8dff5a")},
 	# breaks: it does not bounce; the first thing it strikes ends its flight.
-	"molotov": {"fuse": 5.0, "color": Color("4a3a1e"), "glow": Color("ff8a2e"), "breaks": true}
+	"molotov": {"fuse": 5.0, "color": Color("4a3a1e"), "glow": Color("ff8a2e"), "breaks": true},
+	# The heal grenade: a pale canister that opens a field where it comes to rest (HealField).
+	"heal": {"fuse": 1.5, "color": Color("d9eef2"), "glow": Color("52d1ff")}
 }
 ## Blast of the grenade: radius, damage to survivors at the centre, damage to infected.
 const BLAST := [6.5, 45.0, 280.0]
@@ -27,6 +29,8 @@ var hostile := false
 var impact := false
 ## Factor on what its blast does to the infected (the launcher's shell, by the workbench).
 var boost := 1.0
+## The heal grenade: 1 if its field also raises the fallen (the thrower's improvement).
+var level := 0
 var armed_in := 0.1
 ## The shell's body, turned along its flight.
 var shell: Node3D
@@ -204,6 +208,8 @@ func _physics_process(delta: float) -> void:
 		game.gas_burst(global_position)
 	elif kind == "molotov":
 		game.fire_burst(global_position)
+	elif kind == "heal":
+		game.heal_burst(global_position, level)
 	elif kind == "grenade" and hostile:
 		game.blast(global_position + Vector3(0, 0.15, 0), 6.0, 70.0, 110.0, "frag")
 	elif kind == "grenade":

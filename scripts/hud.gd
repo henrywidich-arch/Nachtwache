@@ -25,7 +25,7 @@ const SHOP_NOTES := {
 const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "SCHWER"], ["class", "KLASSE"], ["mods", "AUFSÄTZE"], ["gear", "AUSRÜSTUNG"], ["use", "VERBRAUCH"], ["team", "TEAM"]]
 ## What is carried in the pockets and used with one key: item, key, short name. The
 ## syringe is not counted: its tile shows the seconds until it is ready again.
-const TILES := [["syringe", "Q", "SPRITZE"], ["grenade", "G", "FRAG"], ["flashbang", "T", "BLEND"], ["molotov", "H", "BRAND"], ["claymore", "B", "MINE"]]
+const TILES := [["syringe", "Q", "SPRITZE"], ["grenade", "G", "FRAG"], ["flashbang", "T", "BLEND"], ["molotov", "H", "BRAND"], ["heal", "J", "HEIL"], ["claymore", "B", "MINE"]]
 ## The keys, as the settings list them.
 const KEYS := [
 	["W A S D", "Bewegen"], ["Maus", "Umsehen"], ["Linke Maustaste", "Schießen"], ["Rechte Maustaste", "Zielen"],
@@ -359,7 +359,7 @@ func _build_play_ui() -> void:
 	var pockets := HBoxContainer.new()
 	pockets.alignment = BoxContainer.ALIGNMENT_END
 	pockets.add_theme_constant_override("separation", 6)
-	_anchored(pockets, Control.PRESET_BOTTOM_RIGHT, -380, -218, -32, -158)
+	_anchored(pockets, Control.PRESET_BOTTOM_RIGHT, -446, -218, -32, -158)
 	for entry in TILES:
 		var tile := PanelContainer.new()
 		var plate := _plate(0.6)
@@ -687,7 +687,7 @@ func _process(delta: float) -> void:
 	var held: float = game.help_share()
 	hold_bar.visible = held > 0.0
 	hold_bar.value = held
-	armor_label.text = ("" if player.armor <= 0.0 else "RÜSTUNG %d" % ceili(player.armor)) + ("" if player.plate_level <= 0 else "     WESTE %s" % "I".repeat(player.plate_level))
+	armor_label.text = ("" if player.armor <= 0.0 else "RÜSTUNG %d" % ceili(player.armor)) + ("" if player.plate_level <= 0 else "     WESTE %s" % "I".repeat(player.plate_level)) + ("" if player.buff_left <= 0.0 else "     GESTÄRKT %d s" % ceili(player.buff_left))
 	loadout_left = maxf(0.0, loadout_left - delta)
 	loadout_box.modulate.a = minf(1.0, loadout_left * 2.0)
 	# The pockets: one tile per key, dim when it is empty, lit while it is in the hand.

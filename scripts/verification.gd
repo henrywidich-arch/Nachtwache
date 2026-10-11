@@ -2851,7 +2851,91 @@ func _companions(game: Node3D) -> void:
 	mate.receive_damage(9999.0)
 	mate._recover(Teammate.DOWN_SECONDS + 0.1)
 	expect(not mate.down and mate.rising_left > 0.0, "Left alone, a companion still gets up by itself after %.0f s" % Teammate.DOWN_SECONDS)
+	mate._recover(6.0)
+	await _heal_grenade(game)
 	game.start_run()
+
+## The heal grenade: where it comes to rest a field opens that heals the survivors in it
+## and nobody else; improved, the field raises whoever lies in it, and strengthened.
+func _heal_grenade(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var field: HealField = game.heal
+	var mate: Teammate = game.team[0]
+	var other: Teammate = game.team[1]
+	# (The checks let the field's time pass themselves.)
+	field.set_physics_process(false)
+	var sold: bool = Survivor.GOODS.has("heal") and str(Survivor.GOODS.heal.group) == "use" and int(Survivor.GOODS.heal.max) >= 1 and int(Survivor.GOODS.heal.price) > 0 and Survivor.GOODS.has("heal_kit") and InputMap.has_action("throw_heal") and Survivor.THROW_KEYS.has("heal") and Throwable.KINDS.has("heal")
+	var pocket := false
+	for entry in SurvivalHUD.TILES:
+		pocket = pocket or str(entry[0]) == "heal"
+	var asked: int = game.item_price("heal_kit")
+	player.take_item("heal_kit")
+	sold = sold and pocket and asked > 0 and game.item_price("heal_kit") == -1 and player.heal_level == 1
+	player.heal_level = 0
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.items.heal = 1
+	player.throw_cooldown = 0.0
+	player.throw("heal")
+	var can: Throwable = null
+	for node in game.ordnance.get_children():
+		if node is Throwable and (node as Throwable).kind == "heal":
+			can = node
+	var thrown: bool = can != null and int(player.items.heal) == 0
+	if can != null:
+		can.fuse = 0.0
+	await frames(3)
+	expect(sold and thrown and not is_instance_valid(can) and field.fields.size() == 1 and int(field.fields[0].level) == 0, "The heal grenade is sold with the other grenades and thrown like them (key J); where it comes to rest its field opens. Its improvement is sold with the equipment")
+	# In the field: the survivor and a companion are healed. Outside it, and the infected, are not.
+	field.clear()
+	var at := Vector3(0, 0, 27.0)
+	field.open(at, 0)
+	face(game, at + Vector3(1.0, 0.05, 0), PI)
+	player.health = 40.0
+	player.armor = 0.0
+	mate.global_position = at + Vector3(-1.0, 0.05, 0.6)
+	mate.health = mate.max_health * 0.3
+	other.global_position = at + Vector3(HealField.RADIUS + 2.5, 0.05, 0)
+	other.health = other.max_health * 0.3
+	var foe: Infected = game.spawn_enemy("mauler")
+	foe.set_physics_process(false)
+	foe.position = at + Vector3(0, 0.05, -1.2)
+	await frames(2)
+	foe.health = foe.max_health * 0.5
+	field.step(2.0)
+	var healed: bool = player.health >= 40.0 + HealField.HEAL_PER_SECOND * 1.5 and player.health <= 40.0 + HealField.HEAL_PER_SECOND * 2.6 and mate.health >= mate.max_health * (0.3 + HealField.MATE_SHARE_PER_SECOND * 1.5) and mate.health <= mate.max_health * (0.3 + HealField.MATE_SHARE_PER_SECOND * 2.6)
+	var only_them: bool = is_equal_approx(other.health, other.max_health * 0.3) and is_equal_approx(foe.health, foe.max_health * 0.5) and not field.field_at(foe.global_position).is_empty() and field.field_at(other.global_position).is_empty()
+	# One who lies in a plain field stays down.
+	mate.receive_damage(9999.0)
+	field.step(HealField.RAISE_SECONDS + 1.0)
+	expect(healed and only_them and mate.down, "The field heals the survivor (to %.0f from 40) and a companion in it, not whoever stands outside and not the infected; a plain field raises nobody" % player.health)
+	# Improved, it raises whoever lies in it - a companion and the survivor himself - and
+	# they get up strengthened: they take less, and their shots do more.
+	field.clear()
+	field.open(at, 1)
+	var plain_shot: float = mate.strength()
+	var plain_bonus: float = player._bonus(Survivor.WEAPONS.rifle, foe, false)
+	player.go_down()
+	field.step(HealField.RAISE_SECONDS + 0.6)
+	var raised: bool = not mate.down and mate.rising_left > 0.0 and mate.buff_left > 0.0 and not player.down and player.buff_left > 0.0
+	mate._recover(6.0)
+	var before: float = mate.health
+	mate.receive_damage(50.0)
+	var warded: bool = is_equal_approx(before - mate.health, 50.0 * Teammate.ARMOUR * HealField.BUFF_WARD) and is_equal_approx(mate.strength(), plain_shot * HealField.BUFF_DAMAGE) and mate.name_tag.text.contains("GESTÄRKT")
+	player.health = 100.0
+	player.armor = 0.0
+	player.receive_damage(20.0)
+	game.hud._process(0.05)
+	warded = warded and is_equal_approx(100.0 - player.health, 20.0 * HealField.BUFF_WARD) and is_equal_approx(player._bonus(Survivor.WEAPONS.rifle, foe, false), plain_bonus * HealField.BUFF_DAMAGE) and game.hud.armor_label.text.contains("GESTÄRKT")
+	# The strength wears off, and so does the field.
+	player.buff_left = 0.01
+	mate.buff_left = 0.01
+	mate.set_physics_process(true)
+	await frames(3)
+	mate.set_physics_process(false)
+	field.step(HealField.SECONDS + 1.0)
+	expect(raised and warded and HealField.BUFF_WARD < 1.0 and HealField.BUFF_DAMAGE > 1.0 and player.buff_left == 0.0 and mate.buff_left <= 0.0 and not mate.name_tag.text.contains("GESTÄRKT") and field.fields.is_empty(), "Improved, the field raises whoever lies in it after %.1f s, from a distance; they get up strengthened for %.0f s (the HUD says so), and both wear off" % [HealField.RAISE_SECONDS, HealField.BUFF_SECONDS])
+	foe.receive_hit(99999.0, Vector3.FORWARD)
+	field.set_physics_process(true)
 
 ## The plain infected of the second mission: many of them wear what the Hive's people wore -
 ## a few at the villa and the station, most of them in the facility. The farm knows none.
@@ -4747,6 +4831,16 @@ func bot(game: Node3D) -> void:
 	var squad_kills := 0
 	for mate in game.team:
 		squad_kills += mate.kills
+	# Who is still on the field when the bot stops (a night that does not end has somebody left).
+	for node in get_tree().get_nodes_in_group("infected"):
+		var rest := node as Infected
+		if rest != null and not rest.dead:
+			print("BOT_LEFT %s at %s absent=%s health=%.0f away=%.1f" % [rest.kind, rest.global_position.snapped(Vector3.ONE * 0.1), str(rest.absent), rest.health, rest.global_position.distance_to(game.player.global_position)])
+			var chest: Vector3 = rest.global_position + Vector3(0, float(rest.spec.height) * 0.6, 0)
+			var prey_at := "-" if not is_instance_valid(rest.prey) else "%s %s" % [rest.prey.get_class() if not rest.prey is Teammate else (rest.prey as Teammate).label, str(rest.prey.global_position.snapped(Vector3.ONE * 0.1))]
+			print("BOT_LEFT   prey=%s alert=%s held=%.1f player at %s sees=%s" % [prey_at, str(rest.alert), rest.held_left, str(game.player.global_position.snapped(Vector3.ONE * 0.1)), str(game.player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(game.player.camera.global_position, chest, 1)).is_empty())])
+			for mate in game.team:
+				print("BOT_LEFT   %s at %s down=%s order=%s target=%s sees=%s ammo=%d reload=%.1f hold_fire=%.1f" % [mate.label, str(mate.global_position.snapped(Vector3.ONE * 0.1)), str(mate.down), mate.order, "-" if mate.target == null else mate.target.kind, str(mate._sees(chest)), mate.ammo, mate.reload_left, mate.hold_fire])
 	print("BOT_SQUAD downs=%d revives=%d" % [game.squad_downs, int(game.stats.revives)])
 	print("BOT_RESULT state=%s round=%d kills=%d squad_kills=%d score=%d heals=%d seen=%s stuck=%d weather_loops=%s" % [game.state, game.wave, game.kills, squad_kills, game.score, heals, str(seen), stuck.size(), str(game.sounds.rain.playing and game.sounds.ambience.playing)])
 	print("BOT_ROUNDS ", " ".join(PackedStringArray(durations)))

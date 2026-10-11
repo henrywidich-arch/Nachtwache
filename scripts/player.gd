@@ -128,6 +128,9 @@ const GOODS := {
 	"molotov": {"label": "MOLOTOWCOCKTAIL", "price": 70, "max": 3, "group": "use", "note": "Taste H. Zerplatzt beim Aufschlag: Der Boden brennt einige Sekunden, und wer hindurchläuft, brennt weiter."},
 	"claymore": {"label": "CLAYMORE", "price": 90, "max": 4, "group": "use", "note": "Taste B. Zündet, sobald etwas davor läuft."},
 	"revive": {"label": "ADRENALINSPRITZE", "price": 300, "max": 1, "group": "use", "note": "Rettet dich einmal, wenn dein Leben auf null fällt."},
+	"heal": {"label": "HEILGRANATE", "price": 90, "max": 2, "group": "use", "note": "Taste J. Öffnet für einige Sekunden ein Heilfeld: Wer darin steht – du, Mitspieler, Begleiter –, wird geheilt. Infizierten nützt es nichts."},
+	# What makes the field of the heal grenade raise the fallen (Survivor.heal_level).
+	"heal_kit": {"label": "HEILFELD: WIEDERBELEBUNG", "prices": [350], "group": "gear", "note": "Das Feld der Heilgranate richtet auch auf, wer darin am Boden liegt – aus der Ferne, ohne [E]. Wer so aufsteht, ist einige Sekunden gestärkt."},
 	"vest": {"label": "SCHUTZWESTE", "price": 150, "group": "gear", "note": "50 Rüstung. Rüstung fängt 60 % jedes Treffers ab."},
 	"armor": {"label": "SCHWERE RÜSTUNG", "price": 300, "group": "gear", "note": "100 Rüstung."},
 	"plates": {"label": "BALLISTISCHE WESTE", "prices": [160, 260, 400], "group": "gear", "note": "C.R.U.-Kugeln und -Granaten: 25 / 40 / 55 % weniger Schaden"},
@@ -194,7 +197,12 @@ var controlled := false
 var menu_open := false
 ## Co-op: out of the fight until the partner helps or the round ends.
 var down := false
-var items := {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0}
+var items := {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0}
+## 1 once the improvement of the heal grenade is bought: its field raises the fallen.
+var heal_level := 0
+## Seconds the survivor is still strengthened (a heal field has put him back on his feet):
+## he takes less and his shots do more, see HealField.
+var buff_left := 0.0
 var armor := 0.0
 ## Level of the ballistic plates, 0 to 3.
 var plate_level := 0
@@ -216,7 +224,7 @@ const LAUNCH_SHOWN := 4.8
 const THROW_SWING := 0.16
 const THROW_AIM_AFTER := 0.2
 ## The key that readies and throws each thing.
-const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov"}
+const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov", "heal": "throw_heal"}
 ## A blow with the weapon (key V): how far it reaches and how wide (the cosine of half its
 ## angle), what it does, how fast whoever is struck is thrown back and for how long he
 ## reels, and the seconds until the next blow.
@@ -494,6 +502,8 @@ func take_item(id: String) -> void:
 			filter_left = filter_capacity()
 		"sling":
 			extra_slots = mini((GOODS.sling.prices as Array).size(), extra_slots + 1)
+		"heal_kit":
+			heal_level = 1
 		_:
 			items[id] = int(items[id]) + 1
 
@@ -565,6 +575,7 @@ func throw(kind: String) -> void:
 	var body := Throwable.new()
 	body.game = game
 	body.kind = kind
+	body.level = heal_level
 	game.ordnance.add_child(body)
 	body.global_position = camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15
 	body.linear_velocity = -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5
@@ -895,6 +906,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		ready_throw("flashbang")
 	if event.is_action_pressed("throw_molotov"):
 		ready_throw("molotov")
+	if event.is_action_pressed("throw_heal"):
+		ready_throw("heal")
 	if event.is_action_pressed("melee"):
 		melee()
 	if event.is_action_pressed("syringe"):
@@ -907,6 +920,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_cycle(-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
 
 func _physics_process(delta: float) -> void:
+	buff_left = maxf(0.0, buff_left - delta)
 	shot_cooldown = maxf(0, shot_cooldown - delta)
 	throw_cooldown = maxf(0, throw_cooldown - delta)
 	melee_cooldown = maxf(0, melee_cooldown - delta)
@@ -1192,6 +1206,8 @@ func _show_flame(on: bool) -> void:
 ## take off a soldier's armour.
 func _bonus(data: Dictionary, enemy: Infected, headshot: bool) -> float:
 	var factor: float = game.skills.damage_factor(enemy, headshot, current_weapon)
+	if buff_left > 0.0:
+		factor *= HealField.BUFF_DAMAGE
 	if Skills.kind_of(enemy) == "special":
 		factor *= float(data.get("special", 1.0))
 	if game.net.joined and enemy is CruSoldier:
@@ -1680,6 +1696,8 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 	if not controlled or health <= 0:
 		return
 	amount *= game.skills.harm_factor(kind, by)
+	if buff_left > 0.0:
+		amount *= HealField.BUFF_WARD
 	# (From here on a blast is a blow like any other: armour takes its share of it.)
 	if kind in ["blast", "burst"]:
 		kind = ""
@@ -1739,6 +1757,11 @@ func go_down() -> void:
 	else:
 		game.hud.announce("DU BIST AM BODEN", "Dein Mitspieler kann dir aufhelfen. Nach der Runde stehst du wieder.", 5.0)
 
+## Strengthened for `seconds` (a heal field has put him back on his feet).
+func strengthen(seconds: float) -> void:
+	buff_left = maxf(buff_left, seconds)
+	game.hud.announce("GESTÄRKT", "Für %d Sekunden steckst du mehr weg und triffst härter." % int(seconds), 2.5)
+
 func get_up() -> void:
 	down = false
 	health = 50.0
@@ -1772,7 +1795,7 @@ func reset_survivor() -> void:
 	trauma = 0
 	mist_exposure = 0
 	mist_damage_left = 0
-	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0}
+	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0}
 	trigger_held = false
 	crouched = false
 	(body_shape.shape as CapsuleShape3D).height = STAND_HEIGHT
@@ -1786,6 +1809,8 @@ func reset_survivor() -> void:
 	burn_report.clear()
 	armor = 0.0
 	plate_level = 0
+	heal_level = 0
+	buff_left = 0.0
 	clung_by = null
 	mask_level = 0
 	filter_left = 0.0

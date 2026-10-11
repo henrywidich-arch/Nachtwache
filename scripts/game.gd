@@ -197,6 +197,7 @@ var story: StoryDirector
 var gas: GasField
 ## Fire on the ground, from Molotov cocktails.
 var fire: FireField
+var heal: HealField
 ## True while a blast is being worked out: a shield does not stop that.
 ## (Also set for a bullet that an ability lets through a shield.)
 var blasting := false
@@ -297,6 +298,10 @@ func _ready() -> void:
 	fire.name = "Fire"
 	fire.game = self
 	add_child(fire)
+	heal = HealField.new()
+	heal.name = "Heal"
+	heal.game = self
+	add_child(heal)
 	mission = MissionDirector.new()
 	mission.name = "Mission"
 	mission.game = self
@@ -477,6 +482,9 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_boomer_check")
+	elif "--heal-check" in args:
+		check_mode = true
+		call_deferred("_run_heal_check")
 	elif "--map-check" in args:
 		check_mode = true
 		call_deferred("_run_map_check")
@@ -567,7 +575,7 @@ func _warm_up() -> void:
 	fade.tween_callback(curtain.queue_free)
 
 func _configure_input() -> void:
-	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_5, "squad_free": KEY_6, "crouch": KEY_C, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "melee": KEY_V, "syringe": KEY_Q, "test_menu": KEY_F1}
+	var bindings := {"move_forward": KEY_W, "move_back": KEY_S, "move_left": KEY_A, "move_right": KEY_D, "sprint": KEY_SHIFT, "jump": KEY_SPACE, "reload": KEY_R, "interact": KEY_E, "flashlight": KEY_F, "pause": KEY_ESCAPE, "next_wave": KEY_N, "weapon_1": KEY_1, "weapon_2": KEY_2, "weapon_3": KEY_3, "weapon_4": KEY_4, "weapon_5": KEY_5, "weapon_6": KEY_6, "weapon_7": KEY_7, "weapon_8": KEY_8, "weapon_9": KEY_9, "weapon_0": KEY_0, "skip_round": KEY_F2, "fullscreen": KEY_F11, "squad_hold": KEY_X, "squad_follow": KEY_5, "squad_free": KEY_6, "crouch": KEY_C, "throw_grenade": KEY_G, "throw_flash": KEY_T, "place_claymore": KEY_B, "throw_molotov": KEY_H, "throw_heal": KEY_J, "melee": KEY_V, "syringe": KEY_Q, "test_menu": KEY_F1}
 	for action in bindings:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -683,6 +691,7 @@ func _clear_match_nodes() -> void:
 	story.clear()
 	gas.clear()
 	fire.clear()
+	heal.clear()
 	for key in squad_levels:
 		squad_levels[key] = 0
 	medic_round = 0
@@ -1391,6 +1400,16 @@ func gas_burst(center: Vector3) -> void:
 		return
 	gas.burst(fx.floor_below(center + Vector3.UP * 0.3))
 
+## A heal grenade has come to rest: its field opens there (HealField). In a co-op match the
+## host opens it for both. `level`: 1 if it also raises the fallen.
+func heal_burst(center: Vector3, level: int = 0) -> void:
+	if net.joined:
+		net.request_heal(center, level)
+		return
+	var at := fx.floor_below(center + Vector3.UP * 0.3)
+	heal.open(at, level)
+	net.send_heal(at, level)
+
 ## A Molotov cocktail has burst: the ground around it burns for a while. In a co-op match
 ## the host lights the fire for both. `by`: the partner, if the bottle was his.
 func fire_burst(center: Vector3, by: Node = null) -> void:
@@ -1453,6 +1472,8 @@ func item_price(id: String) -> int:
 			return -1 if player.plate_level >= data.prices.size() else price(int(data.prices[player.plate_level]))
 		"sling":
 			return -1 if player.extra_slots >= data.prices.size() else price(int(data.prices[player.extra_slots]))
+		"heal_kit":
+			return -1 if player.heal_level >= data.prices.size() else price(int(data.prices[player.heal_level]))
 		"squad_armor", "squad_ammo":
 			# Only for somebody who has a squad with him.
 			var level := int(squad_levels[id])
@@ -3579,6 +3600,38 @@ func _run_blast_check() -> void:
 		await get_tree().create_timer(float(moments[i])).timeout
 		await _capture(folder, "blast_%d.png" % (i + 1))
 	print("BLAST_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## Pictures of the heal grenade's field - a plain one and one that raises the fallen - from
+## the survivor's eye, from above, and beside a fire and a bank of gas to tell them apart
+## (--heal-check --capture-dir=<folder>).
+func _run_heal_check() -> void:
+	var folder := _capture_dir()
+	await get_tree().create_timer(1.5).timeout
+	start_run()
+	set_process(false)
+	hud.banner_left = 0
+	hud.radio_left = 0
+	mission.plain()
+	preparation_left = 9999.0
+	var south := Vector3(0, 0, 13.0)
+	_place_player(south + Vector3(0, 0.05, 0), 180)
+	for mate in team:
+		mate.set_physics_process(false)
+	await get_tree().create_timer(1.0).timeout
+	heal.open(south + Vector3(-4.5, 0, 9.0), 0)
+	heal.open(south + Vector3(4.5, 0, 9.0), 1)
+	if team.size() > 0:
+		team[0].global_position = south + Vector3(4.5, 0.05, 9.0)
+		team[0].strengthen(HealField.BUFF_SECONDS)
+	await get_tree().create_timer(1.6).timeout
+	await _capture_from(folder, "heal_1_eye.png", south + Vector3(0, 1.6, 0), south + Vector3(0, 0.6, 9.0), 62)
+	await _capture_from(folder, "heal_2_above.png", south + Vector3(0.2, 13.0, 8.6), south + Vector3(0, 0, 9.0), 62)
+	fire.ignite(south + Vector3(-4.5, 0, 17.5))
+	gas._add(south + Vector3(4.5, 0, 17.5), 60.0, 1.0)
+	await get_tree().create_timer(1.5).timeout
+	await _capture_from(folder, "heal_3_beside_fire_and_gas.png", south + Vector3(0, 9.0, 3.0), south + Vector3(0, 0, 13.0), 62)
+	print("HEAL_CAPTURE_COMPLETE fields=%d" % heal.fields.size())
 	get_tree().quit()
 
 ## Pictures of the two exploding infected side by side, of the burst of each a few moments
