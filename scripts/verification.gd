@@ -3128,7 +3128,7 @@ func _heal_grenade(game: Node3D) -> void:
 	var other: Teammate = game.team[1]
 	# (The checks let the field's time pass themselves.)
 	field.set_physics_process(false)
-	var sold: bool = Survivor.GOODS.has("heal") and str(Survivor.GOODS.heal.group) == "use" and int(Survivor.GOODS.heal.max) >= 1 and int(Survivor.GOODS.heal.price) > 0 and Survivor.GOODS.has("heal_kit") and InputMap.has_action("throw_heal") and Survivor.THROW_KEYS.has("heal") and Throwable.KINDS.has("heal")
+	var sold: bool = Survivor.GOODS.has("heal") and str(Survivor.GOODS.heal.group) == "use" and int(Survivor.GOODS.heal.max) >= 1 and int(Survivor.GOODS.heal.price) > 0 and Survivor.GOODS.has("heal_kit") and str(Survivor.GOODS.heal_kit.group) == "gear" and "use" in HiveStations.TABS and "gear" in HiveStations.TABS and InputMap.has_action("throw_heal") and Survivor.THROW_KEYS.has("heal") and Throwable.KINDS.has("heal")
 	var pocket := false
 	for entry in SurvivalHUD.TILES:
 		pocket = pocket or str(entry[0]) == "heal"
