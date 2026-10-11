@@ -5375,6 +5375,9 @@ func coop(game: Node3D, as_host: bool) -> void:
 	# The second exploding infected: what the host sent, the look of every Charger each side
 	# saw (by its number, which both sides share), and the puddles that lay about.
 	var wet_step := 0
+	# (A heal grenade of the guest: the host opens its field, and both sides must see it.)
+	var heal_thrown := false
+	var heal_seen := false
 	var wet_one: Infected = null
 	var charger_looks := {}
 	var wet_puddles := 0
@@ -5661,6 +5664,10 @@ func coop(game: Node3D, as_host: bool) -> void:
 			if foe is Infected and (foe as Infected).kind == "charger" and (foe as Infected).model != null:
 				charger_looks[(foe as Infected).net_id] = str((foe as Infected).model.kind)
 		wet_puddles = maxi(wet_puddles, game.fx.puddles.size())
+		if not as_host and not heal_thrown and clock > seconds * 0.55:
+			heal_thrown = true
+			game.heal_burst(game.player.global_position, 0)
+		heal_seen = heal_seen or not game.heal.fields.is_empty()
 		for foe in game.enemies.get_children():
 			if foe is CruSoldier and not foe.dead:
 				cru_seen = true
@@ -5692,6 +5699,7 @@ func coop(game: Node3D, as_host: bool) -> void:
 			if item.done:
 				items_done += 1
 	print("%s_TASKS tasks=%d items=%d done=%d props=%d" % [tag, game.mission.tasks.size(), items_total, items_done, game.mission.props.size()])
+	print("%s_HEAL field_seen=%s" % [tag, str(heal_seen)])
 	# What this side heard of its own hits: never more ticks than shots fired here, never
 	# more answers to a kill than kills made here.
 	print("%s_ANSWERS shots=%d ticks=%d kill_answers=%d own_kills=%d dings=%d ding_kills=%d" % [tag, shots, int(game.sounds.answers.hit_body) + int(game.sounds.answers.hit_head), int(game.sounds.answers.hit_kill), game.kills, int(game.sounds.answers.ding) + int(game.sounds.answers.ding_head), int(game.sounds.answers.ding_kill)])
