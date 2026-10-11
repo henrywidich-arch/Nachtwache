@@ -680,8 +680,12 @@ func _skin_ends(room: Dictionary, side: int, a0: float, a1: float) -> Array:
 		return [a0 - (depth if skins.has(WEST) else 0.0), a1 + (depth if skins.has(EAST) else 0.0)]
 	return [a0 - HALF, a1 + HALF]
 
+## What a room is made of - a piece of wall, a ceiling, a pane - stands firm however
+## narrow it is (see CabinMap.snag_kind).
 func _part_shape(centre: Vector3, size: Vector3) -> void:
+	snag_firm += 1
 	_add_shape(body, centre, size)
+	snag_firm -= 1
 
 func _wall_piece(room: Dictionary, side: int, look: Dictionary, a: float, b: float, y0: float, y1: float, clip0: float, clip1: float) -> void:
 	var skin := _skin_of(room, side)
@@ -1318,7 +1322,10 @@ func _handrail(foot: Vector3, head: Vector3, offset: float, tint: Color = Color(
 		var high := foot.lerp(head, float(i + 1) / pieces) + shift
 		var bottom := minf(low.y, high.y) - 0.25
 		var top := maxf(low.y, high.y) + 1.05
+		# (A railing keeps one from falling: it stands firm, short as its pieces are.)
+		snag_firm += 1
 		_add_shape(rails, Vector3((low.x + high.x) * 0.5, (bottom + top) * 0.5, (low.z + high.z) * 0.5), Vector3(0.08, top - bottom, Vector2(high.x - low.x, high.z - low.z).length()), Basis(slope.x, Vector3.UP, forward))
+		snag_firm -= 1
 
 ## A level steel railing between two points on a floor; bodies stop, shots pass.
 func _guard_rail(from: Vector3, to: Vector3, tint: Color = Color("2a2d2f"), height: float = 1.05) -> void:
@@ -1338,6 +1345,8 @@ func _guard_rail(from: Vector3, to: Vector3, tint: Color = Color("2a2d2f"), heig
 # ---------------------------------------------------------------- building
 
 func _begin_build() -> void:
+	# (Here a post is a thing nobody should hang on, too: see CabinMap.snag_goes.)
+	snag_goes = ["low", "thin", "small"]
 	random.seed = 60931
 	flicker_noise.frequency = 0.9
 	obstacles.clear()
@@ -1970,7 +1979,21 @@ func _register(center: Vector3, size: Vector3, yaw: float = 0.0) -> void:
 		if top > floor_y + 0.12 and bottom < floor_y + 1.9 and (floors[level].bounds as Rect2).intersects(rect):
 			obstacles[level].append(rect)
 
+## The floors a spot of the map can stand on: those whose ground it lies over.
+func _snag_levels(flat: Vector2) -> Array:
+	var levels: Array = []
+	for level in range(floors.size()):
+		if (floors[level].bounds as Rect2).has_point(flat):
+			levels.append(level)
+	return levels
+
 func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float = 0.0) -> void:
+	# (A small thing on a floor is not solid at all: nobody hangs on it. See CabinMap.snag_kind.)
+	if snag_rule and snag_firm == 0:
+		var small := _snag_goes(center, size)
+		if small != "":
+			snag_dropped[small] += 1
+			return
 	_add_shape(body, center, size, Basis(Vector3.UP, yaw))
 	if not blocks_path:
 		return
@@ -1981,7 +2004,9 @@ func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float
 		var floor_y := float(floors[level].y)
 		if (floors[level].bounds as Rect2).has_point(flat) and top > floor_y + 0.12 and top < floor_y + 1.2 and center.y - size.y * 0.5 < floor_y + 0.5:
 			var cap := floor_y + 1.3 - top
+			snag_firm += 1
 			_add_shape(rails, Vector3(center.x, top + cap * 0.5, center.z), Vector3(size.x, cap, size.z), Basis(Vector3.UP, yaw))
+			snag_firm -= 1
 
 # ---------------------------------------------------------------- paths
 

@@ -1676,7 +1676,8 @@ func _door_tag(room_id: String, side: int, at: float, code: String, title: Strin
 ## of the two meet in a point there, and behind it is nothing.
 func _corner_post(pos: Vector3, tall: float) -> void:
 	_part("plate", pos + Vector3(0, tall * 0.5, 0), Vector3(0.56, tall, 0.56), Color("1c2023"))
-	_solid(pos + Vector3(0, tall * 0.5, 0), Vector3(0.56, tall, 0.56), false)
+	# (The paths know it: a body sent past it would hang on its corner.)
+	_solid(pos + Vector3(0, tall * 0.5, 0), Vector3(0.56, tall, 0.56))
 
 ## A display with the plan of the Hive (see HiveDisplay), `wide` metres across, on which
 ## the cell `here` is marked. Kinds: "wall" (`pos` is the middle of the screen on the face
@@ -1969,8 +1970,8 @@ func _belt_posts(from: Vector3, to: Vector3, belt: Color = Color("8f1d18")) -> v
 		batch.cylinder(mats["steel"], at, 0.16, 0.16, 0.03, Color("2a2e31"), 10)
 		batch.cylinder(mats["steel"], at + Vector3(0, 0.03, 0), 0.03, 0.03, 0.92, Color("8a9094"), 8)
 	var yaw := atan2(-span.z, span.x)
+	# (Nobody hangs on a belt: one walks through it.)
 	_part("plain", (from + to) * 0.5 + Vector3(0, 0.86, 0), Vector3(span.length(), 0.05, 0.012), belt, Vector3(0, rad_to_deg(yaw), 0))
-	_solid((from + to) * 0.5 + Vector3(0, 0.5, 0), Vector3(span.length(), 1.0, 0.1), true, yaw)
 
 ## Somebody under a sheet.
 func _covered(pos: Vector3, yaw: float) -> void:
@@ -4432,7 +4433,8 @@ func _hall_lift(hall: Dictionary) -> void:
 	_hazard(Vector3(-6.0, UNDER + 0.008, lift.z + 4.4), Vector3(6.0, UNDER + 0.008, lift.z + 4.4), Vector3(0.5, 0.016, 0.3), 24)
 	for corner: Vector3 in [Vector3(-3.1, 0, -3.1), Vector3(3.1, 0, -3.1), Vector3(-3.1, 0, 3.1), Vector3(3.1, 0, 3.1)]:
 		_part("plate", lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3), Color("c9a227"))
-		_add_shape(body, lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3))
+		# (A post: the rule of small things says whether it is solid - it is not.)
+		_solid(lift + corner + Vector3(0, 3.0, 0), Vector3(0.3, 6.0, 0.3), false)
 	_part("plate", lift + Vector3(0, 6.1, 0), Vector3(6.62, 0.3, 6.62), Color("1c2023"))
 	# The doors of the shaft in the wall behind it, with their stripes.
 	_face_box(hall, NORTH, "shutter", -2.9, 2.9, 0.0, 5.4, -0.09, 0.03, Color(0.36, 0.38, 0.4))
@@ -4657,7 +4659,8 @@ func _hall_way_hatch(x: float, z: float, turn: int) -> void:
 		var side := Basis(Vector3.UP, k * PI / 2)
 		batch.box(mats["plate"], frame * (side * Vector3(0, rim * 0.5, half - 0.04)), Vector3(wide if k % 2 == 0 else wide - 0.16, rim, 0.08), Color("23282b"), facing * side)
 	_glow_box(frame * Vector3(0, rim - 0.05, 0), Vector3(wide - 0.16, 0.004, wide - 0.16), Color.BLACK, 0.0, facing)
-	_solid(Vector3(x, UNDER + 0.2, z), Vector3(wide, 0.4, wide), true, turn * PI / 2)
+	# (Low as it is, nobody walks over the mouth of a way in.)
+	_firm_solid(Vector3(x, UNDER + 0.2, z), Vector3(wide, 0.4, wide), true, turn * PI / 2)
 	var lid := _way_flap(Transform3D(facing, frame * Vector3(0, rim + 0.02, -(half - 0.02))), wide, wide, Color("3a3f42"), 6, -random.randf_range(100.0, 112.0))
 	_smear(frame * Vector3(0, 0, half + 0.1), frame * Vector3(random.randf_range(-0.4, 0.4), 0, half + 1.7), 0.3)
 	_way("cellar", "containment", frame * Vector3(0, rim, half), facing.z, frame * Vector3(0, 0, half + 0.8), {"node": lid, "deep": 1.5})
@@ -5235,7 +5238,8 @@ func _way_cellar(room_id: String, x: float, z: float, turn: int = 0) -> void:
 	for edge in [-1.0, 1.0]:
 		_placed(frame, "panelwood", Vector3(float(edge) * 0.2, rim - 0.02, -half + 0.12), Vector3(0.05, 0.3, 0.05), wood.darkened(0.2))
 	_placed(frame, "panelwood", Vector3(0, rim - 0.02, -half + 0.12), Vector3(0.36, 0.035, 0.035), wood.darkened(0.2))
-	_solid(Vector3(x, floor_y + rim * 0.5, z), Vector3(wide, rim, wide), true, turn * PI / 2)
+	# (Low as it is, nobody walks over the mouth of a way in.)
+	_firm_solid(Vector3(x, floor_y + rim * 0.5, z), Vector3(wide, rim, wide), true, turn * PI / 2)
 	var lid := _way_flap(Transform3D(facing, frame * Vector3(0, rim + 0.03, -(half - 0.02))), wide, wide, wood, 0, -random.randf_range(96.0, 104.0), "panelwood", 0.045)
 	_smear(frame * Vector3(0, 0, half + 0.1), frame * Vector3(random.randf_range(-0.4, 0.4), 0, half + 1.9), 0.3)
 	_way("cellar", room_id, frame * Vector3(0, rim, half), facing.z, frame * Vector3(0, 0, half + 0.8), {"node": lid, "deep": 1.5})
@@ -5497,7 +5501,10 @@ func _way_fall(room_id: String, side: int, a: float) -> void:
 		var block := Vector3(0, float(step[2]) * 0.5, float(step[0]))
 		var size := Vector3(2.15, float(step[2]), float(step[1]))
 		_placed(frame, "beton", block, size, _vary(slab_tint.darkened(0.3), 0.04), Vector3(0, random.randf_range(-3, 3), 0))
+		# (The steps of the heap they come down by stand firm, the lowest too.)
+		snag_firm += 1
 		_add_shape(body, frame * block, size, basis)
+		snag_firm -= 1
 	# What it carried down with it lies on it: pieces of the finish of the ceiling, cracks.
 	for k in range(5):
 		var along := random.randf_range(0.12, 0.9)

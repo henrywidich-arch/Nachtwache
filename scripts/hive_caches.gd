@@ -711,7 +711,7 @@ func _answer(index: int, delta: float) -> void:
 	var pack: Array[String] = []
 	var rare := false
 	for k in range(count):
-		var kind := str(kinds[randi() % kinds.size()])
+		var kind := HiveDirector.pick(kinds)
 		if HiveEntries.RARE.has(kind):
 			kind = "mauler" if rare else kind
 			rare = true
@@ -1286,7 +1286,8 @@ static func furnish(map: HiveMap) -> void:
 		node.add_child(shine)
 		site.shine = shine
 		var yaw := atan2(-frame.basis.x.z, frame.basis.x.x)
-		map._solid(frame * Vector3(0, size.y * 0.5, (size.z + (0.22 if str(spec[4]) == "kiste" else 0.0)) * 0.5), Vector3(size.x, size.y, size.z - (0.22 if str(spec[4]) == "kiste" else 0.0)), true, yaw)
+		# (A cache stands firm, low as a crate of weapons is: one walks up to it, not through it.)
+		map._firm_solid(frame * Vector3(0, size.y * 0.5, (size.z + (0.22 if str(spec[4]) == "kiste" else 0.0)) * 0.5), Vector3(size.x, size.y, size.z - (0.22 if str(spec[4]) == "kiste" else 0.0)), true, yaw)
 		map._end_zone()
 		map.caches.append(site)
 	map.batch = kept_batch

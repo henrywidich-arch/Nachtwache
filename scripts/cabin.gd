@@ -498,7 +498,127 @@ func _add_shape(owner_body: StaticBody3D, center: Vector3, size: Vector3, orient
 	var collision := CollisionShape3D.new()
 	collision.shape = shape
 	collision.transform = Transform3D(orientation, center)
+	if snag_firm > 0:
+		collision.set_meta("firm", true)
 	owner_body.add_child(collision)
+
+# --- what one gets stuck on
+
+## Small things on a floor are not solid: nobody should hang on a pot plant, a post, a
+## fallen chair. `_solid` and `_round_solid` ask snag_kind and build nothing for what it
+## calls small - no shape, no cap, no place in the paths; its look stays. (Off: a map as
+## it was built before the rule, for tools/snag_check.gd.)
+var snag_rule := true
+## The kinds of small thing the rule lets go on this map. On the farm posts stay: they
+## carry its porches and roofs, and its walls are built of narrow pieces. The map of
+## mission two lets all three go (HiveCore).
+var snag_goes: Array = ["low", "small"]
+## While above zero, what is made solid stays solid whatever its size, and is marked so:
+## for a builder that wants a small thing to stand firm (see _firm_solid).
+var snag_firm := 0
+## How many colliders the rule has let go, by kind.
+var snag_dropped := {"low": 0, "thin": 0, "small": 0}
+## Below this the top of a thing is under one's knee.
+const SNAG_LOW := 0.59
+## A low thing longer than this is no prop but a bench, a cot, a kerb, a row of sandbags.
+const SNAG_LONG := 1.7
+## A post: no wider than SNAG_THIN across and no longer than SNAG_SHORT along.
+const SNAG_THIN := 0.3
+const SNAG_SHORT := 0.6
+## A small thing: no wider than SNAG_SMALL either way, its top below one's hip.
+const SNAG_SMALL := 0.7
+const SNAG_HIP := 0.85
+
+## The floors a spot of the map can stand on (their numbers).
+func _snag_levels(_flat: Vector2) -> Array:
+	return [0, 1, 2]
+
+## The floor a box stands on and how far its top is over it: [number of the floor, metres],
+## or [] for what is part of a floor (its top no higher than a step) or hangs clear of
+## one's knee.
+func _snag_floor(center: Vector3, size: Vector3) -> Array:
+	var top := center.y + size.y * 0.5
+	var bottom := center.y - size.y * 0.5
+	for level in _snag_levels(Vector2(center.x, center.z)):
+		var floor_y := level_height(level)
+		# (Not what comes up through it from the storey below: a wall, a shaft.)
+		if top > floor_y + 0.12 and bottom < floor_y + 0.5 and bottom > floor_y - 0.6:
+			return [level, top - floor_y]
+	return []
+
+## What makes a box on a floor a thing nobody should hang on: "low" (its top under one's
+## knee), "thin" (a post) or "small" (a pot plant, a bin) - or "" for what stands firm:
+## furniture, crates from hip height, walls, pillars, railings, anything long. `size` is
+## the thing's own size, before it is turned.
+func snag_kind(center: Vector3, size: Vector3) -> String:
+	var stands := _snag_floor(center, size)
+	if stands.is_empty():
+		return ""
+	var wide := maxf(size.x, size.z)
+	var narrow := minf(size.x, size.z)
+	var over := float(stands[1])
+	# (A millimetre of grace: a shape keeps its size less exactly than a script does.)
+	if over < SNAG_LOW and wide <= SNAG_LONG + 0.001:
+		return "low"
+	if narrow <= SNAG_THIN + 0.001 and wide <= SNAG_SHORT + 0.001:
+		return "thin"
+	if wide <= SNAG_SMALL + 0.001 and over <= SNAG_HIP + 0.001:
+		return "small"
+	return ""
+
+## Whether the builders let a box go: a small thing of a kind this map lets go.
+func _snag_goes(center: Vector3, size: Vector3) -> String:
+	var small := snag_kind(center, size)
+	return small if snag_goes.has(small) else ""
+
+## A solid box that stays solid whatever its size (see snag_rule): something small that
+## is meant to stop a body - the foot of a thing one must not walk through.
+func _firm_solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float = 0.0) -> void:
+	snag_firm += 1
+	_solid(center, size, blocks_path, yaw)
+	snag_firm -= 1
+
+## Every collider of the map that stands on a floor, upright (what leans is a ramp), as
+## {shape, at, size, low, high, wide, narrow, level, over, kind, firm}: `kind` is what
+## snag_kind says of it, `firm` whether a builder wanted it solid all the same.
+func floor_solids() -> Array:
+	var found: Array = []
+	for owner_body in [body, rails]:
+		for child in owner_body.get_children():
+			var node := child as CollisionShape3D
+			if node == null:
+				continue
+			var size := Vector3.ZERO
+			if node.shape is BoxShape3D:
+				size = (node.shape as BoxShape3D).size
+			elif node.shape is CylinderShape3D:
+				var drum := node.shape as CylinderShape3D
+				size = Vector3(drum.radius * 2.0, drum.height, drum.radius * 2.0)
+			else:
+				continue
+			var turn := node.transform.basis
+			if absf(turn.y.y) < 0.999:
+				continue
+			var at := node.transform.origin
+			var stands := _snag_floor(at, size)
+			if stands.is_empty():
+				continue
+			var half := (turn.x.abs() * size.x + turn.y.abs() * size.y + turn.z.abs() * size.z) * 0.5
+			found.append({
+				"shape": node, "at": at, "size": size, "low": at - half, "high": at + half, "wide": maxf(size.x, size.z), "narrow": minf(size.x, size.z),
+				"level": int(stands[0]), "over": float(stands[1]), "kind": snag_kind(at, size), "firm": node.has_meta("firm")
+			})
+	return found
+
+## The colliders that should not be there: small things on a floor (snag_kind) that are
+## solid without a builder having wanted it (see _firm_solid). The builders let them go
+## by themselves, so this lists what was made solid past them.
+func snags() -> Array:
+	var found: Array = []
+	for entry in floor_solids():
+		if snag_goes.has(str(entry.kind)) and not bool(entry.firm):
+			found.append(entry)
+	return found
 
 ## Records a box as an obstacle on every storey whose walking space it reaches into.
 func _register(center: Vector3, size: Vector3, yaw: float = 0.0) -> void:
@@ -520,6 +640,12 @@ func _register(center: Vector3, size: Vector3, yaw: float = 0.0) -> void:
 ## nobody can hop onto it, and a sight line at chest height counts it as an obstacle,
 ## while shots still pass over it.
 func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float = 0.0) -> void:
+	# (A small thing on a floor is not solid at all: see snag_kind.)
+	if snag_rule and snag_firm == 0:
+		var small := _snag_goes(center, size)
+		if small != "":
+			snag_dropped[small] += 1
+			return
 	_add_shape(body, center, size, Basis(Vector3.UP, yaw))
 	if not blocks_path:
 		return
@@ -529,7 +655,9 @@ func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float
 		var floor_y := level_height(level)
 		if top > floor_y + 0.12 and top < floor_y + 1.2 and center.y - size.y * 0.5 < floor_y + 0.5:
 			var cap := floor_y + 1.3 - top
+			snag_firm += 1
 			_add_shape(rails, Vector3(center.x, top + cap * 0.5, center.z), Vector3(size.x, cap, size.z), Basis(Vector3.UP, yaw))
+			snag_firm -= 1
 
 ## Box that stops bodies but lets bullets through (railings, fences, window openings).
 func _rail_solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float = 0.0) -> void:
@@ -539,12 +667,19 @@ func _rail_solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: 
 
 ## Upright round obstacle such as a silo or a tank.
 func _round_solid(base: Vector3, radius: float, height: float) -> void:
+	if snag_rule and snag_firm == 0:
+		var small := _snag_goes(base + Vector3(0, height * 0.5, 0), Vector3(radius * 2.0, height, radius * 2.0))
+		if small != "":
+			snag_dropped[small] += 1
+			return
 	var shape := CylinderShape3D.new()
 	shape.radius = radius
 	shape.height = height
 	var collision := CollisionShape3D.new()
 	collision.shape = shape
 	collision.position = base + Vector3(0, height * 0.5, 0)
+	if snag_firm > 0:
+		collision.set_meta("firm", true)
 	body.add_child(collision)
 	_register(base + Vector3(0, height * 0.5, 0), Vector3(radius * 1.8, height, radius * 1.8))
 
@@ -1109,7 +1244,9 @@ func _stair_rail(foot: Vector3, head: Vector3, offset: float, steps: int, tint: 
 		var high := foot.lerp(head, float(i + 1) / pieces) + shift
 		var bottom := low.y - 0.25
 		var top := high.y + 1.1
+		snag_firm += 1
 		_add_shape(rails, Vector3((low.x + high.x) * 0.5, (bottom + top) * 0.5, (low.z + high.z) * 0.5), Vector3(0.08, top - bottom, Vector2(high.x - low.x, high.z - low.z).length()), Basis(-side, Vector3.UP, forward))
+		snag_firm -= 1
 	# Paths keep a little more distance from the newel post at the foot.
 	_register(foot + shift + Vector3(0, 0.6, 0), Vector3(0.3, 1.2, 0.3))
 
@@ -1520,7 +1657,7 @@ func _build_stairs(trim: Color) -> void:
 		var high := -2.4 + i * 0.425
 		var room := STOREY * (3.0 - (high + 0.425)) / 5.4 - 0.32
 		if room > 0.1:
-			_solid(Vector3(high + 0.2125, room * 0.5, -6.98), Vector3(0.425, room, 0.08), false)
+			_firm_solid(Vector3(high + 0.2125, room * 0.5, -6.98), Vector3(0.425, room, 0.08), false)
 	_add_stair(Vector3(3.0, 0, -8.0), Vector3(-2.4, STOREY, -8.0), STAIRWELL, Vector2i(7, -16), Vector2i(-5, -16), 0, 1, "upper", "foot")
 	lettering("OBERGESCHOSS", Vector3(4.88, 2.0, -7.9), 22, Color("c7a25c")).rotation.y = -PI / 2
 
@@ -4101,7 +4238,8 @@ func _build_mast() -> void:
 	_dirt_path([Vector2(27.5, 20.8), Vector2(31.7, 21.3), Vector2(32.2, 27.0), Vector2(31.3, 32.2)], 1.4)
 	_mask_rect(Rect2(base.x - 1.6, base.z - 1.6, 3.2, 3.2), 2)
 	_yard_chunk(base)
-	_prop("concrete", base + Vector3(0, 0.12, 0), Vector3(2.4, 0.24, 2.4), Color("5a5c57"))
+	# (Its foot is no step to hang on: one walks over it. The legs of the mast stand firm.)
+	_prop("concrete", base + Vector3(0, 0.12, 0), Vector3(2.4, 0.24, 2.4), Color("5a5c57"), false)
 	# Four legs that lean together, braced on every side.
 	var levels := 10
 	var rings: Array = []
