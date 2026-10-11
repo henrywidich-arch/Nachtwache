@@ -20,6 +20,35 @@ const GRAVITY := 22.0
 const ARMOUR := 0.525
 ## Being helped up by hand: how long the help may pause before it counts as let go.
 const LIFT_GRACE := 0.25
+## --- what makes them do a little more; all of it rare, and with rests in between.
+## A throw (a grenade or a bottle that harms no survivor): so many infected have to stand
+## within KNOT_REACH metres of one spot (one fewer when a pack is on the squad); the spot
+## has to be THROW_SAFE metres from every survivor - never at the player's feet - and
+## within THROW_RANGE of the thrower. THROW_REST: seconds until the same companion throws
+## again (halved under a pack); SQUAD_THROW_REST: until anybody of the squad does.
+const KNOT_COUNT := 4
+const KNOT_REACH := 3.5
+const THROW_SAFE := 8.0
+const THROW_RANGE := Vector2(7.0, 19.0)
+const THROW_REST := Vector2(40.0, 70.0)
+const SQUAD_THROW_REST := 14.0
+## A heal field for whoever is hurt: thrown to the feet of the player or of a companion
+## whose health is below this share, if he is within this many metres. The rests as above.
+const TREAT_BELOW := 0.45
+const TREAT_RANGE := 14.0
+const TREAT_REST := 70.0
+const SQUAD_TREAT_REST := 40.0
+## Their weapons improve by themselves as the night goes on (no money, no workbench): a
+## step every ARMS_EVERY rounds - the stages of the second mission count as its rounds -
+## each worth ARMS_STEP of their damage, ARMS_TOP steps at the most. And of what a
+## level's infected take more than plain ones (Profile "brood") they make up this share
+## from the start, so that they keep up on the harder levels.
+const ARMS_EVERY := 2
+const ARMS_STEP := 0.15
+const ARMS_TOP := 4
+const ARMS_BROOD := 0.5
+## How close an enemy may be while it goes to help a fallen companion up.
+const TEND_CLEAR := 2.4
 ## Personal space: closer than KEEP_AWAY metres to the player it makes room. It only
 ## catches up when the player is more than FOLLOW_FAR away and stops FOLLOW_NEAR short.
 const KEEP_AWAY := 2.0
@@ -102,6 +131,11 @@ var hold_fire := 0.0
 var crowd := 0
 ## Has called out that the survivor is down; it does so once for every time he falls.
 var leader_called := false
+## Seconds until it may throw something again, and until it may open another heal field.
+var throw_rest := 25.0
+var treat_rest := 15.0
+## The fallen companion it is going to help up, if any.
+var tending: Teammate
 ## Seconds it is still strengthened (a heal field has put it back on its feet): it takes
 ## less and its shots do more, see HealField.
 var buff_left := 0.0
@@ -149,7 +183,25 @@ func outfit(armor: int, rounds: int) -> void:
 ## The factor on what its shots do: the shop's ammunition, how far along the night is,
 ## and whether it is strengthened.
 func strength() -> float:
-	return damage_factor * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (HealField.BUFF_DAMAGE if buff_left > 0.0 else 1.0)
+	return damage_factor * arms() * lerpf(GREEN_DAMAGE, 1.0, seasoned()) * (HealField.BUFF_DAMAGE if buff_left > 0.0 else 1.0)
+
+## The step its weapon has reached by itself in a round (or a stage of the second mission).
+static func arms_level(wave: int) -> int:
+	return clampi((wave - 1) / ARMS_EVERY, 0, ARMS_TOP)
+
+## The factor its weapon has gained by itself: the steps of the night, and its share of
+## the toughness of the level's infected.
+func arms() -> float:
+	var brood: float = float(game.rules.get("brood", 1.0)) if game.brood_on else 1.0
+	return (1.0 + ARMS_STEP * arms_level(game.wave)) * (1.0 + ARMS_BROOD * maxf(0.0, brood - 1.0))
+
+## Says so on the HUD when the squad's weapons have reached another step.
+func _keep_up() -> void:
+	var level := arms_level(game.wave)
+	if level > int(game.squad_arms):
+		game.squad_arms = level
+		game.hud.kill_feed("TEAM  ·  Waffen verbessert  ·  Stufe %d" % level, 0, false, true)
+		game.sounds.play_sound("equip", -5.0, 1.2)
 
 ## Strengthened for `seconds` (a heal field has put it back on its feet).
 func strengthen(seconds: float) -> void:
@@ -182,6 +234,7 @@ func _pick_target() -> Infected:
 		return null
 	var candidates: Array = []
 	crowd = 0
+	var cover := _being_helped()
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
 		var gap := enemy.global_position.distance_to(global_position)
@@ -194,6 +247,13 @@ func _pick_target() -> Infected:
 			continue
 		if enemy.prey == self or enemy.global_position.distance_to(game.player.global_position) < 4.0:
 			gap *= 0.6
+		# What holds the survivor down comes before everything: a Leech on him, the
+		# Prowler that has him pinned.
+		if enemy.clung_to == game.player:
+			gap *= 0.15
+		# Whoever is helping somebody up is covered: what comes near the two is shot first.
+		if cover != Vector3.INF and enemy.global_position.distance_to(cover) < 6.0:
+			gap *= 0.5
 		if enemy == target:
 			gap *= 0.8
 		# A Medic is worth more than whoever stands nearer.
@@ -209,6 +269,145 @@ func _pick_target() -> Infected:
 		if _sees(enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.6, 0)):
 			return enemy
 	return null
+
+## Where somebody is being helped up right now (a companion by anybody, the survivor by a
+## companion); Vector3.INF if nobody is.
+func _being_helped() -> Vector3:
+	for mate: Teammate in game.team:
+		if mate != self and mate.down and mate.lifted > 0.0:
+			return mate.global_position
+		if mate != self and mate.helping > 0.0:
+			return game.player.global_position
+	return Vector3.INF
+
+## The fallen companion this one should go and help up: the nearest one that lies within
+## 25 metres. Nobody while the survivor himself needs it, and none who cannot fight.
+func _fallen_friend() -> Teammate:
+	tending = null
+	if unarmed or (game.player.down and game.rescuer() == self):
+		return null
+	var best := 25.0
+	for mate: Teammate in game.team:
+		if mate == self or not mate.down or mate.unarmed:
+			continue
+		var gap := mate.global_position.distance_to(global_position)
+		if gap < best:
+			best = gap
+			tending = mate
+	return tending
+
+## True if it should go and help a fallen companion up now: not when it was told to hold
+## its place, and not while an enemy is as close as `threat` metres and at its throat.
+func _may_tend(threat: float) -> bool:
+	return order != "hold" and threat > TEND_CLEAR and _fallen_friend() != null
+
+## At the side of the fallen companion: helps it up for as long as it is called. True when
+## it stands.
+func _lift_friend(delta: float) -> bool:
+	if tending == null or not tending.lift(delta):
+		return false
+	game.bark(self, look, "rescue")
+	game.hud.kill_feed("%s hilft %s auf" % [label, tending.label], 0, false, true)
+	tending = null
+	return true
+
+## A spot where the infected stand in a knot, to throw something at: Vector3.INF if there
+## is none that is far enough from every survivor and in sight.
+func _knot() -> Vector3:
+	var need := KNOT_COUNT - (1 if crowd >= HORDE_COUNT else 0)
+	var herd: Array = []
+	for node in get_tree().get_nodes_in_group("infected"):
+		var enemy := node as Infected
+		if enemy.dead or enemy.absent or enemy.spec.get("human", false) or enemy.kind == "stalker":
+			continue
+		var gap := enemy.global_position.distance_to(global_position)
+		if gap >= THROW_RANGE.x and gap <= THROW_RANGE.y and absf(enemy.global_position.y - global_position.y) < 2.0:
+			herd.append(enemy.global_position)
+	var best := Vector3.INF
+	var most := need - 1
+	for spot: Vector3 in herd:
+		var middle := Vector3.ZERO
+		var count := 0
+		for other: Vector3 in herd:
+			if other.distance_to(spot) < KNOT_REACH:
+				middle += other
+				count += 1
+		if count > most:
+			most = count
+			best = middle / count
+	if best == Vector3.INF:
+		return best
+	for one in game.survivors:
+		if is_instance_valid(one) and (one as Node3D).global_position.distance_to(best) < THROW_SAFE:
+			return Vector3.INF
+	return best if _sees(best + Vector3(0, 1.0, 0)) else Vector3.INF
+
+## Whoever of the squad needs a heal field at his feet: the survivor first, then a
+## companion (itself too). With the improved field also somebody who lies down. Nobody
+## who already stands in one.
+func _wounded() -> Node3D:
+	var raises: bool = int(game.player.heal_level) > 0
+	var list: Array = [game.player]
+	list.append_array(game.team)
+	for one in list:
+		var who := one as Node3D
+		var hurt: bool = float(who.get("health")) < float(who.get("max_health") if who is Teammate else 100.0) * TREAT_BELOW
+		var lies: bool = bool(who.get("down"))
+		if (lies and not raises) or not (hurt or lies) or who.global_position.distance_to(global_position) > TREAT_RANGE:
+			continue
+		if not game.heal.field_at(who.global_position).is_empty() or (who != self and not _sees(who.global_position + Vector3(0, 1.0, 0))):
+			continue
+		return who
+	return null
+
+## Throws something of its own to `at`: "grenade" or "molotov" (they harm no survivor) or
+## "heal". It flies in an arc and does its work where it lands.
+func _lob(kind: String, at: Vector3) -> Throwable:
+	var body := Throwable.new()
+	body.game = game
+	body.kind = kind
+	body.friendly = true
+	body.level = int(game.player.heal_level)
+	game.ordnance.add_child(body)
+	var from := eye() + Vector3(0, 0.25, 0)
+	body.global_position = from
+	var flat := Vector2(at.x - from.x, at.z - from.z)
+	var seconds := clampf(flat.length() / 11.0, 0.7, 1.7)
+	# (A little more than the plain arc needs: the air slows it.)
+	body.linear_velocity = Vector3(flat.x / seconds, (at.y - from.y) / seconds + 4.9 * seconds, flat.y / seconds) * 1.07
+	body.angular_velocity = Vector3(randf_range(-5, 5), randf_range(-5, 5), randf_range(-5, 5))
+	if kind != "molotov":
+		body.fuse = seconds + 0.3
+	facing = atan2(-flat.x, -flat.y)
+	visual.throw()
+	game.sounds.play_at("swipe", eye(), -4.0, 1.4)
+	return body
+
+## Now and then: a heal field for whoever is hurt, or something thrown into a knot of
+## infected. Called a few times a second; the rests see to it that it stays rare.
+func _awake() -> void:
+	if unarmed or down:
+		return
+	_keep_up()
+	if treat_rest <= 0.0 and float(game.elapsed) >= float(game.squad_treat_ready):
+		var hurt := _wounded()
+		if hurt != null:
+			_lob("heal", hurt.global_position)
+			treat_rest = TREAT_REST
+			game.squad_treat_ready = float(game.elapsed) + SQUAD_TREAT_REST
+			game.squad_treats += 1
+			game.hud.kill_feed("%s  ·  Heilfeld für %s" % [label, "dich" if hurt == game.player else str(hurt.get("label"))], 0, false, true)
+			return
+	if throw_rest <= 0.0 and float(game.elapsed) >= float(game.squad_throw_ready) and target != null:
+		var knot := _knot()
+		if knot != Vector3.INF:
+			var bottle := randf() < 0.4
+			_lob("molotov" if bottle else "grenade", knot)
+			throw_rest = randf_range(THROW_REST.x, THROW_REST.y) * (0.5 if crowd >= HORDE_COUNT else 1.0)
+			game.squad_throw_ready = float(game.elapsed) + SQUAD_THROW_REST
+			game.squad_throws += 1
+			game.bark(self, look, "frag")
+			game.hud.kill_feed("%s  ·  %s" % [label, "Molotow" if bottle else "Granate"], 0, false, true)
 
 ## Free roaming: where the fight is. Vector3.INF means "stay where you are".
 func _hunting_ground(player: Survivor, anchor: Vector3, threat: float) -> Vector3:
@@ -244,6 +443,8 @@ func _physics_process(delta: float) -> void:
 		visual.animate(delta, Vector3.ZERO, false, false)
 		return
 	shot_left -= delta
+	throw_rest -= delta
+	treat_rest -= delta
 	pause_left -= delta
 	hold_fire -= delta
 	think_left -= delta
@@ -283,6 +484,7 @@ func _physics_process(delta: float) -> void:
 		# A whole pack around it: one of the squad says so, and then not for a good while.
 		if crowd >= HORDE_COUNT:
 			game.squad_says(self, "horde", HORDE_PAUSE)
+		_awake()
 	var player: Survivor = game.player
 	var anchor: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * slot
 	var to_player := player.global_position - global_position
@@ -314,6 +516,15 @@ func _physics_process(delta: float) -> void:
 			if helping >= HELP_SECONDS:
 				helping = 0.0
 				game.rescued_by(self)
+	elif _may_tend(threat):
+		# One of the squad is down and nothing is at its own throat: it goes and helps it
+		# up, which takes as long as it takes the player.
+		goal = tending.global_position
+		var apart := goal - global_position
+		travelling = Vector2(apart.x, apart.z).length() > 1.4 or absf(apart.y) > 1.2
+		pace = RUN_SPEED
+		if not travelling:
+			_lift_friend(delta)
 	elif target != null and (threat < 3.2 or (target.kind == "charger" and threat < 6.5)):
 		# Too close: give ground, drifting towards its post.
 		var home := (hold_point if order == "hold" else anchor) - global_position

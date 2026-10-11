@@ -23,7 +23,8 @@ var fires: Array = []
 var tick := 0.0
 
 ## Sets the ground around `at` on fire. `by`: the co-op partner, if the bottle was his.
-func ignite(at: Vector3, by: Node = null) -> void:
+## `tame`: a companion's bottle - its fire burns the infected and no survivor.
+func ignite(at: Vector3, by: Node = null, tame: bool = false) -> void:
 	var parts: Dictionary = game.fx.fire_pool(at, RADIUS)
 	var voice := AudioStreamPlayer3D.new()
 	var crackle := (game.sounds.clips["fire"][0] as AudioStreamWAV).duplicate() as AudioStreamWAV
@@ -38,7 +39,7 @@ func ignite(at: Vector3, by: Node = null) -> void:
 	(parts.node as Node3D).add_child(voice)
 	if not game.sounds.hush:
 		voice.play()
-	fires.append({"pos": at, "left": SECONDS, "parts": parts, "voice": voice, "by": by})
+	fires.append({"pos": at, "left": SECONDS, "parts": parts, "voice": voice, "by": by, "tame": tame})
 	game.sounds.play_at("molotov", at + Vector3(0, 0.3, 0), 2.0)
 	game.player.shake_from(at, 0.35, 12.0)
 
@@ -46,13 +47,17 @@ func ignite(at: Vector3, by: Node = null) -> void:
 func burning_at(pos: Vector3) -> bool:
 	return not _fire_at(pos).is_empty()
 
-func _fire_at(pos: Vector3) -> Dictionary:
+func _fire_at(pos: Vector3, wild: bool = false) -> Dictionary:
 	for fire in fires:
 		var center: Vector3 = fire.pos
 		var rise := pos.y - center.y
-		if float(fire.left) > DYING and rise > -1.0 and rise < 2.2 and Vector2(pos.x - center.x, pos.z - center.z).length() < RADIUS:
+		if float(fire.left) > DYING and rise > -1.0 and rise < 2.2 and Vector2(pos.x - center.x, pos.z - center.z).length() < RADIUS and not (wild and bool(fire.get("tame", false))):
 			return fire
 	return {}
+
+## True where a fire burns that hurts a survivor: any but a companion's.
+func scalds(pos: Vector3) -> bool:
+	return not _fire_at(pos, true).is_empty()
 
 func clear() -> void:
 	for fire in fires:
@@ -81,7 +86,7 @@ func _physics_process(delta: float) -> void:
 		return
 	tick = TICK
 	var player: Survivor = game.player
-	if player.is_targetable() and burning_at(player.global_position):
+	if player.is_targetable() and scalds(player.global_position):
 		player.receive_damage(SURVIVOR_DPS * TICK * float(game.rules.harm), Vector3.INF, "fire")
 	if game.net.joined:
 		return

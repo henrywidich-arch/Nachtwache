@@ -221,6 +221,14 @@ var partner_lift := 0.0
 var partner_lift_held := 0.0
 ## How often one of the companions has gone down in this night (the bots report it).
 var squad_downs := 0
+## The companions: how far their weapons have improved by themselves (the step that was
+## last told on the HUD), and the time of the night (elapsed) before which none of them
+## throws again or opens another heal field. How often they did either, for the bots.
+var squad_arms := 0
+var squad_throw_ready := 0.0
+var squad_treat_ready := 0.0
+var squad_throws := 0
+var squad_treats := 0
 const SQUAD_HEALTH := 0.3
 const SQUAD_DAMAGE := 0.2
 ## What the last finished night earned: {xp, level, raised} (see finish).
@@ -756,6 +764,11 @@ func start_run(test: bool = false) -> void:
 	for key in stats:
 		stats[key] = 0
 	squad_downs = 0
+	squad_arms = 0
+	squad_throw_ready = 0.0
+	squad_treat_ready = 0.0
+	squad_throws = 0
+	squad_treats = 0
 	last_place = 0
 	operators.clear()
 	if not net.joined and not second:
@@ -1412,12 +1425,12 @@ func heal_burst(center: Vector3, level: int = 0) -> void:
 
 ## A Molotov cocktail has burst: the ground around it burns for a while. In a co-op match
 ## the host lights the fire for both. `by`: the partner, if the bottle was his.
-func fire_burst(center: Vector3, by: Node = null) -> void:
+func fire_burst(center: Vector3, by: Node = null, tame: bool = false) -> void:
 	if net.joined:
 		net.request_fire(center)
 		return
 	var at := fx.floor_below(center + Vector3.UP * 0.3)
-	fire.ignite(at, by)
+	fire.ignite(at, by, tame)
 	net.send_fire(at)
 
 ## Fire on an enemy: it goes round a shield, and whoever it touches burns on for a while.

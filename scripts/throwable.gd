@@ -29,6 +29,9 @@ var hostile := false
 var impact := false
 ## Factor on what its blast does to the infected (the launcher's shell, by the workbench).
 var boost := 1.0
+## Thrown by a companion: whatever it does, it does to the infected only - no survivor is
+## hurt by its blast or burnt by its fire.
+var friendly := false
 ## The heal grenade: 1 if its field also raises the fallen (the thrower's improvement).
 var level := 0
 var armed_in := 0.1
@@ -207,13 +210,13 @@ func _physics_process(delta: float) -> void:
 	if kind == "gas":
 		game.gas_burst(global_position)
 	elif kind == "molotov":
-		game.fire_burst(global_position)
+		game.fire_burst(global_position, null, friendly)
 	elif kind == "heal":
 		game.heal_burst(global_position, level)
 	elif kind == "grenade" and hostile:
 		game.blast(global_position + Vector3(0, 0.15, 0), 6.0, 70.0, 110.0, "frag")
 	elif kind == "grenade":
-		game.blast(global_position + Vector3(0, 0.15, 0), BLAST[0], BLAST[1], BLAST[2] * boost)
+		game.blast(global_position + Vector3(0, 0.15, 0), BLAST[0], 0.0 if friendly else float(BLAST[1]), BLAST[2] * boost)
 	elif hostile:
 		# Thrown at the survivors (an operator's): it blinds them, not the infected.
 		game.blind(global_position + Vector3(0, 0.2, 0))

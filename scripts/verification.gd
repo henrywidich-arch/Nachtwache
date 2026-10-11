@@ -2853,7 +2853,197 @@ func _companions(game: Node3D) -> void:
 	expect(not mate.down and mate.rising_left > 0.0, "Left alone, a companion still gets up by itself after %.0f s" % Teammate.DOWN_SECONDS)
 	mate._recover(6.0)
 	await _heal_grenade(game)
+	await _squad_awake(game)
 	game.start_run()
+
+## The companions do a little more: their weapons keep up with the night and the level,
+## they throw into a knot of infected and harm no survivor with it, they open a heal field
+## for whoever is hurt, help each other up, and shoot first at what holds the survivor down.
+func _squad_awake(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var mate: Teammate = game.team[0]
+	var other: Teammate = game.team[1]
+	_wipe_all(game)
+	await wait(0.5)
+	game.fx.clear()
+	game.fire.clear()
+	game.heal.clear()
+	for node in game.ordnance.get_children():
+		node.queue_free()
+	for one in game.team:
+		one.set_physics_process(false)
+		one.revive(true)
+		one._recover(8.0)
+		one.buff_left = 0.0
+	# --- their weapons improve by themselves, and make up a share of the level's toughness
+	var level_before: String = game.level
+	game.wave = 1
+	game.squad_arms = 0
+	var plain: float = mate.arms()
+	game.wave = 5
+	mate._keep_up()
+	var stepped: bool = is_equal_approx(plain, 1.0) and Teammate.arms_level(1) == 0 and Teammate.arms_level(1 + Teammate.ARMS_EVERY) == 1 and Teammate.arms_level(60) == Teammate.ARMS_TOP and is_equal_approx(mate.arms(), 1.0 + Teammate.ARMS_STEP * Teammate.arms_level(5)) and int(game.squad_arms) == Teammate.arms_level(5) and is_equal_approx(mate.strength(), mate.damage_factor * mate.arms() * lerpf(Teammate.GREEN_DAMAGE, 1.0, mate.seasoned()))
+	game.brood_on = true
+	game.level = "hard"
+	game._set_modifier("")
+	var hard_brood: float = float(Profile.DIFFICULTIES.hard.brood)
+	var kept_up: bool = hard_brood > 1.0 and is_equal_approx(mate.arms(), (1.0 + Teammate.ARMS_STEP * Teammate.arms_level(5)) * (1.0 + Teammate.ARMS_BROOD * (hard_brood - 1.0)))
+	game.brood_on = false
+	game.level = level_before
+	game._set_modifier("")
+	expect(stepped and kept_up, "The companions' weapons improve by themselves - a step every %d rounds, said on the HUD - and make up %.0f %% of what a level's infected take more" % [Teammate.ARMS_EVERY, Teammate.ARMS_BROOD * 100.0])
+	# --- a knot of infected: something is thrown into it, never at a survivor's feet
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	mate.global_position = Vector3(1.5, 0.05, 23.0)
+	other.global_position = Vector3(-1.5, 0.05, 22.5)
+	var knot_at := Vector3(0, 0, 35.0)
+	var pack: Array = []
+	for i in range(5):
+		var one: Infected = game.spawn_enemy("mauler")
+		one.set_physics_process(false)
+		one.position = knot_at + Vector3(cos(i * 1.26) * 1.2, 0.05, sin(i * 1.26) * 1.2)
+		one.max_health = 4000.0
+		one.health = 4000.0
+		pack.append(one)
+	await frames(3)
+	mate.crowd = 0
+	var spot: Vector3 = mate._knot()
+	var found: bool = spot != Vector3.INF and spot.distance_to(knot_at) < 1.7
+	(pack[3] as Infected).position.x += 40.0
+	(pack[4] as Infected).position.x += 40.0
+	await frames(2)
+	var too_few: bool = mate._knot() == Vector3.INF
+	(pack[3] as Infected).position.x -= 40.0
+	(pack[4] as Infected).position.x -= 40.0
+	player.global_position = knot_at + Vector3(3.0, 0.05, 0)
+	await frames(2)
+	var not_at_his_feet: bool = mate._knot() == Vector3.INF
+	# What it throws goes off among them - and does nothing to the survivors beside it.
+	other.global_position = knot_at + Vector3(-2.0, 0.05, 0.5)
+	player.health = 100.0
+	player.armor = 0.0
+	var bomb: Throwable = mate._lob("grenade", knot_at)
+	var lobbed: bool = bomb.friendly and bomb.kind == "grenade" and bomb.linear_velocity.y > 0.0 and bomb.fuse > 0.5 and bomb.fuse < 2.3
+	bomb.linear_velocity = Vector3.ZERO
+	bomb.global_position = knot_at + Vector3(0, 0.3, 0)
+	bomb.fuse = 0.0
+	await frames(3)
+	var harmless: bool = (pack[0] as Infected).health < 4000.0 and player.health == 100.0 and is_equal_approx(other.health, other.max_health) and not other.down
+	var bottle: Throwable = mate._lob("molotov", knot_at)
+	var bottle_tame: bool = bottle.friendly and bottle.kind == "molotov"
+	bottle.linear_velocity = Vector3.ZERO
+	bottle.global_position = knot_at + Vector3(0, 0.3, 0)
+	bottle.fuse = 0.0
+	await frames(3)
+	var fire: FireField = game.fire
+	var tame: bool = bottle_tame and fire.fires.size() == 1 and bool(fire.fires[0].tame) and fire.burning_at(player.global_position) and not fire.scalds(player.global_position)
+	await wait(0.7)
+	tame = tame and player.health == 100.0 and (pack[1] as Infected).burn_left > 0.0
+	fire.clear()
+	fire.ignite(game.fx.floor_below(player.global_position + Vector3.UP * 0.3))
+	tame = tame and fire.scalds(player.global_position)
+	fire.clear()
+	expect(found and too_few and not_at_his_feet and lobbed and harmless and tame, "A companion throws into a knot of %d infected, never where a survivor stands within %.0f m; its grenade and its fire hurt the infected and no survivor (a bottle of the player's own still burns him)" % [Teammate.KNOT_COUNT, Teammate.THROW_SAFE])
+	# --- rare, and with rests: one throw, then none for a while - not by the other either
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	other.global_position = Vector3(-1.5, 0.05, 22.5)
+	for node in game.ordnance.get_children():
+		node.queue_free()
+	await frames(2)
+	for one in game.team:
+		one.treat_rest = 999.0
+		one.throw_rest = 0.0
+		one.target = pack[0]
+		one.crowd = 0
+	game.squad_throw_ready = 0.0
+	var thrown_before: int = game.squad_throws
+	mate._awake()
+	other._awake()
+	mate.throw_rest = 0.0
+	mate._awake()
+	var in_flight := 0
+	for node in game.ordnance.get_children():
+		if node is Throwable and (node as Throwable).friendly and not node.is_queued_for_deletion():
+			in_flight += 1
+	var rested: bool = in_flight == 1 and game.squad_throws == thrown_before + 1 and float(game.squad_throw_ready) >= float(game.elapsed) + Teammate.SQUAD_THROW_REST - 0.01 and Teammate.THROW_REST.x >= 30.0
+	for node in game.ordnance.get_children():
+		node.queue_free()
+	for one in pack:
+		_take_off(game, one as Infected)
+	await frames(2)
+	# --- a heal field for the survivor when he is low, and none when he is not
+	for one in game.team:
+		one.throw_rest = 999.0
+		one.treat_rest = 0.0
+		one.target = null
+		one.health = one.max_health
+	game.squad_treat_ready = 0.0
+	player.health = 90.0
+	mate._awake()
+	var not_needed: bool = game.ordnance.get_child_count() == 0 and mate._wounded() == null
+	player.health = 30.0
+	var treats_before: int = game.squad_treats
+	mate._awake()
+	other._awake()
+	var can: Throwable = null
+	var cans := 0
+	for node in game.ordnance.get_children():
+		if node is Throwable and (node as Throwable).kind == "heal":
+			can = node
+			cans += 1
+	var treated: bool = cans == 1 and can.friendly and game.squad_treats == treats_before + 1 and mate.treat_rest > 0.0 and float(game.squad_treat_ready) > float(game.elapsed)
+	if can != null:
+		can.linear_velocity = Vector3.ZERO
+		can.global_position = player.global_position + Vector3(0.4, 0.3, 0)
+		can.fuse = 0.0
+	await frames(3)
+	treated = treated and not game.heal.field_at(player.global_position).is_empty() and mate._wounded() == null
+	game.heal.clear()
+	player.health = 100.0
+	expect(rested and not_needed and treated, "It stays rare - after a throw nobody of the squad throws for %.0f s - and a companion opens a heal field at the survivor's feet when he is below %.0f %% of his health, not otherwise" % [Teammate.SQUAD_THROW_REST, Teammate.TREAT_BELOW * 100.0])
+	# --- they help each other up, unless they were told to hold; and what holds the
+	# survivor down, or comes near somebody who is being helped, is shot first
+	face(game, Vector3(0, 0.05, 10.0), PI)
+	mate.global_position = Vector3(-10.0, 0.05, 30.0)
+	other.global_position = Vector3(6.0, 0.05, 30.0)
+	other.receive_damage(9999.0)
+	mate.order = "follow"
+	var goes: bool = other.down and mate._may_tend(INF) and mate.tending == other and not mate._may_tend(1.0)
+	mate.order = "hold"
+	var holds: bool = not mate._may_tend(INF)
+	mate.order = "follow"
+	var far: Infected = game.spawn_enemy("mauler")
+	far.set_physics_process(false)
+	far.position = Vector3(4.0, 0.05, 32.5)
+	var nearer: Infected = game.spawn_enemy("mauler")
+	nearer.set_physics_process(false)
+	nearer.position = Vector3(-6.0, 0.05, 38.0)
+	var leech: Infected = game.spawn_enemy("leech")
+	leech.set_physics_process(false)
+	leech.position = Vector3(-10.0, 0.05, 40.0)
+	await frames(3)
+	mate.target = null
+	var as_ever: bool = mate._pick_target() == nearer
+	other.lifted = 0.5
+	mate.target = null
+	var covers: bool = mate._pick_target() == far
+	other.lifted = 0.0
+	leech.clung_to = player
+	mate.target = null
+	var frees: bool = mate._pick_target() == leech
+	leech.clung_to = null
+	mate._may_tend(INF)
+	mate.global_position = other.global_position + Vector3(1.0, 0, 0)
+	var held := 0.0
+	while other.down and held < 6.0:
+		mate._lift_friend(0.05)
+		held += 0.05
+	other._recover(0.05)
+	expect(goes and holds and as_ever and covers and frees and not other.down and absf(held - float(game.REVIVE_SECONDS)) < 0.11 and mate.tending == null, "A companion goes to help a fallen one up (%.1f s at its side) unless it was told to hold or something is at its throat; a Leech on the survivor is shot before anything else, and whoever comes near somebody who is being helped before what is merely nearer" % held)
+	for one in [far, nearer, leech]:
+		_take_off(game, one)
+	game.wave = 1
+	await frames(2)
 
 ## The heal grenade: where it comes to rest a field opens that heals the survivors in it
 ## and nobody else; improved, the field raises whoever lies in it, and strengthened.
@@ -4841,7 +5031,7 @@ func bot(game: Node3D) -> void:
 			print("BOT_LEFT   prey=%s alert=%s held=%.1f player at %s sees=%s" % [prey_at, str(rest.alert), rest.held_left, str(game.player.global_position.snapped(Vector3.ONE * 0.1)), str(game.player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(game.player.camera.global_position, chest, 1)).is_empty())])
 			for mate in game.team:
 				print("BOT_LEFT   %s at %s down=%s order=%s target=%s sees=%s ammo=%d reload=%.1f hold_fire=%.1f" % [mate.label, str(mate.global_position.snapped(Vector3.ONE * 0.1)), str(mate.down), mate.order, "-" if mate.target == null else mate.target.kind, str(mate._sees(chest)), mate.ammo, mate.reload_left, mate.hold_fire])
-	print("BOT_SQUAD downs=%d revives=%d" % [game.squad_downs, int(game.stats.revives)])
+	print("BOT_SQUAD downs=%d revives=%d throws=%d heal_fields=%d arms=%d" % [game.squad_downs, int(game.stats.revives), game.squad_throws, game.squad_treats, game.squad_arms])
 	print("BOT_RESULT state=%s round=%d kills=%d squad_kills=%d score=%d heals=%d seen=%s stuck=%d weather_loops=%s" % [game.state, game.wave, game.kills, squad_kills, game.score, heals, str(seen), stuck.size(), str(game.sounds.rain.playing and game.sounds.ambience.playing)])
 	print("BOT_ROUNDS ", " ".join(PackedStringArray(durations)))
 	print("BOT_TIME %.0f s  harm=%.0f  tree=%s  vest=%s" % [game.elapsed, harm, tree if tree != "" else "-", str(vest)])
@@ -8120,7 +8310,7 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 	var squad_kills := 0
 	for mate in game.team:
 		squad_kills += mate.kills
-	print("BOT_SQUAD downs=%d revives=%d" % [game.squad_downs, int(game.stats.revives)])
+	print("BOT_SQUAD downs=%d revives=%d throws=%d heal_fields=%d arms=%d" % [game.squad_downs, int(game.stats.revives), game.squad_throws, game.squad_treats, game.squad_arms])
 	print("BOT_RESULT state=%s stage=%s t=%d kills=%d squad_kills=%d score=%d heals=%d most_alive=%d seen=%s lost=%d paths=%d path_ms_each=%.3f" % [game.state, hive.stage, int(game.elapsed), game.kills, squad_kills, game.score, heals, most_alive, str(seen), lost.size(), map.path_calls, (map.path_usec / 1000.0) / maxf(1.0, float(map.path_calls))])
 	print("BOT_STAGES ", " ".join(PackedStringArray(stages)))
 	var carried: Array[String] = []
