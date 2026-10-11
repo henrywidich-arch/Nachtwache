@@ -381,6 +381,9 @@ func _ready() -> void:
 		for bus in FieldAudio.VOLUMES:
 			sounds.set_volume(bus, float(settings.get_value("audio", bus, FieldAudio.VOLUMES[bus])))
 		player.sensitivity = float(settings.get_value("controls", "sensitivity", 1.0)) * 0.0022
+		# (Whoever left the game filling the screen gets it that way again.)
+		if bool(settings.get_value("video", "fullscreen", false)) and DisplayServer.get_name() != "headless" and not check_mode:
+			get_window().mode = Window.MODE_FULLSCREEN
 	hud = SurvivalHUD.new()
 	hud.name = "Interface"
 	hud.game = self
@@ -2073,6 +2076,7 @@ func toggle_fullscreen() -> void:
 	var window := get_window()
 	var filling := window.mode in [Window.MODE_FULLSCREEN, Window.MODE_EXCLUSIVE_FULLSCREEN]
 	window.mode = Window.MODE_WINDOWED if filling else Window.MODE_FULLSCREEN
+	keep_setting("video", "fullscreen", not filling)
 
 ## The 3D resolution a machine starts with until its player picks one in the menu. A Mac
 ## with a Retina display draws four pixels for every point of its screen: half is plenty.
