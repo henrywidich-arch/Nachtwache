@@ -1208,6 +1208,7 @@ func _bonus(data: Dictionary, enemy: Infected, headshot: bool) -> float:
 	var factor: float = game.skills.damage_factor(enemy, headshot, current_weapon)
 	if buff_left > 0.0:
 		factor *= HealField.BUFF_DAMAGE
+	factor *= game.heal.aim_at(global_position)
 	if Skills.kind_of(enemy) == "special":
 		factor *= float(data.get("special", 1.0))
 	if game.net.joined and enemy is CruSoldier:
