@@ -221,6 +221,9 @@ const KINDS := {
 	},
 	"crusher": {
 		"scene": preload("res://assets/models/crusher.glb"), "source_height": 1.7, "height": 2.65, "set": "mutant",
+		# Where its head's hit zone sits (see skull_position): metres above its eyes along the
+		# head's own up, and behind them - its skull and cap reach half a metre over its eyes.
+		"skull": Vector2(0.17, 0.06),
 		"eye_color": Color(0.2, 0.55, 1.0), "eye_height": 1.579, "eye_gap": 0.025, "eye_center": 0.0, "eye_size": 0.0065,
 		"metallic": 0.18,
 		"moves": {"run": ["mutant_run"], "walk": ["mutant_walk"], "attacks": ["slam", "mutant_swipe", "mutant_punch"], "pace": [0.5, 1.5]}
@@ -1463,6 +1466,19 @@ func pick_attack() -> String:
 ## Only the Ripper leaps; everyone else ignores the call.
 func pounce() -> void:
 	pass
+
+## The middle of the head's hit zone. For a look with a "skull" in KINDS it lies above and
+## behind the eyes, along the head's own up, so that a shot at the forehead or the cap
+## strikes it too, however the head is bent; otherwise it is the head bone.
+func skull_position() -> Vector3:
+	if not config.has("skull") or not eye_offsets.has(kind):
+		return head_position()
+	var head := skeleton.get_bone_global_pose(rig.head.index)
+	var offsets: Array = eye_offsets[kind]
+	var eyes: Vector3 = head * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5)
+	var turn: Basis = head.basis.orthonormalized() * skeleton.get_bone_global_rest(rig.head.index).basis.orthonormalized().inverse()
+	var skull: Vector2 = config.skull
+	return skeleton.global_transform * (eyes + (turn * Vector3.UP * skull.x - turn * Vector3(0, 0, 1) * skull.y) / model_scale)
 
 func head_position() -> Vector3:
 	return skeleton.global_transform * skeleton.get_bone_global_pose(rig.head.index).origin

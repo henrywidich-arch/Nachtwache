@@ -187,7 +187,7 @@ const TYPES := {
 		"voice": "roar", "idle": "roar", "strike": "crusher_attack", "pain": "crusher_pain", "death": "crusher_death",
 		"health": 2400.0, "health_per_round": 0.0, "speed": 2.9, "speed_per_round": 0.0,
 		"damage": 44.0, "reach": 2.6, "attack_time": 1.15, "attack_gap": 1.7, "strike_at": 0.5,
-		"radius": 0.5, "height": 2.0, "head": 1.9, "head_size": 0.28, "head_factor": 0.55, "reward": 400, "score": 2000,
+		"radius": 0.5, "height": 2.0, "head": 1.9, "head_size": 0.34, "head_factor": 1.0, "reward": 400, "score": 2000,
 		"stagger": ""
 	}
 }
@@ -978,7 +978,7 @@ func _cling(delta: float, target: Vector3, distance: float, same_floor: bool) ->
 	global_position = clung_to.global_position + ahead * 0.52 + Vector3(0, 0.62, 0)
 	velocity = Vector3.ZERO
 	model.rotation.y = atan2(ahead.x, ahead.z)
-	head_box.global_position = model.head_position()
+	head_box.global_position = model.skull_position()
 	shaken = maxf(0.0, shaken - delta * SHAKE_FADE)
 	cling_tick -= delta
 	if cling_tick <= 0.0:
@@ -1102,7 +1102,7 @@ func _haunt(delta: float) -> void:
 	var look := direction if pace > 0.1 else Vector3(offset.x, 0, offset.y).normalized()
 	if look.length() > 0.1:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(-look.x, -look.z), minf(delta * 10.0, 1.0))
-	head_box.global_position = model.head_position()
+	head_box.global_position = model.skull_position()
 	# Caught in the open while it hunts, it does not move a muscle.
 	model.animate(0.0 if haunt == "hunt" and seen else delta, pace)
 
@@ -1124,7 +1124,7 @@ func vanish() -> void:
 func _ambient(delta: float, look: Vector3, turn: bool) -> void:
 	if turn and look.length() > 0.1:
 		model.rotation.y = lerp_angle(model.rotation.y, atan2(-look.x, -look.z), minf(delta * 8, 1))
-	head_box.global_position = model.head_position()
+	head_box.global_position = model.skull_position()
 	growl_left -= delta
 	if growl_left <= 0.0:
 		growl_left = randf_range(3.5, 9.0)

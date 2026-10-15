@@ -627,7 +627,7 @@ func _physics_process(delta: float) -> void:
 	var wanted_pitch := 0.0
 	firing = false
 	if target != null:
-		var aim_point := target.model.head_position() if head_aim else target.global_position + Vector3(0, float(target.spec.height) * 0.6, 0)
+		var aim_point := target.model.skull_position() if head_aim else target.global_position + Vector3(0, float(target.spec.height) * 0.6, 0)
 		var line := aim_point - eye()
 		look_dir = Vector3(line.x, 0, line.z)
 		wanted_pitch = atan2(line.y, Vector2(line.x, line.z).length())

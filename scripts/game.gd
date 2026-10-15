@@ -541,6 +541,9 @@ func _ready() -> void:
 	elif "--crusher-states" in args:
 		check_mode = true
 		call_deferred("_run_crusher_states")
+	elif "--crusher-head" in args:
+		check_mode = true
+		call_deferred("_run_crusher_head")
 	elif "--crusher-ttk" in args:
 		check_mode = true
 		call_deferred("_run_crusher_ttk")
@@ -2391,6 +2394,16 @@ func _run_mp_test(as_host: bool) -> void:
 	var runner = load("res://scripts/verification.gd").new()
 	add_child(runner)
 	await runner.coop(self, as_host)
+
+## Where the Crusher's head is hit: in each pose (walking, guarding, leaping, striking,
+## roaring, stooping) real rays from the survivor go to the eyes of the model and a little
+## above and below them, and a real shot goes at its eyes; prints what they struck and
+## what the shot took, and with --capture-dir pictures with the hit zones drawn over it.
+##   hid.sh "--crusher-head" <capture folder>   (or headless, without pictures)
+func _run_crusher_head() -> void:
+	var runner = load("res://scripts/verification.gd").new()
+	add_child(runner)
+	await runner.crusher_head(self, _capture_dir() if "--shots" in OS.get_cmdline_user_args() else "")
 
 ## How long a Crusher lasts against every weapon (see the checks' crusher_ttk).
 func _run_crusher_ttk() -> void:

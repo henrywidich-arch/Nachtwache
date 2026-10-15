@@ -90,6 +90,7 @@ var flash_overlay: ColorRect
 var hit_left := 0.0
 var hit_is_head := false
 var hit_is_dull := false
+var hit_is_blocked := false
 var banner_left := 0.0
 var radio_left := 0.0
 var flash_left := 0.0
@@ -530,9 +531,11 @@ func _draw_reticle() -> void:
 			reticle.draw_line(centre + direction * 6.5, centre + direction * 9, color, 2)
 		reticle.draw_arc(centre, 14.5, 0.0, TAU, 28, color, 1.6)
 	elif hit_left > 0:
-		color = ORANGE if hit_is_head else IVORY
+		color = ORANGE if hit_is_head else (Color(0.62, 0.72, 0.95) if hit_is_blocked else IVORY)
 		for direction in [Vector2(-1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1)]:
 			reticle.draw_line(centre + direction * 9, centre + direction * 16, color, 2)
+		if hit_is_blocked:
+			reticle.draw_line(centre + Vector2(-14, -21), centre + Vector2(14, -21), color, 3)
 
 ## The groups of what is carried, one line for each number key: the key, the group, what
 ## of it is in hand (or would come with the key) and how many more the key steps through.
@@ -591,10 +594,13 @@ func key_rows() -> Array:
 ## The cross that shows a hit. `answered`: whoever calls plays the sound of it himself
 ## (a bullet's hit has its own answer, see FieldAudio.confirm_hit). `dull`: it landed on
 ## what it hardly gets through (the Crusher's shell), and the mark shows that.
-func hit_marker(headshot: bool, answered: bool = false, dull: bool = false) -> void:
+## `blocked`: it was aimed at the Crusher's head and struck its forearm: the cross with a
+## bar over it, in the colour of the arm.
+func hit_marker(headshot: bool, answered: bool = false, dull: bool = false, blocked: bool = false) -> void:
 	hit_left = 0.17
 	hit_is_head = headshot
 	hit_is_dull = dull
+	hit_is_blocked = blocked
 	if not answered:
 		game.sounds.play_sound("headshot" if headshot else "hit")
 

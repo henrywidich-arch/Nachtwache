@@ -1602,6 +1602,8 @@ func shoot() -> void:
 	var struck := {}
 	var endpoint := origin - camera.global_basis.z * 90
 	var marks := 0
+	# A shot at the Crusher's head that struck the forearm before it.
+	var blocked := false
 	# A bullet scatters anywhere inside its square; shot has a pattern.
 	var scatter: Array[Vector2] = []
 	if pellets > 1:
@@ -1644,8 +1646,16 @@ func shoot() -> void:
 				entry.headshot = entry.headshot or headshot
 				entry.through = entry.through or shielded
 				struck[enemy] = entry
+				if head_zone and enemy.guarding():
+					blocked = true
 				if marks < 4:
-					if enemy.hardened():
+					if head_zone and enemy.guarding() and not enemy.hardened():
+						# It strikes the forearm before the face: a dull thud and a puff, no spray
+						# of a head.
+						game.fx.dust(endpoint, -direction)
+						game.fx.blood(endpoint, direction, false)
+						game.sounds.play_at("thud", endpoint, -7.0, randf_range(1.5, 1.8))
+					elif enemy.hardened():
 						# It glances off the Crusher's shell: chips of it, no blood, and a clack.
 						game.fx.dust(endpoint, hit.normal)
 						game.sounds.play_at("bolt", endpoint, -3.0, randf_range(0.7, 0.9))
@@ -1699,7 +1709,7 @@ func shoot() -> void:
 		game.hud.hit_marker(false, true, true)
 		game.sounds.confirm_dull()
 	elif not struck.is_empty():
-		game.hud.hit_marker(any_head, true)
+		game.hud.hit_marker(any_head, true, false, blocked and not any_head)
 		# The shooter hears his hit: one answer for the whole shot, whatever it struck. (A
 		# guest of a co-op match learns of a kill from the host, see SurvivalHUD.kill_feed.)
 		game.sounds.confirm_hit(any_head, any_kill, any_infected)

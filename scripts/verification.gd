@@ -310,7 +310,7 @@ func run(game: Node3D) -> void:
 	var crusher_health: float = crusher.health
 	await frames(8)
 	game.player.shoot()
-	expect(is_equal_approx(crusher.health, crusher_health - 28.0 * maxf(1.0, 2.7 * 0.55)), "A shot at the Crusher's head counts as a resisted headshot")
+	expect(is_equal_approx(crusher.health, crusher_health - 28.0 * 2.7 * float(Infected.TYPES.crusher.head_factor)), "A shot at the Crusher's head counts as a headshot with the weapon's own factor")
 	# (A hit at a time, with a breath between: it bears no more of one, see Infected.BULK_HIT.)
 	for i in range(6):
 		crusher.receive_hit(crusher.max_health * 0.1, Vector3.BACK)
@@ -2953,6 +2953,7 @@ func _threats(game: Node3D) -> void:
 	await _crusher_shell(game)
 	await _crusher_guard(game)
 	await _crusher_toughness(game)
+	await _crusher_head_zone(game)
 	await _hive_staff(game)
 	game.team_enabled = true
 	game.start_run()
@@ -3706,6 +3707,59 @@ func _crusher_toughness(game: Node3D) -> void:
 	game.wave = round_now
 	player.health = 100.0
 	randomize()
+	await wait(0.2)
+
+## The Crusher's head: a real ray at its visible head - the eyes, the forehead and cap above
+## them, a little beside - strikes its head zone in every pose (walking, guarding, leaping,
+## striking, roaring, stooping); a real shot at its forehead pays more than one at its body
+## while the arm is down, and strikes the forearm (as much as the body, a mark of its own)
+## while it is up.
+func _crusher_head_zone(game: Node3D) -> void:
+	var player: Survivor = game.player
+	_wipe_all(game)
+	await wait(0.5)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	player.equip_weapon("rifle", true)
+	var round_now: int = game.wave
+	game.wave = game.ROUNDS.size()
+	var giant: Infected = game.spawn_enemy("crusher")
+	game.wave = round_now
+	giant.position = Vector3(0, 0.05, 28.0)
+	await frames(4)
+	giant.set_physics_process(false)
+	giant.model.rotation.y = 0.0
+	var struck := true
+	var paid := true
+	var notes: Array = []
+	for pose in ["walk", "guard", "leap", "slam", "roar", "stoop"]:
+		_crusher_pose(giant, str(pose))
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var eyes := _crusher_eyes(giant)
+		var misses := 0
+		for aim in [Vector3(0, 0.3, 0), Vector3(0, 0.15, 0), Vector3.ZERO, Vector3(0, -0.08, 0), Vector3(0.15, 0.1, 0), Vector3(-0.15, 0.1, 0)]:
+			if _crusher_ray(game, player.camera.global_position, eyes + aim) != "head":
+				misses += 1
+		struck = struck and misses == 0
+		giant.health = giant.max_health
+		giant.bulk = 0.0
+		player.camera.look_at(eyes + Vector3(0, 0.2, 0))
+		player.shot_cooldown = 0.0
+		player.reload_left = 0.0
+		player.ammo = 30
+		player.shoot()
+		var took: float = giant.max_health - giant.health
+		if pose == "guard":
+			paid = paid and giant.guarding() and is_equal_approx(took, 28.0) and game.hud.hit_is_blocked and not game.hud.hit_is_head
+		else:
+			paid = paid and took > 28.0 * 2.0 and game.hud.hit_is_head
+		notes.append("%s %.0f" % [pose, took])
+	_crusher_pose(giant, "walk")
+	expect(struck, "A ray at the Crusher's visible head - its eyes, its forehead and cap, a little beside - strikes its head in every pose: walking, guarding, leaping, striking, roaring, stooping")
+	expect(paid, "A shot at its forehead pays: %s against 28 at the body; behind the raised arm it strikes the forearm, with a mark of its own" % ", ".join(PackedStringArray(notes)))
+	_take_off(game, giant)
+	game.boss = null
 	await wait(0.2)
 
 ## The second exploding infected: a Charger in another body, with a burst of its own -
@@ -8914,7 +8968,7 @@ func _crusher_pull(game: Node3D, giant: Infected, id: String) -> Dictionary:
 	elif id in ["mg", "mg2", "minigun"]:
 		gap = 15.0
 	giant.global_position = Vector3(0, 0.05, 22.0 + gap)
-	giant.head_box.global_position = giant.model.head_position()
+	giant.head_box.global_position = giant.model.skull_position()
 	# (The physics world learns of the move with its next step.)
 	await get_tree().physics_frame
 	await get_tree().physics_frame
@@ -9121,4 +9175,157 @@ func crusher_ttk(game: Node3D) -> void:
 					print("TTK %s %s %s %s r6=%.1f r8=%.1f r10=%.1f pull=%.0f/%.0f shut=%.0f tree=%s" % [level, "best" if best else "plain", id, aim, t[0], t[1], t[2], float(p[aim]), float(p["guard"]), float(p["shut_" + aim]), fastest.tree])
 				await frames(1)
 	print("TTK_COMPLETE")
+	get_tree().quit()
+
+# ---------------------------------------------------------------- the Crusher's head
+
+## Puts a standing Crusher into a pose: "walk", "guard", "leap", "slam", "roar", "stoop".
+func _crusher_pose(giant: Infected, pose: String) -> void:
+	var body: InfectedVisual = giant.model
+	giant.set_guard(false)
+	body.guard = 0.0
+	body.guard_speed = 0.0
+	body.duck = 0.0
+	body.state = "move"
+	body.busy_left = 0.0
+	match pose:
+		"guard":
+			giant.set_guard(true)
+		"leap":
+			body.attack(Infected.LEAP_SECONDS, Infected.LEAP_STRIKE, "leap")
+		"slam":
+			body.attack(float(giant.spec.attack_time), float(giant.spec.strike_at), "slam")
+		"roar":
+			body.scream("roar")
+		"stoop":
+			body.duck = 1.0
+	var steps := {"walk": 12, "guard": 14, "leap": 18, "slam": 10, "roar": 14, "stoop": 6}
+	for i in range(int(steps.get(pose, 10))):
+		body.animate(0.05, 1.4 if pose in ["walk", "guard", "stoop"] else 0.0)
+	giant.head_box.global_position = body.skull_position()
+
+## Where the visible head of the model is: the middle between its eyes, and which way it looks.
+func _crusher_eyes(giant: Infected) -> Vector3:
+	var body: InfectedVisual = giant.model
+	var skeleton: Skeleton3D = body.skeleton
+	var offsets: Array = InfectedVisual.eye_offsets[body.kind]
+	return skeleton.global_transform * (skeleton.get_bone_global_pose(body.rig.head.index) * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5))
+
+## How high above its feet the model reaches (its skinned mesh, as posed).
+func _crusher_top(giant: Infected) -> float:
+	var body: InfectedVisual = giant.model
+	var box: AABB = body.mesh_instance.get_aabb()
+	return (body.mesh_instance.global_transform * box).end.y - giant.global_position.y
+
+## What a ray from `from` to `to` strikes first: "head", "body", "world" or "nothing".
+func _crusher_ray(game: Node3D, from: Vector3, to: Vector3) -> String:
+	var query := PhysicsRayQueryParameters3D.create(from, from + (to - from).normalized() * 40.0, 1 | 4 | 8, [game.player.get_rid()])
+	var hit := game.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return "nothing"
+	var what: Object = hit.collider
+	if what.has_meta("infected"):
+		return "head"
+	if what is Infected:
+		return "body"
+	return "world"
+
+func crusher_head(game: Node3D, folder: String) -> void:
+	var player: Survivor = game.player
+	game.team_enabled = false
+	game.start_run()
+	game.mission.plain()
+	game.preparation_left = 99999.0
+	await wait(0.5)
+	player.health = 100000.0
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	game.wave = game.ROUNDS.size()
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.position = Vector3(0, 0.05, 28.0)
+	await frames(4)
+	giant.set_physics_process(false)
+	giant.model.rotation.y = 0.0
+	if folder != "":
+		var red := StandardMaterial3D.new()
+		red.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		red.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		red.albedo_color = Color(1, 0.1, 0.1, 0.45)
+		red.no_depth_test = true
+		var ball := MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		for shape in giant.head_box.get_children():
+			if shape is CollisionShape3D and (shape as CollisionShape3D).shape is SphereShape3D:
+				sphere.radius = ((shape as CollisionShape3D).shape as SphereShape3D).radius
+				sphere.height = sphere.radius * 2.0
+		ball.mesh = sphere
+		ball.material_override = red
+		giant.head_box.add_child(ball)
+		var blue := red.duplicate() as StandardMaterial3D
+		blue.albedo_color = Color(0.2, 0.5, 1.0, 0.25)
+		for shape in giant.get_children():
+			if shape is CollisionShape3D and (shape as CollisionShape3D).shape is CapsuleShape3D:
+				var pill := MeshInstance3D.new()
+				var capsule := CapsuleMesh.new()
+				capsule.radius = ((shape as CollisionShape3D).shape as CapsuleShape3D).radius
+				capsule.height = ((shape as CollisionShape3D).shape as CapsuleShape3D).height
+				pill.mesh = capsule
+				pill.material_override = blue
+				pill.position = (shape as CollisionShape3D).position
+				giant.add_child(pill)
+	for pose in ["walk", "guard", "leap", "slam", "roar", "stoop"]:
+		_crusher_pose(giant, str(pose))
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var eyes := _crusher_eyes(giant)
+		var eye_cam: Vector3 = player.camera.global_position
+		var marks: Array = []
+		for lift in [0.4, 0.3, 0.2, 0.1, 0.0, -0.1]:
+			marks.append("%+.2f:%s" % [lift, _crusher_ray(game, eye_cam, eyes + Vector3(0, float(lift), 0))])
+		for aside in [-0.2, 0.2]:
+			marks.append("x%+.2f:%s" % [aside, _crusher_ray(game, eye_cam, eyes + Vector3(float(aside), 0.1, 0))])
+		# The top of the model's head: the highest point of the mesh near the head bone.
+		marks.append("top=%.2f" % _crusher_top(giant))
+		# A real shot at the eyes: what it takes, and whether it was one in the head.
+		giant.health = giant.max_health
+		giant.bulk = 0.0
+		player.camera.look_at(eyes)
+		player.shot_cooldown = 0.0
+		player.reload_left = 0.0
+		player.ammo = 30
+		var heads: int = int(game.sounds.answers.ding_head)
+		game.sounds.hit_heard = -10.0
+		player.shoot()
+		var took: float = giant.max_health - giant.health
+		print("HEAD pose=%s eyes_up=%.2f zone_up=%.2f zone_off=%.2f capsule_top=%.2f rays=%s shot=%.1f head_answer=%s" % [pose, eyes.y - giant.global_position.y, giant.head_box.global_position.y - giant.global_position.y, giant.head_box.global_position.distance_to(eyes), float(giant.spec.height), " ".join(PackedStringArray(marks)), took, str(int(game.sounds.answers.ding_head) > heads)])
+		if folder != "":
+			var at: Vector3 = giant.global_position
+			await game._capture_from(folder, "head_%s.png" % pose, at + Vector3(2.6, 2.0, -2.2), at + Vector3(0, 1.9, 0), 50)
+	# Alive: it walks at the survivor, who keeps his sights on its eyes and fires.
+	giant.set_guard(false)
+	giant.model.state = "move"
+	giant.health = giant.max_health
+	giant.position = Vector3(0, 0.05, 40.0)
+	giant.special_cooldown = 99.0
+	giant.set_physics_process(true)
+	var tally := {}
+	var took_live := 0.0
+	var shots := 0
+	var head_answers: int = int(game.sounds.answers.ding_head)
+	var dulls: int = game.sounds.dulls
+	for frame in range(240):
+		await get_tree().physics_frame
+		player.health = 100000.0
+		var eyes := _crusher_eyes(giant)
+		var seen := _crusher_ray(game, player.camera.global_position, eyes)
+		tally[seen] = int(tally.get(seen, 0)) + 1
+		player.camera.look_at(eyes)
+		player.ammo = 30
+		var before: float = giant.health
+		if player.shot_cooldown <= 0.0:
+			shots += 1
+		player.shoot()
+		took_live += before - giant.health
+	giant.set_physics_process(false)
+	print("HEAD_LIVE rays=%s shots=%d took=%.0f head_answers=%d dull=%d guard=%s shell=%s" % [str(tally), shots, took_live, int(game.sounds.answers.ding_head) - head_answers, game.sounds.dulls - dulls, str(giant.guard), giant.shell])
+	print("HEAD_COMPLETE")
 	get_tree().quit()
