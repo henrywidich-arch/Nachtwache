@@ -3569,7 +3569,20 @@ func _crusher_guard(game: Node3D) -> void:
 	var eyes: Vector3 = skeleton.global_transform * (skeleton.get_bone_global_pose(body.rig.head.index) * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5))
 	var nearest: Vector3 = Geometry3D.get_closest_point_to_segment(eyes, elbow, wrist)
 	var before: float = (nearest - eyes).dot(giant.facing())
-	var covered: bool = giant.guarding() and body.guard > 0.95 and nearest.distance_to(eyes) < 0.32 and before > 0.08 and nearest.distance_to(elbow) > 0.1 and nearest.distance_to(wrist) > 0.1
+	var covered: bool = giant.guarding() and body.guard > 0.95 and nearest.distance_to(eyes) < 0.32 and before > 0.03 and nearest.distance_to(elbow) > 0.1 and nearest.distance_to(wrist) > 0.1
+	# It moves like muscle: the arm overshoots a little, a blow on it jolts it, and it trembles.
+	var peak := 0.0
+	var spare: InfectedVisual = body
+	spare.guard = 0.0
+	spare.guard_speed = 0.0
+	for i in range(30):
+		spare.animate(0.02, 0.0)
+		peak = maxf(peak, spare.guard)
+	spare.hit(1.0, 0.5)
+	var jolted: bool = spare.guard_jolt > 0.5
+	for i in range(20):
+		spare.animate(0.05, 0.0)
+	expect(peak > 1.01 and peak < 1.15 and jolted and spare.guard_jolt < 0.01 and absf(spare.guard - 1.0) < 0.05, "The guard comes up like muscle, not like a hinge: past its mark a little (%.2f) and back, jolted by a blow on it" % peak)
 	expect(open and raised and covered, "Shot twice in the head within a moment, the Crusher raises a forearm before its face: it lies %.2f m before its eyes, which are behind the middle of it" % before)
 	# Behind it a shot at the head is one at the body - whoever says otherwise.
 	heads = int(sounds.answers.ding_head)

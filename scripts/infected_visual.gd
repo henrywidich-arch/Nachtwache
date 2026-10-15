@@ -310,10 +310,29 @@ static var shell_code: Shader
 ## the head is drawn in behind it (radians).
 const GUARD_ARM := 1
 const GUARD_FRONT := 0.12
-const GUARD_ALONG := 0.55
-const GUARD_LIE := Vector2(1.0, 0.15)
-const GUARD_ELBOW := Vector3(1.0, -0.4, 0.3)
-const GUARD_TUCK := 0.16
+const GUARD_ALONG := 0.5
+const GUARD_LIE := Vector2(1.0, 0.45)
+const GUARD_ELBOW := Vector3(0.75, 0.2, 0.65)
+const GUARD_TUCK := 0.22
+## How far above the eyes the middle of the forearm lies (the head is ducked behind it).
+const GUARD_RISE := 0.045
+## The rest of the body behind the guard (radians, as far as the guard is up): how far the
+## back hunches, how far the trunk twists the guarding shoulder forward, how far the head
+## turns away from the arm and leans over, how the guarding shoulder rolls in and up, how
+## far the other arm drops into a hanging claw (0 to 1), and the tremble and sway of a body
+## that holds itself together (radians, and seconds of one sway).
+const GUARD_HUNCH := 0.32
+const GUARD_TWIST := 0.22
+const GUARD_TURN := 0.38
+const GUARD_LEAN := 0.14
+const GUARD_ROLL := Vector2(0.3, 0.12)
+const GUARD_CLAW := 0.6
+const GUARD_TREMBLE := 0.035
+const GUARD_SWAY := Vector2(0.06, 3.1)
+## How the guard comes and goes: a spring - fast up with a little overshoot, slower down
+## with a sag (stiffness, damping, up and down) - and how hard a blow on the arm jolts it.
+const GUARD_SPRING := Vector4(70.0, 12.0, 38.0, 10.5)
+const GUARD_JOLT := 0.9
 static var shell_eye: StandardMaterial3D
 
 var kind := "mauler_hazmat"
@@ -360,6 +379,9 @@ var shell_lamp: OmniLight3D
 ## is (0 to 1). It comes down by itself for whatever is no walking: a blow, a leap, a roar.
 var guard_on := false
 var guard := 0.0
+var guard_speed := 0.0
+## A blow on the guard: it jolts the arm and the head back, and dies away.
+var guard_jolt := 0.0
 
 func _ready() -> void:
 	config = KINDS[kind]
@@ -1116,9 +1138,8 @@ func animate(delta: float, speed: float) -> void:
 	travel = 0.0
 	if shell_skin != null:
 		_shell_step(delta)
-	if guard_on or guard > 0.0:
-		var up := guard_on and not dying and state == "move"
-		guard = move_toward(guard, 1.0 if up else 0.0, delta * (4.5 if up else 5.5))
+	if guard_on or guard > 0.0 or absf(guard_speed) > 0.0:
+		_guard_spring(delta)
 	if dying:
 		death_time += delta
 		if dissolving:
@@ -1187,7 +1208,7 @@ func _overlay() -> void:
 			up = skeleton.get_bone_global_pose(above).basis.inverse() * Vector3.UP
 		skeleton.set_bone_pose_position(pelvis, skeleton.get_bone_pose_position(pelvis) - up * drop)
 	if guard > 0.01:
-		_raise_guard(smoothstep(0.0, 1.0, guard))
+		_raise_guard(clampf(guard, 0.0, 1.15))
 	if swell > 0.0:
 		var pulse := 1.0 + swell * (0.2 + 0.06 * sin(clock * 34.0))
 		holder.scale = Vector3(pulse, 1.0 + swell * 0.04, pulse) * model_scale
@@ -1208,8 +1229,23 @@ func _point(index: int, from: Vector3, to: Vector3, weight: float) -> void:
 func _raise_guard(weight: float) -> void:
 	if not eye_offsets.has(kind) or not rig.has("arms"):
 		return
-	_nudge(rig.head.index, Vector3(GUARD_TUCK * weight, 0, 0))
 	var arm: Dictionary = rig.arms[GUARD_ARM]
+	var other: Dictionary = rig.arms[1 - GUARD_ARM]
+	# Which side the guarding arm is on (+1: the skeleton's +X), and a slow sway and a
+	# quick, uneven tremble - two waves that never quite meet.
+	var side := signf(float((arm.upper.origin as Vector3).x)) if absf(float((arm.upper.origin as Vector3).x)) > 0.001 else 1.0
+	var sway := sin(clock * TAU / GUARD_SWAY.y) * GUARD_SWAY.x * weight
+	var shiver := Vector2(sin(clock * 27.0) + 0.6 * sin(clock * 43.0 + 1.3), sin(clock * 31.0 + 0.4) + 0.5 * sin(clock * 19.0)) * GUARD_TREMBLE * weight
+	var jolt := guard_jolt
+	# The back hunches and twists the guarding shoulder forward; it sways a little.
+	var spine: Array = rig.spine
+	for bone in spine:
+		_nudge(bone.index, Vector3((GUARD_HUNCH * weight - 0.15 * jolt) / spine.size(), -side * GUARD_TWIST * weight / spine.size(), sway / spine.size()))
+	# The guarding shoulder rolls in and comes up; the head ducks, turns away and leans over.
+	_nudge(int(arm.clav.index), Vector3(0, -side * GUARD_ROLL.x * weight, side * GUARD_ROLL.y * weight))
+	_nudge(rig.head.index, Vector3(GUARD_TUCK * weight - 0.3 * jolt + shiver.x, -side * GUARD_TURN * weight + shiver.y, side * GUARD_LEAN * weight))
+	# The other arm drops into a hanging claw, fingers forward, twitching.
+	_claw(other, side, weight * GUARD_CLAW)
 	var head := skeleton.get_bone_global_pose(rig.head.index)
 	var offsets: Array = eye_offsets[kind]
 	var face: Vector3 = head * (((offsets[0] as Vector3) + (offsets[1] as Vector3)) * 0.5)
@@ -1223,7 +1259,7 @@ func _raise_guard(weight: float) -> void:
 		out = -out
 	var upper_length := shoulder.distance_to(elbow_now)
 	var fore_length := elbow_now.distance_to(hand_now)
-	var before := face + ahead * GUARD_FRONT
+	var before := face + ahead * (GUARD_FRONT - 0.04 * jolt) + Vector3.UP * (GUARD_RISE + shiver.x * 0.2)
 	var pole := out * GUARD_ELBOW.x + Vector3.DOWN * GUARD_ELBOW.y + ahead * GUARD_ELBOW.z
 	# The forearm is to pass before the eyes. Where its wrist has to be for that depends on
 	# where the elbow ends up, and that on the wrist: three rounds settle it.
@@ -1242,7 +1278,43 @@ func _raise_guard(weight: float) -> void:
 		lie = (wrist - elbow).normalized()
 	_point(arm.upper.index, elbow_now - shoulder, elbow - shoulder, weight)
 	var fore := skeleton.get_bone_global_pose(arm.fore.index).origin
-	_point(arm.fore.index, skeleton.get_bone_global_pose(arm.hand.index).origin - fore, wrist - fore, weight)
+	_point(arm.fore.index, skeleton.get_bone_global_pose(arm.hand.index).origin - fore, wrist - fore, minf(weight, 1.0))
+	# The forearm trembles; the hand is clenched back against it.
+	_nudge(int(arm.fore.index), Vector3(shiver.x, shiver.y, 0) * 1.4)
+	_nudge(int(arm.hand.index), Vector3(-0.5 * weight, 0, side * 0.35 * weight))
+
+## The arm that does not guard: it hangs down and a little forward, its hand turned up into
+## a claw, twitching now and then.
+func _claw(arm: Dictionary, guard_side: float, weight: float) -> void:
+	if weight <= 0.01:
+		return
+	var out := Vector3(-guard_side, 0, 0)
+	var ahead := Vector3(0, 0, 1)
+	var twitch := maxf(0.0, sin(clock * 2.3) * sin(clock * 5.9)) * 0.35
+	var shoulder: Vector3 = skeleton.get_bone_global_pose(arm.upper.index).origin
+	var elbow: Vector3 = skeleton.get_bone_global_pose(arm.fore.index).origin
+	_point(int(arm.upper.index), elbow - shoulder, out * 0.45 + Vector3.DOWN * 0.85 + ahead * (0.25 + twitch), weight)
+	var fore: Vector3 = skeleton.get_bone_global_pose(arm.fore.index).origin
+	var hand: Vector3 = skeleton.get_bone_global_pose(arm.hand.index).origin
+	_point(int(arm.fore.index), hand - fore, ahead * (0.7 + twitch) + Vector3.DOWN * 0.6 + out * 0.15, weight)
+	_nudge(int(arm.hand.index), Vector3(-0.6 * weight, 0, 0))
+
+## The guard comes and goes like muscle, not like a hinge: a spring towards up or down,
+## fast up with a little overshoot, slower down with a sag; a jolt dies away.
+func _guard_spring(delta: float) -> void:
+	var up := guard_on and not dying and state == "move"
+	var goal := 1.0 if up else 0.0
+	var steps := maxi(1, ceili(delta / 0.02))
+	var dt := delta / steps
+	for i in range(steps):
+		var stiff: float = GUARD_SPRING.x if up else GUARD_SPRING.z
+		var damp: float = GUARD_SPRING.y if up else GUARD_SPRING.w
+		guard_speed += (stiff * (goal - guard) - damp * guard_speed) * dt
+		guard = clampf(guard + guard_speed * dt, 0.0, 1.15)
+	guard_jolt = move_toward(guard_jolt, 0.0, delta * 4.0)
+	if not up and guard < 0.005 and absf(guard_speed) < 0.05:
+		guard = 0.0
+		guard_speed = 0.0
 
 func _begin(clip_name: String, blend: float, rate: float, from: float, hold: float, next_state: String) -> void:
 	player.speed_scale = 1.0
@@ -1277,6 +1349,9 @@ func _travel_at(clip_name: String, seconds: float) -> float:
 
 ## A bullet jerks the upper body; `strength` is 0..1.
 func hit(from_side: float, strength: float = 1.0) -> void:
+	if guard > 0.5:
+		# A blow on the guard jolts it, whatever else the hit does.
+		guard_jolt = maxf(guard_jolt, GUARD_JOLT * clampf(0.5 + strength, 0.5, 1.0))
 	if shell_state == "on":
 		# It glances off the shell: a flare where a body would flinch.
 		shell_flare = maxf(shell_flare, 0.55)

@@ -2731,6 +2731,29 @@ func _run_sandbox_check() -> void:
 ## its forearm before its face, and both. `--side` adds the guard seen from its side and
 ## from above, `--menu` the test room's menu with the two switches.
 ##   hid.sh "--crusher-states" <capture folder>
+## The Crusher's guard in motion: a frame every tenth of a second as it walks on the spot,
+## raises its arm, takes a blow on it, holds, and lets it down again (crusher_motion_NN.png).
+func _crusher_motion(folder: String, giant: Infected) -> void:
+	# (Nothing else moves it: not the test room, not its own clock.)
+	giant.remove_from_group("infected")
+	giant.set_physics_process(false)
+	sandbox.set_daylight(true)
+	var at: Vector3 = giant.global_position
+	var front: Vector3 = giant.facing()
+	var beside := Vector3(-front.z, 0, front.x)
+	for frame in range(20):
+		if frame == 1:
+			giant.set_guard(true)
+		if frame == 9:
+			giant.model.hit(1.0, 0.6)
+		if frame == 15:
+			giant.set_guard(false)
+		for i in range(5):
+			giant.model.animate(0.02, 1.4)
+		var view: Vector3 = at + front * 2.5 + beside * (1.3 if "--other-side" not in OS.get_cmdline_user_args() else -1.3) + Vector3(0, 2.1, 0)
+		await _capture_from(folder, "crusher_motion_%02d.png" % frame, view, at + Vector3(0, 1.85, 0), 55)
+	print("CRUSHER_MOTION_COMPLETE")
+
 func _run_crusher_states() -> void:
 	var folder := _capture_dir()
 	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
@@ -2741,6 +2764,10 @@ func _run_crusher_states() -> void:
 	hud.radio_left = 0
 	sandbox.frozen = true
 	var giant: Infected = sandbox.spawn("crusher")[0]
+	if "--motion" in OS.get_cmdline_user_args():
+		await _crusher_motion(folder, giant)
+		get_tree().quit()
+		return
 	# Close enough to fill the picture.
 	var toward := (player.global_position - giant.global_position).normalized()
 	player.global_position = giant.global_position + Vector3(toward.x, 0, toward.z).normalized() * 2.7
