@@ -541,6 +541,9 @@ func _ready() -> void:
 	elif "--crusher-states" in args:
 		check_mode = true
 		call_deferred("_run_crusher_states")
+	elif "--crusher-ttk" in args:
+		check_mode = true
+		call_deferred("_run_crusher_ttk")
 	elif "--mp-host-test" in args or "--mp-join-test" in args:
 		check_mode = true
 		call_deferred("_run_mp_test", "--mp-host-test" in args)
@@ -2388,6 +2391,12 @@ func _run_mp_test(as_host: bool) -> void:
 	var runner = load("res://scripts/verification.gd").new()
 	add_child(runner)
 	await runner.coop(self, as_host)
+
+## How long a Crusher lasts against every weapon (see the checks' crusher_ttk).
+func _run_crusher_ttk() -> void:
+	var runner = load("res://scripts/verification.gd").new()
+	add_child(runner)
+	await runner.crusher_ttk(self)
 
 func _run_bot_check() -> void:
 	# A scripted survivor plays the real match loop at high speed and reports problems.

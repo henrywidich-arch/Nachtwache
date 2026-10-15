@@ -2949,6 +2949,7 @@ func _threats(game: Node3D) -> void:
 	await _second_exploder(game)
 	await _crusher_shell(game)
 	await _crusher_guard(game)
+	await _crusher_toughness(game)
 	await _hive_staff(game)
 	game.team_enabled = true
 	game.start_run()
@@ -3609,6 +3610,88 @@ func _crusher_guard(game: Node3D) -> void:
 	game.boss = null
 	await wait(0.2)
 
+## The Crusher's toughness: what it bears (BULK_*) and its level. Its time to kill is worked
+## out as crusher_ttk does it - the game's own shots, then a fight at the weapon's pace with
+## shell and guard by their clocks - with the dice fixed, for a few weapons of every class,
+## plain and as good as they get: none of them tears it apart in seconds, none needs for ever,
+## and ALBTRAUM makes it last longer against each of them.
+func _crusher_toughness(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var skills: Skills = game.skills
+	_wipe_all(game)
+	await wait(0.5)
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100000.0
+	var kept_inventory: Dictionary = player.inventory.duplicate(true)
+	var kept_weapon: String = player.current_weapon
+	var kept_tree: String = skills.chosen
+	var kept_ranks: Dictionary = skills.ranks.duplicate()
+	var kept_rules: Dictionary = game.rules
+	var kept_brood: bool = game.brood_on
+	var round_now: int = game.wave
+	seed(4711)
+	game.wave = game.ROUNDS.size()
+	game.brood_on = true
+	game.rules = Profile.DIFFICULTIES.normal
+	var giant: Infected = game.spawn_enemy("crusher")
+	giant.position = Vector3(0, 0.05, 34.0)
+	await frames(6)
+	giant.set_physics_process(false)
+	# One huge hit takes BULK_HIT of it; a hail takes the full rate, then a share of the rest.
+	var base: float = giant.max_health
+	giant.receive_hit(5000.0, Vector3.BACK)
+	var one_hit: float = base - giant.health
+	giant.health = base
+	giant.bulk = 0.0
+	for i in range(30):
+		giant.receive_hit(30.0, Vector3.BACK)
+	var hail: float = base - giant.health
+	var room: float = base * Infected.BULK_RATE * Infected.BULK_TIME
+	var bears: bool = is_equal_approx(one_hit, base * Infected.BULK_HIT) and is_equal_approx(hail, room + (900.0 - room) * Infected.BULK_SHARE)
+	giant.bulk = 50.0
+	giant.breathe(Infected.BULK_TIME)
+	bears = bears and is_equal_approx(giant.bulk, 50.0 / exp(1.0))
+	# The level: NORMAL keeps its 2400, ALBTRAUM makes it so much tougher as the horde.
+	game.rules = Profile.DIFFICULTIES.nightmare
+	var hard_one: Infected = game.spawn_enemy("crusher")
+	var ladder: float = float(Profile.DIFFICULTIES.nightmare.brood) / float(Profile.DIFFICULTIES.normal.brood)
+	var laddered: bool = is_equal_approx(base, float(Infected.TYPES.crusher.health)) and is_equal_approx(hard_one.max_health, base * ladder) and is_equal_approx(hard_one.toughened, ladder)
+	_take_off(game, hard_one)
+	game.rules = Profile.DIFFICULTIES.normal
+	expect(bears and laddered, "The Crusher bears %.0f of one huge hit and %.0f of a hail of 900, and ALBTRAUM makes it %.2f times as tough as NORMAL (%.0f)" % [one_hit, hail, ladder, base * ladder])
+	# Weapon by weapon: [weapon, as good as it gets, NORMAL from, to].
+	var bands := [["pistol", false, 18.0, 45.0], ["rifle", false, 10.0, 30.0], ["fifty", false, 8.0, 25.0], ["launcher", false, 10.0, 32.0],
+		["nitro", true, 5.0, 16.0], ["minigun", true, 5.0, 14.0], ["rifle", true, 5.0, 16.0], ["revolver", true, 6.0, 20.0]]
+	var fair := true
+	var harder := true
+	var notes: Array = []
+	for band in bands:
+		var id := str(band[0])
+		_crusher_arm(game, id, bool(band[1]), "breacher" if Skills.heavy_gear(id) else "hunter")
+		var pull: Dictionary = await _crusher_pull(game, giant, id)
+		game.rules = Profile.DIFFICULTIES.normal
+		var plain := _crusher_fight(game, giant, id, pull, false, base, 4)
+		game.rules = Profile.DIFFICULTIES.nightmare
+		var worst := _crusher_fight(game, giant, id, pull, false, base * ladder, 4)
+		game.rules = Profile.DIFFICULTIES.normal
+		fair = fair and plain >= float(band[2]) and plain <= float(band[3])
+		harder = harder and worst >= plain * 1.2 and worst >= 9.0
+		notes.append("%s%s %.0f/%.0f s" % [id, "+" if bool(band[1]) else "", plain, worst])
+	expect(fair and harder, "No weapon tears a grown Crusher apart in seconds, none needs for ever, and ALBTRAUM makes it last longer against each (NORMAL / ALBTRAUM): %s" % ", ".join(PackedStringArray(notes)))
+	_take_off(game, giant)
+	game.boss = null
+	skills.chosen = kept_tree
+	skills.ranks = kept_ranks
+	player.inventory = kept_inventory
+	player.current_weapon = ""
+	player.equip_weapon(kept_weapon, true)
+	game.rules = kept_rules
+	game.brood_on = kept_brood
+	game.wave = round_now
+	player.health = 100.0
+	randomize()
+	await wait(0.2)
+
 ## The second exploding infected: a Charger in another body, with a burst of its own -
 ## low, wide, the colour of blood orange, and a puddle that lies there for a while.
 func _second_exploder(game: Node3D) -> void:
@@ -4030,7 +4113,10 @@ func _toughness(game: Node3D) -> void:
 		apart += 1 if own else 0
 		for level in order:
 			var tested: float = took["%s/%s" % [level, kind]]
-			if own:
+			if str(kind) == "crusher":
+				# (It keeps NORMAL's health and goes up and down from there, see Infected.toughened.)
+				untouched = untouched and is_equal_approx(tested, plain * float(Profile.DIFFICULTIES[level].brood) / float(Profile.DIFFICULTIES.normal.brood))
+			elif own:
 				untouched = untouched and is_equal_approx(tested, plain)
 			else:
 				tougher = tougher and is_equal_approx(tested, plain * float(Profile.DIFFICULTIES[level].brood))
@@ -4060,7 +4146,7 @@ func _toughness(game: Node3D) -> void:
 	game.level = level_before
 	game._set_modifier("")
 	expect(thinned, "The yard takes the full crowd on NORMAL (%d at once late in a night); where the infected are tougher, fewer are let in at once (SCHWER %d, ALBTRAUM %d instead of %d and more), and as many come in all" % [int(caps.normal), int(caps.hard), int(caps.nightmare), as_before])
-	expect(tougher and untouched and standard and horde >= 6 and apart >= 14 and Infected.BROOD_APART.has("crusher") and Infected.BROOD_APART.has("stalker") and Infected.BROOD_APART.has("prowler"), "In a night the horde (%d kinds) takes what its level says - a Mauler of the first round %.0f on NORMAL - while the C.R.U., the operators, the Crusher, the Stalker and the Prowler (%d kinds) keep their health on every level" % [horde, 95.0 * float(Profile.DIFFICULTIES.normal.brood), apart])
+	expect(tougher and untouched and standard and horde >= 6 and apart >= 14 and Infected.BROOD_APART.has("crusher") and Infected.BROOD_APART.has("stalker") and Infected.BROOD_APART.has("prowler"), "In a night the horde (%d kinds) takes what its level says - a Mauler of the first round %.0f on NORMAL - while the C.R.U., the operators, the Stalker and the Prowler keep their health on every level and the Crusher keeps NORMAL's and goes with the level from there (%d kinds apart)" % [horde, 95.0 * float(Profile.DIFFICULTIES.normal.brood), apart])
 	await frames(3)
 
 ## What came with v0.8: the UMP and the parts for it, ballistic plates, lamps on the C.R.U.
@@ -8784,3 +8870,234 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 	Engine.time_scale = 1.0
 	await wait(0.2)
 	get_tree().call_deferred("quit", 0)
+
+# ---------------------------------------------------------------- the Crusher's toughness
+
+## What one pull of the trigger (one blow, one shell, one item) brings to a Crusher, measured
+## with the game's own code: the real shot, its pellets, factors and abilities, against a
+## Crusher that stands still - as it arrives, before the Crusher's own rules (its shell,
+## its bulk) take their share. Keys: body, head (aimed at the open head), guard (at the head
+## behind its arm), and the same behind its shell (shut_body, shut_head, shut_guard).
+func _crusher_pull(game: Node3D, giant: Infected, id: String) -> Dictionary:
+	var player: Survivor = game.player
+	var data: Dictionary = Survivor.WEAPONS.get(id, {})
+	var gap := 12.0
+	if id in ["shotgun", "autoshotgun"]:
+		gap = 5.0
+	elif id == "flamer":
+		gap = 4.0
+	elif id == "melee":
+		gap = 1.6
+	elif id in ["sniper", "svd", "fifty", "nitro", "m14"]:
+		gap = 20.0
+	elif id in ["mg", "mg2", "minigun"]:
+		gap = 15.0
+	giant.global_position = Vector3(0, 0.05, 22.0 + gap)
+	giant.head_box.global_position = giant.model.head_position()
+	# (The physics world learns of the move with its next step.)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var found := {}
+	for shut in [false, true]:
+		for aim in ["body", "head", "guard"]:
+			if id in ["launcher", "grenade", "claymore", "molotov", "melee", "flamer"] and aim != "body":
+				found[("shut_" if shut else "") + aim] = found[("shut_" if shut else "") + "body"]
+				continue
+			var sum := 0.0
+			var tries := 8 if int(data.get("pellets", 1)) > 1 or aim != "body" else 4
+			for i in range(tries):
+				giant.health = giant.max_health
+				giant.shell = "on" if shut else ""
+				giant.guard = aim == "guard"
+				giant.model.guard = 1.0 if aim == "guard" else 0.0
+				giant.head_hits = 0
+				giant.burn_left = 0.0
+				giant.set("bulk", -1e9)
+				player.loading_shells = false
+				var target: Vector3 = giant.head_box.global_position if aim != "body" else giant.global_position + Vector3(0, 1.25, 0)
+				player.camera.look_at(target)
+				player.shot_cooldown = 0.0
+				player.reload_left = 0.0
+				player.trigger_held = false
+				player.spin = 1.0
+				player.ammo = 50
+				match id:
+					"melee":
+						player.melee_cooldown = 0.0
+						player.melee()
+					"launcher":
+						game.blast(giant.global_position + Vector3(0, 0.9, 0) - Vector3(0, 0, 0.6), Throwable.BLAST[0], 0.0, float(Throwable.BLAST[2]) * (1.0 + Survivor.UPGRADE_SHARE * player.weapon_level + game.skills.value("damage_heavy")))
+					"grenade":
+						game.blast(giant.global_position + Vector3(0, 0.15, -1.0), Throwable.BLAST[0], 0.0, float(Throwable.BLAST[2]))
+					"claymore":
+						game.blast(giant.global_position + Vector3(0, 0.45, -1.3), Claymore.BLAST[0], 0.0, float(Claymore.BLAST[2]))
+					_:
+						player.shoot()
+				sum += giant.max_health - giant.health
+			# (Behind the shell only its share arrived: what was fired at it is that much more.)
+			found[("shut_" if shut else "") + aim] = sum / tries / (Infected.SHELL_SHARE if shut else 1.0)
+	giant.shell = ""
+	giant.guard = false
+	giant.model.guard = 0.0
+	giant.burn_left = 0.0
+	giant.health = giant.max_health
+	return found
+
+## Seconds a fight takes against a Crusher of `health`, firing without a break at the
+## weapon's own pace (its magazine, its reload), the Crusher's shell and guard by their
+## own clocks; `pull` from _crusher_pull. Averaged over `runs` fights.
+func _crusher_fight(game: Node3D, giant: Infected, id: String, pull: Dictionary, head: bool, health: float, runs: int = 3) -> float:
+	var player: Survivor = game.player
+	var data: Dictionary = player.gun() if Survivor.WEAPONS.has(id) else {}
+	var interval: float = Survivor.MELEE_GAP if id == "melee" else float(data.get("interval", 1.0))
+	var magazine: int = player.magazine_of(id) if Survivor.WEAPONS.has(id) else 1000
+	var reload: float = player.reload_of(id) if Survivor.WEAPONS.has(id) else 0.0
+	if data.has("shells") or data.has("drum"):
+		reload = reload * magazine + 0.25
+	var total := 0.0
+	var dt := 0.02
+	for run in range(runs):
+		giant.max_health = health
+		giant.health = health
+		if giant.get("toughened") != null:
+			giant.toughened = float(game.rules.get("brood", 1.0)) / float(Profile.DIFFICULTIES.normal.get("brood", 1.0))
+		giant.shell = ""
+		giant.shell_armed = false
+		giant.shell_left = 0.0
+		giant.guard = false
+		giant.guard_left = 0.0
+		giant.guard_rest = 0.0
+		giant.guard_idle = randf_range(Infected.GUARD_IDLE.x, Infected.GUARD_IDLE.y) * 0.6
+		giant.head_hits = 0
+		giant.head_hits_left = 0.0
+		giant.burn_left = 0.0
+		giant.model.guard = 0.0
+		var t := 0.0
+		giant.enraged = true
+		var ammo := magazine
+		var next := float(data.get("spin", 0.0))
+		var loading := 0.0
+		giant.set("bulk", 0.0)
+		while giant.health > 40.0 and t < 400.0:
+			t += dt
+			giant._harden(dt)
+			giant._ward(dt)
+			if giant.has_method("breathe"):
+				giant.call("breathe", dt)
+			giant.model.guard = 1.0 if giant.guard else 0.0
+			if id == "flamer":
+				if giant.health < 40.0:
+					break
+				giant._burn(dt)
+			next -= dt
+			if loading > 0.0:
+				loading -= dt
+				if loading <= 0.0:
+					ammo = magazine
+				continue
+			if next > 0.0:
+				continue
+			var shut := giant.hardened()
+			var open_head := head and not giant.guarding()
+			var key := ("shut_" if shut else "") + ("head" if open_head else ("guard" if head else "body"))
+			# (The last pull ends it; the Crusher is not let die, which would leave a cloud.)
+			var lands: float = float(pull[key]) * (Infected.SHELL_SHARE if shut else 1.0)
+			if giant.get("bulk") != null:
+				var base: float = giant.max_health / float(giant.toughened)
+				var room := maxf(0.0, base * float(giant.BULK_RATE) * giant.BULK_TIME - float(giant.bulk))
+				lands = minf(minf(lands, room) + maxf(0.0, lands - room) * giant.BULK_SHARE, base * giant.BULK_HIT)
+			if giant.health - lands <= 0.0:
+				break
+			giant.receive_hit(float(pull[key]), Vector3.BACK, open_head)
+			if id == "flamer":
+				giant.ignite(2.5)
+			next = interval
+			ammo -= 1
+			if ammo <= 0:
+				loading = reload
+		total += t
+	giant.burn_left = 0.0
+	return total / runs
+
+## Puts a weapon into the survivor's hands as it comes (`best` false) or as good as the
+## game lets it get: the workbench's every level, a rare one's damage and what else it can
+## have, and the tree that serves it best against a Crusher with all its ranks.
+func _crusher_arm(game: Node3D, id: String, best: bool, tree: String) -> void:
+	var player: Survivor = game.player
+	var skills: Skills = game.skills
+	skills.chosen = tree if best else ""
+	skills.ranks = {}
+	if best:
+		for line in Skills.TREES[tree].skills:
+			skills.ranks[str(line.id)] = int(line.ranks)
+	if not Survivor.WEAPONS.has(id):
+		return
+	if not player.inventory.has(id):
+		player.inventory[id] = {"ammo": int(Survivor.WEAPONS[id].magazine), "reserve": 999, "level": 0}
+	var record: Dictionary = player.inventory[id]
+	record.erase("tuned")
+	record.erase("rare")
+	record["level"] = 3 if best else 0
+	record["mags"] = 1 if best else 0
+	record["drill"] = 2 if best else 0
+	if best:
+		var rare := {}
+		for line in HiveCaches.RARE_FITS.get(id, ["damage"]):
+			rare[line] = float(HiveCaches.RARE_LINES[line][0])
+		record["rare"] = rare
+	player.current_weapon = ""
+	player.equip_weapon(id, true)
+	player.reserve = 999
+
+## The table of how long a Crusher lasts against every weapon of the game, on NORMAL and
+## on the highest level, plain and as good as it gets, aimed at the body and at the head:
+## a Crusher of round 6, 8 and 10 on the farm (mission two's two are as strong as the one
+## of round 8). Prints TTK lines.  Godot --headless --path . -- --crusher-ttk
+func crusher_ttk(game: Node3D) -> void:
+	var player: Survivor = game.player
+	game.team_enabled = false
+	var levels: Array = ["normal", Profile.DIFFICULTIES.keys()[Profile.DIFFICULTIES.size() - 1]]
+	var arms: Array = Survivor.ORDER.duplicate()
+	arms.append_array(["melee", "grenade", "claymore"])
+	var trees: Array = Skills.TREES.keys()
+	for level in levels:
+		game.profile.difficulty = str(level)
+		game.start_run()
+		game.mission.plain()
+		game.preparation_left = 99999.0
+		await wait(0.5)
+		player.health = 100000.0
+		face(game, Vector3(0, 0.05, 22.0), PI)
+		var healths: Array = []
+		for wave in [6, 8, 10]:
+			game.wave = wave
+			var one: Infected = game.spawn_enemy("crusher")
+			healths.append(one.max_health)
+			_take_off(game, one)
+		game.wave = 10
+		var giant: Infected = game.spawn_enemy("crusher")
+		giant.position = Vector3(0, 0.05, 34.0)
+		await frames(6)
+		giant.set_physics_process(false)
+		print("TTK_LEVEL %s crusher r6=%.0f r8=%.0f r10=%.0f" % [level, healths[0], healths[1], healths[2]])
+		for id in arms:
+			for best in [false, true]:
+				var fastest := {}
+				for tree in (trees if best else [""]):
+					_crusher_arm(game, str(id), best, str(tree))
+					var pull: Dictionary = await _crusher_pull(game, giant, str(id))
+					var row := {"tree": tree, "pull": pull}
+					for head in [false, true]:
+						var times: Array = []
+						for h in healths:
+							times.append(_crusher_fight(game, giant, str(id), pull, head, float(h)))
+						row["head" if head else "body"] = times
+					if fastest.is_empty() or float(row.body[2]) < float(fastest.body[2]):
+						fastest = row
+				for aim in ["body", "head"]:
+					var t: Array = fastest[aim]
+					var p: Dictionary = fastest.pull
+					print("TTK %s %s %s %s r6=%.1f r8=%.1f r10=%.1f pull=%.0f/%.0f shut=%.0f tree=%s" % [level, "best" if best else "plain", id, aim, t[0], t[1], t[2], float(p[aim]), float(p["guard"]), float(p["shut_" + aim]), fastest.tree])
+				await frames(1)
+	print("TTK_COMPLETE")
+	get_tree().quit()

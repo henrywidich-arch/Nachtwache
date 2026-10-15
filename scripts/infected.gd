@@ -268,6 +268,17 @@ const SHELL_SECONDS := 5.0
 const SHELL_PAUSE := Vector2(8.0, 12.0)
 const SHELL_TELL := 1.0
 const SHELL_FIRST := 0.1
+## The Crusher is a colossus: of whatever pours onto it faster than BULK_RATE of its full
+## health a second, only BULK_SHARE of the excess tells. A hail of fire still wears it
+## down, but no weapon, however heavy or however worked on, tears it apart in seconds -
+## and the weak ones are not hit by this at all. BULK_TIME: the seconds over which it
+## counts what it has just taken (it gets its breath back that quickly).
+const BULK_RATE := 0.1
+const BULK_SHARE := 0.25
+const BULK_TIME := 3.0
+## And no single hit - one shot with all its pellets, one blast - takes more than BULK_HIT
+## of its full health.
+const BULK_HIT := 0.12
 ## The Crusher's guard: a forearm before its face, and a shot at the head counts as one at
 ## the body as long as it is there. It comes up when GUARD_HITS shots have struck its head
 ## within GUARD_MEMORY seconds, and now and then by itself (every GUARD_IDLE seconds, from -
@@ -363,6 +374,12 @@ var enraged := false
 var shell := ""
 var shell_left := 0.0
 var shell_armed := false
+## What the Crusher has taken a moment ago (see BULK_RATE).
+var bulk := 0.0
+## How much tougher than on NORMAL the level made the Crusher; what it bears (see
+## BULK_RATE) is reckoned on its NORMAL health, so the level makes it last that much longer
+## against every weapon alike.
+var toughened := 1.0
 ## The Crusher's guard: whether the arm is up (or on its way there), the seconds it stays,
 ## the seconds until it may come up again, the seconds until it comes up by itself, and
 ## the shots that struck its head a moment ago.
@@ -428,6 +445,11 @@ func _ready() -> void:
 	# The horde is as tough as the level says (the rule "brood" in Profile.DIFFICULTIES).
 	if game.brood_on and not spec.get("human", false) and not kind in BROOD_APART:
 		max_health *= float(game.rules.get("brood", 1.0))
+	# The Crusher keeps NORMAL's health as it is and goes up and down with the level as the
+	# horde does (on ALBTRAUM 2.6 / 1.8 of it).
+	if game.brood_on and kind == "crusher":
+		toughened = float(game.rules.get("brood", 1.0)) / float(Profile.DIFFICULTIES.normal.get("brood", 1.0))
+		max_health *= toughened
 	health = max_health
 	# A Crusher that turns up before the last round is not yet fully grown.
 	if kind == "crusher" and wave < int(game.ROUNDS.size()):
@@ -772,6 +794,7 @@ func _physics_process(delta: float) -> void:
 	if kind == "crusher":
 		_harden(delta)
 		_ward(delta)
+		breathe(delta)
 	if warded > 0.0:
 		# Strengthened by a Medic's gas: it mends until the gas has worn off.
 		warded -= delta
@@ -1117,6 +1140,18 @@ func _ambient(delta: float, look: Vector3, turn: bool) -> void:
 			game.sounds.play_at("thud", global_position)
 			game.player.shake_from(global_position, 0.3, 12.0)
 
+## What of `amount` tells on the Crusher (see BULK_RATE); it remembers it.
+func _bear(amount: float) -> float:
+	var base := max_health / toughened
+	var room := maxf(0.0, base * BULK_RATE * BULK_TIME - bulk)
+	var taken := minf(minf(amount, room) + maxf(0.0, amount - room) * BULK_SHARE, base * BULK_HIT)
+	bulk += taken
+	return taken
+
+## The Crusher gets its breath back.
+func breathe(delta: float) -> void:
+	bulk *= exp(-delta / BULK_TIME)
+
 ## True while the Crusher's shell is shut: hardly anything gets through to it.
 func hardened() -> bool:
 	return shell == "on" and not dead
@@ -1316,6 +1351,8 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		amount *= CLOUD_WARD
 	if fresh > 0.0:
 		amount *= HiveEntries.FRESH_WARD
+	if kind == "crusher":
+		amount = _bear(amount)
 	health -= amount
 	# Which way the shot twists the body depends on the side it came from.
 	var side := 1.0 if facing().cross(direction).y > 0.0 else -1.0
