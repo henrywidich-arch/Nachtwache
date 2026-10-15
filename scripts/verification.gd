@@ -311,7 +311,10 @@ func run(game: Node3D) -> void:
 	await frames(8)
 	game.player.shoot()
 	expect(is_equal_approx(crusher.health, crusher_health - 28.0 * maxf(1.0, 2.7 * 0.55)), "A shot at the Crusher's head counts as a resisted headshot")
-	crusher.receive_hit(crusher.max_health * 0.52, Vector3.BACK)
+	# (A hit at a time, with a breath between: it bears no more of one, see Infected.BULK_HIT.)
+	for i in range(6):
+		crusher.receive_hit(crusher.max_health * 0.1, Vector3.BACK)
+		crusher.breathe(Infected.BULK_TIME * 4.0)
 	expect(crusher.enraged and not crusher.dead, "A Crusher that has lost half its health goes berserk")
 	crusher.receive_hit(99999, Vector3.BACK)
 	expect(crusher.dead and game.boss == null and game.fx.clouds.size() == 1, "A dead Crusher leaves an acid cloud")
@@ -3639,7 +3642,7 @@ func _crusher_toughness(game: Node3D) -> void:
 	giant.set_physics_process(false)
 	# One huge hit takes BULK_HIT of it; a hail takes the full rate, then a share of the rest.
 	var base: float = giant.max_health
-	giant.receive_hit(5000.0, Vector3.BACK)
+	giant.receive_hit(2000.0, Vector3.BACK)
 	var one_hit: float = base - giant.health
 	giant.health = base
 	giant.bulk = 0.0
@@ -6168,6 +6171,7 @@ func _overhaul(game: Node3D) -> void:
 	face(game, came_down + Vector3(Infected.QUAKE_REACH + 1.0, 0, 0), PI)
 	giant._quake(null)
 	var kind: Dictionary = Infected.TYPES.crusher
+	expect(is_equal_approx(float(kind.damage) * Infected.LEAP_BLOW, 44.0 * 1.05) and is_equal_approx(Infected.QUAKE_HARM, 19.5) and Infected.LEAP_SHAKE.x < 1.3, "The leap hurts a quarter less than before v0.54: its blow %.0f (was 62), the quake %.1f in its middle (was 26), and it shakes the view less" % [float(kind.damage) * Infected.LEAP_BLOW, Infected.QUAKE_HARM])
 	expect(shaken > 5.0 and shaken < float(Infected.QUAKE_HARM) and spared and player.health == 100.0 and float(kind.speed) >= 2.5 and float(kind.damage) >= 40.0, "Its landing hurts whoever stands near (%.0f at two metres), but not twice whom it struck, and nobody further off" % shaken)
 	giant._retire()
 	giant.queue_free()
@@ -6838,7 +6842,11 @@ func _breacher(game: Node3D) -> void:
 	player.armor = 0.0
 	player.health = 100.0
 	# --- the Crusher's shell: only his heavy gear and his explosives go through it
+	# (A grown one: of a young one no single blast takes more than BULK_HIT.)
+	var round_was: int = game.wave
+	game.wave = game.ROUNDS.size()
 	var giant: Infected = game.spawn_enemy("crusher")
+	game.wave = round_was
 	giant.set_physics_process(false)
 	giant.position = Vector3(-14.0, 0.05, 44.0)
 	await frames(3)

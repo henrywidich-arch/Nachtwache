@@ -252,7 +252,11 @@ const LEAP_SHORT := 1.3
 const LEAP_LEAD := 0.45
 const LEAP_WAIT := 6.5
 const QUAKE_REACH := 4.5
-const QUAKE_HARM := 26.0
+const QUAKE_HARM := 19.5
+## The blow of the leap, as a factor on the Crusher's own blow (a quarter less since v0.54:
+## it was 1.4 and the quake 26), and how hard its landing shakes the view (and up to how far).
+const LEAP_BLOW := 1.05
+const LEAP_SHAKE := Vector2(1.0, 15.0)
 const POUNCE_FLIGHT := 0.46
 const ENRAGE_PACE := 1.6
 ## The Crusher's shell. Again and again it hardens for SHELL_SECONDS: only SHELL_SHARE of
@@ -904,7 +908,7 @@ func _physics_process(delta: float) -> void:
 				prey.receive_damage(attack_damage * harm(), global_position, "", Skills.kind_of(self))
 			if kind == "crusher":
 				game.sounds.play_at("thud", global_position, 6.0 if jump != "" else 4.0)
-				game.player.shake_from(global_position, 1.3 if jump != "" else 0.9, 18.0 if jump != "" else 14.0)
+				game.player.shake_from(global_position, LEAP_SHAKE.x if jump != "" else 0.9, LEAP_SHAKE.y if jump != "" else 14.0)
 				if jump != "":
 					_quake(prey if hit else null)
 		if attack_clock >= attack_length:
@@ -915,7 +919,7 @@ func _physics_process(delta: float) -> void:
 		# Prey that keeps its distance gets jumped: a crouch, then a long, low leap.
 		special_cooldown = LEAP_WAIT
 		jump = "crouch"
-		_begin_attack("leap", LEAP_SECONDS, LEAP_STRIKE, reach * 1.2, float(spec.damage) * 1.4)
+		_begin_attack("leap", LEAP_SECONDS, LEAP_STRIKE, reach * 1.2, float(spec.damage) * LEAP_BLOW)
 	elif distance < reach and same_floor:
 		pace = 0.0
 		if cooldown <= 0.0 and _clear_line(target):
@@ -1142,6 +1146,10 @@ func _ambient(delta: float, look: Vector3, turn: bool) -> void:
 
 ## What of `amount` tells on the Crusher (see BULK_RATE); it remembers it.
 func _bear(amount: float) -> float:
+	# (What is more than all its health is no weapon but the game's own word - a round
+	# swept clean, a check: it is let through as it is.)
+	if amount >= max_health:
+		return amount
 	var base := max_health / toughened
 	var room := maxf(0.0, base * BULK_RATE * BULK_TIME - bulk)
 	var taken := minf(minf(amount, room) + maxf(0.0, amount - room) * BULK_SHARE, base * BULK_HIT)
