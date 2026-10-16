@@ -565,7 +565,7 @@ func _build_wake() -> void:
 	wake.scale_amount_min = 0.5
 	wake.scale_amount_max = 1.3
 	var puff := QuadMesh.new()
-	puff.size = Vector2(0.45, 0.45)
+	puff.size = Vector2(0.3, 0.3)
 	var foam := StandardMaterial3D.new()
 	foam.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	foam.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -613,10 +613,10 @@ func _splash(at: Vector3, size: float) -> void:
 	burst.direction = Vector3.UP
 	burst.spread = 40.0
 	burst.gravity = Vector3(0, -9.0, 0)
-	burst.initial_velocity_min = 2.5 * size
-	burst.initial_velocity_max = 5.0 * size
-	burst.scale_amount_min = 0.6
-	burst.scale_amount_max = 1.4
+	burst.initial_velocity_min = 1.8 * size
+	burst.initial_velocity_max = 3.6 * size
+	burst.scale_amount_min = 0.4
+	burst.scale_amount_max = 0.9
 	burst.mesh = wake.mesh
 	burst.color_ramp = wake.color_ramp
 	burst.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE

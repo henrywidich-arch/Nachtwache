@@ -75,7 +75,8 @@ func _ready() -> void:
 	sheet.mesh = plane
 	sheet.position = Vector3(0, surface, 0)
 	var murk := StandardMaterial3D.new()
-	murk.albedo_color = Color(0.07, 0.17, 0.15, 0.82)
+	# Murky: what lies below the surface is a shadow at most; fin and back show.
+	murk.albedo_color = Color(0.05, 0.12, 0.1, 0.93)
 	murk.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	murk.metallic = 0.3
 	murk.roughness = 0.08
@@ -90,7 +91,7 @@ func _ready() -> void:
 	deep.mesh = murk_box
 	deep.position = Vector3(0, surface - DEPTH * 0.5 - 0.03, 0)
 	var haze := StandardMaterial3D.new()
-	haze.albedo_color = Color(0.03, 0.1, 0.08, 0.45)
+	haze.albedo_color = Color(0.02, 0.06, 0.05, 0.8)
 	haze.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	haze.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	haze.cull_mode = BaseMaterial3D.CULL_FRONT
@@ -100,7 +101,7 @@ func _ready() -> void:
 	var lamp := OmniLight3D.new()
 	lamp.position = Vector3(0, 6.0, 0)
 	lamp.omni_range = 24.0
-	lamp.light_energy = 1.2
+	lamp.light_energy = 0.6
 	add_child(lamp)
 	# (Under the pier it is no deep water to them either: they go round its end.)
 	var gap := PIER.x * 0.5 + 0.15

@@ -9428,7 +9428,7 @@ func _figures(game: Node3D) -> void:
 			whole = whole and body.player.has_animation(str(clip))
 		whole = whole and body.skeleton.get_bone_count() == 66 and body.kind == look
 		var misses := 0
-		for pose in [["idle", 1.0], ["stalk", 0.3], ["run", 0.2], ["leap", 0.5], ["slash_l", 0.3], ["bite", 0.25], ["pin", 0.4], ["spit", 0.85], ["roar", 0.9], ["sweep", 0.5], ["charge", 0.1]]:
+		for pose in [["idle", 1.0], ["stalk", 0.3], ["run", 0.2], ["leap", 0.5], ["slash_l", 0.3], ["bite", 0.25], ["pin", 0.4], ["spit", 0.85], ["roar", 0.9], ["sweep", 0.5], ["charge", 0.1], ["slam", 0.47], ["slam", 0.3]]:
 			body.player.play(str(pose[0]))
 			body.player.seek(float(pose[1]), true)
 			body.player.advance(0.0)
@@ -9468,7 +9468,7 @@ func _figures(game: Node3D) -> void:
 	player.camera.rotation = Vector3.ZERO
 	room.frozen = false
 	expect(whole and HiveProwler.fed(HiveProwler.ELITE_FROM, false) and not HiveProwler.fed(HiveProwler.ELITE_FROM - 1, false) and HiveProwler.fed(0, true), "The Prowler once it has fed: his model on the Prowler's own skeleton with all 24 clips, a little bigger; it comes so from its visit %d on and always in the hall" % (HiveProwler.ELITE_FROM + 1))
-	expect(struck, "Rays at the visible skull of both Prowlers - its middle, front, top and sides - strike the head's zone in eleven clips, and a shot there counts in the head (misses: %s)" % ", ".join(PackedStringArray(notes)))
+	expect(struck, "Rays at the visible skull of both Prowlers - its middle, front, top and sides - strike the head's zone in twelve clips, and a shot there counts in the head (misses: %s)" % ", ".join(PackedStringArray(notes)))
 	# --- the sharks: their pool, and a shark that never leaves its water
 	var made: Array = room.spawn("shark1")
 	var pool: SharkPool = room.pool
@@ -9523,11 +9523,17 @@ func _figures(game: Node3D) -> void:
 	player.velocity = Vector3.ZERO
 	shark.rest_left = 0.0
 	var seized := false
+	var stand := player.global_position
 	for i in range(900):
 		await get_tree().physics_frame
 		if player.clung_by == shark:
 			seized = true
 			break
+		# He stands where he is (the body of the shark brushing past does not shove him off).
+		player.global_position = Vector3(stand.x, player.global_position.y, stand.z)
+		player.velocity = Vector3(0, player.velocity.y, 0)
+	if not seized:
+		print("SEIZE_MISS mode=%s prey=%s in_water=%s rest=%.1f shark=%s player=%s over=%s" % [shark.mode, str(shark.prey), str(shark.in_water(player)), shark.rest_left, str(shark.global_position), str(player.global_position), str(water.over(player.global_position))])
 	var held_at := player.global_position
 	await frames(60)
 	var dragged := player.global_position.distance_to(held_at)

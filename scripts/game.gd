@@ -512,6 +512,10 @@ func _ready() -> void:
 	elif "--sandbox-check" in args:
 		check_mode = true
 		call_deferred("_run_sandbox_check")
+	elif "--figures-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_figures_check")
 	elif "--hive-check" in args:
 		check_mode = true
 		call_deferred("_run_hive_check")
@@ -2451,6 +2455,138 @@ func _capture_from(folder: String, file: String, from: Vector3, target: Vector3,
 	await _capture(folder, file)
 	player.camera.current = true
 	observer.queue_free()
+
+## Pictures of the figures of 2026-10-16 (--figures-check --capture-dir=<folder>, optional
+## --figures=prowler,sharks,pool): the Prowler that has fed in every clip, four moments of
+## each, from the side and from the front, with its head's hit zone drawn in red; both
+## sharks in every clip, lifted out of the water; and the sharks in the test pool - on
+## patrol, giving warning at an open edge, lunging, holding a survivor in the water.
+func _run_figures_check() -> void:
+	var folder := _capture_dir()
+	var parts := "prowler,sharks,pool"
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--figures="):
+			parts = arg.trim_prefix("--figures=")
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.0)
+	start_run(true)
+	await tick.call(1.0)
+	hud.banner_left = 0
+	hud.visible = false
+	sandbox.frozen = true
+	sandbox.god = true
+	var yard: Vector3 = cabin.points.yard_south
+	if "prowler" in parts:
+		for look in ["prowler_elite", "prowler"]:
+			var beast: Infected = spawn_enemy("prowler", look)
+			beast.position = yard + Vector3(0, 0.05, -6.0)
+			await get_tree().physics_frame
+			beast.set_physics_process(false)
+			beast.model.rotation.y = 0.0
+			var body := beast.model as ProwlerVisual
+			body.state = "stagger"
+			body.busy_left = 9999.0
+			# The head's hit zone, made visible.
+			var mark := MeshInstance3D.new()
+			var ball := SphereMesh.new()
+			ball.radius = float(beast.spec.head_size)
+			ball.height = ball.radius * 2.0
+			mark.mesh = ball
+			var red := StandardMaterial3D.new()
+			red.albedo_color = Color(1.0, 0.1, 0.1, 0.35)
+			red.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			red.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mark.material_override = red
+			beast.head_box.add_child(mark)
+			var clips: Array = ["idle", "stalk", "trot", "run", "leap", "slash_l", "slash_r", "slam", "bite", "flinch", "stagger", "roar", "death", "turn_l", "turn_r", "pivot_l", "pivot_r", "brake", "shake", "pin", "charge_wind", "charge", "sweep", "spit"]
+			if look == "prowler":
+				clips = ["idle", "run", "bite", "pin"]
+			var centre: Vector3 = beast.global_position + Vector3(0, 0.75, 0)
+			for clip in clips:
+				var length: float = body.player.get_animation(clip).length
+				for step in range(4):
+					body.player.play(clip)
+					body.player.seek(length * step / 4.0 + 0.001, true)
+					body.player.advance(0.0)
+					await get_tree().process_frame
+					beast.head_box.global_position = body.skull_position()
+					await _capture_from(folder, "prowler_%s_%s_%d_side.png" % [look, clip, step], centre + Vector3(5.2, 0.4, 0), centre, 50.0)
+					await _capture_from(folder, "prowler_%s_%s_%d_front.png" % [look, clip, step], centre + Vector3(2.4, 0.9, -3.8), centre, 50.0)
+			sandbox.clear()
+			await tick.call(0.2)
+	if "sharks" in parts:
+		var pool := sandbox.shark_pool()
+		for look in ["shark1", "shark2"]:
+			var shark := Shark.spawn_in(self, pool.water, Vector3.INF, look)
+			shark.set_physics_process(false)
+			# Lifted over the deck, to be seen whole.
+			var at := pool.arrival + Vector3(0, 1.3, -3.0)
+			shark.global_position = at
+			shark.heading = Vector3.RIGHT
+			shark.model.rotation.y = atan2(-1.0, 0.0)
+			var body := shark.model as SharkVisual
+			body.state = "stagger"
+			body.busy_left = 9999.0
+			for clip in ["swim", "swim_fast", "turn_l", "turn_r", "lunge", "bite", "thrash", "death"]:
+				var length: float = body.player.get_animation(clip).length
+				for step in range(4):
+					body.player.play(clip)
+					body.player.seek(length * step / 4.0 + 0.001, true)
+					body.player.advance(0.0)
+					await get_tree().process_frame
+					await _capture_from(folder, "shark_%s_%s_%d_side.png" % [look, clip, step], at + Vector3(0, 0.3, -6.5), at, 50.0)
+					await _capture_from(folder, "shark_%s_%s_%d_high.png" % [look, clip, step], at + Vector3(-3.5, 3.5, -3.5), at, 50.0)
+			# The jaws close up: wide open in the lunge and the bite.
+			for moment in [["lunge", 0.5], ["bite", 0.15], ["swim", 0.3]]:
+				body.player.play(str(moment[0]))
+				body.player.seek(float(moment[1]), true)
+				body.player.advance(0.0)
+				await get_tree().process_frame
+				var jaws := body.mouth_position()
+				await _capture_from(folder, "shark_%s_jaws_%s.png" % [look, moment[0]], jaws + Vector3(1.9, 0.05, -0.9), jaws, 50.0)
+			sandbox.clear()
+			await tick.call(0.2)
+	if "pool" in parts:
+		var pool := sandbox.shark_pool()
+		var water := pool.water
+		sandbox.frozen = false
+		sandbox.to_pool()
+		var first := Shark.spawn_in(self, water, water.inside(Vector3(SharkPool.AT.x - 3.0, 0, SharkPool.AT.z), 1.0), "shark1")
+		var second := Shark.spawn_in(self, water, water.inside(Vector3(SharkPool.AT.x + 5.0, 0, SharkPool.AT.z + 2.0), 1.0), "shark2")
+		await tick.call(3.0)
+		await _capture_from(folder, "pool_01_overview.png", SharkPool.AT + Vector3(-11.0, 6.5, -13.0), SharkPool.AT + Vector3(0, -0.5, 0), 60.0)
+		await _capture(folder, "pool_02_deck.png")
+		# At an open edge: the fin turns to him, comes on, lunges.
+		_place_player(SharkPool.AT + Vector3(4.0, 0.1, -SharkPool.BASIN.y * 0.5 - 0.6), 180.0, -25.0)
+		var shots := 0
+		for i in range(900):
+			await get_tree().physics_frame
+			var one: Shark = first if first.mode in ["tell", "lunge"] else (second if is_instance_valid(second) and second.mode in ["tell", "lunge"] else null)
+			if one != null and one.mode == "tell" and shots == 0:
+				await _capture(folder, "pool_03_tell.png")
+				await _capture_from(folder, "pool_04_tell_side.png", player.global_position + Vector3(-5.0, 2.5, 3.0), one.global_position, 60.0)
+				shots = 1
+			if one != null and one.mode == "lunge" and shots == 1 and one.mode_left < Shark.LUNGE - Shark.LUNGE_STRIKE + 0.05:
+				await _capture(folder, "pool_05_lunge.png")
+				await _capture_from(folder, "pool_06_lunge_side.png", player.global_position + Vector3(-4.5, 1.2, 3.5), one.global_position + Vector3(0, 0.5, 0), 60.0)
+				shots = 2
+				break
+		# In the water.
+		player.global_position = Vector3(SharkPool.AT.x + 4.0, water.bottom + 0.1, SharkPool.AT.z + 1.0)
+		player.velocity = Vector3.ZERO
+		for shark in [first, second]:
+			if is_instance_valid(shark):
+				shark.rest_left = 0.0
+		for i in range(900):
+			await get_tree().physics_frame
+			if player.clung_by != null:
+				await tick.call(0.6)
+				await _capture_from(folder, "pool_07_hold.png", player.global_position + Vector3(-4.0, 3.8, -4.0), player.global_position + Vector3(0, 0.6, 0), 60.0)
+				break
+		print("FIGURES pool tell=%d first=%s/%d bites=%d second=%s held=%s" % [shots, first.mode, first.lunges, first.bites, second.mode if is_instance_valid(second) else "-", str(player.clung_by != null)])
+	hud.visible = true
+	print("FIGURES_CAPTURE_COMPLETE")
+	get_tree().quit()
 
 ## Pictures of the Crusher's leap, seen from the side, a tenth of a second apart; then its
 ## blow from the front. Prints where it took off and where it came down.
