@@ -258,7 +258,9 @@ static func ride_tunnel(map: HiveMap, zone_id: String, centre: Vector3) -> Array
 
 ## A basin: its floor (a pit nobody walks in on purpose), the walls that close it under
 ## the floor of the room around it, and the water in it.
-static func water(map: HiveMap, rect: Rect2, surface: float, bottom: float, deep: bool) -> void:
+## (`sharks`: sharks swim in it - they are what is dangerous there, the water itself does
+## not hurt.)
+static func water(map: HiveMap, rect: Rect2, surface: float, bottom: float, deep: bool, sharks: bool = false) -> void:
 	var kept := map.batch
 	map._chunk("Basin", false)
 	var middle := rect.get_center()
@@ -281,7 +283,7 @@ static func water(map: HiveMap, rect: Rect2, surface: float, bottom: float, deep
 	map._chunk("Water", false)
 	map.batch.quad(map.mats[key], Vector3(rect.position.x, surface, rect.position.y), Vector3(rect.position.x, surface, rect.end.y), Vector3(rect.end.x, surface, rect.end.y), Vector3(rect.end.x, surface, rect.position.y), Color.WHITE)
 	map.batch = kept
-	map.waters.append({"rect": rect, "surface": surface, "bottom": bottom, "deep": deep})
+	map.waters.append({"rect": rect, "surface": surface, "bottom": bottom, "deep": deep, "sharks": sharks})
 
 ## A sheet of water over a floor one walks on (it is only seen).
 static func wet(map: HiveMap, rect: Rect2, top: float, floor_y: float) -> void:
@@ -325,10 +327,11 @@ static func run_waters(map: HiveMap, delta: float) -> void:
 		return
 	var player: Survivor = game.player
 	if is_instance_valid(player):
-		var in_deep := not deep_at(map, player.global_position).is_empty()
+		var basin := deep_at(map, player.global_position)
+		var in_deep := not basin.is_empty()
 		player.wade = WADE if in_deep else 1.0
 		map.water_time = map.water_time + delta if in_deep else 0.0
-		if in_deep and map.water_time > WATER_GRACE and not player.down and not (game.sandbox.on and game.sandbox.god):
+		if in_deep and not bool(basin.get("sharks", false)) and map.water_time > WATER_GRACE and not player.down and not (game.sandbox.on and game.sandbox.god):
 			player.receive_damage(WATER_HARM * delta, Vector3.INF, "water")
 		if in_deep and map.water_time > 0.3 and map.water_told < 0.0:
 			map.water_told = 6.0
@@ -349,7 +352,8 @@ static func run_waters(map: HiveMap, delta: float) -> void:
 			map.water_bodies.erase(key)
 	for node in game.enemies.get_children():
 		var enemy := node as Infected
-		if enemy == null or enemy.dead:
+		# (A shark lives there.)
+		if enemy == null or enemy.dead or enemy is Shark:
 			continue
 		var key := enemy.get_instance_id()
 		if deep_at(map, enemy.global_position).is_empty():

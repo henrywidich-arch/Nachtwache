@@ -72,6 +72,15 @@ const END_HUSH := 0.6
 const END_SPITS := 4
 ## Nearer than this to the survivor it has to have come for a visit to count as one.
 const REACHED := 10.0
+## It feeds between its visits: from this visit on (counted from 0) it comes as the elite
+## look - bigger, its back all spikes (ProwlerVisual.LOOKS.prowler_elite) - and in the hall
+## it always does. Its numbers stay those of its visit; what makes it worse is the boldness
+## every visit adds anyway.
+const ELITE_FROM := 2
+
+## True if the Prowler of this visit has fed (the last fight counts as fed).
+static func fed(visit: int, for_good: bool) -> bool:
+	return for_good or visit >= ELITE_FROM
 
 var director: HiveDirector
 var game: Node3D
@@ -96,6 +105,8 @@ var told_command := false
 var search_for := 0.0
 ## It has shown itself once (the first visit begins with that).
 var shown := false
+## It has come as the elite look once this night (the HUD has said so).
+var shown_fed := false
 ## How near it came to the survivor on this visit (for the logs of automatic runs).
 var nearest := 99.0
 
@@ -136,6 +147,7 @@ func begin(from: String) -> void:
 	told_squad = behind > 0
 	told_command = behind > 0
 	shown = behind > 0
+	shown_fed = fed(visits, false)
 	wait_left = randf_range(FIRST_GAP.x, FIRST_GAP.y) if behind <= 0 else randf_range(15.0, 40.0)
 
 func end() -> void:
@@ -251,6 +263,7 @@ func _arrive(for_good: bool) -> void:
 	beast.game = game
 	beast.wave = maxi(1, game.wave)
 	beast.kind = "prowler"
+	beast.visual_kind = "prowler_elite" if fed(visits, for_good) else "prowler"
 	beast.uncounted = true
 	beast.position = lair + Vector3(0, 0.08, 0)
 	beast.net_id = game.next_net_id
@@ -281,6 +294,10 @@ func _arrive(for_good: bool) -> void:
 	else:
 		beast.nerve = nerve_on(visits) * tough
 		stay = stay_on(visits)
+		if fed(visits, false) and not shown_fed:
+			game.hud.announce("ER HAT GEFRESSEN", "Der Prowler ist gewachsen – Stacheln den ganzen Rücken hinab.", 4.0)
+	if fed(visits, for_good):
+		shown_fed = true
 	game.boss = beast
 	if game.check_mode:
 		print("PROWLER_VISIT n=%d stage=%s final=%s nerve=%d health=%d gap=%.1f room=%s ground=%d" % [visits, director.stage, str(for_good), int(beast.nerve), int(beast.max_health), lair.distance_to(game.player.global_position), str(director.map.room_at(game.player.global_position).get("id", "?")), int(open_ground(game.player.global_position))])

@@ -16,6 +16,7 @@ func info() -> Dictionary:
 	return {
 		"id": "kryoarchiv", "kind": "area", "label": "KRYOARCHIV", "name": "Kryoarchiv (Kapseln, Laufstege)", "class": "mittel",
 		"size": Vector2(36.0, 44.0), "levels": [0.0, 4.2], "mood": "cryo",
+		"staff": ["hive_lab2", "hive_lab", "hive_nurse"],
 		"views": [["oben", Vector3(2, 8, 42), Vector3(24, 0, 14)], ["auge", Vector3(18, 1.62, 42), Vector3(18, 1, 8)], ["steg", Vector3(2, 5.82, 38), Vector3(30, 2, 6)]],
 		"ports": [
 			{"side": SOUTH, "at": 18.0, "y": 0.0, "room": "halle", "role": "in"},

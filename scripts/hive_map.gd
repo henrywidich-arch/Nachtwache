@@ -72,6 +72,8 @@ var water_told := 0.0
 var water_bodies: Dictionary = {}
 var areal_signs: Dictionary = {}
 var areal_rides: Dictionary = {}
+## Piece -> the water its sharks swim in (SharkWater; see AreaKit.shark_water).
+var shark_waters: Dictionary = {}
 ## The lamps that run past the windows while the train runs (the classic ride's or a
 ## ride of the random part's).
 var ride_set: Array = []
@@ -5983,8 +5985,8 @@ func set_port(id: String, open: bool, instant: bool = false) -> void:
 func area_floor(height: float, piece: Dictionary) -> int:
 	return HiveAreale.area_floor(self, height, piece)
 
-func _areal_water(rect: Rect2, surface: float, bottom: float, deep_water: bool) -> void:
-	HiveAreale.water(self, rect, surface, bottom, deep_water)
+func _areal_water(rect: Rect2, surface: float, bottom: float, deep_water: bool, sharks: bool = false) -> void:
+	HiveAreale.water(self, rect, surface, bottom, deep_water, sharks)
 
 ## A thin sheet of water over a floor (`top` its surface, `floor_y` the floor under it).
 func _areal_wet(rect: Rect2, top: float, floor_y: float) -> void:

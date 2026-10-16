@@ -8,6 +8,7 @@ func info() -> Dictionary:
 	return {
 		"id": "ankunft", "kind": "arrival", "label": "BAHNSTEIG C", "name": "Ankunft · Bahnsteig", "class": "gross",
 		"size": Vector2(56.0, 31.0), "levels": [0.0], "mood": "cold",
+		"staff": ["hive_office", "hive_security"],
 		"views": [["oben", Vector3(4, 8, 22), Vector3(40, 0, 8)], ["auge", Vector3(28, 1.62, 21), Vector3(14, 2, 0)], ["leitstand", Vector3(48, 1.62, -6), Vector3(40, 1, 10)]],
 		"reach": [Rect2(-15.0, 24.0, 15.0, 7.0), Rect2(56.0, 24.0, 15.0, 7.0), Rect2(40.0, -9.0, 16.0, 9.0)],
 		"ports": [{"side": NORTH, "at": 14.0, "y": 0.0, "room": "bahnsteig", "role": "out"}],

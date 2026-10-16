@@ -152,6 +152,26 @@ static func _with(base: Dictionary, extra: Dictionary) -> Dictionary:
 	out.merge(extra, true)
 	return out
 
+## The sharks of a piece with deep water (its "sharks", its water: AreaKit.shark_water).
+func release_sharks(piece: Dictionary) -> Array:
+	var made: Array = []
+	var map := director.game.cabin as HiveMap
+	var water: SharkWater = map.shark_waters.get(str(piece.id), null) if map != null else null
+	if water == null:
+		return made
+	for k in range(int(HiveLayout.info(str(piece.def)).get("sharks", 0))):
+		var shark := Shark.spawn_in(director.game, water)
+		if shark != null:
+			made.append(shark)
+	return made
+
+## Who worked in the piece a stage is about: the looks its contract names ("staff"), added
+## to the facility's own for its plain infected (HiveDirector.look_for).
+func staff(stage: String) -> Array:
+	if not piece_of.has(stage):
+		return []
+	return HiveLayout.info(str(piece_of[stage].def)).get("staff", [])
+
 ## True for a stage of the random part (this node runs it).
 func owns(stage: String) -> bool:
 	return piece_of.has(stage)
@@ -209,6 +229,7 @@ func enter(id: String) -> void:
 			var event: Dictionary = piece.get("event", {})
 			task = {"kind": str(event.get("kind", "hold")), "state": "reach", "time": 0.0, "event": event, "piece": piece}
 			_post(piece, str(task.kind) == "clear")
+			release_sharks(piece)
 			if director.checkpoints.has(id):
 				director._checkpoint(id, 350)
 			for said: String in (p_info.get("lines", {}) as Dictionary).get("enter", []):

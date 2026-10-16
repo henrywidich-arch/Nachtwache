@@ -11,6 +11,7 @@ func info() -> Dictionary:
 	return {
 		"id": "reaktorschacht", "kind": "area", "label": "REAKTORSCHACHT", "name": "Reaktorschacht (drei Ebenen)", "class": "mittel",
 		"size": Vector2(32.0, 32.0), "levels": [0.0, 4.2, 8.4], "mood": "plant",
+		"staff": ["hive_worker", "hive_worker", "zombie_soldier"],
 		"views": [["oben", Vector3(2, 11.5, 30), Vector3(20, 0, 10)], ["auge_boden", Vector3(16, 1.62, 29), Vector3(16, 4, 16)], ["ebene_1", Vector3(4, 5.82, 20), Vector3(24, 4.2, 4)], ["ebene_2", Vector3(28, 10, 22), Vector3(4, 5, 8)]],
 		"ports": [
 			{"side": SOUTH, "at": 16.0, "y": 0.0, "room": "schacht", "role": "in"},

@@ -46,6 +46,10 @@ extends RefCounted
 ##                 title] (at along that wall, local)
 ##   station       an optional stop (workbench and equipment): [room, side, [[look, at], ...]]
 ##   supply        an optional supply point: [local point on the floor, facing (Vector3)]
+##   staff         looks of the plain infected there besides the facility's own
+##                 (HiveDirector.STAFF, look_for), e.g. ["hive_lab2", "hive_worker"]
+##   sharks        how many sharks (Shark) swim in its deep water while its stage runs
+##                 (and in the test room); its water for them is sharks() (SharkWater)
 ## lay() builds its rooms (room()), what joins them (door(), pane(), stairs()), its ways
 ## in (the map's _way_* builders), names its points (point()), and may add water
 ## (water()). The doorways of its ports are made by HiveLayout, not by lay().
@@ -223,8 +227,17 @@ func point(key: String, at: Vector3, yaw: float = 0.0) -> void:
 ## pool beside walkways), its floor `bottom` above the base. `deep`: whoever stands on
 ## its floor is in deep water (HiveCore.waters: slow, it hurts, [Leertaste] climbs out on
 ## to the nearest walkway). A basin is a pit: what lies under the water is not walked on.
-func water(rect: Rect2, surface: float, bottom: float, deep: bool = true) -> void:
-	m._areal_water(r(rect.position.x, rect.position.y, rect.size.x, rect.size.y), y(surface), y(bottom), deep)
+func water(rect: Rect2, surface: float, bottom: float, deep: bool = true, sharks: bool = false) -> void:
+	m._areal_water(r(rect.position.x, rect.position.y, rect.size.x, rect.size.y), y(surface), y(bottom), deep, sharks)
+
+## The water the sharks of the piece swim in: the open parts of its basins as boxes of the
+## piece's frame (x, z, w, d), from the bottom to the surface; HiveAreaRun puts the sharks
+## into it. Where somebody walks (a walkway, steps) is no part of it.
+func shark_water(surface: float, bottom: float, open: Array) -> void:
+	var boxes: Array = []
+	for rect: Rect2 in open:
+		boxes.append(AABB(p(rect.position.x, bottom, rect.position.y), Vector3(rect.size.x, surface - bottom, rect.size.y)))
+	m.shark_waters[str(piece.id)] = SharkWater.from_boxes(y(surface), boxes)
 
 # ---------------------------------------------------------------- ways in
 

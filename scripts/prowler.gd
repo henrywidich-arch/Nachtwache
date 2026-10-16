@@ -277,8 +277,9 @@ func _ready() -> void:
 	_set_mode("close")
 	if game.boss == null:
 		game.boss = self
-	# Shoulders and haunches.
-	for part in [[0.66, 0.74, 0.48], [-0.64, 0.7, 0.46]]:
+	# Shoulders and haunches (a bigger look has them further apart and bigger).
+	var grown := (model as ProwlerVisual).size / ProwlerVisual.SIZE
+	for part in [[0.66 * grown, 0.74 * grown, 0.48 * grown], [-0.64 * grown, 0.7 * grown, 0.46 * grown]]:
 		var flank := Flank.new()
 		flank.whole = self
 		flank.game = game
@@ -739,7 +740,7 @@ func _physics_process(delta: float) -> void:
 			# The half turn: the body comes round about the point between its hind paws.
 			pivot_clock += delta
 			model.rotation.y = pivot_from + pivot_side * PI * smoothstep(0.0, ProwlerVisual.PIVOT_TURN, pivot_clock)
-			var spot := pivot_hip + facing() * ProwlerVisual.HAUNCH
+			var spot := pivot_hip + facing() * (model as ProwlerVisual).haunch()
 			velocity.x = (spot.x - global_position.x) / maxf(delta, 0.001)
 			velocity.z = (spot.z - global_position.z) / maxf(delta, 0.001)
 			velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
@@ -966,7 +967,7 @@ func _pivot() -> void:
 	mode = "pivot"
 	pivot_clock = 0.0
 	pivot_from = model.rotation.y
-	pivot_hip = global_position - facing() * ProwlerVisual.HAUNCH
+	pivot_hip = global_position - facing() * (model as ProwlerVisual).haunch()
 	attack_clock = -1.0
 	(model as ProwlerVisual).pivot(pivot_side > 0.0)
 

@@ -15,6 +15,7 @@ func info() -> Dictionary:
 	return {
 		"id": "isolationstrakt", "kind": "area", "label": "ISOLATIONSTRAKT", "name": "Isolationstrakt (Zellen, Turm)", "class": "mittel",
 		"size": Vector2(40.0, 40.0), "levels": [0.0, 4.2], "mood": "cold",
+		"staff": ["hive_nurse", "hive_security", "zombie_soldier"],
 		"views": [["ring", Vector3(7, 7, 9), Vector3(33, 0, 9)], ["auge_turm", Vector3(20, 1.62, 33), Vector3(20, 2, 12)], ["kanzel", Vector3(20, 5.82, 26), Vector3(20, 4, 2)], ["zelle", Vector3(8.8, 1.62, 1.5), Vector3(8.8, 1.2, 9)]],
 		"ports": [
 			{"side": SOUTH, "at": 20.0, "y": 0.0, "room": "zugang_s", "role": "in"},

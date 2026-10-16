@@ -11,6 +11,7 @@ func info() -> Dictionary:
 	return {
 		"id": "gartenlabor", "kind": "area", "label": "BIOTOP", "name": "Gartenlabor (Biotop)", "class": "gross",
 		"size": Vector2(48.0, 44.0), "levels": [0.0, 4.2], "mood": "bio",
+		"staff": ["hive_lab2", "hive_scientist", "hive_scientist2"],
 		"views": [["oben_sw", Vector3(3, 8.8, 41), Vector3(28, 0, 18)], ["oben_no", Vector3(45, 8.8, 3), Vector3(20, 0, 30)], ["auge_einstieg", Vector3(24, 1.62, 41), Vector3(24, 1.5, 20)], ["steg", Vector3(40, 5.82, 2), Vector3(20, 1, 24)], ["bruecke", Vector3(30, 5.82, 19.5), Vector3(10, 2, 30)]],
 		"ports": [
 			{"side": SOUTH, "at": 24.0, "y": 0.0, "room": "halle", "role": "in"},

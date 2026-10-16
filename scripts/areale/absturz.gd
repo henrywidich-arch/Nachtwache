@@ -10,6 +10,7 @@ func info() -> Dictionary:
 	return {
 		"id": "absturz", "kind": "arrival", "label": "IM TUNNEL", "name": "Ankunft · Zugunglück im Tunnel", "class": "mittel",
 		"size": Vector2(74.0, 38.0), "levels": [0.0, 8.4], "mood": "deep",
+		"staff": ["hive_worker", "zombie_soldier"],
 		"views": [["tunnel", Vector3(13, 1.62, 30.5), Vector3(60, 1.5, 30.5)], ["wrack", Vector3(36, 2.5, 30.5), Vector3(46, 1, 35)], ["notweg", Vector3(60, 1.62, 27.5), Vector3(60, 3, 22)], ["oben", Vector3(60, 10.02, 4.5), Vector3(60, 9, 0)]],
 		"reach": [Rect2(-15.0, 32.0, 15.0, 6.0), Rect2(74.0, 32.0, 15.0, 6.0)],
 		"ports": [{"side": NORTH, "at": 60.0, "y": 8.4, "room": "oben", "role": "out", "open": true}],

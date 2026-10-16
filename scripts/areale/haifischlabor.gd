@@ -22,7 +22,7 @@ extends AreaKit
 ## on the level 4.2 of this piece; ports, spots, posts, caches and the stop are in info().
 
 const SURFACE := -0.2
-const BOTTOM := -1.6
+const BOTTOM := -2.5
 ## The walkways, in the frame of the piece (x, z, w, d).
 const WALKS := [
 	Rect2(0.2, 44.6, 55.6, 3.2),    # south, where one comes in
@@ -36,11 +36,26 @@ const WALKS := [
 ]
 ## Where the causeway lies under water (z from, to).
 const SUNKEN := [20.0, 31.0]
+## The open water the sharks swim in (x, z, w, d): the basin without the walkways and
+## without the two flights of steps that lead up out of it.
+const OPEN := [
+	Rect2(3.2, 3.2, 33.0, 16.8), Rect2(36.2, 9.2, 11.8, 10.8),
+	Rect2(3.2, 20.0, 16.8, 5.2), Rect2(34.0, 20.0, 14.0, 5.2),
+	Rect2(3.2, 26.8, 16.8, 17.8), Rect2(34.0, 26.8, 14.0, 17.8), Rect2(20.0, 32.0, 1.0, 12.6), Rect2(23.2, 32.0, 10.8, 12.6),
+	Rect2(50.4, 12.6, 5.4, 32.0)
+]
+## The steps up out of the water: on to the south walkway and on to the pump platform
+## ([x, foot z, head z]).
+const STEPS := [[22.1, 41.6, 44.6], [53.1, 12.6, 9.2]]
+## The stretches of railing that are left (most of them are gone): from, to (local, on the
+## walkway's edge). Behind them the sharks cannot reach anybody.
+const RAILS := [[Vector3(26.0, 0, 44.66), Vector3(36.0, 0, 44.66)], [Vector3(20.06, 0, 21.0), Vector3(20.06, 0, 25.0)], [Vector3(50.34, 0, 33.0), Vector3(50.34, 0, 41.0)], [Vector3(33.94, 0, 28.0), Vector3(33.94, 0, 31.5)]]
 
 func info() -> Dictionary:
 	return {
 		"id": "haifischlabor", "kind": "area", "label": "HAIFISCHLABOR", "name": "Haifischlabor (geflutet)", "class": "gross",
-		"size": Vector2(56.0, 48.0), "levels": [0.0, 4.2], "mood": "water",
+		"size": Vector2(56.0, 48.0), "levels": [0.0, 4.2], "mood": "water", "sharks": 2,
+		"staff": ["hive_lab2", "hive_lab", "hive_worker"],
 		"views": [["oben_sw", Vector3(4, 10.5, 45), Vector3(34, 0, 18)], ["oben_no", Vector3(52, 10.5, 3), Vector3(20, 0, 32)], ["auge_einstieg", Vector3(8, 1.62, 45.5), Vector3(27, 1, 26)], ["auge_engstelle", Vector3(4, 1.62, 26), Vector3(27, 1, 26)], ["auge_damm", Vector3(49.2, 1.62, 40), Vector3(49.2, 1, 12)], ["beobachtung", Vector3(18, 5.82, 2), Vector3(28, 0, 26)]],
 		"ports": [
 			{"side": SOUTH, "at": 8.0, "y": 0.0, "room": "halle", "role": "in"},
@@ -74,7 +89,18 @@ func lay() -> void:
 		"look": {"lamp": "hang", "lamp_gap": 18.0, "lamp_every": 1, "lamp_height": 6.5, "light": Color("a8e0e8"), "energy": 2.0, "reach": 20.0}
 	})
 	# --- the basin and the walkways over it
-	water(Rect2(0.2, 0.2, 55.6, 47.6), SURFACE, BOTTOM)
+	water(Rect2(0.2, 0.2, 55.6, 47.6), SURFACE, BOTTOM, true, true)
+	shark_water(SURFACE, BOTTOM, OPEN)
+	# Steps up out of the water, and the railings that are left.
+	m._chunk("Stairs", false)
+	for step: Array in STEPS:
+		var foot := p(float(step[0]), BOTTOM, float(step[1]))
+		var head := p(float(step[0]), 0.0, float(step[2]))
+		m._steps(foot, head, 1.6, "betonfloor", Color(0.5, 0.5, 0.48))
+		m._handrail(foot, head, 0.78)
+	m._chunk("Kit", false)
+	for rail: Array in RAILS:
+		railing(rail[0], rail[1])
 	m._chunk("Kit", false)
 	for walk: Rect2 in WALKS:
 		slab(walk, 0.0, "betonfloor", Color(0.56, 0.56, 0.54))

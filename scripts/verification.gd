@@ -115,8 +115,8 @@ func run(game: Node3D) -> void:
 	await frames(35)
 	# --- every infected model is rigged and animated
 	game.begin_wave()
-	var expected_bones := {"mauler_hazmat": 25, "mauler_female": 68, "striker": 68, "crusher": 28, "charger": 19, "normalzombie": 22, "normalzombie2": 22, "zombiehelm": 22, "leech": 22}
-	var owners := {"mauler_hazmat": "mauler", "mauler_female": "mauler", "striker": "striker", "crusher": "crusher", "charger": "charger", "normalzombie": "mauler", "normalzombie2": "mauler", "zombiehelm": "mauler", "leech": "leech"}
+	var expected_bones := {"mauler_hazmat": 25, "mauler_female": 68, "striker": 68, "crusher": 28, "charger": 19, "normalzombie": 22, "normalzombie2": 22, "zombiehelm": 22, "leech": 22, "zombie_soldier": 22, "hive_office": 22, "hive_office2": 22, "hive_lab2": 22}
+	var owners := {"mauler_hazmat": "mauler", "mauler_female": "mauler", "striker": "striker", "crusher": "crusher", "charger": "charger", "normalzombie": "mauler", "normalzombie2": "mauler", "zombiehelm": "mauler", "leech": "leech", "zombie_soldier": "mauler", "hive_office": "mauler", "hive_office2": "mauler", "hive_lab2": "mauler"}
 	for visual in expected_bones:
 		var specimen: Infected = game.spawn_enemy(owners[visual], visual)
 		specimen.set_physics_process(false)
@@ -1168,6 +1168,7 @@ func run(game: Node3D) -> void:
 	await _breacher(game)
 	await _wish(game)
 	await _operators(game)
+	await _figures(game)
 	await _sandbox(game)
 	await _hive(game)
 	await _areas(game)
@@ -3297,12 +3298,13 @@ func _hive_staff(game: Node3D) -> void:
 	var plain: Dictionary = InfectedVisual.KINDS.normalzombie
 	for look in staff_above + staff_below:
 		var build: Dictionary = InfectedVisual.KINDS.get(str(look), {})
-		known = known and not build.is_empty() and str(build.set) == "zombie" and int(build.get("mission", 1)) == 2 and (build.moves as Dictionary).hash() == (plain.moves as Dictionary).hash() and absf(float(build.height) - 1.76) < 0.06 and not (Infected.TYPES.mauler.visuals as Array).has(look)
+		# (The soldier also comes on the farm, as a rare look: mission 1.)
+		known = known and not build.is_empty() and str(build.set) == "zombie" and int(build.get("mission", 1)) == (1 if look == "zombie_soldier" else 2) and (build.moves as Dictionary).hash() == (plain.moves as Dictionary).hash() and absf(float(build.height) - 1.76) < 0.09 and not (Infected.TYPES.mauler.visuals as Array).has(look)
 	var late := 0
 	for kind in InfectedVisual.KINDS:
 		if int((InfectedVisual.KINDS[kind] as Dictionary).get("mission", 1)) == 2:
 			late += 1
-	expect(known and late == 7 and staff_below.size() == 7 and staff_above.size() == 3 and staff_below.has("hive_scientist") and staff_below.has("hive_lab") and staff_below.has("hive_nurse") and not staff_above.has("hive_scientist") and float(HiveDirector.STAFF.above[1]) < 0.5 and float(HiveDirector.STAFF.below[1]) > 0.5 and float(HiveDirector.STAFF.below[1]) < 1.0, "The Hive's staff: seven looks for the plain infected of the second mission, built like the plain ones, prepared when a night there begins")
+	expect(known and late == 10 and staff_below.size() == 11 and staff_above.size() == 4 and staff_below.has("hive_scientist") and staff_below.has("hive_lab") and staff_below.has("hive_nurse") and not staff_above.has("hive_scientist") and float(HiveDirector.STAFF.above[1]) < 0.5 and float(HiveDirector.STAFF.below[1]) > 0.5 and float(HiveDirector.STAFF.below[1]) < 1.0, "The Hive's staff: eleven looks for the plain infected of the second mission (ten its own), built like the plain ones, prepared when a night there begins")
 	# How often the director hands them out, stage by stage; the special kinds keep their looks.
 	var stage_before: String = hive.stage
 	var shares := {}
@@ -3343,9 +3345,9 @@ func _hive_staff(game: Node3D) -> void:
 		one.set_physics_process(false)
 		seen[one.model.kind] = int(seen.get(one.model.kind, 0)) + 1
 		maulers = maulers and one.kind == "mauler" and one.spec == Infected.TYPES.mauler and is_equal_approx(one.max_health, 95.0 + 7.0 * 7.0) and one.model.skeleton.get_bone_count() >= 22 and not one.alert
-		if one.model.kind == "hive_lab":
+		if Infected.FEMALE_LOOKS.has(one.model.kind):
 			woman = woman and str(one.voices.death) == "death_female"
-		elif one.model.kind != "mauler_female":
+		else:
 			woman = woman and str(one.voices.death) == "death"
 		_take_off(game, one)
 	var in_staff := 0
@@ -3367,15 +3369,16 @@ func _hive_staff(game: Node3D) -> void:
 	var lies: bool = staff_below.has(fallen.model.kind) and fallen.dead and game.kills == kills_then + 1 and fallen.model.dying and fallen.model.player.current_animation.begins_with("death")
 	hive.stage = stage_before
 	expect(maulers and woman and in_staff >= 16 and seen.size() >= 5 and lies, "In the facility the director's plain infected are Maulers in every number, %d of 40 in the clothes of the staff (%d looks seen); the woman of the laboratory has a woman's voice, and one of them falls like any other" % [in_staff, seen.size()])
-	# On the farm nothing changes: a Mauler there wears one of the five looks it always had.
-	var old: Array = Infected.TYPES.mauler.visuals
+	# On the farm nothing changes: a Mauler there wears one of the five looks it always had
+	# (or, now and then, the soldier's: see _figures).
+	var old: Array = (Infected.TYPES.mauler.visuals as Array) + (Infected.TYPES.mauler.rare as Dictionary).keys()
 	var farm := true
 	for i in range(40):
 		var one: Infected = game.spawn_enemy("mauler")
 		one.set_physics_process(false)
 		farm = farm and old.has(one.model.kind)
 		_take_off(game, one)
-	expect(farm and old == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"], "On the farm the plain infected look as they always did")
+	expect(farm and Infected.TYPES.mauler.visuals == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"] and old.size() == 6, "On the farm the plain infected look as they always did, and now and then like a soldier")
 	_wipe_all(game)
 	await wait(0.5)
 
@@ -7211,9 +7214,10 @@ func _sandbox(game: Node3D) -> void:
 	for group in [Sandbox.INFECTED, Sandbox.SOLDIERS, Sandbox.OPERATORS]:
 		for entry in group:
 			kinds.append(str(entry[0]))
-	var all_there := kinds.size() == Infected.TYPES.size()
+	# (The sharks only live in water: they have buttons of their own, which take him to their pool.)
+	var all_there := not Sandbox.SHARKS.is_empty()
 	for kind in Infected.TYPES:
-		all_there = all_there and kinds.has(str(kind))
+		all_there = all_there and (kinds.has(str(kind)) or str(kind) == "shark")
 	room.frozen = true
 	var placed := true
 	var told := ""
@@ -7224,7 +7228,8 @@ func _sandbox(game: Node3D) -> void:
 			var one: Infected = made[0]
 			var gap: float = Vector2(one.global_position.x - player.global_position.x, one.global_position.z - player.global_position.z).length()
 			# In front of him (he looks north, towards the house), at about the distance asked for.
-			good = one.kind == kind and one.wave == 5 and gap > 3.0 and gap < Sandbox.GAP + 6.0 and one.global_position.z < player.global_position.z - 2.0 and not one.is_physics_processing()
+			good = one.kind == (kind if kind != "prowler_elite" else "prowler") and one.model.kind == (kind if kind != "prowler_elite" else "prowler_elite") if kind.begins_with("prowler") else one.kind == kind
+			good = good and one.wave == 5 and gap > 3.0 and gap < Sandbox.GAP + 6.0 and one.global_position.z < player.global_position.z - 2.0 and not one.is_physics_processing()
 		if not good:
 			placed = false
 			told += kind + " "
@@ -9479,6 +9484,7 @@ func _areas(game: Node3D) -> void:
 	expect(escaped and hive.stage == "a0", "From the derailed car the way leads to the emergency exit, up the stair and on into the first area")
 	var done_kinds: Array[String] = []
 	var failed: Array[String] = []
+	var sharks := 0
 	var end_piece: Dictionary = {}
 	for entry: Dictionary in map.night.pieces:
 		if str(entry.kind) == "end" and int(entry.chain) == 0:
@@ -9506,6 +9512,10 @@ func _areas(game: Node3D) -> void:
 		piece.event = event
 		# (Entered again, so that it begins with the objective set here.)
 		hive._enter("a%d" % index)
+		if str(piece.def) == "haifischlabor":
+			for node in game.enemies.get_children():
+				if node is Shark and not (node as Shark).dead and (node as Shark).water == map.shark_waters.get(str(piece.id)):
+					sharks += 1
 		_wipe_all(game)
 		var origin: Vector3 = piece.origin
 		put.call(map.points["%s_entry" % piece.id])
@@ -9557,6 +9567,7 @@ func _areas(game: Node3D) -> void:
 		put.call(map.points["%s_entry" % next.id])
 		await _idle_frames()
 	expect(failed.is_empty() and done_kinds.size() == areas.size() and hive.stage == "g_lock", "In every area the way out stays shut until its objective is done, and opens then: things found and picked up, places switched on, a door hacked open, a place held, a lockdown sat out, the guards felled (%s)%s" % [", ".join(PackedStringArray(done_kinds)), "" if failed.is_empty() else " - not: " + ", ".join(PackedStringArray(failed))])
+	expect(sharks >= 2 and map.shark_waters.size() >= 1, "In the shark laboratory two sharks swim in the open water between its walkways (%d)" % sharks)
 	# The lock at the end: its twin's gate shuts, and the squad stands in the facility's.
 	put.call(map.points["%s_mid" % end_piece.id])
 	await _idle_frames()
@@ -9619,3 +9630,302 @@ func _areas(game: Node3D) -> void:
 	await _idle_frames()
 	profile.mode = kept_mode
 	profile.mission = kept_mission
+
+# ---------------------------------------------------------------- the figures of 2026-10-16
+
+## The figures of 2026-10-16: four more looks of the plain infected (the administration,
+## the laboratories, a soldier), the Prowler once it has fed, and the infected sharks of the
+## flooded laboratory with their test pool.
+func _figures(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var room: Sandbox = game.sandbox
+	game.return_to_menu()
+	await frames(2)
+	game.team_enabled = false
+	game.start_run(true)
+	await frames(3)
+	room.frozen = false
+	_wipe_all(game)
+	await wait(0.3)
+	# --- the new looks: built like the plain ones, every clip, the women's voices for her
+	var built := true
+	var told := ""
+	for look in ["hive_office", "hive_office2", "hive_lab2", "zombie_soldier"]:
+		var one: Infected = game.spawn_enemy("mauler", look)
+		one.set_physics_process(false)
+		one.position = Vector3(0, 0.05, 30.0)
+		var body: InfectedVisual = one.model
+		var library: AnimationLibrary = InfectedVisual.libraries[look]
+		var good: bool = body.kind == look and body.skeleton.get_bone_count() == 22 and body.rig.arms.size() == 2 and body.rig.legs.size() == 2 and body.rig.spine.size() >= 2 and library.has_animation("run") and library.has_animation("swipe") and library.has_animation("death_back") and library.has_animation("kick") and body.eyes != null and one.spec == Infected.TYPES.mauler
+		var thigh: int = body.rig.legs[0].thigh.index
+		body.animate(0.3, 3.0)
+		var before := body.skeleton.get_bone_pose_rotation(thigh)
+		body.animate(0.17, 3.0)
+		good = good and before.angle_to(body.skeleton.get_bone_pose_rotation(thigh)) > 0.05
+		good = good and (str(one.voices.death) == "death_female") == (look == "hive_office")
+		if not good:
+			told += look + " "
+		built = built and good
+		_take_off(game, one)
+	expect(built, "Four more looks of the plain infected - a woman and a man of the administration, a scientist, a soldier - have the plain ones' skeleton and every clip, and run on it %s" % told)
+	# The soldier now and then on the farm too; never pushing the plain looks out.
+	var soldiers := 0
+	for i in range(2000):
+		if Infected.pick_look(Infected.TYPES.mauler) == "zombie_soldier":
+			soldiers += 1
+	var always: bool = Infected.pick_look({"visuals": ["normalzombie"], "rare": {"zombie_soldier": 1.0}}) == "zombie_soldier"
+	var never: bool = Infected.pick_look({"visuals": ["normalzombie"], "rare": {"zombie_soldier": 0.0}}) == "normalzombie"
+	expect(always and never and soldiers > 40 and soldiers < 240 and int((InfectedVisual.KINDS.zombie_soldier as Dictionary).get("mission", 1)) == 1, "On the farm about one plain infected in seventeen is a soldier of the cordon (%d of 2000)" % soldiers)
+	# In the second mission each part of the facility brings more of its own people, and
+	# all the others still come.
+	var hive: HiveDirector = game.hive
+	var kept_stage: String = hive.stage
+	var shares := {}
+	var mixed := true
+	var groups := {"admin": ["hive_office", "hive_office2"], "labs": ["hive_lab2", "hive_lab", "hive_scientist", "hive_scientist2"], "security": ["zombie_soldier", "hive_security"], "terminal": ["hive_office", "hive_office2"]}
+	for stage in groups:
+		hive.stage = str(stage)
+		var seen := {}
+		var worn := 0
+		for i in range(3000):
+			var look: String = hive.look_for("mauler")
+			if look != "":
+				worn += 1
+				seen[look] = int(seen.get(look, 0)) + 1
+		var own := 0
+		for look in groups[stage]:
+			own += int(seen.get(look, 0))
+		shares[stage] = float(own) / maxf(1.0, worn)
+		for look in (HiveDirector.STAFF.below[0] as Array):
+			mixed = mixed and float(seen.get(look, 0)) / maxf(1.0, worn) > 0.01
+	hive.stage = kept_stage
+	expect(mixed and float(shares.admin) > 0.3 and float(shares.labs) > 0.45 and float(shares.security) > 0.35 and float(shares.terminal) < 0.25, "In the facility the offices bring their clerks (%.0f %%), the laboratories their scientists (%.0f %%), the security centre its guards and soldiers (%.0f %%) - and every other look still comes there" % [float(shares.admin) * 100.0, float(shares.labs) * 100.0, float(shares.security) * 100.0])
+	# --- the Prowler once it has fed
+	var clips := ["idle", "stalk", "trot", "run", "leap", "slash_l", "slash_r", "slam", "bite", "flinch", "stagger", "roar", "death", "turn_l", "turn_r", "pivot_l", "pivot_r", "brake", "shake", "pin", "charge_wind", "charge", "sweep", "spit"]
+	face(game, Vector3(0, 0.05, 22.0), PI)
+	player.health = 100.0
+	# (Frozen, as in the test room: nothing of them runs but the clip that is shown.)
+	room.frozen = true
+	var whole := true
+	var struck := true
+	var notes: Array = []
+	for look in ["prowler", "prowler_elite"]:
+		var beast := game.spawn_enemy("prowler", look) as Prowler
+		beast.position = Vector3(0, 0.05, 31.0)
+		await frames(3)
+		beast.set_physics_process(false)
+		beast.position = Vector3(0, 0.05, 31.0)
+		beast.model.rotation.y = 0.0
+		for flank in beast.flanks:
+			flank.position = Vector3(0, flank.height, -flank.along)
+		var body := beast.model as ProwlerVisual
+		body.state = "stagger"
+		body.busy_left = 999.0
+		for clip in clips:
+			whole = whole and body.player.has_animation(str(clip))
+		whole = whole and body.skeleton.get_bone_count() == 66 and body.kind == look
+		var misses := 0
+		for pose in [["idle", 1.0], ["stalk", 0.3], ["run", 0.2], ["leap", 0.5], ["slash_l", 0.3], ["bite", 0.25], ["pin", 0.4], ["spit", 0.85], ["roar", 0.9], ["sweep", 0.5], ["charge", 0.1], ["slam", 0.47], ["slam", 0.3]]:
+			body.player.play(str(pose[0]))
+			body.player.seek(float(pose[1]), true)
+			body.player.advance(0.0)
+			await get_tree().process_frame
+			beast.head_box.global_position = body.skull_position()
+			await get_tree().physics_frame
+			await get_tree().physics_frame
+			for point in _skull_skin(body):
+				if _crusher_ray(game, player.camera.global_position, point) != "head":
+					misses += 1
+					if misses <= 3:
+						var probe := game.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(player.camera.global_position, point + (point - player.camera.global_position).normalized() * 2.0, 1 | 4 | 8, [player.get_rid()]))
+						print("SKULL_MISS %s %s point %s zone %s answer %s at %s by %s %s beast %s" % [look, str(pose[0]), str(point), str(beast.head_box.global_position), _crusher_ray(game, player.camera.global_position, point), str(probe.get("position")), str(probe.get("collider")), (probe.get("collider") as Node).get_class() if probe.get("collider") else "", str(beast.global_position)])
+		notes.append("%s %d" % [look, misses])
+		struck = struck and misses == 0
+		# A real shot at the middle of its skull.
+		body.player.play("idle")
+		body.player.seek(1.0, true)
+		body.player.advance(0.0)
+		await get_tree().process_frame
+		beast.head_box.global_position = body.skull_position()
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+		var aim: Vector3 = _skull_skin(body)[0]
+		player.camera.look_at(aim)
+		player.shot_cooldown = 0.0
+		player.reload_left = 0.0
+		player.ammo = 30
+		var health_before: float = beast.health
+		player.shoot()
+		struck = struck and beast.health < health_before and game.hud.hit_is_head
+		if look == "prowler_elite":
+			whole = whole and body.size > ProwlerVisual.SIZE and beast.flanks[0].along > 0.66
+		_take_off(game, beast)
+		game.boss = null
+		await frames(2)
+	player.camera.rotation = Vector3.ZERO
+	room.frozen = false
+	expect(whole and HiveProwler.fed(HiveProwler.ELITE_FROM, false) and not HiveProwler.fed(HiveProwler.ELITE_FROM - 1, false) and HiveProwler.fed(0, true), "The Prowler once it has fed: his model on the Prowler's own skeleton with all 24 clips, a little bigger; it comes so from its visit %d on and always in the hall" % (HiveProwler.ELITE_FROM + 1))
+	expect(struck, "Rays at the visible skull of both Prowlers - its middle, front, top and sides - strike the head's zone in twelve clips, and a shot there counts in the head (misses: %s)" % ", ".join(PackedStringArray(notes)))
+	# --- the sharks: their pool, and a shark that never leaves its water
+	var made: Array = room.spawn("shark1")
+	var pool: SharkPool = room.pool
+	var water: SharkWater = pool.water
+	var shark: Shark = made[0] if made.size() == 1 else null
+	expect(shark != null and shark.kind == "shark" and shark.water == water and water.holds(shark.global_position, 0.3) and player.global_position.distance_to(pool.arrival) < 1.0 and shark.model is SharkVisual and (shark.model as SharkVisual).player.has_animation("lunge"), "The test room has a shark pool: a click takes the survivor there and puts a shark into its water")
+	for node in game.enemies.get_children():
+		if node != shark and node is Infected:
+			_take_off(game, node as Infected)
+	var kept := true
+	var hunger := 0
+	for i in range(600):
+		await get_tree().physics_frame
+		kept = kept and water.over(shark.global_position) and shark.global_position.y <= water.surface + 0.25 and shark.global_position.y >= water.bottom
+		if shark.lunges > 0 or shark.bites > 0:
+			hunger += 1
+	var shown := absf((water.surface - shark.global_position.y) - shark._cruise_depth()) < 0.2
+	expect(kept and hunger == 0 and shown, "The shark swims in its water and never leaves it, its fin above the surface, and leaves alone who stands back from the edge")
+	# Behind one of the railings that are left nobody is taken.
+	var hx: float = SharkPool.BASIN.x * 0.5
+	var hz: float = SharkPool.BASIN.y * 0.5
+	face(game, SharkPool.AT + Vector3(-hx + 3.0, 0.1, -hz - 0.6), PI)
+	for i in range(600):
+		await get_tree().physics_frame
+		if shark.lunges > 0 or shark.bites > 0:
+			hunger += 1
+	expect(hunger == 0 and not shark._open_to(player), "Behind a railing at the edge the shark cannot reach him")
+	# At an open edge: the warning, then the lunge and the bite.
+	room.god = false
+	player.health = 100.0
+	face(game, SharkPool.AT + Vector3(4.0, 0.1, -hz - 0.6), PI)
+	var told_first := false
+	var told_for := 0
+	var waked := false
+	var bit := false
+	for i in range(1200):
+		await get_tree().physics_frame
+		player.health = maxf(player.health, 60.0)
+		if shark.mode == "tell":
+			told_for += 1
+			told_first = told_first or shark.bites == 0
+			waked = waked or shark.wake.emitting
+		if shark.bites > 0:
+			bit = true
+			break
+	var hurt: bool = player.health < 100.0
+	room.god = true
+	expect(bit and told_first and told_for >= int(Shark.TELL * 50.0) and waked and shark.lunges >= 1 and hurt and water.over(shark.global_position), "At an open edge it gives warning - its fin turns to him and comes on with a wake for %.1f s - then lunges out of the water and bites; its body stays in the water" % (told_for / 60.0))
+	# In the water it seizes him and drags him off; three presses of [E] free him.
+	var bottom: float = water.bottom + 0.1
+	player.global_position = Vector3(SharkPool.AT.x + 4.0, bottom, SharkPool.AT.z)
+	player.velocity = Vector3.ZERO
+	shark.rest_left = 0.0
+	var seized := false
+	var stand := player.global_position
+	for i in range(900):
+		await get_tree().physics_frame
+		if player.clung_by == shark:
+			seized = true
+			break
+		# He stands where he is (the body of the shark brushing past does not shove him off).
+		player.global_position = Vector3(stand.x, player.global_position.y, stand.z)
+		player.velocity = Vector3(0, player.velocity.y, 0)
+	if not seized:
+		print("SEIZE_MISS mode=%s prey=%s in_water=%s rest=%.1f shark=%s player=%s over=%s" % [shark.mode, str(shark.prey), str(shark.in_water(player)), shark.rest_left, str(shark.global_position), str(player.global_position), str(water.over(player.global_position))])
+	var held_at := player.global_position
+	await frames(60)
+	var dragged := player.global_position.distance_to(held_at)
+	shark.shake()
+	shark.shake()
+	var still_held: bool = player.clung_by == shark
+	shark.shake()
+	expect(seized and still_held and player.clung_by == null and dragged > 0.3 and shark.mode == "dive", "Who is in the deep water it seizes and drags off (%.1f m); three presses of [E] shake it off" % dragged)
+	face(game, pool.arrival, PI)
+	# Shots: what lies deep is hardly hurt; at the surface it takes them, and it can be killed.
+	shark.set_physics_process(false)
+	var at := water.inside(Vector3(SharkPool.AT.x + 3.0, 0, SharkPool.AT.z - 2.0), 1.0)
+	shark.global_position = Vector3(at.x, water.bottom + 0.5, at.z)
+	var deep_before: float = shark.health
+	shark.receive_hit(100.0, Vector3.FORWARD)
+	var deep_took: float = deep_before - shark.health
+	shark.global_position = Vector3(at.x, water.surface - shark._cruise_depth(), at.z)
+	shark._place_shape()
+	shark.head_box.global_position = shark.model.skull_position()
+	var top_before: float = shark.health
+	shark.receive_hit(100.0, Vector3.FORWARD)
+	var top_took: float = top_before - shark.health
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	player.camera.look_at(shark.global_position + Vector3(0, 0.25, 0))
+	player.shot_cooldown = 0.0
+	player.reload_left = 0.0
+	player.ammo = 30
+	var shot_before: float = shark.health
+	player.shoot()
+	var shot_took: float = shot_before - shark.health
+	shark.set_physics_process(true)
+	shark.receive_hit(99999.0, Vector3.FORWARD)
+	var killed: bool = shark.dead and not shark.is_in_group("infected")
+	await wait(4.5)
+	var sunk: bool = is_instance_valid(shark) and water.over(shark.global_position) and shark.global_position.y < water.bottom + 0.8
+	player.camera.rotation = Vector3.ZERO
+	expect(deep_took <= 100.0 * Shark.SHOT_LEAST + 0.01 and top_took > 80.0 and shot_took > 0.0 and killed and sunk, "Through deep water a shot does little (%.0f of 100), at the surface it tells (%.0f), a real shot strikes it, and it can be killed: it sinks to the bottom" % [deep_took, top_took])
+	room.clear()
+	await frames(2)
+	game.return_to_menu()
+	await frames(2)
+
+## Points of the visible skull of a Prowler: the middle of the skin that only its head
+## joint moves, and halfway from there to the furthest such skin in front, on top and at
+## either side - carried by the pose it has now, as the graphics card carries them.
+func _skull_skin(body: ProwlerVisual) -> Array[Vector3]:
+	var skel: Skeleton3D = body.skeleton
+	var inst: MeshInstance3D = body.mesh_instance
+	var skin: Skin = inst.skin
+	var head := skel.find_bone("Bone_019")
+	# The skull is what the head joint and the joints below it (the jaw, the throat) move.
+	var mats: Array[Transform3D] = []
+	var in_head: Array[bool] = []
+	for i in range(skin.get_bind_count()):
+		var which := skin.get_bind_bone(i)
+		if which < 0:
+			which = skel.find_bone(skin.get_bind_name(i))
+		mats.append(skel.global_transform * skel.get_bone_global_pose(which) * skin.get_bind_pose(i))
+		var up := which
+		while up >= 0 and up != head:
+			up = skel.get_bone_parent(up)
+		in_head.append(up == head)
+	var arrays: Array = inst.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	var per: int = bones.size() / verts.size()
+	var points: Array[Vector3] = []
+	for v in range(verts.size()):
+		var share := 0.0
+		var at := Vector3.ZERO
+		for k in range(per):
+			var weight: float = weights[v * per + k]
+			if weight <= 0.0:
+				continue
+			var bind: int = bones[v * per + k]
+			at += (mats[bind] * verts[v]) * weight
+			if in_head[bind]:
+				share += weight
+		if share >= 0.95:
+			points.append(at)
+	var middle := Vector3.ZERO
+	for point in points:
+		middle += point
+	middle /= maxf(1.0, points.size())
+	var out: Array[Vector3] = [middle]
+	var toward := (body.get_viewport().get_camera_3d().global_position - middle) if body.get_viewport().get_camera_3d() != null else Vector3.BACK
+	for axis in [Vector3(toward.x, 0, toward.z).normalized(), Vector3.UP, Vector3.RIGHT, Vector3.LEFT]:
+		var far := middle
+		var best := -INF
+		for point in points:
+			var reach: float = (point - middle).dot(axis)
+			if reach > best:
+				best = reach
+				far = point
+		out.append(middle.lerp(far, 0.5))
+	return out

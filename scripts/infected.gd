@@ -29,7 +29,10 @@ const TYPES := {
 		"health": 95.0, "health_per_round": 7.0, "speed": 2.45, "speed_per_round": 0.07,
 		"damage": 9.0, "reach": 1.25, "attack_time": 0.7, "attack_gap": 1.15, "strike_at": 0.36,
 		"radius": 0.3, "height": 1.75, "head": 1.42, "head_size": 0.17, "head_factor": 1.0, "reward": 25, "score": 100,
-		"stagger": "stumble"
+		"stagger": "stumble",
+		# Now and then one of them wears a uniform: a soldier of the cordon that was thrown
+		# round the woods before the squad came (share of the plain ones that look so).
+		"rare": {"zombie_soldier": 0.06}
 	},
 	"charger": {
 		# Two bodies, one enemy: the second ("boomer2") bursts wet and wide, see bursts_wet.
@@ -79,6 +82,15 @@ const TYPES := {
 		"health": 3000.0, "health_per_round": 0.0, "speed": 8.6, "speed_per_round": 0.0,
 		"damage": 17.0, "reach": 2.2, "attack_time": 0.7, "attack_gap": 1.0, "strike_at": 0.31,
 		"radius": 0.5, "height": 1.3, "head": 1.0, "head_size": 0.3, "head_factor": 0.8, "reward": 800, "score": 4000,
+		"stagger": ""
+	},
+	# An infected shark of the flooded laboratory. `shark`: it lives in water (see Shark).
+	"shark": {
+		"label": "HAI", "visuals": ["shark1", "shark2"], "shark": true,
+		"voice": "prowler_growl", "idle": "gurgle", "strike": "dog_bite", "pain": "prowler_pain", "death": "prowler_death",
+		"health": 1100.0, "health_per_round": 0.0, "speed": 3.4, "speed_per_round": 0.0,
+		"damage": 42.0, "reach": 1.35, "attack_time": 0.6, "attack_gap": 1.0, "strike_at": 0.26,
+		"radius": 0.45, "height": 0.9, "head": 0.3, "head_size": 0.36, "head_factor": 1.5, "reward": 400, "score": 1500,
 		"stagger": ""
 	},
 	# Helix's Containment Response Unit: `visuals` are looks of SoldierVisual, `role` is
@@ -194,9 +206,9 @@ const TYPES := {
 const CHARGER_BLAST := 4.3
 ## Infected that are fights of their own: what a difficulty does to the health of the horde
 ## (the rule "brood", see Profile) leaves them as they are.
-const BROOD_APART := ["crusher", "stalker", "prowler"]
+const BROOD_APART := ["crusher", "stalker", "prowler", "shark"]
 ## Looks of the plain infected that are women: they get the female voices.
-const FEMALE_LOOKS := ["mauler_female", "hive_lab"]
+const FEMALE_LOOKS := ["mauler_female", "hive_lab", "hive_office"]
 ## The Medic's gas: how far it reaches at most, the health it gives back per second to
 ## an infected it has strengthened, the share of a hit that still gets through to them,
 ## and how close the Medic comes to its prey before it stops and lets the gas work.
@@ -427,6 +439,26 @@ var entering: HiveEntries = null
 var fresh := 0.0
 func harm() -> float:
 	return float(game.rules.harm) * (HiveEntries.FRESH_HARM if fresh > 0.0 else 1.0)
+
+## One of the looks a kind has everywhere - or, as often as its "rare" says, a rare one.
+static func pick_look(type: Dictionary) -> String:
+	for rare in (type.get("rare", {}) as Dictionary):
+		if randf() < float(type.rare[rare]):
+			return str(rare)
+	return str((type.visuals as Array).pick_random())
+
+## The body that shows a look: the hound, the Prowler (and its elite), a shark, a soldier
+## or one of the two-legged infected.
+static func visual_for(look: String, human: bool = false) -> InfectedVisual:
+	if look == "ripper":
+		return RipperVisual.new()
+	if look.begins_with("prowler"):
+		return ProwlerVisual.new()
+	if look.begins_with("shark"):
+		return SharkVisual.new()
+	if human:
+		return CruVisual.new()
+	return InfectedVisual.new()
 var model: InfectedVisual
 var head_box: StaticBody3D
 
@@ -467,15 +499,8 @@ func _ready() -> void:
 	shape.shape = capsule
 	shape.position.y = float(spec.height) * 0.5
 	add_child(shape)
-	var look: String = visual_kind if visual_kind != "" else str(spec.visuals.pick_random())
-	if look == "ripper":
-		model = RipperVisual.new()
-	elif look == "prowler":
-		model = ProwlerVisual.new()
-	elif spec.get("human", false):
-		model = CruVisual.new()
-	else:
-		model = InfectedVisual.new()
+	var look: String = visual_kind if visual_kind != "" else pick_look(spec)
+	model = visual_for(look, spec.get("human", false))
 	model.kind = look
 	add_child(model)
 	for role in ["voice", "idle", "strike", "pain", "death"]:

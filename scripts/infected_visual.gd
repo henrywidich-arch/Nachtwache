@@ -194,6 +194,46 @@ const KINDS := {
 		"metallic": 1.0,
 		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
 	},
+	# [figures] Four more looks of 2026-10-16 (his Meshy models bürozombie, bürozombie2, laborzombie, soldatzombie),
+	# prepared like the Hive's staff (tools of the workshop Nachtwache-Modelle/figuren): 30,000 triangles, 22 bones,
+	# maps baked over at 2048 and imported smaller (normal 1024, roughness and metallic 512). The soldier is no
+	# staff of the Hive: he comes on the farm too, now and then (Infected.TYPES.mauler.rare).
+	# A woman of the administration: white blouse, dark trousers, ID card, long hair.
+	"hive_office": {
+		"scene": preload("res://assets/models/hive_office.glb"), "mission": 2, "source_height": 1.7, "height": 1.7, "set": "zombie",
+		"maps": "res://assets/models/hive_office_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.558, "eye_gap": 0.0355, "eye_center": 0.0015, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
+	# A man of the administration in a dark blue suit and tie.
+	"hive_office2": {
+		"scene": preload("res://assets/models/hive_office2.glb"), "mission": 2, "source_height": 1.8, "height": 1.8, "set": "zombie",
+		"maps": "res://assets/models/hive_office2_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.636, "eye_gap": 0.034, "eye_center": 0, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]},
+		# (Thrown back hard he would lie 0.16 m deep in the floor: that fall is left out.)
+		"deaths": ["death_back", "death_drop_back", "death_from_front", "death_side", "death_side_left", "death_dying_back", "death_fall_back", "death_headshot", "death_forward", "death_from_back", "death_fall_forward", "death_bow_forward", "death_back_headshot", "death_from_right", "death_drop_left", "death_from_left", "death_drop_right"]
+	},
+	# A scientist in an open lab coat over a grey shirt, with an ID card.
+	"hive_lab2": {
+		"scene": preload("res://assets/models/hive_lab2.glb"), "mission": 2, "source_height": 1.78, "height": 1.78, "set": "zombie",
+		"maps": "res://assets/models/hive_lab2_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.61, "eye_gap": 0.035, "eye_center": 0, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]},
+		# (His coat is wide: in five falls it sinks 0.15-0.18 m into the floor, which are left out.)
+		"deaths": ["death_back", "death_from_front", "death_dying_back", "death_fall_back", "death_headshot", "death_forward", "death_from_back", "death_bow_forward", "death_back_headshot", "death_from_right", "death_drop_left", "death_from_left", "death_drop_right"]
+	},
+	# A soldier in a camouflage uniform with a belt of pouches and a holster.
+	"zombie_soldier": {
+		"scene": preload("res://assets/models/zombie_soldier.glb"), "source_height": 1.82, "height": 1.82, "set": "zombie",
+		"maps": "res://assets/models/zombie_soldier_",
+		"eye_color": Color(1.0, 0.13, 0.05), "eye_height": 1.674, "eye_gap": 0.036, "eye_center": -0.0005, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]}
+	},
 	"boomer2": {
 		"scene": preload("res://assets/models/boomer2.glb"), "source_height": 1.85, "height": 1.85, "set": "zombie",
 		"maps": "res://assets/models/boomer2_",
@@ -891,6 +931,9 @@ static func warm_up(parent: Node, mission: int = 1) -> void:
 			probe.free()
 	if ResourceLoader.exists(RipperVisual.SCENE):
 		RipperVisual.model_scene()
+	# The Prowler of the second mission comes in a second look once it has fed.
+	if mission >= 2:
+		ProwlerVisual.body_scene("prowler_elite")
 
 # ---------------------------------------------------------------- charger auto-rig
 
