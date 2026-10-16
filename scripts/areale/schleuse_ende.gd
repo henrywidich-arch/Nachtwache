@@ -12,6 +12,7 @@ func info() -> Dictionary:
 	return {
 		"id": "schleuse_ende", "kind": "end", "label": "DIE SCHLEUSE", "name": "Ende · Schleuse zum Forschungstrakt", "class": "klein",
 		"size": Vector2(8.0, 12.0), "levels": [0.0], "mood": "sick",
+		"views": [["schleuse", Vector3(4, 1.62, 11), Vector3(4, 1.5, 0)]],
 		"ports": [{"side": SOUTH, "at": 4.0, "y": 0.0, "room": "kammer", "role": "in"}],
 		"goal": "Durch die Dekontamination in den Forschungstrakt"
 	}

@@ -124,6 +124,32 @@ func opening(a: String, side: int, at: float, width: float = 2.0, options: Dicti
 func pane(a: String, side: int, at: float, width: float, sill: float, head: float, kind: String = "glass", through: String = "") -> void:
 	m._pane(n(a), side, along(side, at), width, sill, head, kind, n(through) if through != "" else "")
 
+## Cuts a gap into a wall of a room without a door of its own: where a port of an upper
+## level (its room a gallery without walls) goes through the wall of the tall room around
+## it. `low` and `high` above that room's floor.
+func cut(room_name: String, side: int, at: float, width: float, low: float, high: float) -> void:
+	var a := along(side, at)
+	((m.room_of[n(room_name)] as Dictionary).open[side] as Array).append([a - width * 0.5, a + width * 0.5, low, high, "frame"])
+
+## A gallery, catwalk or landing: a room of a level above the base without walls, floor or
+## ceiling of its own (the tall room around it has them), walked on where `walks_at` say,
+## its floor of steel on posts (deck()).
+## (`slab_rect`: where its floor of steel lies, if not over all of it - clear of a wall it
+## meets inside the piece.)
+func gallery(name: String, height: float, rect: Rect2, walks_at: Array = [], rails_at: Array = [], posts: Array = [], slab_rect: Rect2 = Rect2()) -> Dictionary:
+	var made := room(name, height, rect.position.x, rect.position.y, rect.size.x, rect.size.y, 3.0, "bighall", {
+		"walls": false, "floor": false, "ceiling": false, "lamps": "none", "walk": walks([rect.grow(-0.65)] if walks_at.is_empty() else walks_at)
+	})
+	deck(rect if slab_rect.size == Vector2.ZERO else slab_rect, height, rails_at, posts)
+	return made
+
+## A flight of steel stairs between two levels of the piece (as the facility's galleries
+## have: two metres wide, rails, the lower half kept clear), foot and head local, with
+## where one stands below and above.
+func flight(foot: Vector3, head: Vector3, land_low: Vector3, land_high: Vector3) -> void:
+	m._chunk("Kit", false)
+	m._deck_stairs(o + foot, o + head, lv(foot.y), lv(head.y), o + land_low, o + land_high)
+
 ## Steps from `foot` up to `head` (local points on their treads), with rails at both
 ## sides, and the way over them for the paths (from `land_low` on the lower floor to
 ## `land_high` on the upper one).
@@ -143,8 +169,18 @@ func deck(rect: Rect2, height: float, rails_at: Array = [], posts: Array = []) -
 	for entry: Array in rails_at:
 		var side := int(entry[0])
 		world_rails.append([side, along(side, float(entry[1])), along(side, float(entry[2]))])
+	# (Where it meets an outer wall of the piece it stops at the wall's face: a floor that
+	# runs on into the wall to its outer line would lie in one plane with it there.)
+	var plan := rect
+	var size: Vector2 = piece.get("size", Vector2.ZERO)
+	if size != Vector2.ZERO:
+		var x0 := rect.position.x + (0.21 if rect.position.x <= 0.01 else 0.0)
+		var z0 := rect.position.y + (0.21 if rect.position.y <= 0.01 else 0.0)
+		var x1 := rect.end.x - (0.21 if rect.end.x >= size.x - 0.01 else 0.0)
+		var z1 := rect.end.y - (0.21 if rect.end.y >= size.y - 0.01 else 0.0)
+		plan = Rect2(x0, z0, x1 - x0, z1 - z0)
 	m._chunk("Kit", false)
-	m._deck_floor(r(rect.position.x, rect.position.y, rect.size.x, rect.size.y), y(height), y(0.0), world_rails)
+	m._deck_floor(r(plan.position.x, plan.position.y, plan.size.x, plan.size.y), y(height), y(0.0), world_rails)
 	for spot: Vector2 in posts:
 		post(spot, height)
 

@@ -515,6 +515,9 @@ func _ready() -> void:
 	elif "--hive-check" in args:
 		check_mode = true
 		call_deferred("_run_hive_check")
+	elif "--areas-check" in args:
+		check_mode = true
+		call_deferred("_run_areas_check")
 	elif "--stations-check" in args:
 		check_mode = true
 		HiveStations.pictures.call_deferred(self)
@@ -795,7 +798,10 @@ func start_run(test: bool = false) -> void:
 	sandbox.on = test and not net.active
 	# The second mission is played alone with the squad for now: a co-op night is the farm.
 	var second: bool = profile.mission == 2 and not test and not net.active
-	use_map(second)
+	# The test room on the map of the second mission: every area of its random part, to
+	# walk through alone (Sandbox.visit).
+	var visit: bool = sandbox.on and sandbox.visit_id != ""
+	use_map(second or visit, HiveLayout.showcase() if visit else {})
 	if second:
 		# The staff of the Hive: prepared the first time a night begins there, not before.
 		InfectedVisual.warm_up(self, 2)
@@ -875,12 +881,22 @@ func start_run(test: bool = false) -> void:
 
 ## Puts the map of a mission into the world: the farm, or the villa with what lies under
 ## it. The other one waits outside the world, as it is.
-func use_map(second: bool) -> void:
+## `night`: the layout of the random part to build it with (HiveLayout); left out, the
+## night the director prepares. A map built for another layout is built anew.
+func use_map(second: bool, night: Dictionary = {}) -> void:
 	var wanted: CabinMap = farm
 	if second:
+		if night.is_empty():
+			night = hive.prepare_night()
+		if is_instance_valid(hive_map) and hive_map.layout_key != str(night.get("key", "classic")):
+			if hive_map.is_inside_tree():
+				remove_child(hive_map)
+			hive_map.queue_free()
+			hive_map = null
 		if not is_instance_valid(hive_map):
 			hive_map = HiveMap.new()
 			hive_map.name = "Villa"
+			hive_map.night = night
 		wanted = hive_map
 	if cabin != wanted or not wanted.is_inside_tree():
 		if cabin.is_inside_tree():
@@ -896,6 +912,14 @@ func use_map(second: bool) -> void:
 func _aim_shop_camera(view: Dictionary) -> void:
 	shop_camera.position = view.position
 	shop_camera.look_at(view.target)
+
+## Whether starting the night that is chosen builds the map of the second mission first
+## (it takes a moment: the menu says so meanwhile).
+func hive_needs_build() -> bool:
+	if profile.mission != 2 or net.active:
+		return false
+	var night := hive.prepare_night()
+	return not is_instance_valid(hive_map) or hive_map.layout_key != str(night.get("key", "classic"))
 
 ## The places the HUD and the map in the corner point at.
 func markers() -> Array:
@@ -2339,6 +2363,8 @@ func return_to_menu() -> void:
 	state = "menu"
 	player.controlled = false
 	sandbox.end()
+	# (The test room begins on the farm again when it is chosen in the menu.)
+	sandbox.visit_id = ""
 	hive.end()
 	_clear_match_nodes()
 	use_map(false)
@@ -2357,7 +2383,7 @@ func finish(victory: bool) -> void:
 	var squad := "KOOP" if net.active else ("TEAM" if not team.is_empty() else "SOLO")
 	var before := Skills.experience(profile.totals)
 	last_place = profile.record(Profile.board(level, mode), {
-		"score": score, "round": (HiveDirector.ORDER.find(hive.stage) + 1) if hive.on else wave, "seconds": int(elapsed), "victory": victory, "kills": stats.kills,
+		"score": score, "round": (hive.order.find(hive.stage) + 1) if hive.on else wave, "seconds": int(elapsed), "victory": victory, "kills": stats.kills,
 		"special_kills": stats.special_kills, "cru_kills": stats.cru_kills, "revives": stats.revives,
 		"phantom": stats.phantom, "havoc": stats.havoc, "ghost": stats.ghost,
 		"objectives": stats.objectives, "team": squad, "date": Time.get_date_string_from_system()
@@ -2692,6 +2718,51 @@ func _run_hive_check() -> void:
 		else:
 			await _shot_at(folder, "hive_%s.png" % view[0], view[1], view[2], 0.6)
 		print("HIVE_VIEW %s draws=%d tris=%d fps=%d" % [view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)), int(Engine.get_frames_per_second())])
+	get_tree().quit()
+
+## Pictures of the random part of mission two (HiveLayout): --areas-check
+## --capture-dir=<folder> builds every piece (the showcase of the test room) and takes the
+## views each piece names (its "views": from high up inside it and at eye height), and a
+## look down every transition. --areas-part=<name>: only the pieces whose name begins so.
+func _run_areas_check() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	var part := ""
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--areas-part="):
+			part = arg.trim_prefix("--areas-part=")
+	await tick.call(1.0)
+	sandbox.visit_id = HiveLayout.POOL[0]
+	start_run(true)
+	await tick.call(2.0)
+	hud.play_ui.hide()
+	hud.banner_left = 0
+	var map := cabin as HiveMap
+	print("AREAS rooms=%d doors=%d floors=%d times=%s" % [map.rooms.size(), map.doors.size(), map.floors.size(), str(map.build_times)])
+	var seen := {}
+	for piece: Dictionary in map.night.pieces:
+		var def := str(piece.def)
+		if part != "" and not def.begins_with(part):
+			continue
+		var info := HiveLayout.info(def)
+		var origin: Vector3 = piece.origin
+		var views: Array = []
+		for view: Array in info.get("views", []):
+			views.append([str(view[0]), origin + (view[1] as Vector3), origin + (view[2] as Vector3)])
+		if str(piece.kind) == "transition":
+			var from: Vector3 = map.points.get("%s_in" % piece.id, Vector3.INF)
+			var to: Vector3 = map.points.get("%s_out" % piece.id, Vector3.INF)
+			if from != Vector3.INF and to != Vector3.INF:
+				views.append(["gang", from + Vector3(0, 1.62, 0), to + Vector3(0, 1.4, 0)])
+		var count := int(seen.get(def, 0))
+		seen[def] = count + 1
+		for view: Array in views:
+			# (The survivor stands there first: the zones drawn are those of where he is.)
+			player.position = (view[1] as Vector3) - Vector3(0, 1.5, 0)
+			player.velocity = Vector3.ZERO
+			await tick.call(0.5)
+			await _capture_from(folder, "%s%s_%s.png" % [def, "" if count == 0 else "_%d" % count, view[0]], view[1], view[2], 72.0)
+			print("AREAS_VIEW %s %s draws=%d fps=%d" % [def, view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Engine.get_frames_per_second())])
 	get_tree().quit()
 
 const CRUSHER_SHOTS := ["plain", "tell", "shell", "guard", "both"]

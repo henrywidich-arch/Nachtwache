@@ -1037,7 +1037,7 @@ func _triple(buttons: Array) -> HBoxContainer:
 ## Starts the night that is chosen. The map of the second mission is built when it is
 ## first asked for, which takes a moment: a note stands there meanwhile.
 func _start_night() -> void:
-	if game.profile.mission == 2 and not game.net.active and not is_instance_valid(game.hive_map):
+	if game.hive_needs_build():
 		show_menu("loading")
 		await get_tree().process_frame
 		await get_tree().process_frame
@@ -1360,6 +1360,14 @@ func _test_world(column: VBoxContainer, room: Sandbox) -> void:
 	for entry in Sandbox.PLACES:
 		places.append(_chip(str(entry[0]), _test_do.bind("jump", str(entry[1])), false, 150))
 	_test_row(column, "HINSPRINGEN", places)
+	# Mission 2: every piece of the random part, to walk through and look at (Sandbox.visit).
+	var pieces: Array = []
+	for group: Array in [HiveLayout.ARRIVALS, HiveLayout.pool(), HiveLayout.transitions(), [HiveLayout.END]]:
+		for def in group:
+			pieces.append(_chip(str(HiveLayout.info(str(def)).get("name", def)).to_upper(), _test_do.bind("visit", str(def)), room.visit_id == str(def), 270))
+	if room.visit_id != "":
+		pieces.append(_chip("ZURÜCK ZUM HOF", _test_do.bind("farm"), false, 200))
+	_test_row(column, "MISSION 2  ·  AREALE (ALLEIN BEGEHEN)", pieces)
 	_test_row(column, "AUSPROBIEREN", [
 		_chip("BLENDGRANATE AUF MICH", _test_do.bind("flash"), false, 260),
 		_chip("ECHTE RUNDE %d STARTEN" % room.strength, _test_do.bind("round"), false, 250)])
@@ -1423,6 +1431,17 @@ func _test_do(what: String, arg: String = "") -> void:
 			game.resume_run()
 			room.start_round()
 			return
+		"visit":
+			hide_menu()
+			show_menu("loading")
+			await get_tree().process_frame
+			await get_tree().process_frame
+			room.visit(arg)
+			return
+		"farm":
+			hide_menu()
+			room.leave_visit()
+			return
 		"shop":
 			game.resume_run()
 			game.open_shop()
@@ -1469,7 +1488,7 @@ func _menu_end_villa(column: VBoxContainer, mode: String) -> Control:
 	_gap(column, 10)
 	var again: Button
 	if mode == "lose" and game.hive.checkpoint != "landing":
-		again = _button("AB KONTROLLPUNKT  ·  %s" % HiveDirector.STAGES[game.hive.checkpoint][0], game.retry_checkpoint, true)
+		again = _button("AB KONTROLLPUNKT  ·  %s" % game.hive.stages[game.hive.checkpoint][0], game.retry_checkpoint, true)
 		column.add_child(again)
 		column.add_child(_button("VON VORN", game.start_run))
 	else:

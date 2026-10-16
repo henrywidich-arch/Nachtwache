@@ -32,7 +32,7 @@ func lay() -> void:
 		else:
 			# A bend: no wall at all where the second leg leaves the first.
 			var corner: Vector2 = before.corner
-			door(str(before.name), str(leg.name), corner.y if int(leg.side) in [EAST, WEST] else corner.x, float(shape.width), {"kind": "join"})
+			door(str(before.name), str(leg.name), corner.y if int(leg.side) in [EAST, WEST] else corner.x, float(shape.width) - 0.4, {"kind": "join"})
 	for beside: Dictionary in shape.beside:
 		var rect: Rect2 = beside.rect
 		room(str(beside.name), 0.0, rect.position.x, rect.position.y, rect.size.x, rect.size.y, minf(tall, 3.8), beside_style(), beside_options())
@@ -85,14 +85,20 @@ func dress_beside(_beside: Dictionary) -> void:
 
 ## Ways in: a hole in the ceiling every so many metres of corridor, and one in every
 ## second room beside it.
+## The length of a bay of the passage (see HiveMap._passage): the ways in from above sit
+## in the middle of a bay, beside its coffer of light and between its beams.
+func bay_step() -> float:
+	return 5.5
+
 func ways(shape: Dictionary) -> void:
 	var step := 0
 	for leg: Dictionary in shape.legs:
 		var rect: Rect2 = leg.rect
 		var long := maxf(rect.size.x, rect.size.y)
-		var count := int(floor(long / 12.0))
-		for k in range(count):
-			var t := (k + 0.5) / maxf(1.0, count)
+		var bays := maxi(1, roundi((long - 0.4) / bay_step()))
+		var bay := (long - 0.4) / bays
+		for k in range(0, bays, 2):
+			var t := (0.2 + (k + 0.5) * bay) / long
 			var spot := rect.position + rect.size * Vector2(t if rect.size.x >= rect.size.y else 0.5, 0.5 if rect.size.x >= rect.size.y else t)
 			var aside := (float(shape.width) * 0.5 - 1.0) * (1.0 if step % 2 == 0 else -1.0)
 			if rect.size.x >= rect.size.y:
@@ -104,9 +110,14 @@ func ways(shape: Dictionary) -> void:
 	var k := 0
 	for beside: Dictionary in shape.beside:
 		if k % 2 == 1:
-			var rect: Rect2 = beside.rect
-			drop(str(beside.name), rect.get_center().x, rect.get_center().y, k % 4)
+			var spot := beside_drop(beside)
+			drop(str(beside.name), spot.x, spot.y, k % 4)
 		k += 1
+
+## Where the way in from above of a room beside the corridor is: in its middle, between
+## its lamps and between the benches of a laboratory.
+func beside_drop(beside: Dictionary) -> Vector2:
+	return (beside.rect as Rect2).get_center()
 
 # ---------------------------------------------------------------- helpers
 

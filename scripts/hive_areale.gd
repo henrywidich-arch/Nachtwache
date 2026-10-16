@@ -106,6 +106,12 @@ static func lay(map: HiveMap) -> void:
 			map._supply(made.p((spot[0] as Vector3).x, 0.0, (spot[0] as Vector3).z), spot[1], str(piece_info.label))
 		map._end_zone()
 		map.areal_kits[str(piece.id)] = made
+		# Where one stands who has just come in through its way in, or is about to go out.
+		if str(piece.kind) != "transition":
+			if not (piece["in"] as Dictionary).is_empty():
+				map.areal_points["%s_entry" % piece.id] = AreaKit.port_inside(piece.origin, piece.size, piece["in"])
+			if not (piece.out as Dictionary).is_empty():
+				map.areal_points["%s_leave" % piece.id] = AreaKit.port_inside(piece.origin, piece.size, piece.out)
 	# The doorways between the pieces: every one a gate of the facility, shut or open by
 	# the night (HiveDirector); the way out of an area says so over it.
 	for link: Dictionary in map.night.links:
@@ -193,9 +199,11 @@ static func track(map: HiveMap, room_id: String, edge_z: float, toward: float, s
 	var reach := outer.size.x + (30.0 if stubs else 0.0)
 	map._part("darkfloor", Vector3(mid.x, pit - 0.15, mid.y), Vector3(reach, 0.3, outer.size.y), Color(0.5, 0.5, 0.5))
 	map._solid(Vector3(mid.x, pit - 0.25, mid.y), Vector3(outer.size.x, 0.5, outer.size.y), false)
-	map._part("formwork", Vector3(mid.x, y - 0.55, edge_z + toward * 0.1), Vector3(outer.size.x, 1.1, 0.2), Color(0.6, 0.6, 0.58))
+	# (A centimetre and a half inside the edge of the floor, and as much under it: in one
+	# plane with its faces they would flicker.)
+	map._part("formwork", Vector3(mid.x, y - 0.565, edge_z + toward * 0.115), Vector3(outer.size.x - 0.04, 1.07, 0.2), Color(0.6, 0.6, 0.58))
 	var far_z := outer.position.y if toward > 0.0 else outer.end.y
-	map._part("formwork", Vector3(mid.x, y - 0.55, far_z + toward * 0.1), Vector3(outer.size.x, 1.1, 0.2), Color(0.6, 0.6, 0.58))
+	map._part("formwork", Vector3(mid.x, y - 0.565, far_z + toward * 0.115), Vector3(outer.size.x - 0.04, 1.07, 0.2), Color(0.6, 0.6, 0.58))
 	var line := edge_z - toward * 2.0
 	for rail in [-0.75, 0.75]:
 		map._part("steel", Vector3(mid.x, pit + 0.09, line + rail), Vector3(reach, 0.18, 0.09), Color("3b3d3e"))
@@ -206,10 +214,10 @@ static func track(map: HiveMap, room_id: String, edge_z: float, toward: float, s
 		return
 	for end in [-1.0, 1.0]:
 		var x: float = mid.x + end * (outer.size.x * 0.5 + 7.5)
-		map._part("beton", Vector3(x, y + 4.75, line), Vector3(15.0, 0.3, 5.6), Color(0.3, 0.3, 0.3))
+		map._part("beton", Vector3(x, y + 4.75, line), Vector3(14.9, 0.3, 5.5), Color(0.3, 0.3, 0.3))
 		for wall in [-1.0, 1.0]:
 			map._part("beton", Vector3(x, y + 1.75, line + wall * 2.65), Vector3(15.0, 5.9, 0.3), Color(0.34, 0.34, 0.34))
-		map._part("plain", Vector3(mid.x + end * (outer.size.x * 0.5 + 15.0), y + 1.75, line), Vector3(0.2, 6.0, 5.6), Color("030303"))
+		map._part("plain", Vector3(mid.x + end * (outer.size.x * 0.5 + 15.0), y + 1.75, line), Vector3(0.2, 5.9, 5.2), Color("030303"))
 		map._glow_box(Vector3(mid.x + end * (outer.size.x * 0.5 + 9.0), y + 3.2, line + 2.4), Vector3(0.16, 0.16, 0.05), Color("ff3a2a"), 4.0)
 		map._add_shape(map.body, Vector3(mid.x + end * (outer.size.x * 0.5 + 0.2), y + 2.0, line), Vector3(0.3, 6.5, 6.0))
 
@@ -409,7 +417,7 @@ static func stair_shaft(map: HiveMap, from: Vector2, side: int, wide: float, y_f
 		map._steps(foot, head, FLIGHT, "betonfloor", grey)
 		map._handrail(foot, head, FLIGHT * 0.5 - 0.05)
 		map._handrail(foot, head, -(FLIGHT * 0.5 - 0.05))
-	for slab: Array in [[7.6, 10.4, mid], [-0.3, 0.4, y_first], [17.6, 18.3, y_second]]:
+	for slab: Array in [[7.6, 10.4, mid], [0.0, 0.4, y_first], [17.6, 18.0, y_second]]:
 		var centre: Vector3 = at.call((float(slab[0]) + float(slab[1])) * 0.5, float(slab[2]) - 0.15)
 		var long := float(slab[1]) - float(slab[0])
 		var size := Vector3(FLIGHT * across.x + long * absf(dir.x), 0.3, FLIGHT * across.y + long * absf(dir.y))
@@ -433,8 +441,8 @@ static func stair_shaft(map: HiveMap, from: Vector2, side: int, wide: float, y_f
 			map._part_shape(centre, size)
 	var middle: Vector3 = at.call(RUN * 0.5, 0.0)
 	var floor_size := Vector3(wide * across.x + RUN * absf(dir.x), 0.3, wide * across.y + RUN * absf(dir.y))
-	map._part("betonfloor", Vector3(middle.x, bottom + 0.25, middle.z), floor_size, Color(0.5, 0.5, 0.5))
-	map._part_shape(Vector3(middle.x, bottom + 0.25, middle.z), floor_size)
+	map._part("betonfloor", Vector3(middle.x, bottom + 0.22, middle.z), floor_size, Color(0.5, 0.5, 0.5))
+	map._part_shape(Vector3(middle.x, bottom + 0.22, middle.z), floor_size)
 	map._part("beton", Vector3(middle.x, top - 0.15, middle.z), floor_size, Color(0.45, 0.45, 0.45))
 	map._part_shape(Vector3(middle.x, top - 0.15, middle.z), floor_size)
 	for t in [4.0, 9.0, 14.0]:

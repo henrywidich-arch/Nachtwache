@@ -1170,6 +1170,7 @@ func run(game: Node3D) -> void:
 	await _operators(game)
 	await _sandbox(game)
 	await _hive(game)
+	await _areas(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -9329,3 +9330,292 @@ func crusher_head(game: Node3D, folder: String) -> void:
 	print("HEAD_LIVE rays=%s shots=%d took=%.0f head_answers=%d dull=%d guard=%s shell=%s" % [str(tally), shots, took_live, int(game.sounds.answers.ding_head) - head_answers, game.sounds.dulls - dulls, str(giant.guard), giant.shell])
 	print("HEAD_COMPLETE")
 	get_tree().quit()
+
+# ---------------------------------------------------------------- the random part of mission two
+
+## The random part of mission two after the station (HiveLayout, HiveAreale, HiveAreaRun):
+## many nights laid out from their seeds, the map with every piece built and walked, a
+## night run through from its arrival to the research wing - every kind of objective
+## done once -, both arrivals after the ride, a checkpoint that keeps its night, deep
+## water, and the test room's visits to every piece.
+## A few frames of every kind: the director and the map run on the idle frames, and after
+## a heavy one several physics frames may pass without one between them.
+func _idle_frames() -> void:
+	for i in range(3):
+		await get_tree().process_frame
+		await get_tree().physics_frame
+
+static func haifischlabor_bottom() -> float:
+	return float((load("res://scripts/areale/haifischlabor.gd") as GDScript).get_script_constant_map().get("BOTTOM", -1.6)) + 0.05
+
+func _areas(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var profile: Profile = game.profile
+	var kept_mode: String = profile.mode
+	var kept_mission: int = profile.mission
+	# --- 200 nights, from their seeds alone
+	var bad: Array[String] = []
+	var counts := {}
+	var arrivals := {}
+	var kinds := {}
+	var defs := {}
+	var objectives := {}
+	var by_arrival := {}
+	for seed_value in range(1, 201):
+		var night := HiveLayout.plan(seed_value)
+		var again := HiveLayout.plan(seed_value)
+		var faults := HiveLayout.faults(night)
+		var first_origins := (night.pieces as Array).map(func(piece: Dictionary) -> Vector3: return piece.origin)
+		var second_origins := (again.pieces as Array).map(func(piece: Dictionary) -> Vector3: return piece.origin)
+		if HiveLayout.describe(night) != HiveLayout.describe(again) or str(first_origins) != str(second_origins):
+			faults.append("another night the second time")
+		if not faults.is_empty():
+			bad.append("%d: %s" % [seed_value, faults[0]])
+		var n: int = (night.areas as Array).size()
+		counts[n] = int(counts.get(n, 0)) + 1
+		arrivals[night.arrival] = int(arrivals.get(night.arrival, 0)) + 1
+		by_arrival[night.arrival] = seed_value
+		for piece: Dictionary in night.pieces:
+			if str(piece.kind) == "transition":
+				kinds[piece.def] = true
+			elif str(piece.kind) == "area":
+				defs[piece.def] = true
+				objectives[str(piece.event.kind)] = true
+	var in_range := true
+	for n in counts:
+		in_range = in_range and int(n) >= 2 and int(n) <= 4
+	expect(bad.is_empty() and in_range and counts.size() == 3 and arrivals.size() == 2 and kinds.size() == HiveLayout.TRANSITIONS.size() and defs.size() == HiveLayout.POOL.size() and objectives.size() == HiveLayout.OBJECTIVES.size(), "200 nights of mission two are laid out from their seeds: each joined from its arrival to the lock at the end, no piece on another, no area twice, every area with an objective that can be done, the same night again from the same seed; two to four areas (%s), both arrivals, every transition, area and kind of objective (%d / %d / %d)%s" % [str(counts), kinds.size(), defs.size(), objectives.size(), "" if bad.is_empty() else " - " + ", ".join(PackedStringArray(bad.slice(0, 5)))])
+	var classic := hive.prepare_night()
+	hive.night_fresh = false
+	expect(bool(classic.get("classic", false)) and str(HiveAreale.wanted_from_args().get("key", "")) == "classic", "A check that asks for no night of its own gets the classic one (the facility as it was)")
+	# --- every piece built once (the showcase of the test room) and walked
+	MeshBatch.watched.clear()
+	MeshBatch.watching = true
+	var probe := HiveMap.new()
+	probe.night = HiveLayout.showcase()
+	probe._ready()
+	MeshBatch.watching = false
+	var in_doorways: Array = probe.doorway_faults(MeshBatch.watched)
+	MeshBatch.watched.clear()
+	var small: Array = probe.snags().filter(func(entry: Dictionary) -> bool: return (entry.at as Vector3).x > HiveLayout.WEST)
+	for id in probe.areas:
+		probe.unlock(str(id), true)
+	for door in probe.doors:
+		if str(door.kind) == "script":
+			probe.set_door(str(door.name), true, true)
+	var broken: Array[String] = []
+	var pieces := 0
+	for piece: Dictionary in probe.night.pieces:
+		pieces += 1
+		var p_info := HiveLayout.info(str(piece.def))
+		var from: Vector3 = probe.points.get("%s_entry" % piece.id, probe.points.get("%s_in" % piece.id, Vector3.INF))
+		var goals: Array = []
+		if probe.points.has("%s_leave" % piece.id):
+			goals.append(probe.points["%s_leave" % piece.id])
+		elif probe.points.has("%s_out" % piece.id):
+			goals.append(probe.points["%s_out" % piece.id])
+		var spots: Dictionary = p_info.get("spots", {})
+		if spots.has("goal"):
+			goals.append((piece.origin as Vector3) + (spots.goal as Vector3))
+		for spot: Vector3 in (spots.get("switches", []) as Array) + (spots.get("items", []) as Array):
+			goals.append((piece.origin as Vector3) + spot)
+		for post: Array in p_info.get("posts", []):
+			goals.append((piece.origin as Vector3) + (post[1] as Vector3))
+		for goal: Vector3 in goals:
+			var route: PackedVector3Array = probe.path_between(from, goal)
+			if route.is_empty() or route[route.size() - 1].distance_to(goal) > 2.0:
+				broken.append("%s %s" % [piece.def, str((goal - (piece.origin as Vector3)).snapped(Vector3.ONE * 0.1))])
+	for chain in [0, 1]:
+		var members: Array = (probe.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.chain) == chain and str(piece.kind) != "transition")
+		for k in range(members.size() - 1):
+			var from: Vector3 = probe.points.get("%s_leave" % members[k].id, Vector3.INF)
+			var to: Vector3 = probe.points.get("%s_entry" % members[k + 1].id, Vector3.INF)
+			var route: PackedVector3Array = probe.path_between(from, to)
+			if route.is_empty() or route[route.size() - 1].distance_to(to) > 2.0:
+				broken.append("%s > %s" % [members[k].def, members[k + 1].def])
+	# (In the shark laboratory's basin, a step beside the narrow connector to its island.)
+	var deep_spot := Vector3.INF
+	for piece: Dictionary in probe.night.pieces:
+		if str(piece.def) == "haifischlabor":
+			deep_spot = (piece.origin as Vector3) + Vector3(12.0, haifischlabor_bottom(), 27.7)
+	var climb := probe.climb_out(deep_spot + Vector3(0, 0.05, 0)) if deep_spot != Vector3.INF else Vector3.INF
+	var findings := "%d in doorways, %d small things solid, %d not walkable" % [in_doorways.size(), small.size(), broken.size()]
+	if not in_doorways.is_empty():
+		findings += " - first in a doorway: %s in %s" % [in_doorways[0].what, in_doorways[0].door]
+	if not broken.is_empty():
+		findings += " - " + ", ".join(PackedStringArray(broken.slice(0, 6)))
+	expect(pieces >= HiveLayout.POOL.size() + HiveLayout.TRANSITIONS.size() + 3 and in_doorways.is_empty() and small.is_empty() and broken.is_empty() and not probe.waters.is_empty() and climb != Vector3.INF and climb.y > deep_spot.y + 1.0, "Every area, transition and arrival can be built: nothing stands in a doorway, nothing small is solid, and from where each is entered every way out, every place of its objectives and every post can be walked to, and from each to the next (%s); out of deep water one climbs on to the walkway beside it" % findings)
+	probe.free()
+	# --- a night with a random part, from the crash in the tunnel to the research wing:
+	# every area of the pool, every kind of objective once
+	profile.mode = "story"
+	profile.mission = 2
+	game.team_enabled = true
+	hive.seed_wanted = -3
+	hive.night = {}
+	hive.resume_at = "g_crash"
+	hive.night_fresh = false
+	game.start_run()
+	await _idle_frames()
+	var map := game.cabin as HiveMap
+	var run: HiveAreaRun = hive.run
+	var areas: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return str(piece.kind) == "area" and int(piece.chain) == 0)
+	var began: bool = hive.on and run.on and hive.stage == "g_crash" and map.layout_key == "showcase" and areas.size() == HiveLayout.POOL.size() and hive.order.has("g_lock") and hive.order.has("labs") and not hive.order.has("admin")
+	expect(began, "A night with a random part has stages of its own after the ride - the arrival, every area, the lock - and then the research wing, the hall and the lift as ever (%s)" % ", ".join(PackedStringArray(hive.order.slice(hive.order.find("ride")))))
+	var put := func(at: Vector3) -> void:
+		player.global_position = at + Vector3(0, 0.08, 0)
+		player.velocity = Vector3.ZERO
+		for mate in game.team:
+			mate.global_position = at + Vector3(0.9, 0.08, 0.9)
+			mate.velocity = Vector3.ZERO
+	# Down the tunnel and up the emergency stair.
+	var arrival_id := str(map.night.pieces[0].id)
+	put.call(map.points["%s_exit" % arrival_id])
+	await _idle_frames()
+	var escaped: bool = hive.stage == "g_escape"
+	put.call(map.points["%s_top" % arrival_id])
+	await _idle_frames()
+	expect(escaped and hive.stage == "a0", "From the derailed car the way leads to the emergency exit, up the stair and on into the first area")
+	var done_kinds: Array[String] = []
+	var failed: Array[String] = []
+	var end_piece: Dictionary = {}
+	for entry: Dictionary in map.night.pieces:
+		if str(entry.kind) == "end" and int(entry.chain) == 0:
+			end_piece = entry
+	for index in range(areas.size()):
+		var piece: Dictionary = areas[index]
+		var kind: String = HiveLayout.OBJECTIVES[index % HiveLayout.OBJECTIVES.size()]
+		# (The objective of each area is set here: every kind once.)
+		var p_info := HiveLayout.info(str(piece.def))
+		var spots: Dictionary = p_info.get("spots", {})
+		var event := {}
+		for option: Dictionary in p_info.get("events", []):
+			if str(option.kind) == kind:
+				event = option.duplicate(true)
+		if event.is_empty():
+			event = {"kind": kind, "goal": "Prüfen", "seconds": 30.0, "count": 2, "after": 10.0}
+		if kind == "collect":
+			event.items = range(mini(3, (spots.get("items", []) as Array).size()))
+		if kind == "restore":
+			event.switches = range(mini(2, (spots.get("switches", []) as Array).size()))
+		var unfit := (kind == "collect" and (event.items as Array).size() < 2) or (kind == "restore" and (event.switches as Array).size() < 2) or (kind in ["hack", "hold", "lockdown"] and not spots.has("goal"))
+		if unfit:
+			kind = "clear"
+			event = {"kind": "clear", "goal": "Säubern"}
+		piece.event = event
+		# (Entered again, so that it begins with the objective set here.)
+		hive._enter("a%d" % index)
+		_wipe_all(game)
+		var origin: Vector3 = piece.origin
+		put.call(map.points["%s_entry" % piece.id])
+		await _idle_frames()
+		var shut_before: bool = not map.door_open("%s_out" % piece.id)
+		match kind:
+			"collect":
+				for spot_index: int in event.items:
+					put.call(origin + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
+					await _idle_frames()
+					hive.use()
+					await _idle_frames()
+			"restore":
+				for spot_index: int in event.switches:
+					put.call(origin + (spots.switches[spot_index] as Vector3) + Vector3(0.9, 0, 0.0))
+					await _idle_frames()
+					hive.use()
+					await _idle_frames()
+				hive.progress = 0.99999
+				await _idle_frames()
+			"hack":
+				put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
+				await _idle_frames()
+				hive.use()
+				await _idle_frames()
+				hive.progress = 0.99999
+				await _idle_frames()
+			"hold", "lockdown":
+				put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
+				await _idle_frames()
+				if kind == "lockdown" and map.door_open("%s_in" % piece.id):
+					failed.append("%s: the lockdown left the way in open" % piece.def)
+				hive.progress = 0.99999
+				await _idle_frames()
+			"clear":
+				await _idle_frames()
+				for guard in hive.guards:
+					if is_instance_valid(guard) and not (guard as Infected).dead:
+						(guard as Infected)._die(Vector3.FORWARD, false)
+				if not run.task.is_empty():
+					run.task.time = 5.0
+				await _idle_frames()
+		if hive.stage == "a%d_out" % index and shut_before and map.door_open("%s_out" % piece.id):
+			done_kinds.append("%s:%s" % [piece.def, kind])
+		else:
+			failed.append("%s:%s at %s (stage %s, task %s)" % [piece.def, kind, str(player.global_position.snapped(Vector3.ONE * 0.1)), hive.stage, str(run.task.get("state", "-"))])
+		# On through the transition into the next piece.
+		var next: Dictionary = areas[index + 1] if index + 1 < areas.size() else end_piece
+		put.call(map.points["%s_entry" % next.id])
+		await _idle_frames()
+	expect(failed.is_empty() and done_kinds.size() == areas.size() and hive.stage == "g_lock", "In every area the way out stays shut until its objective is done, and opens then: things found and picked up, places switched on, a door hacked open, a place held, a lockdown sat out, the guards felled (%s)%s" % [", ".join(PackedStringArray(done_kinds)), "" if failed.is_empty() else " - not: " + ", ".join(PackedStringArray(failed))])
+	# The lock at the end: its twin's gate shuts, and the squad stands in the facility's.
+	put.call(map.points["%s_mid" % end_piece.id])
+	await _idle_frames()
+	var sealed: bool = not map.door_open("%s_in" % end_piece.id) and run.lock_left > 0.0
+	run.lock_left = 0.01
+	await _idle_frames()
+	var real_lock: Vector3 = map.points.decon
+	var squad_in := true
+	for mate in game.team:
+		squad_in = squad_in and mate.global_position.distance_to(real_lock) < 8.0
+	expect(sealed and hive.stage == "labs" and player.global_position.distance_to(real_lock) < 6.0 and map.door_open("gate_research") and not map.door_open("gate_decon") and squad_in, "The lock at the end shuts behind the squad, and when its light is through everybody stands in the facility's own lock: its gate to the laboratories opens, the one to the central hall stays shut")
+	# --- a defeat taken up again keeps its night: the same map, not built anew
+	var built := map
+	hive.resume_at = "labs"
+	game.start_run()
+	await _idle_frames()
+	expect(game.cabin == built and hive.stage == "labs" and hive.run.on and (game.cabin as HiveMap).layout_key == "showcase", "A night taken up again at a checkpoint is the same night: its map is not built again")
+	# --- both arrivals after the ride
+	var arrived: Array[String] = []
+	for arrival in ["ankunft", "absturz"]:
+		hive.seed_wanted = int(by_arrival.get(arrival, 1))
+		hive.resume_at = ""
+		hive.night_fresh = false
+		game.start_run()
+		await _idle_frames()
+		map = game.cabin as HiveMap
+		_wipe_all(game)
+		put.call(map.points.car_a)
+		hive._enter("ride")
+		hive.stage_time = 1.7
+		await _idle_frames()
+		var in_car: bool = player.global_position.distance_to(hive.run.car()) < 7.5
+		hive.stage_time = HiveAreaRun.CRASH_AT + 0.1 if arrival == "absturz" else HiveDirector.RIDE_SECONDS + 0.1
+		await _idle_frames()
+		var wanted := "g_crash" if arrival == "absturz" else "g_arrive"
+		if in_car and hive.stage == wanted and map.door_open("%s_car" % str(map.night.pieces[0].id)):
+			arrived.append(arrival)
+	expect(arrived.size() == 2, "After the station the train either comes in at the platform of sector C or is derailed in the tunnel: the ride ends in the car of that arrival, and its doors open (%s)" % ", ".join(PackedStringArray(arrived)))
+	hive.seed_wanted = -2
+	hive.resume_at = ""
+	# --- the test room: into pieces of the random part, alone
+	game.return_to_menu()
+	await _idle_frames()
+	var visited: Array[String] = []
+	for def in [HiveLayout.ARRIVALS[1], HiveLayout.POOL[0], HiveLayout.TRANSITIONS[3], HiveLayout.END]:
+		game.sandbox.visit(str(def))
+		await _idle_frames()
+		var spot: Array = game.sandbox.visit_spot(str(def))
+		var here: Dictionary = (game.cabin as HiveMap).piece_at(player.global_position) if game.cabin is HiveMap else {}
+		if game.sandbox.on and game.team.is_empty() and not hive.on and not spot.is_empty() and player.global_position.distance_to(spot[0]) < 1.0 and str(here.get("def", "")) == str(def):
+			visited.append(str(def))
+	var labels := true
+	for group: Array in [HiveLayout.ARRIVALS, HiveLayout.POOL, HiveLayout.TRANSITIONS, [HiveLayout.END]]:
+		for def in group:
+			labels = labels and str(HiveLayout.info(str(def)).get("name", "")) != ""
+	game.sandbox.leave_visit()
+	await _idle_frames()
+	expect(visited.size() == 4 and labels and game.cabin == game.farm and game.sandbox.visit_id == "", "In the test room the pieces of mission two's random part can be walked alone - each has a German name on its button - and back to the farm (%s)" % ", ".join(PackedStringArray(visited)))
+	game.return_to_menu()
+	await _idle_frames()
+	profile.mode = kept_mode
+	profile.mission = kept_mission

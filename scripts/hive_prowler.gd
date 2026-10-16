@@ -22,7 +22,8 @@ extends Node
 
 ## Stages in which it never comes: everything before the facility, the hold in the
 ## canteen (hard enough as it is), the lock, the way out.
-const AWAY := ["landing", "villa", "mirror", "descent", "station", "nadja", "deal", "power", "hold", "board", "ride", "terminal", "lockdown", "decon", "exit"]
+## (In a night with a random part also its arrival and the lock at its end.)
+const AWAY := ["landing", "villa", "mirror", "descent", "station", "nadja", "deal", "power", "hold", "board", "ride", "terminal", "lockdown", "decon", "exit", "g_arrive", "g_crash", "g_escape", "g_lock"]
 ## The first stage it may come in.
 const FIRST_STAGE := "admin"
 ## Free ground in square metres, within ROOM_REACH metres of walking around the survivor,
@@ -128,7 +129,9 @@ func begin(from: String) -> void:
 	wounds = 0
 	search_for = 0.0
 	# Taken up again further down, it is as bold as it would be by then.
-	var behind: int = HiveDirector.ORDER.find(from) - HiveDirector.ORDER.find(FIRST_STAGE)
+	# (In a night with a random part its first area counts as the administration.)
+	var first: int = director.order.find(FIRST_STAGE) if director.order.has(FIRST_STAGE) else director.order.find("a0")
+	var behind: int = director.order.find(from) - first
 	visits = maxi(0, behind / 3)
 	told_squad = behind > 0
 	told_command = behind > 0

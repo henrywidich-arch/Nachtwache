@@ -41,6 +41,7 @@ func info() -> Dictionary:
 	return {
 		"id": "haifischlabor", "kind": "area", "label": "HAIFISCHLABOR", "name": "Haifischlabor (geflutet)", "class": "gross",
 		"size": Vector2(56.0, 48.0), "levels": [0.0, 4.2], "mood": "water",
+		"views": [["oben_sw", Vector3(4, 10.5, 45), Vector3(34, 0, 18)], ["oben_no", Vector3(52, 10.5, 3), Vector3(20, 0, 32)], ["auge_einstieg", Vector3(8, 1.62, 45.5), Vector3(27, 1, 26)], ["auge_engstelle", Vector3(4, 1.62, 26), Vector3(27, 1, 26)], ["auge_damm", Vector3(49.2, 1.62, 40), Vector3(49.2, 1, 12)], ["beobachtung", Vector3(18, 5.82, 2), Vector3(28, 0, 26)]],
 		"ports": [
 			{"side": SOUTH, "at": 8.0, "y": 0.0, "room": "halle", "role": "in"},
 			{"side": WEST, "at": 20.0, "y": 0.0, "room": "halle", "role": "in"},
@@ -95,9 +96,10 @@ func lay() -> void:
 	light(Vector3(46.0, 3.4, 5.0), Color("ffcf8a"), 2.4, 12.0, 0.03)
 	# --- the observation rooms over the north strip, behind glass, and the stair up to them
 	var looks := {"look": {"light": Color("d6f0f0"), "energy": 1.6}}
-	room("beob_w", 4.2, 0, 0, 12, 7, 3.2, "lab", _with(looks, {"bare": [NORTH, WEST]}))
-	room("beob_m", 4.2, 12, 0, 12, 7, 3.2, "lab", _with(looks, {"bare": [NORTH]}))
-	room("beob_o", 4.2, 24, 0, 12, 7, 3.2, "lab", _with(looks, {"bare": [NORTH]}))
+	# (They begin at the face of the hall's wall, which is theirs on that side.)
+	room("beob_w", 4.2, 0.2, 0.2, 11.8, 6.8, 3.2, "lab", _with(looks, {"bare": [NORTH, WEST]}))
+	room("beob_m", 4.2, 12, 0.2, 12, 6.8, 3.2, "lab", _with(looks, {"bare": [NORTH]}))
+	room("beob_o", 4.2, 24, 0.2, 12, 6.8, 3.2, "lab", _with(looks, {"bare": [NORTH]}))
 	door("beob_w", "beob_m", 1.8, 1.8, {"kind": "slide"})
 	door("beob_m", "beob_o", 1.8, 1.8, {"kind": "slide"})
 	opening("beob_o", EAST, 1.7, 2.0, {"kind": "frame"})
@@ -141,7 +143,7 @@ func lay() -> void:
 ## into the walkways they meet, and never into a wall.
 func _walk_inner() -> Array:
 	var out: Array = []
-	var hall := Rect2(0.45, 0.45, 55.1, 47.1)
+	var hall := Rect2(0.64, 0.64, 54.72, 46.72)
 	for walk: Rect2 in WALKS:
 		var nav := walk.grow(-0.25)
 		if walk.size.x >= walk.size.y * 2.0:

@@ -228,7 +228,7 @@ func _process(delta: float) -> void:
 		due.remove_at(index)
 		# (Not if the stage has moved on to one in which nobody comes.)
 		# (Those who answer a weapon cache that is being opened come in any stage: HiveCaches.)
-		if (HiveDirector.PRESSURE.has(director.stage) or job.has("cache")) and director.intro_left <= 0.0:
+		if (director.pressure.has(director.stage) or job.has("cache")) and director.intro_left <= 0.0:
 			come(int(job.entry), str(job.kind), int(job.get("fan", 0)))
 	_swing(delta)
 	_wear(delta)
@@ -237,7 +237,7 @@ func _process(delta: float) -> void:
 
 func _watch(delta: float) -> void:
 	var here: Vector3 = game.player.global_position
-	if director.stage != camp_stage or camp_at == Vector3.INF or here.distance_to(camp_at) > CAMP_RADIUS or not HiveDirector.PRESSURE.has(director.stage):
+	if director.stage != camp_stage or camp_at == Vector3.INF or here.distance_to(camp_at) > CAMP_RADIUS or not director.pressure.has(director.stage):
 		camp_stage = director.stage
 		camp_at = here
 		camp_time = 0.0

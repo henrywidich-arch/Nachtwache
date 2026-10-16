@@ -10,6 +10,7 @@ func info() -> Dictionary:
 	return {
 		"id": "absturz", "kind": "arrival", "label": "IM TUNNEL", "name": "Ankunft · Zugunglück im Tunnel", "class": "mittel",
 		"size": Vector2(74.0, 38.0), "levels": [0.0, 8.4], "mood": "deep",
+		"views": [["tunnel", Vector3(13, 1.62, 30.5), Vector3(60, 1.5, 30.5)], ["wrack", Vector3(36, 2.5, 30.5), Vector3(46, 1, 35)], ["notweg", Vector3(60, 1.62, 27.5), Vector3(60, 3, 22)], ["oben", Vector3(60, 10.02, 4.5), Vector3(60, 9, 0)]],
 		"reach": [Rect2(-15.0, 32.0, 15.0, 6.0), Rect2(74.0, 32.0, 15.0, 6.0)],
 		"ports": [{"side": NORTH, "at": 60.0, "y": 8.4, "room": "oben", "role": "out", "open": true}],
 		"goal": "Durch den Tunnel zum Notausstieg", "goal_up": "Den Notweg hinauf in den Sektor",
@@ -66,10 +67,10 @@ func lay() -> void:
 	# Ways in: up out of the track, out of the tunnel wall, from the shaft overhead.
 	for x in [26.0, 58.0, 68.0]:
 		edge("bankett", Vector3(x, 0, 32.0), Vector3(0, 0, -1))
-	hole("bankett", NORTH, 44.0, "breach")
+	hole("bankett", NORTH, 20.0, "breach")
 	hole("bankett", NORTH, 10.0, "vent")
 	drop("notgang", 58.0, 26.5, 1)
-	drop("oben", 55.0, 3.0, 0)
+	drop("oben", 57.4, 1.6, 0)
 	ride_tunnel(Vector3(13, 0, 34))
 	point("car", Vector3(13, 0, 34))
 	point("in", Vector3(13, 0, 30.5))

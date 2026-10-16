@@ -5,7 +5,7 @@ extends "res://scripts/areale/gang.gd"
 func info() -> Dictionary:
 	return {
 		"id": "laborgang", "kind": "transition", "label": "LABORGANG", "name": "Laborgang", "mood": "sick",
-		"width": 6.0, "height": 4.2, "lengths": [14.0, 30.0], "bends": true, "beside": 8.0, "beside_long": 9.0
+		"width": 7.0, "height": 4.2, "lengths": [14.0, 30.0], "bends": true, "beside": 8.0, "beside_long": 9.0
 	}
 
 func dress_beside(beside: Dictionary) -> void:

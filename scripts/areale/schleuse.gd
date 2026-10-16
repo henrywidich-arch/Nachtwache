@@ -45,5 +45,11 @@ func ways(shape: Dictionary) -> void:
 	for leg: Dictionary in shape.legs:
 		if str(leg.name) == "kammer":
 			continue
-		var middle: Vector2 = (leg.rect as Rect2).get_center()
-		drop(str(leg.name), middle.x + (2.0 if (leg.rect as Rect2).size.y > (leg.rect as Rect2).size.x else 0.0), middle.y + (2.0 if (leg.rect as Rect2).size.x >= (leg.rect as Rect2).size.y else 0.0), 1)
+		# (In the middle of its first bay, beside the coffer of light.)
+		var rect: Rect2 = leg.rect
+		var along_z := rect.size.y > rect.size.x
+		var long := maxf(rect.size.x, rect.size.y)
+		var bay := long / maxi(1, roundi(long / 5.0))
+		var t := bay * 0.5 / long
+		var spot := rect.position + rect.size * (Vector2(0.5, t) if along_z else Vector2(t, 0.5)) + (Vector2(2.0, 0) if along_z else Vector2(0, 2.0))
+		drop(str(leg.name), spot.x, spot.y, 1)

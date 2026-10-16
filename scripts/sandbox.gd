@@ -51,6 +51,11 @@ var now_playing := ""
 var voice_left := 0.0
 ## Lines waiting to be played one after the other: [speaker, cue, index].
 var queue: Array = []
+## The piece of mission two's random part the survivor is visiting (HiveLayout: an area,
+## a transition, an arrival, the lock at the end), "" in the test room on the farm. The
+## test room is then the map of the second mission built with every piece there is
+## (HiveLayout.showcase), every door open, nobody else there.
+var visit_id := ""
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -76,6 +81,8 @@ func begin() -> void:
 	jump("yard_south")
 	set_daylight(true)
 	set_slow(1.0)
+	if visit_id != "":
+		_place_visit()
 
 ## Called when the test room is left: the night comes back as it was.
 func end() -> void:
@@ -308,6 +315,55 @@ func set_squad(with: bool) -> void:
 		game.team.clear()
 
 # ---------------------------------------------------------------- the world
+
+## Into a piece of the random part of mission two (see visit_id): the test room starts
+## again on that map, and the survivor stands where one comes into the piece.
+func visit(def: String) -> void:
+	visit_id = def
+	game.start_run(true)
+
+## Back to the test room on the farm.
+func leave_visit() -> void:
+	visit_id = ""
+	game.start_run(true)
+
+## Where a piece of the showcase is entered, and which way one looks there.
+func visit_spot(def: String) -> Array:
+	var map := game.cabin as HiveMap
+	if map == null:
+		return []
+	for piece: Dictionary in map.night.get("pieces", []):
+		if str(piece.def) != def:
+			continue
+		var id := str(piece.id)
+		var at: Vector3 = map.points.get("%s_entry" % id, map.points.get("%s_in" % id, Vector3.INF))
+		if at == Vector3.INF:
+			continue
+		var ahead: Vector3 = map.points.get("%s_middle" % id, map.points.get("%s_leave" % id, map.points.get("%s_out" % id, map.points.get("%s_mid" % id, at + Vector3(0, 0, -5)))))
+		return [at, atan2(-(ahead.x - at.x), -(ahead.z - at.z))]
+	return []
+
+func _place_visit() -> void:
+	var map := game.cabin as HiveMap
+	if map == null:
+		return
+	for id in map.areas:
+		map.unlock(str(id), true)
+	for door in map.doors:
+		if str(door.kind) == "script":
+			map.set_door(str(door.name), true, true)
+	for name in map.areal_signs:
+		map.set_port(str(name), true, true)
+	var spot := visit_spot(visit_id)
+	if spot.is_empty():
+		return
+	var player: Survivor = game.player
+	player.global_position = (spot[0] as Vector3) + Vector3(0, 0.08, 0)
+	player.velocity = Vector3.ZERO
+	player.rotation.y = float(spot[1])
+	player.camera.rotation.x = 0.0
+	var label := str(HiveLayout.info(visit_id).get("name", visit_id))
+	game.hud.announce("TESTRAUM  ·  " + label.to_upper(), "Mission 2, Zufallsteil. F1: Menü – auf der Seite WELT geht es zu den anderen Arealen und zurück zum Hof.", 7)
 
 func jump(point: String) -> void:
 	var cabin: CabinMap = game.cabin

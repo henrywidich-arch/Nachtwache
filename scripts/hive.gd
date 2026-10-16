@@ -201,6 +201,20 @@ var entries: HiveEntries
 ## The weapon caches off the way, and what was found in them (a node of its own).
 var caches: HiveCaches
 var board_time := 0.0
+## The random part of the night after the station (HiveLayout; a node of its own that
+## runs its stages), the night it is built from, and this night's tables: its order of
+## stages, what each is called, who keeps coming, where a defeat is taken up again (the
+## classic ones - ORDER, STAGES, PRESSURE, CHECKPOINTS - when there is no random part).
+var run: HiveAreaRun
+var night: Dictionary = {}
+var night_fresh := false
+## Which night comes next: -2 the director decides (a new seed for every night in play,
+## the classic night in a check), -1 the classic night, -3 the showcase, a seed otherwise.
+var seed_wanted := -2
+var order: Array = ORDER
+var stages: Dictionary = STAGES
+var pressure: Dictionary = PRESSURE
+var checkpoints: Dictionary = CHECKPOINTS
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -213,6 +227,34 @@ func _ready() -> void:
 	caches = HiveCaches.new()
 	caches.director = self
 	add_child(caches)
+	run = HiveAreaRun.new()
+	run.director = self
+	add_child(run)
+
+## The night the next start builds its map for (Game.start_run asks before the map is put
+## into the world): the same one again when a defeat is taken up at a checkpoint, a new one
+## otherwise. Asking twice before the night begins gives the same answer.
+func prepare_night() -> Dictionary:
+	if night_fresh and not night.is_empty():
+		return night
+	if resume_at == "" or night.is_empty():
+		var wanted := _seed_for_night()
+		# (-3: every piece in one night, the showcase of the test room - for the checks.)
+		night = HiveLayout.showcase() if wanted == -3 else (HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted))
+	night_fresh = true
+	return night
+
+func _seed_for_night() -> int:
+	if seed_wanted != -2:
+		return seed_wanted
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hive-seed="):
+			return int(arg.trim_prefix("--hive-seed="))
+		if arg == "--hive-classic":
+			return -1
+	if game.check_mode:
+		return -1
+	return randi_range(1, 999999)
 
 # ---------------------------------------------------------------- begin and end
 
@@ -245,12 +287,14 @@ func begin() -> void:
 	stayed.clear()
 	company = Profile.known_company(str(game.profile.company))
 	pair = Profile.pair_of(company)
-	var from := resume_at if CHECKPOINTS.has(resume_at) else "landing"
+	night_fresh = false
+	run.setup()
+	var from := resume_at if checkpoints.has(resume_at) else "landing"
 	resume_at = ""
 	checkpoint = from
 	prowl.begin(from)
 	caches.begin(from)
-	var start: Dictionary = CHECKPOINTS[from]
+	var start: Dictionary = checkpoints[from]
 	map.lock_all()
 	for id in start.open:
 		map.unlock(str(id), true)
@@ -261,20 +305,21 @@ func begin() -> void:
 	game.sounds.dry = true
 	var at: Vector3 = map.points.get(str(start.at), map.player_start)
 	# Taken up behind the station, the two operators are already at the survivor's side.
-	if not pair.is_empty() and ORDER.find(from) > ORDER.find("deal"):
+	if not pair.is_empty() and order.find(from) > order.find("deal"):
 		_part(true)
 	_place_squad(at, float(map.facings.get(str(start.at), 0.0)))
-	if ORDER.find(from) < ORDER.find("nadja"):
+	if order.find(from) < order.find("nadja"):
 		_spawn_nadja(at + Vector3(1.4, 0, 2.6))
 	else:
 		nadja_gone = true
 	if from == "terminal":
 		map.set_door("car_b", true, true)
+	run.resume(from)
 	_enter(from)
 	if from == "landing":
 		_arrive()
 	else:
-		game.hud.announce("KONTROLLPUNKT", "%s  ·  %s" % [STAGES[from][0], STAGES[from][1]], 6)
+		game.hud.announce("KONTROLLPUNKT", "%s  ·  %s" % [stages[from][0], stages[from][1]], 6)
 
 ## Called when the night is over or left.
 func end() -> void:
@@ -283,6 +328,7 @@ func end() -> void:
 	on = false
 	prowl.end()
 	caches.end()
+	run.clear_things()
 	_end_intro()
 	for puppet in puppets:
 		if is_instance_valid(puppet.node):
@@ -482,7 +528,7 @@ func _enter(id: String) -> void:
 	use_at = Vector3.INF
 	use_key = ""
 	guards.clear()
-	var info: Array = STAGES[id]
+	var info: Array = stages[id]
 	goal = str(info[1])
 	marker = _point(str(info[2]))
 	game.wave = int(info[3])
@@ -592,7 +638,7 @@ func _enter(id: String) -> void:
 			game.sounds.play_sound("beep")
 			line("m2_power_on")
 		"labs":
-			map.unlock("decon")
+			map.unlock("decon", run.on)
 			map.unlock("research")
 			_checkpoint("labs", 350)
 			line("m2_labs")
@@ -610,6 +656,9 @@ func _enter(id: String) -> void:
 		"exit":
 			line("m2_lift")
 			talk("m2_down")
+		_:
+			if run.owns(id):
+				run.enter(id)
 
 func _update(delta: float) -> void:
 	var player: Survivor = game.player
@@ -757,6 +806,9 @@ func _update(delta: float) -> void:
 		"exit":
 			if here.distance_to(_point("lift")) < 3.2:
 				_win()
+		_:
+			if run.owns(stage):
+				run.update(delta)
 
 func _open_mirror() -> void:
 	_all_clear()
@@ -768,6 +820,12 @@ func _open_mirror() -> void:
 ## Something to use with [E] at a named place; when it is used, _used runs.
 func _use(point: String, key: String, text: String) -> void:
 	use_at = _point(point)
+	use_key = key
+	use_text = text
+
+## The same at a place given as a position.
+func _use_spot(at: Vector3, key: String, text: String) -> void:
+	use_at = at
 	use_key = key
 	use_text = text
 
@@ -795,6 +853,8 @@ func use() -> bool:
 			_enter("cafe")
 		"generator":
 			_enter("decon")
+		_:
+			run.use(key)
 	return true
 
 # ---------------------------------------------------------------- Nadja and the operators
@@ -1109,21 +1169,39 @@ func _run_ride(_delta: float) -> void:
 		var player: Survivor = game.player
 		# (Whoever stood in the doorway when it shut is inside the car now.)
 		var car: Vector3 = _point("car_a")
+		# The car the ride ends in: the terminal's, or that of the random part's arrival.
+		var shift := HiveMap.RIDE if run.car() == Vector3.INF else run.car() - car
 		player.global_position = Vector3(clampf(player.global_position.x, car.x - 6.4, car.x + 6.4), car.y + 0.05, clampf(player.global_position.z, car.z - 1.4, car.z + 1.4))
-		player.global_position += HiveMap.RIDE
+		player.global_position += shift
 		for mate in game.team:
 			if mate.down:
 				mate.revive(true)
 			var room: Dictionary = map.room_at(mate.global_position)
 			if room.is_empty() or str(room.id) != "car_a":
-				mate.global_position = player.global_position - HiveMap.RIDE + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-0.6, 0.6))
-			mate.global_position += HiveMap.RIDE
+				mate.global_position = player.global_position - shift + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-0.6, 0.6))
+			mate.global_position += shift
 			mate.velocity = Vector3.ZERO
-		map.ride(true)
+		if run.on:
+			map.ride_areal(str(map.night.pieces[0].id), true)
+		else:
+			map.ride(true)
 		game.hud.flash(Color.BLACK, 1.0)
+	# Derailed: a blow, darkness, and the car stands in the tunnel.
+	if run.crashes() and stage_time > HiveAreaRun.CRASH_AT and done.has("ride_jump"):
+		map.ride_areal(str(map.night.pieces[0].id), false)
+		game.hud.flash(Color.WHITE, 0.4)
+		game.hud.flash(Color.BLACK, 1.6)
+		game.player.trauma = 1.0
+		game.sounds.play_sound("explosion", 2.0)
+		_enter("g_crash")
+		return
 	if stage_time > RIDE_SECONDS:
-		map.ride(false)
-		_enter("terminal")
+		if run.on:
+			map.ride_areal(str(map.night.pieces[0].id), false)
+			_enter("g_arrive")
+		else:
+			map.ride(false)
+			_enter("terminal")
 
 func _clear_enemies() -> void:
 	for node in game.enemies.get_children():
@@ -1142,7 +1220,7 @@ func _clear_enemies() -> void:
 func look_for(kind: String) -> String:
 	if kind != "mauler":
 		return ""
-	var staff: Array = STAFF["below" if ORDER.find(stage) >= ORDER.find("terminal") else "above"]
+	var staff: Array = STAFF["below" if order.find(stage) > order.find("ride") else "above"]
 	return str((staff[0] as Array).pick_random()) if randf() < float(staff[1]) else ""
 
 func _spawn(kind: String, at: Vector3) -> Infected:
@@ -1285,20 +1363,20 @@ static func pick(kinds: Array) -> String:
 ## How many may be alive at once in the stage that runs. (Whoever digs himself in gets a
 ## few more: see HiveEntries.)
 func _crowd() -> int:
-	if not PRESSURE.has(stage):
+	if not pressure.has(stage):
 		return 0
-	return mini(CROWD_LIMIT, roundi(int(PRESSURE[stage][1]) * _horde())) + game.extra_guns() + entries.more()
+	return mini(CROWD_LIMIT, roundi(int(pressure[stage][1]) * _horde())) + game.extra_guns() + entries.more() + run.more()
 
 func _run_pressure(delta: float) -> void:
-	if not PRESSURE.has(stage) or intro_left > 0.0:
+	if not pressure.has(stage) or intro_left > 0.0:
 		return
-	var plan: Array = PRESSURE[stage]
+	var plan: Array = pressure[stage]
 	pressure_left -= delta
 	var room: int = _crowd() - int(game.alive_count) - entries.coming()
 	if pressure_left > 0.0 or room <= 0:
 		return
 	# (Whoever digs himself in gets them sooner.)
-	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste()
+	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste() * run.haste()
 	var kinds: Array = plan[0]
 	var kind := pick(kinds)
 	# Nearly all of them come through a way in near the squad - out of a ceiling, out of a
@@ -1370,7 +1448,7 @@ func heard(cue: String, seconds: float, speaker: String = "") -> void:
 ## Until the channel is cleared at the station the voice of command is not Coleman's: his
 ## lines sound as in the last hours of the first mission (Radio.hijacked).
 func channel_taken() -> bool:
-	return on and not done.has("radio_clear") and ORDER.find(stage) <= ORDER.find("deal")
+	return on and not done.has("radio_clear") and order.find(stage) <= order.find("deal")
 
 ## Nobody has said anything for so many seconds, and nothing waits to be said.
 func _silent_for(seconds: float) -> bool:
@@ -1550,7 +1628,7 @@ func _body_of(speaker: String) -> Node3D:
 # ---------------------------------------------------------------- the HUD
 
 func title() -> String:
-	return str(STAGES[stage][0]) if STAGES.has(stage) else ""
+	return str(stages[stage][0]) if stages.has(stage) else ""
 
 func summary() -> Array[String]:
 	var out: Array[String] = []
@@ -1560,6 +1638,7 @@ func summary() -> Array[String]:
 		out.append("%s   %d %%" % [progress_text, int(progress * 100.0)])
 	if stage == "station" and _guards_left() > 0:
 		out.append("Wachen auf dem Bahnsteig:  %d" % _guards_left())
+	out.append_array(run.summary())
 	# (Side goals: a cache that is being opened, the nearest one the survivor knows of.)
 	out.append_array(caches.summary())
 	return out
@@ -1568,11 +1647,11 @@ func markers() -> Array:
 	var at := use_at if use_at != Vector3.INF else marker
 	if at == Vector3.INF or intro_left > 0.0:
 		return []
-	return [{"pos": at + Vector3(0, 1.4, 0), "text": "ZIEL"}]
+	return [{"pos": at + Vector3(0, 1.4, 0), "text": "ZIEL"}] + run.markers()
 
 ## Which music fits: none of the first mission's rounds, so the director says.
 func music_phase() -> String:
-	if stage in ["hold", "lockdown", "mirror"]:
+	if stage in ["hold", "lockdown", "mirror"] or run.holding():
 		return "auftrag"
 	if stage in ["hall", "exit"]:
 		return "letzte_runde"

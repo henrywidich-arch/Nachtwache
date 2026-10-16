@@ -117,20 +117,31 @@ func _build(what: String) -> int:
 			if route.is_empty() or route[route.size() - 1].distance_to(leg[2]) > 2.0:
 				bad += 1
 				print("WAY %s %s %s: from %s to %s%s" % [piece.id, piece.def, str(leg[0]), str((leg[1] as Vector3).snapped(Vector3.ONE * 0.1)), str((leg[2] as Vector3).snapped(Vector3.ONE * 0.1)), " (none)" if route.is_empty() else " (ends %.1f m off)" % route[route.size() - 1].distance_to(leg[2])])
-	# The whole way of each chain: from the car of its arrival to its lock.
+	# The way from piece to piece: from where one leaves a piece (or the car of the arrival)
+	# through the transition to where one comes into the next (the path finder does not
+	# go down a level and up again to come back to its own, so the way is walked as the
+	# squad walks it, one stretch after the other).
 	for chain in [0, 1]:
-		var members: Array = (night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == chain)
-		if members.is_empty():
-			continue
-		var first: Vector3 = map.points.get("%s_in" % members[0].id, Vector3.INF)
-		var last: Vector3 = map.points.get("%s_mid" % members[members.size() - 1].id, Vector3.INF)
-		var route: PackedVector3Array = map.path_between(first, last)
-		var long := map._length(route)
-		if route.is_empty() or route[route.size() - 1].distance_to(last) > 2.0:
-			bad += 1
-			print("WAY chain %d: no way from the arrival %s to the lock %s" % [chain, str(first.snapped(Vector3.ONE * 0.1)), str(last.snapped(Vector3.ONE * 0.1))])
-		else:
-			print("CHAIN %d walkable, %.0f m" % [chain, long])
+		var members: Array = (night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == chain and str(piece.kind) != "transition")
+		var total := 0.0
+		for k in range(members.size() - 1):
+			var from: Vector3 = map.points.get("%s_leave" % members[k].id, Vector3.INF)
+			var to: Vector3 = map.points.get("%s_entry" % members[k + 1].id, Vector3.INF)
+			var route: PackedVector3Array = map.path_between(from, to)
+			if route.is_empty() or route[route.size() - 1].distance_to(to) > 2.0:
+				bad += 1
+				print("WAY chain %d: no way from %s %s to %s %s" % [chain, members[k].def, str(from.snapped(Vector3.ONE * 0.1)), members[k + 1].def, str(to.snapped(Vector3.ONE * 0.1))])
+			else:
+				total += map._length(route)
+		print("CHAIN %d: %d stretches between pieces, %.0f m" % [chain, members.size() - 1, total])
+	if "--stairs" in OS.get_cmdline_user_args():
+		for stair in map.stairs:
+			var foot: Vector3 = stair.foot
+			if foot.x < 150.0:
+				continue
+			var low_grid: AStarGrid2D = map.navigation[int(stair.low)]
+			var high_grid: AStarGrid2D = map.navigation[int(stair.high)]
+			print("STAIR foot=%s head=%s low=%d(%s y=%.1f) high=%d(%s y=%.1f) bottom_free=%s top_free=%s" % [str(foot.snapped(Vector3.ONE * 0.1)), str((stair.head as Vector3).snapped(Vector3.ONE * 0.1)), int(stair.low), map.floors[int(stair.low)].id, float(map.floors[int(stair.low)].y), int(stair.high), map.floors[int(stair.high)].id, float(map.floors[int(stair.high)].y), str(low_grid.is_in_boundsv(stair.bottom) and not low_grid.is_point_solid(stair.bottom)), str(high_grid.is_in_boundsv(stair.top) and not high_grid.is_point_solid(stair.top))])
 	if "--probe" in OS.get_cmdline_user_args():
 		for piece: Dictionary in night.pieces:
 			if str(piece.def) != "haifischlabor":

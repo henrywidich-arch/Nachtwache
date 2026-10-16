@@ -884,7 +884,7 @@ func markers() -> Array:
 ## Vector3.INF if there is none.
 ## Never while a place has to be held.
 func bot_goal(here: Vector3) -> Vector3:
-	if not on or director.stage in ["mirror", "hold", "lockdown", "hall", "ride", "nadja", "deal", "board", "exit"]:
+	if not on or director.stage in ["mirror", "hold", "lockdown", "hall", "ride", "nadja", "deal", "board", "exit", "g_lock"] or director.run.holding():
 		bot_target = -1
 		return Vector3.INF
 	# Once it has turned off to a cache it goes there. (It used to ask anew every second
