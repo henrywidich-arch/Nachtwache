@@ -19,6 +19,15 @@ func _initialize() -> void:
 		elif arg.begins_with("--build="):
 			build = arg.trim_prefix("--build=")
 	var bad := 0
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--describe="):
+			for seed_value in range(1, int(arg.trim_prefix("--describe=")) + 1):
+				var night := HiveLayout.plan(seed_value)
+				var events: Array[String] = []
+				for piece: Dictionary in night.pieces:
+					if str(piece.kind) == "area":
+						events.append("%s:%s" % [piece.def, piece.event.kind])
+				print("NIGHT %s | %s" % [HiveLayout.describe(night), " ".join(PackedStringArray(events))])
 	if seeds > 0:
 		bad += _plans(seeds)
 	if build != "":

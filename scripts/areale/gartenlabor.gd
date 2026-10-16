@@ -42,7 +42,7 @@ const BEDS := [Rect2(6, 26, 7, 3), Rect2(6, 33, 7, 3), Rect2(30, 34, 9, 3), Rect
 func lay() -> void:
 	room("halle", 0.0, 0, 0, 48, 44, 10.0, "lab", {
 		"lamps": "none",
-		"look": {"floor": ["lawn", Color(0.32, 0.4, 0.27)], "ceiling": ["plate", Color("1b2420")], "panel": Color(0.72, 0.78, 0.7), "stripe": Color("4f8f3a")}
+		"look": {"floor": ["lawn", Color(0.5, 0.6, 0.42)], "ceiling": ["plate", Color("1b2420")], "panel": Color(0.72, 0.78, 0.7), "stripe": Color("4f8f3a")}
 	})
 	# --- the galleries and the bridge to the platform in the trees
 	gallery("galerie_n", 4.2, Rect2(0, 0, 48, 4), [], [[SOUTH, 0.0, 3.9], [SOUTH, 6.1, 44.0]], [Vector2(8, 3.8), Vector2(20, 3.8), Vector2(32, 3.8)])
@@ -63,7 +63,8 @@ func lay() -> void:
 	for x in [8.0, 24.0, 40.0]:
 		for z in [8.0, 22.0, 36.0]:
 			glow(Vector3(x, 9.86, z), Vector3(6.0, 0.05, 0.5), Color("f0b8ff"), 5.0)
-			m._spot(p(x, 9.5, z), Vector3.DOWN, Color("e8c8ff"), 6.0, 14.0, 70.0, 0.0, 0.8, HiveCore.LAMP_FADE + 10.0)
+			m._spot(p(x, 9.5, z), Vector3.DOWN, Color("f0dcff"), 16.0, 16.0, 78.0, 0.0, 0.8, HiveCore.LAMP_FADE + 10.0)
+			light(Vector3(x, 4.0, z), Color("e6ffd8"), 1.8, 13.0)
 	# --- paths of gravel, the beds, the trees, what grew
 	for path in [Rect2(22.5, 4, 3, 39.8), Rect2(0.2, 29, 47.6, 2.6), Rect2(25.5, 11, 18.5, 2.4)]:
 		m._part("gravel", p(path.get_center().x, 0.01, path.get_center().y), Vector3(path.size.x, 0.02, path.size.y), Color(0.6, 0.58, 0.52))

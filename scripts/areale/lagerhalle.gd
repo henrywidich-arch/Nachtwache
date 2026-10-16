@@ -43,7 +43,7 @@ func info() -> Dictionary:
 	}
 
 func lay() -> void:
-	room("halle", 0.0, 0, 0, 52, 40, 11.0, "concrete", {"look": {"lamp_gap": 9.0, "lamp_every": 3, "energy": 3.0, "reach": 14.0, "light": Color("ffd59a"), "stripe": Color("b8961e")}})
+	room("halle", 0.0, 0, 0, 52, 40, 11.0, "concrete", {"look": {"lamp_gap": 9.0, "lamp_every": 2, "energy": 3.6, "reach": 16.0, "light": Color("ffd59a"), "stripe": Color("b8961e")}})
 	# --- the gallery with the office on it, and the stair up at its south end
 	room("buero", 4.2, 0.2, 4, 7.8, 10, 3.2, "office", {"bare": [WEST]})
 	pane("buero", EAST, 9.0, 7.0, 1.0, 2.6, "glass")
@@ -84,6 +84,10 @@ func lay() -> void:
 	m._pipe(p(40.0, 9.5, 20.0), p(40.0, 7.6, 20.0), 0.03, Color("1a1a1a"), 6, "steel")
 	m._part("plate", p(40.0, 6.3, 20.0), Vector3(6.0, 2.6, 2.4), Color("2f6f8a"))
 	stencil("halle", NORTH, 40.0, 8.0, "LAGER  L-2", 240, Color(0.45, 0.4, 0.2))
+	# Work lights over the lanes: the racks swallow what comes from the roof.
+	for x in [4.0, 26.0, 48.0]:
+		for z in [12.0, 28.0]:
+			light(Vector3(x, 6.5, z), Color("ffd59a"), 2.6, 18.0)
 	m._stripe(p(22.5, 0, 1.0), p(22.5, 0, 39.0), 0.14, Color("c9a227"))
 	m._stripe(p(29.5, 0, 1.0), p(29.5, 0, 39.0), 0.14, Color("c9a227"))
 	for spot in [Vector3(48, 0, 12), Vector3(4, 0, 30), Vector3(36, 0, 36)]:
