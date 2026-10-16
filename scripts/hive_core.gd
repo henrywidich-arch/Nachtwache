@@ -49,10 +49,15 @@ const MOODS := {
 	"sick": {"ambient": Color(0.38, 0.56, 0.52), "energy": 0.44, "fog": 0.005, "haze": 0.01, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.2, 0.18)},
 	# The containment hall, the tower hall: darker and colder than anywhere else in the
 	# facility, with what glows in it and a haze the lamps stand in.
-	"deep": {"ambient": Color(0.28, 0.36, 0.5), "energy": 0.3, "fog": 0.006, "haze": 0.022, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.07, 0.1, 0.14)}
+	"deep": {"ambient": Color(0.28, 0.36, 0.5), "energy": 0.3, "fog": 0.006, "haze": 0.022, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.07, 0.1, 0.14)},
+	# The areas of the random part (HiveLayout): flooded halls - cold teal over dark water -,
+	# the biotope - a damp green -, the cold store - icy blue in its mist.
+	"water": {"ambient": Color(0.36, 0.52, 0.54), "energy": 0.4, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.06, 0.16, 0.17)},
+	"bio": {"ambient": Color(0.42, 0.56, 0.38), "energy": 0.46, "fog": 0.005, "haze": 0.02, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.18, 0.08)},
+	"cryo": {"ambient": Color(0.48, 0.58, 0.7), "energy": 0.42, "fog": 0.006, "haze": 0.024, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.12, 0.17, 0.24)}
 }
 ## The moods of places under the ground (no moon, no shadows of it).
-const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep"]
+const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo"]
 ## Water that stands in a room: dark, smooth, with a slow swell that bends what is
 ## mirrored in it. It is drawn where it stands deeper than a few millimetres over the
 ## floor `floor_y`, so that a sheet of it may rise out of the floor like a shore.

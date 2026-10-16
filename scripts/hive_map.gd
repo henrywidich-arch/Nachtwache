@@ -54,9 +54,33 @@ var alarm_hold := false
 var caches: Array[Dictionary] = []
 ## How far each of the house's props has to be turned so that its front looks along +z.
 const PROP_TURN := {}
+## The night this map is built for (HiveLayout): the random part after the station, or
+## {"classic": true} for the facility as it always was. Set before the map enters the
+## tree; a map is built for one night's layout (HiveLayout key) and built anew for another.
+var night: Dictionary = {}
+var layout_key := "classic"
+## What the random part has (see HiveAreale): its named places (merged into `points`),
+## the floor of each of its heights, the kit of each piece, its basins, the words over
+## its ways out, the tunnels of its rides.
+var areal_points: Dictionary = {}
+var areal_facings: Dictionary = {}
+var area_floors: Dictionary = {}
+var areal_kits: Dictionary = {}
+var waters: Array = []
+var water_time := 0.0
+var water_told := 0.0
+var water_bodies: Dictionary = {}
+var areal_signs: Dictionary = {}
+var areal_rides: Dictionary = {}
+## The lamps that run past the windows while the train runs (the classic ride's or a
+## ride of the random part's).
+var ride_set: Array = []
 
 func _ready() -> void:
 	var began := Time.get_ticks_msec()
+	if night.is_empty():
+		night = HiveAreale.wanted_from_args()
+	layout_key = str(night.get("key", "classic"))
 	_begin_build()
 	_build_environment()
 	_build_styles()
@@ -65,6 +89,7 @@ func _ready() -> void:
 	under = _floor("station", "BAHNHOF", UNDER, Rect2(-66, -76, 132, 52))
 	deep = _floor("facility", "ANLAGE", UNDER, Rect2(-60, -644, 132, 340))
 	deck = _floor("deck", "GALERIE", DECK, Rect2(-60, -644, 132, 340))
+	HiveAreale.declare_floors(self)
 	areas = ["descent", "station", "nadja", "admin", "cafe", "atrium", "decon", "research", "hall"]
 	var shop_sign := Label3D.new()
 	shop_sign.name = "WeaponShopLabel"
@@ -76,10 +101,16 @@ func _ready() -> void:
 		var from := Time.get_ticks_msec()
 		(part as Callable).call()
 		build_times[str((part as Callable).get_method())] = Time.get_ticks_msec() - from
+	# The random part of the night, after everything else (its dice are its own).
+	var laid := Time.get_ticks_msec()
+	HiveAreale.lay(self)
+	build_times["areale"] = Time.get_ticks_msec() - laid
 	# The furniture of the weapon caches, in the rooms off the way (see HiveCaches).
 	HiveCaches.furnish(self)
+	HiveCaches.furnish(self, HiveAreale.cache_sites(self))
 	# The workbenches and equipment stations between the supply points (see HiveStations).
 	HiveStations.furnish(self)
+	HiveStations.furnish(self, HiveAreale.station_sites(self))
 	var mark := Time.get_ticks_msec()
 	_compile()
 	build_times["compile"] = Time.get_ticks_msec() - mark
@@ -3138,7 +3169,9 @@ func _lay_research() -> void:
 	_begin_zone("research", "sick", ["atrium"])
 	area = "decon"
 	_room("decon", deep, Rect2(-4, -501, 8, 12), 4.2, "lab", {"look": {"light": Color("bfe8ff"), "strip_color": Color("7fe0ff")}})
-	_door("atrium", "decon", 0.0, 3.0, {"kind": "gate", "area": "decon", "name": "gate_decon"})
+	# (In a night with a random part the squad comes into the lock from its twin at the end
+	# of that part, and the gate to the central hall stays shut: it belongs to the hall.)
+	_door("atrium", "decon", 0.0, 3.0, {"kind": "gate", "area": "atrium" if HiveAreale.random_part(self) else "decon", "name": "gate_decon"})
 	area = "research"
 	_room("lab_corridor", deep, Rect2(-4, -569, 8, 68), 5.0, "lab", {"lamps": "none", "look": {"tide": 1.6, "tide_sides": [EAST, WEST], "tide_span": [-569.0, -539.5]}})
 	_door("decon", "lab_corridor", 0.0, 3.0, {"kind": "gate", "area": "research", "name": "gate_research"})
@@ -5922,14 +5955,58 @@ func tour() -> Array:
 ## drawn, a tunnel with lamps is, and the lamps pass by.
 func ride(on: bool) -> void:
 	riding = on
+	ride_set = ride_lamps
 	ride_speed = 26.0 if on else 0.0
 	force_zone("tunnel", "show" if on else "")
 	force_zone("terminal", "hide" if on else "")
+
+## The same for a ride that ends in the random part: the tunnel around the car of the
+## piece `id` is drawn, and the piece itself is not, while the train runs.
+func ride_areal(id: String, on: bool) -> void:
+	if not areal_rides.has(id):
+		return
+	riding = on
+	ride_set = areal_rides[id].lamps
+	ride_speed = 26.0 if on else 0.0
+	force_zone(str(areal_rides[id].zone), "show" if on else "hide")
+	force_zone(id, "hide" if on else "")
+
+## The piece of the random part a position lies in ({} for none; see HiveAreale).
+func piece_at(pos: Vector3) -> Dictionary:
+	return HiveAreale.piece_at(self, pos)
+
+## Opens or shuts a way of the random part, and what is written over it.
+func set_port(id: String, open: bool, instant: bool = false) -> void:
+	HiveAreale.set_port(self, id, open, instant)
+
+## The floor of the random part a height of a piece stands on (see HiveAreale).
+func area_floor(height: float, piece: Dictionary) -> int:
+	return HiveAreale.area_floor(self, height, piece)
+
+func _areal_water(rect: Rect2, surface: float, bottom: float, deep_water: bool) -> void:
+	HiveAreale.water(self, rect, surface, bottom, deep_water)
+
+## A thin sheet of water over a floor (`top` its surface, `floor_y` the floor under it).
+func _areal_wet(rect: Rect2, top: float, floor_y: float) -> void:
+	HiveAreale.wet(self, rect, top, floor_y)
+
+## Where somebody in deep water climbs out with a jump (INF: nowhere near).
+func climb_out(pos: Vector3) -> Vector3:
+	return HiveAreale.climb_out(self, pos)
 
 func reset() -> void:
 	super.reset()
 	riding = false
 	set_alarm(false)
+	water_bodies.clear()
+	water_time = 0.0
+	for id in areal_rides:
+		force_zone(str(areal_rides[id].zone), "hide")
+	for id in areal_signs:
+		set_port(str(id), door_open(str(id)), true)
+
+func _physics_process(delta: float) -> void:
+	HiveAreale.run_waters(self, delta)
 
 func _process(delta: float) -> void:
 	super._process(delta)
@@ -5939,8 +6016,8 @@ func _process(delta: float) -> void:
 			lamp.light_energy = 3.4 * beat
 	if riding:
 		ride_way += ride_speed * delta
-		for index in range(ride_lamps.size()):
-			ride_lamps[index].position.x = 35.0 - fposmod(index * 8.75 + ride_way, 70.0)
+		for index in range(ride_set.size()):
+			(ride_set[index] as Node3D).position.x = 35.0 - fposmod(index * 8.75 + ride_way, 70.0)
 
 func _after_build() -> void:
 	# The fluid of the tanks stands on the floor of the facility here, not of a cellar.
@@ -5968,6 +6045,11 @@ func _after_build() -> void:
 		"labs": Vector3(0, UNDER, -535.0), "cross": Vector3(0, UNDER, -573.0), "hall_end": HALL_MIDDLE, "lift": HALL_LIFT
 	}
 	facings = {"landing": 0.0, "landing_out": 0.0}
+	points.merge(areal_points, true)
+	facings.merge(areal_facings, true)
+	# The tunnels of the rides of the random part are only there while the train runs.
+	for id in areal_rides:
+		force_zone(str(areal_rides[id].zone), "hide")
 	_settle_ways()
 	player_start = Vector3(0, 0.05, 61.5)
 	_sounds()

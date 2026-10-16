@@ -202,6 +202,8 @@ var controlled := false
 var menu_open := false
 ## Co-op: out of the fight until the partner helps or the round ends.
 var down := false
+## How much of his pace the survivor has in deep water (HiveAreale): 1 elsewhere.
+var wade := 1.0
 var items := {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0}
 ## 1 once the improvement of the heal grenade is bought: its field raises the fallen.
 var heal_level := 0
@@ -1118,6 +1120,8 @@ func _physics_process(delta: float) -> void:
 	if WEAPONS[current_weapon].has("spin"):
 		# The rotary gun weighs as much as a small child (less to a breacher who stands firm).
 		speed *= lerpf(0.72, 1.0, minf(1.0, game.skills.value("carry")))
+	# Deep water (HiveAreale.run_waters): every step a struggle as well.
+	speed *= wade
 	if clung_by != null:
 		# With a Leech hanging on, every step is a struggle.
 		speed *= 0.55
@@ -1127,6 +1131,11 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= 22 * delta
 		airborne = true
+	elif Input.is_action_just_pressed("jump") and not blocked and wade < 1.0 and game.cabin.has_method("climb_out") and game.cabin.climb_out(global_position) != Vector3.INF:
+		# Out of deep water on to the walkway beside it.
+		global_position = game.cabin.climb_out(global_position)
+		velocity = Vector3.ZERO
+		wade = 1.0
 	elif Input.is_action_just_pressed("jump") and not blocked and crouched:
 		# Out of a crouch the key only gets the survivor back on his feet.
 		set_crouched(false)
@@ -1866,6 +1875,7 @@ func shake_from(source: Vector3, strength: float, reach: float) -> void:
 	trauma = minf(1.0, trauma + strength * clampf(1.0 - global_position.distance_to(source) / reach, 0.0, 1.0))
 
 func reset_survivor() -> void:
+	wade = 1.0
 	position = game.cabin.player_start
 	rotation = Vector3(0, PI, 0)
 	camera.rotation = Vector3.ZERO

@@ -111,10 +111,11 @@ static func put(map: HiveMap, look: String, back: Vector3, facing: Vector3, more
 	return station
 
 ## The stations between the supply points, into the finished rooms of the map.
-static func furnish(map: HiveMap) -> void:
+## (`specs`: places of the same form as SITES - the random part's, see HiveAreale.)
+static func furnish(map: HiveMap, specs: Array = SITES) -> void:
 	var kept_state := map.random.state
 	var kept_batch: MeshBatch = map.batch
-	for spec: Array in SITES:
+	for spec: Array in specs:
 		if not map.room_of.has(str(spec[1])):
 			continue
 		var room: Dictionary = map.room_of[str(spec[1])]

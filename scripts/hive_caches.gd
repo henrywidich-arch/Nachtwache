@@ -1250,10 +1250,11 @@ func _post_hints() -> void:
 ## compiled) and notes the places in HiveMap.caches. What stands still goes into the
 ## map's meshes and its path grid; what moves - doors, a lid, the lamp - is a node of the
 ## place's zone.
-static func furnish(map: HiveMap) -> void:
+## (`specs`: places of the same form as SITES - the random part's, see HiveAreale.)
+static func furnish(map: HiveMap, specs: Array = SITES) -> void:
 	var kept_state := map.random.state
 	var kept_batch: MeshBatch = map.batch
-	for spec: Array in SITES:
+	for spec: Array in specs:
 		if not map.room_of.has(str(spec[1])) or not LOOKS.has(str(spec[4])):
 			continue
 		var room: Dictionary = map.room_of[str(spec[1])]
