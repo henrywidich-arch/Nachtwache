@@ -8,7 +8,10 @@ extends Node
 ## that asks whether there is a story or a last round answers as it does there.
 
 ## What can be put on the field, in the order of the menu: [kind, name on the button].
-const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"]]
+const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"], ["prowler_elite", "PROWLER (GEFRESSEN)"]]
+## The sharks, which only live in water: a click takes the survivor to the test pool
+## (SharkPool) and puts them into it. [look, name on the button]
+const SHARKS := [["shark1", "HAI (VERSEUCHT)"], ["shark2", "HAI (BLAU)"]]
 const SOLDIERS := [["cru_assault", "ASSAULT"], ["cru_shotgunner", "BREACHER"], ["cru_heavy", "HEAVY"], ["cru_marksman", "MARKSMAN"], ["cru_medic", "MEDIC"], ["cru_commander", "COMMANDER"], ["cru_shield", "SHIELD"], ["cru_elite", "ELITE"]]
 const OPERATORS := [["phantom", "PHANTOM"], ["havoc", "HAVOC"], ["ghost", "GHOST"]]
 ## A whole C.R.U. squad as a late round sends it.
@@ -51,6 +54,8 @@ var now_playing := ""
 var voice_left := 0.0
 ## Lines waiting to be played one after the other: [speaker, cue, index].
 var queue: Array = []
+## The test pool of the sharks, built the first time it is asked for.
+var pool: SharkPool
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -86,6 +91,9 @@ func end() -> void:
 	voice_left = 0.0
 	now_playing = ""
 	game.skills.open_all = false
+	if is_instance_valid(pool):
+		pool.queue_free()
+	pool = null
 	set_daylight(false)
 	set_slow(1.0)
 	Radio.hijacked = false
@@ -177,6 +185,8 @@ func spots(number: int) -> Array:
 ## Puts `count` enemies of a kind in front of the survivor ("squad": a whole C.R.U. squad,
 ## whatever the count). Returns those that found a place.
 func spawn(kind: String) -> Array:
+	if kind.begins_with("shark"):
+		return spawn_sharks(kind)
 	var kinds: Array = []
 	if kind == "squad":
 		kinds = SQUAD.duplicate()
@@ -210,6 +220,10 @@ func _one(kind: String, at: Vector3) -> Infected:
 		mission.stalker_health = -1.0
 		enemy = game.spawn_stalker(at, "hunt", player)
 		mission.stalker = enemy
+	elif kind == "prowler_elite":
+		# The Prowler as it looks once it has fed (HiveProwler.ELITE_FROM).
+		enemy = game.spawn_enemy("prowler", "prowler_elite")
+		enemy.position = at + Vector3(0, 0.08, 0)
 	else:
 		enemy = game.spawn_enemy(kind)
 		enemy.position = at + Vector3(0, 0.08, 0)
@@ -219,6 +233,39 @@ func _one(kind: String, at: Vector3) -> Infected:
 	if frozen:
 		enemy.set_physics_process(false)
 	return enemy
+
+# ---------------------------------------------------------------- the sharks
+
+## The test pool, built once and kept while the test room runs.
+func shark_pool() -> SharkPool:
+	if not is_instance_valid(pool):
+		pool = SharkPool.new()
+		game.add_child(pool)
+	return pool
+
+## Takes the survivor to the pool's deck, looking out over the water.
+func to_pool() -> void:
+	var where := shark_pool()
+	var player: Survivor = game.player
+	player.global_position = where.arrival
+	player.velocity = Vector3.ZERO
+	player.rotation.y = PI
+	player.camera.rotation.x = -0.25
+
+## Puts `count` sharks of a look into the pool (the survivor is taken there if he is not).
+func spawn_sharks(look: String) -> Array:
+	var where := shark_pool()
+	if game.player.global_position.distance_to(where.arrival) > 40.0:
+		to_pool()
+	var made: Array = []
+	game.wave = strength
+	for i in range(clampi(count, 1, 3)):
+		var shark := Shark.spawn_in(game, where.water, Vector3.INF, look)
+		if shark != null:
+			made.append(shark)
+			if frozen:
+				shark.set_physics_process(false)
+	return made
 
 ## Takes every enemy off the field, without a kill being counted.
 func clear() -> void:

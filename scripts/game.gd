@@ -561,18 +561,13 @@ func _warm_up() -> void:
 	stage.global_position = preview_camera.global_position - preview_camera.global_basis.z * 7.0 - Vector3(0, 1.4, 0)
 	var column := 0
 	for kind in Infected.TYPES:
-		for look in Infected.TYPES[kind].visuals:
+		# (The sharks only live where there is water: they are drawn the first time one comes.)
+		if Infected.TYPES[kind].get("shark", false):
+			continue
+		for look in (Infected.TYPES[kind].visuals as Array) + ((Infected.TYPES[kind].get("rare", {}) as Dictionary).keys()):
 			if look == "ripper" and not ResourceLoader.exists(RipperVisual.SCENE):
 				continue
-			var model: InfectedVisual
-			if look == "ripper":
-				model = RipperVisual.new()
-			elif look == "prowler":
-				model = ProwlerVisual.new()
-			elif Infected.TYPES[kind].get("human", false):
-				model = CruVisual.new()
-			else:
-				model = InfectedVisual.new()
+			var model := Infected.visual_for(look, Infected.TYPES[kind].get("human", false))
 			model.kind = look
 			stage.add_child(model)
 			if model is ProwlerVisual:
@@ -1204,6 +1199,8 @@ static func body_for(kind: String) -> Infected:
 		return Operator.new()
 	if spec.get("prowler", false):
 		return Prowler.new()
+	if spec.get("shark", false):
+		return Shark.new()
 	return CruSoldier.new() if spec.get("human", false) else Infected.new()
 
 ## The infected come out of the gas on the side where the survivors are: through one of

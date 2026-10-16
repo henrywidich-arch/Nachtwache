@@ -97,8 +97,21 @@ const CROWD_LIMIT := 24
 ## Each: the looks (a look listed twice turns up twice as often), and the share of the
 ## plain infected that wear one of them.
 const STAFF := {
-	"above": [["hive_security", "hive_worker", "hive_civilian"], 0.3],
-	"below": [["hive_scientist", "hive_scientist2", "hive_lab", "hive_nurse", "hive_worker", "hive_security", "hive_civilian"], 0.75]
+	"above": [["hive_security", "hive_worker", "hive_civilian", "zombie_soldier"], 0.3],
+	"below": [["hive_scientist", "hive_scientist2", "hive_lab", "hive_nurse", "hive_worker", "hive_security", "hive_civilian", "hive_office", "hive_office2", "hive_lab2", "zombie_soldier"], 0.75]
+}
+## Where a stage is the place of some of these people, their looks come there more often:
+## every look listed here is one more draw beside STAFF's own (the others stay in the mix).
+## The administration is offices, the security centre and the station were guarded by
+## soldiers, the laboratories are the scientists'.
+const STAFF_PLACES := {
+	"station": ["zombie_soldier", "zombie_soldier"],
+	"admin": ["hive_office", "hive_office2", "hive_office", "hive_office2", "hive_office", "hive_office2"],
+	"security": ["zombie_soldier", "zombie_soldier", "zombie_soldier", "hive_security", "hive_security"],
+	"cafe": ["hive_office", "hive_office2"],
+	"labs": ["hive_lab2", "hive_lab2", "hive_lab2", "hive_lab", "hive_lab", "hive_scientist", "hive_scientist2"],
+	"generator": ["hive_lab2", "hive_worker"],
+	"decon": ["hive_lab2", "hive_lab", "hive_nurse"]
 }
 const HOLD_STATION := 80.0
 const HOLD_CAFE := 70.0
@@ -1143,7 +1156,9 @@ func look_for(kind: String) -> String:
 	if kind != "mauler":
 		return ""
 	var staff: Array = STAFF["below" if ORDER.find(stage) >= ORDER.find("terminal") else "above"]
-	return str((staff[0] as Array).pick_random()) if randf() < float(staff[1]) else ""
+	if randf() >= float(staff[1]):
+		return ""
+	return str(((staff[0] as Array) + (STAFF_PLACES.get(stage, []) as Array)).pick_random())
 
 func _spawn(kind: String, at: Vector3) -> Infected:
 	var enemy: Infected = game.spawn_enemy(kind, look_for(kind))

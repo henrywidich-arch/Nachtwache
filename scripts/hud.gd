@@ -1267,6 +1267,11 @@ func _test_enemies(column: VBoxContainer, room: Sandbox) -> void:
 		if str(group[0]) == "C.R.U.":
 			chips.append(_chip("GANZER TRUPP", _test_spawn.bind("squad"), false, 160))
 		_test_row(column, str(group[0]), chips)
+	# The sharks live in water: their buttons take him to the test pool.
+	var sharks: Array = [_chip("ZUM HAIBECKEN", _test_do.bind("pool"), false, 180)]
+	for entry in Sandbox.SHARKS:
+		sharks.append(_chip(str(entry[1]), _test_spawn.bind(str(entry[0])), false, 180))
+	_test_row(column, "HAIBECKEN", sharks)
 	# How many a click brings and how strong they are, side by side.
 	var settings := HBoxContainer.new()
 	settings.add_theme_constant_override("separation", 36)
@@ -1409,6 +1414,8 @@ func _test_do(what: String, arg: String = "") -> void:
 	match what:
 		"clear":
 			room.clear()
+		"pool":
+			room.to_pool()
 		"kit":
 			room.kit()
 		"arsenal":

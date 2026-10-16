@@ -10,6 +10,14 @@ extends RipperVisual
 const MODEL := "res://assets/models/prowler.glb"
 ## The model is three metres long; this is how much of that walks into the game.
 const SIZE := 0.82
+## Its looks. "prowler_elite" is the same animal once it has fed (his model prowlerelite,
+## on the Prowler's own skeleton and clips): a little bigger, spikes all down its back.
+## model: the file; size: as SIZE; head: where the middle of the skull lies from the
+## head joint (metres in the model, before size).
+const LOOKS := {
+	"prowler": {"model": MODEL, "size": SIZE, "head": Vector3(0, -0.06, 0.12)},
+	"prowler_elite": {"model": "res://assets/models/prowler_elite.glb", "size": 0.84, "head": Vector3(0, -0.06, 0.12)}
+}
 ## Ground speed in m/s the gaits are made for at normal playback (the script that makes
 ## the clips carries the same numbers, there for the model at full size).
 const STALK_SPEED := 1.2 * SIZE
@@ -61,7 +69,7 @@ void fragment() {
 }
 """
 
-static var prowler_scene: PackedScene
+static var scenes: Dictionary = {}
 
 ## It walks backwards (springing back from its prey): the gait runs the other way round.
 var backwards := false
@@ -76,24 +84,38 @@ var charging := false
 var neck_bones: Array[int] = []
 var enraged := false
 var rage := 0.0
+## How big this look walks into the game (LOOKS), and where its skull lies from its head joint
+## (in the joint's own space: the middle of the skin that moves with the head alone).
+var size := SIZE
+var skull := Vector3(0, -0.06, 0.12)
+## That middle, worked out once per look.
+static var skulls: Dictionary = {}
 var glow: ShaderMaterial
 var steam: CPUParticles3D
 var ember: OmniLight3D
 
-static func body_scene() -> PackedScene:
-	if prowler_scene == null:
-		prowler_scene = load(MODEL) as PackedScene
-	return prowler_scene
+static func body_scene(look_name: String = "prowler") -> PackedScene:
+	var path: String = (LOOKS.get(look_name, LOOKS.prowler) as Dictionary).model
+	if not scenes.has(path):
+		scenes[path] = load(path) as PackedScene
+	return scenes[path]
+
+## The half turn's pivot behind the middle of the body, for this look.
+func haunch() -> float:
+	return HAUNCH * size / SIZE
 
 func _ready() -> void:
-	model_scale = SIZE
+	var look: Dictionary = LOOKS.get(kind, LOOKS.prowler)
+	size = float(look.size)
+	skull = look.head
+	model_scale = size
 	holder = Node3D.new()
 	holder.name = "Model"
 	# The model faces +Z; characters in this game face -Z.
 	holder.rotation.y = PI
-	holder.scale = Vector3.ONE * SIZE
+	holder.scale = Vector3.ONE * size
 	add_child(holder)
-	var imported := body_scene().instantiate() as Node3D
+	var imported := body_scene(kind).instantiate() as Node3D
 	holder.add_child(imported)
 	skeleton = _find(imported, "Skeleton3D") as Skeleton3D
 	mesh_instance = _find(imported, "MeshInstance3D") as MeshInstance3D
@@ -104,6 +126,9 @@ func _ready() -> void:
 		if player.has_animation(clip):
 			player.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 	head_bone = skeleton.find_bone("Bone_019")
+	if not skulls.has(kind):
+		skulls[kind] = skull_from_skin(skeleton, mesh_instance, head_bone, skull)
+	skull = skulls[kind]
 	for bone_name in ["Bone_006", "Bone_005", "Bone_004"]:
 		var index := skeleton.find_bone(bone_name)
 		if index >= 0:
@@ -140,16 +165,16 @@ func animate(delta: float, speed: float) -> void:
 			wanted = "pin"
 		elif charging and speed > 2.0:
 			wanted = "charge"
-			rate = clampf(speed / GALLOP_SPEED, 0.9, 1.9)
+			rate = clampf(speed / (GALLOP_SPEED * size / SIZE), 0.9, 1.9)
 		elif speed > (RUN_FROM - 0.6 if gait == "run" else RUN_FROM) and not backwards:
 			wanted = "run"
-			rate = clampf(speed / GALLOP_SPEED, 0.7, 1.45)
+			rate = clampf(speed / (GALLOP_SPEED * size / SIZE), 0.7, 1.45)
 		elif speed > (TROT_FROM - 0.4 if gait == "trot" else TROT_FROM):
 			wanted = "trot"
-			rate = clampf(speed / TROT_SPEED, 0.6, 2.3)
+			rate = clampf(speed / (TROT_SPEED * size / SIZE), 0.6, 2.3)
 		elif speed > 0.3:
 			wanted = "stalk"
-			rate = clampf(speed / STALK_SPEED, 0.5, 2.0)
+			rate = clampf(speed / (STALK_SPEED * size / SIZE), 0.5, 2.0)
 		elif absf(turn_rate) > (0.35 if gait.begins_with("turn") else 0.7):
 			# On the spot it steps round: the clip is made for TURN_SPEED, and played as fast as it turns.
 			wanted = "turn_l" if turn_rate > 0.0 else "turn_r"
@@ -264,9 +289,52 @@ func set_buffed(_on: bool) -> void:
 func head_position() -> Vector3:
 	if head_bone < 0:
 		return global_position + Vector3(0, 1.0, 0)
-	# The joint sits at the back of the skull; the skull itself lies in front of it.
+	# The joint sits at the back of the skull; the skull itself lies in front of it, and turns
+	# with it (a bite, the head low over its prey).
 	var pose := skeleton.get_bone_global_pose(head_bone)
-	return skeleton.global_transform * (pose.origin + Vector3(0, -0.06, 0.12))
+	return skeleton.global_transform * (pose * skull)
+
+## The middle of the skin that only the head joint moves, in that joint's own space; the
+## fallback (an offset in the skeleton's space at rest) when the mesh says nothing.
+static func skull_from_skin(skel: Skeleton3D, body: MeshInstance3D, bone: int, fallback: Vector3) -> Vector3:
+	var rest := skel.get_bone_global_rest(bone)
+	var guess := rest.affine_inverse() * (rest.origin + fallback)
+	if body == null or body.mesh == null or body.skin == null or bone < 0:
+		return guess
+	var arrays := body.mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var bones: PackedInt32Array = arrays[Mesh.ARRAY_BONES]
+	var weights: PackedFloat32Array = arrays[Mesh.ARRAY_WEIGHTS]
+	if verts.is_empty() or bones.size() < verts.size():
+		return guess
+	var per := bones.size() / verts.size()
+	# The skull is what the head joint and the joints below it (the jaw, the throat) move;
+	# its middle, at rest, in the head joint's own space.
+	var bind := -1
+	var in_head: Array[bool] = []
+	for i in range(body.skin.get_bind_count()):
+		var which := body.skin.get_bind_bone(i)
+		if which < 0:
+			which = skel.find_bone(body.skin.get_bind_name(i))
+		if which == bone:
+			bind = i
+		var up := which
+		while up >= 0 and up != bone:
+			up = skel.get_bone_parent(up)
+		in_head.append(up == bone)
+	if bind < 0:
+		return guess
+	var sum := Vector3.ZERO
+	var count := 0
+	for v in range(verts.size()):
+		var share := 0.0
+		for k in range(per):
+			if in_head[bones[v * per + k]]:
+				share += weights[v * per + k]
+		if share >= 0.95:
+			sum += body.skin.get_bind_pose(bind) * verts[v]
+			count += 1
+	return sum / count if count >= 20 else guess
 
 ## The last fight: its veins glow through the hide, it steams, and the ground under it is lit.
 func set_enraged(on: bool) -> void:

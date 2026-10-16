@@ -13,6 +13,19 @@ the ground (two-bone IK), so that a paw that stands does not slide. One GLB come
       [--tris 30000] [--tex 2048] [--no-export] [--fresh]
       [--jawtest]          with --review: four close views of the head, to see which joint opens the mouth
 
+Another body on the same skeleton (the elite look, his prowlerelite.glb, which comes without one):
+
+  blender --background --factory-startup --python tools/blender_rig_prowler.py -- \
+      --src "D:/Games/AI Games/Nachtwache/zombies_otherCHARS/MutantElite.glb" --body <prep.blend> --maps <folder> \
+      --marks <marks.json> --out assets/models/prowler_elite.glb [--work <folder>] [--review <folder>]
+
+  --body   the new body, prepared by the model workshop's p4_prepare.py (reduced, new UVs, maps baked over from
+           the untouched mesh: bake_diffuse.png, bake_metallic_roughness.png, bake_normal.png in --maps)
+  --marks  pairs of points [[x, y, z] on the Prowler, [x, y, z] where that lies on the new body] (Blender space):
+           a smooth warp of space through them (thin-plate) carries every joint of the skeleton into the new body,
+           and carries the Prowler's skin with it, from which the new body takes its weights. Then the clips are
+           made exactly as for the Prowler: the legs reach for the ground from where the new paws rest.
+
 The animal looks along -Y in Blender (+Z in the game's file), its left side is +X.
 Ground speeds the gaits are made for (scripts/prowler_visual.gd carries the same numbers):
 stalk 1.2 m/s, trot 4.0 m/s, run 8.5 m/s. Turning on the spot (turn_l, turn_r) is made for 150
@@ -24,7 +37,8 @@ import numpy as np
 from mathutils import Vector, Quaternion
 
 FPS = 60
-OPT = {"src": None, "out": None, "work": None, "review": None, "only": None, "tris": "30000", "tex": "2048"}
+OPT = {"src": None, "out": None, "work": None, "review": None, "only": None, "tris": "30000", "tex": "2048",
+       "body": None, "maps": None, "marks": None}
 FLAGS = set()
 
 
@@ -91,6 +105,156 @@ def prepare(src, tris, tex):
     return arm, obj
 
 
+# ------------------------------------------------------------------------------------------------ another body
+class Warp:
+    """A smooth map of space through pairs of points (thin-plate spline, kernel |r|, with an affine part)."""
+
+    def __init__(self, pairs):
+        a = np.array([p[0] for p in pairs], dtype=np.float64)
+        b = np.array([p[1] for p in pairs], dtype=np.float64)
+        n = len(a)
+        K = np.linalg.norm(a[:, None, :] - a[None, :, :], axis=2)
+        P = np.hstack([np.ones((n, 1)), a])
+        M = np.zeros((n + 4, n + 4))
+        M[:n, :n] = K + np.eye(n) * 1e-6
+        M[:n, n:] = P
+        M[n:, :n] = P.T
+        rhs = np.zeros((n + 4, 3))
+        rhs[:n] = b
+        sol = np.linalg.solve(M, rhs)
+        self.a, self.w, self.affine = a, sol[:n], sol[n:]
+        err = np.abs(self.map(a) - b).max()
+        log("warp through %d pairs, largest miss %.5f m" % (n, err))
+
+    def map(self, pts):
+        pts = np.atleast_2d(np.asarray(pts, dtype=np.float64))
+        K = np.linalg.norm(pts[:, None, :] - self.a[None, :, :], axis=2)
+        return K @ self.w + np.hstack([np.ones((len(pts), 1)), pts]) @ self.affine
+
+    def point(self, v):
+        return Vector(self.map([tuple(v)])[0])
+
+
+def refit(src, body, maps, marks, tex):
+    """The Prowler's skeleton in another body: its joints warped into it, its skin weights taken over."""
+    import json
+    global PIVOT
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.import_scene.gltf(filepath=src)
+    arm, old = find_objects()
+    for o in list(bpy.data.objects):
+        if o not in (arm, old):
+            bpy.data.objects.remove(o, do_unlink=True)
+    with bpy.data.libraries.load(body, link=False) as (src_data, dst_data):
+        dst_data.objects = [n for n in src_data.objects]
+    new = None
+    for o in dst_data.objects:
+        if o is None:
+            continue
+        if o.type == "MESH" and not o.name.endswith("_closed") and new is None:
+            new = o
+            bpy.context.scene.collection.objects.link(o)
+    with open(marks) as f:
+        pairs = json.load(f)["pairs"]
+    warp = Warp(pairs)
+    # the joints
+    bpy.context.view_layer.objects.active = arm
+    arm.select_set(True)
+    bpy.ops.object.mode_set(mode="EDIT")
+    for eb in arm.data.edit_bones:
+        head, tail = warp.point(eb.head), warp.point(eb.tail)
+        roll = eb.roll
+        eb.head, eb.tail = head, tail
+        eb.roll = roll
+    bpy.ops.object.mode_set(mode="OBJECT")
+    PIVOT = warp.point(PIVOT)
+    log("pivot of the trunk now", tuple(round(v, 3) for v in PIVOT))
+    # the old skin, warped into the new body, hands over its weights
+    co = np.array([v.co[:] for v in old.data.vertices])
+    moved = warp.map(co)
+    old.data.vertices.foreach_set("co", moved.astype(np.float32).reshape(-1))
+    old.data.update()
+    for m in list(old.modifiers):
+        old.modifiers.remove(m)
+    old.parent = None
+    new.vertex_groups.clear()
+    for vg in old.vertex_groups:
+        new.vertex_groups.new(name=vg.name)
+    bpy.ops.object.select_all(action="DESELECT")
+    bpy.context.view_layer.objects.active = new
+    new.select_set(True)
+    dt = new.modifiers.new("take", "DATA_TRANSFER")
+    dt.object = old
+    dt.use_vert_data = True
+    dt.data_types_verts = {"VGROUP_WEIGHTS"}
+    dt.vert_mapping = "POLYINTERP_NEAREST"
+    dt.layers_vgroup_select_src = "ALL"
+    dt.layers_vgroup_select_dst = "NAME"
+    bpy.ops.object.modifier_apply(modifier=dt.name)
+    # four influences at most, normalised; the bones that do not deform keep nothing
+    names = [vg.name for vg in new.vertex_groups]
+    deform = {b.name for b in arm.data.bones if b.use_deform}
+    me = new.data
+    W = np.zeros((len(me.vertices), len(names)))
+    for v in me.vertices:
+        for g in v.groups:
+            if names[g.group] in deform:
+                W[v.index, g.group] = g.weight
+    order = np.argsort(-W, axis=1)
+    keep = np.zeros_like(W, dtype=bool)
+    np.put_along_axis(keep, order[:, :4], True, axis=1)
+    W = np.where(keep & (W > 0.003), W, 0.0)
+    lost = W.sum(axis=1) < 1e-6
+    W[lost, names.index(ROOT)] = 1.0
+    W /= W.sum(axis=1, keepdims=True)
+    for j, n in enumerate(names):
+        vg = new.vertex_groups[n]
+        vg.remove(list(range(len(me.vertices))))
+        idx = np.nonzero(W[:, j] > 0.0)[0]
+        for vi in idx:
+            vg.add([int(vi)], float(W[vi, j]), "REPLACE")
+    log("weights taken over: %d vertices, %d had none and went to the root" % (len(me.vertices), int(lost.sum())))
+    bpy.data.objects.remove(old, do_unlink=True)
+    mod = new.modifiers.new("Armature", "ARMATURE")
+    mod.object = arm
+    new.parent = arm
+    new.matrix_parent_inverse = arm.matrix_world.inverted()
+    # its maps
+    mat = bpy.data.materials.new("prowler")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    bsdf = next(n for n in nt.nodes if n.type == "BSDF_PRINCIPLED")
+
+    def image(name, non_color):
+        node = nt.nodes.new("ShaderNodeTexImage")
+        img = bpy.data.images.load(os.path.join(maps, name))
+        if non_color:
+            img.colorspace_settings.name = "Non-Color"
+        if img.size[0] > tex:
+            img.scale(tex, tex)
+        img.pack()
+        node.image = img
+        return node
+    col = image("bake_diffuse.png", False)
+    nt.links.new(col.outputs["Color"], bsdf.inputs["Base Color"])
+    mr = image("bake_metallic_roughness.png", True)
+    sep = nt.nodes.new("ShaderNodeSeparateColor")
+    nt.links.new(mr.outputs["Color"], sep.inputs["Color"])
+    nt.links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
+    nt.links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
+    nrm = image("bake_normal.png", True)
+    nm = nt.nodes.new("ShaderNodeNormalMap")
+    nt.links.new(nrm.outputs["Color"], nm.inputs["Color"])
+    nt.links.new(nm.outputs["Normal"], bsdf.inputs["Normal"])
+    me.materials.clear()
+    me.materials.append(mat)
+    new.name = "Prowler"
+    me.name = "Prowler"
+    arm.name = "ProwlerRig"
+    log("new body: %d triangles, %d vertices" % (sum(len(p.vertices) - 2 for p in me.polygons), len(me.vertices)))
+    return arm, new
+
+
 # ------------------------------------------------------------------------------------------------ the skeleton
 def B(n):
     return "Bone_%03d" % n
@@ -114,6 +278,9 @@ HIND = {
 }
 PIVOT = Vector((0.0, 0.1, 1.15))      # middle of the trunk: whole-body moves turn about it
 PAW = {}                              # FL, FR, HL, HR: where the paw rests (x, y), filled in by Rig
+# A body that was made standing unevenly (the elite: one forepaw 17 cm ahead of the other) walks on even paws: every
+# paw is moved to the mean place of its pair, mirrored (set by refit; world space, added to every place it reaches).
+EVEN = {}
 
 
 def rx(deg):
@@ -213,6 +380,16 @@ class Rig:
         for side in ("L", "R"):
             PAW["F" + side] = self.head[FORE[side]["hand"]].to_2d()
             PAW["H" + side] = self.head[HIND[side]["foot"]].to_2d()
+        if "even" in FLAGS or OPT["body"]:
+            for end in ("F", "H"):
+                left, right = PAW[end + "L"], PAW[end + "R"]
+                x = (abs(left.x) + abs(right.x)) * 0.5
+                y = (left.y + right.y) * 0.5
+                for side, sign in (("L", 1.0), ("R", -1.0)):
+                    rest = PAW[end + side]
+                    EVEN[end + side] = Vector((sign * x - rest.x, y - rest.y, 0.0))
+                    PAW[end + side] = Vector((sign * x, y))
+                    log("paw %s%s moved by (%.3f, %.3f) to stand even" % (end, side, EVEN[end + side].x, EVEN[end + side].y))
 
     def solve(self, P):
         G, pos = {}, {}
@@ -254,7 +431,7 @@ class Rig:
         base = G[self.parent[b]]
         wrist0 = self.head[c["hand"]]
         elbow0 = self.head[c["fore"]]
-        off = Vector((L.off.x * s, L.off.y, L.off.z))
+        off = Vector((L.off.x * s, L.off.y, L.off.z)) + EVEN.get("F" + side, Vector((0.0, 0.0, 0.0)))
         carried = pos[CHEST] + G[CHEST] @ (wrist0 + off - self.head[CHEST])
         target = carried.lerp(wrist0 + off, L.plant)
         flat = G[CHEST].slerp(Quaternion(), L.plant)
@@ -280,7 +457,7 @@ class Rig:
         ball0 = self.head[c["foot"]]
         hock0 = self.head[c["meta"]]
         knee0 = self.head[c["shin"]]
-        off = Vector((L.off.x * s, L.off.y, L.off.z))
+        off = Vector((L.off.x * s, L.off.y, L.off.z)) + EVEN.get("H" + side, Vector((0.0, 0.0, 0.0)))
         carried = pos[ROOT] + G[ROOT] @ (ball0 + off - self.head[ROOT])
         ball = carried.lerp(ball0 + off, L.plant)
         flat = G[ROOT].slerp(Quaternion(), L.plant)
@@ -1146,7 +1323,9 @@ def main():
     parse_args()
     work = OPT["work"]
     base = os.path.join(work, "prowler_base.blend") if work else None
-    if base and os.path.exists(base) and "fresh" not in FLAGS:
+    if OPT["body"]:
+        arm, obj = refit(OPT["src"], OPT["body"], OPT["maps"], OPT["marks"], int(OPT["tex"]))
+    elif base and os.path.exists(base) and "fresh" not in FLAGS:
         bpy.ops.wm.open_mainfile(filepath=base)
         arm, obj = find_objects()
         log("reduced model taken from", base)
