@@ -3344,9 +3344,9 @@ func _hive_staff(game: Node3D) -> void:
 		one.set_physics_process(false)
 		seen[one.model.kind] = int(seen.get(one.model.kind, 0)) + 1
 		maulers = maulers and one.kind == "mauler" and one.spec == Infected.TYPES.mauler and is_equal_approx(one.max_health, 95.0 + 7.0 * 7.0) and one.model.skeleton.get_bone_count() >= 22 and not one.alert
-		if one.model.kind == "hive_lab":
+		if Infected.FEMALE_LOOKS.has(one.model.kind):
 			woman = woman and str(one.voices.death) == "death_female"
-		elif one.model.kind != "mauler_female":
+		else:
 			woman = woman and str(one.voices.death) == "death"
 		_take_off(game, one)
 	var in_staff := 0
@@ -3368,15 +3368,16 @@ func _hive_staff(game: Node3D) -> void:
 	var lies: bool = staff_below.has(fallen.model.kind) and fallen.dead and game.kills == kills_then + 1 and fallen.model.dying and fallen.model.player.current_animation.begins_with("death")
 	hive.stage = stage_before
 	expect(maulers and woman and in_staff >= 16 and seen.size() >= 5 and lies, "In the facility the director's plain infected are Maulers in every number, %d of 40 in the clothes of the staff (%d looks seen); the woman of the laboratory has a woman's voice, and one of them falls like any other" % [in_staff, seen.size()])
-	# On the farm nothing changes: a Mauler there wears one of the five looks it always had.
-	var old: Array = Infected.TYPES.mauler.visuals
+	# On the farm nothing changes: a Mauler there wears one of the five looks it always had
+	# (or, now and then, the soldier's: see _figures).
+	var old: Array = (Infected.TYPES.mauler.visuals as Array) + (Infected.TYPES.mauler.rare as Dictionary).keys()
 	var farm := true
 	for i in range(40):
 		var one: Infected = game.spawn_enemy("mauler")
 		one.set_physics_process(false)
 		farm = farm and old.has(one.model.kind)
 		_take_off(game, one)
-	expect(farm and old == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"], "On the farm the plain infected look as they always did")
+	expect(farm and Infected.TYPES.mauler.visuals == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"] and old.size() == 6, "On the farm the plain infected look as they always did, and now and then like a soldier")
 	_wipe_all(game)
 	await wait(0.5)
 
