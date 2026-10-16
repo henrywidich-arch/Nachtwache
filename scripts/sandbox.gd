@@ -44,6 +44,12 @@ var count := 1
 var strength := 5
 var daylight := true
 var slow := 1.0
+## For looking at a place: `flat` - no shadows and an even light everywhere, no fog;
+## `bare` - the HUD and the weapon out of the picture while the menu is closed (F1 brings
+## both back with the menu).
+var flat := false
+var bare := false
+var look_left := 0.0
 ## Coleman's lines as they sound once Nadja is out of her room.
 var hijack := false
 ## What the menu shows: its tab, and whose lines.
@@ -106,6 +112,7 @@ func end() -> void:
 	Radio.hijacked = false
 
 func _process(delta: float) -> void:
+	_keep_look(delta)
 	if not on or not game.is_playing() or get_tree().paused:
 		return
 	# One line after the other.
@@ -435,6 +442,57 @@ func set_daylight(bright: bool) -> void:
 	daylight = bright
 	(game.cabin as CabinMap).set_daylight(bright)
 	game.sounds.dry = bright
+
+func set_flat(value: bool) -> void:
+	flat = value
+	look_left = 0.0
+	_keep_look(0.0)
+
+func set_bare(value: bool) -> void:
+	bare = value
+	_keep_look(0.0)
+
+## Holds both switches - lights and places built later (a visit) get them as well - and
+## puts everything back as it was once they are off or the test room is left.
+func _keep_look(delta: float) -> void:
+	var flat_now := flat and on
+	look_left -= delta
+	if look_left <= 0.0:
+		look_left = 0.5
+		for node in get_tree().root.find_children("*", "Light3D", true, false):
+			var lamp := node as Light3D
+			if flat_now:
+				if not lamp.has_meta("look_shadow"):
+					lamp.set_meta("look_shadow", lamp.shadow_enabled)
+				lamp.shadow_enabled = false
+			elif lamp.has_meta("look_shadow"):
+				lamp.shadow_enabled = bool(lamp.get_meta("look_shadow"))
+				lamp.remove_meta("look_shadow")
+		for node in get_tree().root.find_children("*", "WorldEnvironment", true, false):
+			var world := node as WorldEnvironment
+			if world.environment == null:
+				continue
+			var sky := world.environment
+			if flat_now and not world.has_meta("look_env"):
+				world.set_meta("look_env", [sky.ambient_light_source, sky.ambient_light_color, sky.ambient_light_energy, sky.fog_enabled, sky.volumetric_fog_enabled])
+				sky.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+				sky.ambient_light_color = Color(0.85, 0.85, 0.85)
+				sky.ambient_light_energy = 1.2
+				sky.fog_enabled = false
+				sky.volumetric_fog_enabled = false
+			elif not flat_now and world.has_meta("look_env"):
+				var kept: Array = world.get_meta("look_env")
+				sky.ambient_light_source = int(kept[0])
+				sky.ambient_light_color = kept[1]
+				sky.ambient_light_energy = float(kept[2])
+				sky.fog_enabled = bool(kept[3])
+				sky.volumetric_fog_enabled = bool(kept[4])
+				world.remove_meta("look_env")
+	var hidden: bool = bare and on and game.state == "playing" and str(game.overlay) == ""
+	if game.hud != null:
+		game.hud.visible = not hidden
+	if game.player != null and is_instance_valid(game.player.weapon):
+		game.player.weapon.visible = not hidden
 
 func set_slow(scale: float) -> void:
 	slow = scale

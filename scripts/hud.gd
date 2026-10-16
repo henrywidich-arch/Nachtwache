@@ -1361,6 +1361,11 @@ func _test_world(column: VBoxContainer, room: Sandbox) -> void:
 	for pace in Sandbox.SLOW:
 		light.append(_chip("TEMPO  %d %%" % int(round(float(pace) * 100.0)), _test_set.bind("slow", pace), is_equal_approx(room.slow, float(pace)), 150))
 	_test_row(column, "LICHT UND ZEIT", light)
+	# For looking at a place and taking pictures of it.
+	_test_row(column, "ZUM ANSEHEN", [
+		_chip("SCHATTEN & NEBEL AUS  ·  %s" % ("AN" if room.flat else "AUS"), _test_set.bind("flat", not room.flat), room.flat, 300),
+		_chip("HUD & WAFFE AUSBLENDEN  ·  %s" % ("AN" if room.bare else "AUS"), _test_set.bind("bare", not room.bare), room.bare, 300)])
+	_text(column, "Mit ausgeblendetem HUD bringt F1 das Menü und alles andere zurück.", 13)
 	var places: Array = []
 	for entry in Sandbox.PLACES:
 		places.append(_chip(str(entry[0]), _test_do.bind("jump", str(entry[1])), false, 150))
@@ -1408,6 +1413,10 @@ func _test_set(what: String, value: Variant) -> void:
 			room.set_daylight(bool(value))
 		"slow":
 			room.set_slow(float(value))
+		"flat":
+			room.set_flat(bool(value))
+		"bare":
+			room.set_bare(bool(value))
 		"hijack":
 			room.hijack = bool(value)
 		"speaker":
