@@ -1,0 +1,175 @@
+{
+  "bark": {
+    "intro": {
+      "raven": ["Focus. Both of you.", "Less talk. More breathing.", "Engines are loud enough already. Do not add to it."],
+      "scorpion": ["Easy for you to say. Nothing ever bothers you.", "Hanging over a drop zone full of who knows what? I am allowed to complain.", "Since when do you give advice? Fine. I will behave."],
+      "viper": ["Nobody asked for opinions. Check your gear.", "Complain quietly. We are almost over the target.", "Because we all come back. Stay sharp, both of you."]
+    },
+    "rope": {
+      "raven": ["Sliding.", "Rope is steady. I am off.", "Over the edge."],
+      "scorpion": ["Here goes nothing!", "My knees hate ropes. Going anyway.", "Last one down buys the drinks."],
+      "viper": ["Hands tight, speed steady. Go.", "Smooth and quiet. Follow me down.", "Nobody is last. Move, move."]
+    },
+    "m2_arrived": {
+      "raven": ["Same rot as the farm. More of it.", "Quiet. The wrong kind of quiet.", "I know this smell."],
+      "scorpion": ["Feels like the whole building has caught something.", "Somebody forgot to lock up, then forgot to live.", "Yeah. Bad memories, bigger building."],
+      "viper": ["No sentries, no alarms. Eyes open, everyone.", "Nobody left to question. Stay in formation.", "Then you know what to expect. Stay close, weapons up."]
+    },
+    "m2_atrium": {
+      "raven": ["Every balcony is a firing position.", "Open floor. Open grave.", "Look up. Then look up again."],
+      "scorpion": ["Big room. Big echo. Big problem.", "Heh. You could park a train in here.", "My neck hurts already."],
+      "viper": ["Use the pillars. Cross one at a time.", "Stick to the edges. Keep your heads moving.", "Good. That means you are looking. Move along the wall."]
+    },
+    "m2_betrayed": {
+      "raven": ["Nobody should be surprised.", "Too grateful. Too soon.", "Lesson learned."],
+      "scorpion": ["All that crying back at the farm! I even felt sorry for her!", "Heh. She played us like a piano, and we sang along.", "I will give her a lesson, all right."],
+      "viper": ["Save the anger for when we have her. Move.", "Then she answers for it. We go on.", "Steady. She has answers, and we need them. Together, now."]
+    },
+    "m2_bought": {
+      "raven": ["Hired guns. They die like the rest.", "Money buys loyalty. Not skill.", "Paid to die. They will manage."],
+      "scorpion": ["Hired guns, huh? Do they get a dental plan?", "Somebody is getting rich off our funeral. I take that personally.", "Ha! Maybe I should have asked for hazard pay."],
+      "viper": ["Expect fire from behind. Cover the entrances.", "Contact will come from the rear. Hold the doors.", "Stay alert. Professionals stay quiet until they shoot."]
+    },
+    "m2_colonel": {
+      "raven": ["That other voice was hers.", "Her trick. Not his.", "Good. A real voice."],
+      "scorpion": ["Hold on. If that was not him, who was giving us orders?", "I feel stupid. Who else feels stupid? I feel stupid.", "Finally, somebody who did not lie to us. Right, sir?"],
+      "viper": ["Colonel, it is good to hear the real you. Fireteam is listening.", "Colonel, glad you are safe. We have a lot to tell you.", "Colonel, welcome back. Your orders, sir."]
+    },
+    "m2_down": {
+      "raven": ["Down is where the answers are.", "No other way.", "Fine. I like the dark."],
+      "scorpion": ["Down, down, and more down. I should have been a mole.", "Great. More basements.", "Of course you do."],
+      "viper": ["In order, and quickly. Watch the one behind you.", "Tight formation. Move.", "Fewer jokes, more steps. Go."]
+    },
+    "m2_land": {
+      "raven": ["Let them thin each other out.", "Not our problem. Yet.", "They fight well. For a while."],
+      "scorpion": ["Look at those poor guys. Nice villa, rough night for the staff.", "Heh. Somebody has a party going wrong.", "I almost feel bad. Almost."],
+      "viper": ["Do not count on them. Stay sharp.", "Move to cover. We take what is left.", "We lend a hand where we can. Weapons up, spread out."]
+    },
+    "m2_locked": {
+      "raven": ["Good. A place to aim from.", "Boxed in means they come one way.", "Breathe. They are not through yet."],
+      "scorpion": ["Boxed in again! Why is it always boxed in?", "Locked in with a horde. This is my kind of party.", "Nowhere to run, nowhere to hide. So, you know. Fine."],
+      "viper": ["Wall at your back. Fire at what shows.", "Hold your sectors. The lockdown will lift.", "Together. We hold, and we all walk out."]
+    },
+    "m2_mirror": {
+      "raven": ["Doctor. Faster.", "Any time now, Doctor.", "Work, Doctor. We are watching."],
+      "scorpion": ["Mirror, door, secret lab. Predictable.", "I was hoping for a normal door. Ha, no.", "Heh. I will check my hair while we wait."],
+      "viper": ["Take the flanks. Protect the doctor while she works.", "Watch the corridor. Give the doctor room.", "Guard her back. She gets us through."]
+    },
+    "m2_offices": {
+      "raven": ["Nobody clocked out.", "Desks, blood, silence.", "Hard shift."],
+      "scorpion": ["Heh. Monday was rough.", "Remind me never to take an office job.", "Overtime nobody signed up for."],
+      "viper": ["Doors. Check each one before you pass.", "Move along the wall. Clear every room.", "Quiet steps. Something may still be at its desk."]
+    },
+    "m2_operators": {
+      "raven": ["I have them in my sights.", "Give me a reason.", "Trust, but only through a scope."],
+      "scorpion": ["These are the freaks that hunted us! And now we talk?", "You are joking. Right? Tell me you are joking.", "Fine, fine. I will be nice. Barely."],
+      "viper": ["Weapons low. Let them speak first.", "We need what they know. Steady.", "Easy. Nobody fires until I say so."]
+    },
+    "m2_stairs": {
+      "raven": ["Cold air from below.", "No end in sight.", "I do not like what I hear."],
+      "scorpion": ["Stairs, more stairs. Who builds like this?", "My knees filed a complaint already.", "That is just the stairs. I think."],
+      "viper": ["Flashlights on. One step behind me.", "Pace yourselves. Light the steps ahead.", "Weapons ready, eyes ahead. Together."]
+    },
+    "m2_stand": {
+      "raven": ["Every shot counts now.", "They will have to climb over me.", "Stay alive. I mean it."],
+      "scorpion": ["Last stand, last bullets, last jokes. Let us make them good.", "Here they come! Boom, boom, and boom again!", "From you? Heh. Never thought I would hear that."],
+      "viper": ["The lift is called. Hold the line until it comes.", "This is the position. Nobody leaves it.", "Hold together. We leave together."]
+    },
+    "m2_station": {
+      "raven": ["A whole railway. Hidden.", "Rails lead somewhere. Nowhere good.", "Quiet place for a station."],
+      "scorpion": ["Who needs a garage when you can have a subway?", "Do they sell tickets? I would like to complain.", "Heh. Mind the gap. Mind everything else too."],
+      "viper": ["Platform first. Check behind the pillars.", "Spread out along the edge. Look behind every column.", "Slow and wide. Nothing gets by us."]
+    },
+    "m2_stay": {
+      "raven": ["Go. I will cover your back from here.", "One scream is enough. I am listening.", "Come back in one piece."],
+      "scorpion": ["You trust them? Fine. Your funeral... I mean, your call.", "Heh. Take care. If they bite, bite back.", "Go on, hero. Try not to die. I would miss the complaints."],
+      "viper": ["We keep the tunnel. You go on with them. Stay alert.", "The tunnel is ours. Move with them, and trust your instincts.", "We have the tunnel. They have your back, for now. Go."]
+    },
+    "m2_tanks": {
+      "raven": ["Something floats in there.", "They are still alive.", "Do not wake it."],
+      "scorpion": ["Nope. Not looking. I am not looking.", "Great. Aquariums. Hands in your pockets, everybody.", "If one of them waves at me, I am going home."],
+      "viper": ["Eyes forward. Walk, do not stop.", "No contact. Pass through, stay quiet.", "Smooth and steady. Keep your distance from the glass."]
+    },
+    "m2_train": {
+      "raven": ["Ready when it moves.", "I have a bad feeling about this ride.", "Quiet on the rails. Too quiet."],
+      "scorpion": ["Next stop, probably my funeral.", "All aboard the screaming express.", "If this thing has a dining car, I am not eating anything."],
+      "viper": ["Magazine in, safety off. We go in prepared.", "Spread through the carriage. Stay ready.", "Quick check, everyone. Then we ride."]
+    },
+    "m2_villa": {
+      "raven": ["Empty halls. The wrong kind of empty.", "Rich people. Dead rich people.", "Somebody paid dearly for this."],
+      "scorpion": ["All this marble and nobody home. Weird.", "I could get used to this. If it had fewer corpses.", "Heh. Wipe your feet, everybody."],
+      "viper": ["Clear each room. The doctor stays between us.", "Stay tight with the doctor. Doors one at a time.", "Calm and methodical. Keep the doctor in the middle."]
+    },
+    "m2_water": {
+      "raven": ["Ripples. No wind.", "Watch the surface.", "Something is looking at us."],
+      "scorpion": ["Wonderful. Something is swimming in my bath.", "Wet boots, wet pants, wet mood.", "I hate water. Water is just slow drowning."],
+      "viper": ["Easy steps. Make no splash.", "Keep it slow, and stay out of the deep part.", "Quiet now. Move as one."]
+    },
+    "m2_crash": {
+      "viper": ["Brace! Brace!", "Hang on, everyone!", "Impact! Cover your heads!"],
+      "scorpion": ["Hold on to something!", "This is going to hurt!", "Hold on, hold on, hold on!"],
+      "raven": ["Down!", "Get low.", "Hit the floor."]
+    },
+    "m2_crash_after": {
+      "viper": ["Everyone alive? Report. Then to the emergency exit, past the wreck.", "Count off. Good. The emergency exit is along the tunnel wall. Go.", "Status, now. Anyone hurt? Walk it off, and follow me to the exit."],
+      "scorpion": ["Alive. Technically. My back disagrees.", "Worst train ride of my life. And I have had some.", "I would give that driver one star."],
+      "raven": ["The engine is burning. We should not be here when it goes.", "Fire, wreck, darkness. Typical.", "Whoever drove this is dead. Or watching."]
+    },
+    "m2_sector_c": {
+      "viper": ["Sector C. Spread out. Weapons ready.", "Hold position. Scan the platform before we move.", "Slow forward. Check every corner."],
+      "scorpion": ["Welcome to the quiet part. I hate the quiet part.", "Cozy. Somebody left the lights on, at least. Barely.", "Nobody here. I am almost insulted."],
+      "raven": ["Nothing moves. That is the problem.", "Dim light. Long shadows. Good for them.", "They are here. They are just waiting."]
+    },
+    "m2_decon": {
+      "viper": ["Hold your breath. The cycle takes seconds.", "Mouths closed. Eyes shut if you can.", "Stay calm. Let the cycle run."],
+      "scorpion": ["A shower with no soap and a lot of trust issues.", "Finally, a bath. Do I get a towel?", "Smells like a swimming pool and regret."],
+      "raven": ["I do not like being sealed in.", "Locked gate. Spray on. Bad combination.", "I count the seconds. I do not like it."]
+    },
+    "m2_lift_in": {
+      "viper": ["Everybody in. Close up.", "In, in, doors closing. Weapons ready.", "Tight and steady. Watch the doors."],
+      "scorpion": ["Please let there be music. Even bad lift music.", "If this thing stops between floors, I am blaming all of you.", "I love lifts. Nothing awkward about a crowded lift."],
+      "raven": ["Small box. One way out.", "Old cable. Heavy load.", "Do not talk. Just breathe."]
+    },
+    "m2_lift_out": {
+      "viper": ["Move out. Fast, fan out.", "Doors are open. Weapons up, go.", "Out, and spread. Cover the exits."],
+      "scorpion": ["End of the ride. Thank you for flying with us.", "That was quicker than I thought. Disappointing.", "Let us see what the new floor has in store."],
+      "raven": ["Corridor clear. For now.", "Left side clear. Right side, unclear.", "Shadows ahead. Nothing moving."]
+    },
+    "m2_area_haifischlabor": {
+      "viper": ["Stay on the walkways. Keep clear of the water edge.", "Single file. Watch your footing.", "Eyes on the observation rooms. Something may be in there."],
+      "scorpion": ["Sharks. Of course there are sharks. Why are there always sharks?", "I did not bring my swimming trunks.", "Heh. Somebody trained them to wait for lunch. That would be us."],
+      "raven": ["They circle. They are watching the walkways.", "One slip and the water takes you.", "Low walkway. Hungry water. Move fast."]
+    },
+    "m2_area_gartenlabor": {
+      "viper": ["Watch the beds. They are coming out of the soil.", "Use the walkway. Do not touch the vines.", "Keep to the bridge. Hold the walkway."],
+      "scorpion": ["Gardening. My favourite. Except this one bites.", "Who waters these? And with what?", "My grandmother grew tomatoes. They did not crawl out."],
+      "raven": ["Plants everywhere. Cover everywhere. For them.", "The vines move. Nothing else should.", "Do not step in the beds. The roots hold more than soil."]
+    },
+    "m2_area_reaktorschacht": {
+      "viper": ["Use the stairs, one level at a time. Watch above.", "Keep moving, do not stand still. Cover the stairs.", "Round and round, stay together. Watch above and below."],
+      "scorpion": ["It is a sauna with a death wish.", "Is it just me, or is it really hot?", "Who thought a glowing hole in the middle was a good idea?"],
+      "raven": ["Every gallery is a shooting spot. Theirs, and ours.", "The glow is not natural. Do not stare.", "One fall and it ends. Stay off the rails."]
+    },
+    "m2_area_kryoarchiv": {
+      "viper": ["Visibility is poor. Stay in contact, call everything.", "Narrow lanes. Take them slowly.", "Cold and quiet. Touch no pods."],
+      "scorpion": ["Freezing. Why is it always freezing in the creepy places?", "Frozen people. Please do not wake up. Please.", "I wanted a vacation somewhere cold. This is not what I meant."],
+      "raven": ["Mist hides everything. Even them.", "Something moves behind the glass.", "Frost on the glass. Breath on the inside."]
+    },
+    "m2_area_isolationstrakt": {
+      "viper": ["Ring corridor. Cover each other around the bend.", "Cells are open. Check each one before we pass.", "Stay tight. Anything can come around the curve."],
+      "scorpion": ["Patients on the loose. Brilliant. Somebody forgot to lock the doors.", "Is this what they call a warm welcome?", "Remind me to cancel my membership."],
+      "raven": ["Bars bent from the inside.", "Observation room on top. Watch it.", "Nobody was cured here."]
+    },
+    "m2_area_lagerhalle": {
+      "viper": ["Rows and racks. Check each lane before we cross.", "Watch the gallery. Keep out from under the crane.", "Move row by row. Stay out of the middle."],
+      "scorpion": ["Big shelves. Do they sell anything useful? Asking for a friend.", "That container is going to fall. I just know it.", "Who needs this much stuff? Seriously."],
+      "raven": ["Racks make good cover. Good ambush too.", "Heavy load. Thin chain.", "Concrete and silence. They are among the racks."]
+    },
+    "m2_area_sezierlabor": {
+      "viper": ["Autopsy hall first. Check the pit before we cross.", "Two floors. Cover the stairs and the cellar door.", "Slow and careful. Nothing in the cold room is resting."],
+      "scorpion": ["Pathology. My favourite place. Said nobody, ever.", "At least the patients here are used to being quiet.", "I really hope the labels on those jars are accurate."],
+      "raven": ["The pit is a bad place to stand.", "Cold cellar. Cold specimens. Not all are cold.", "Everything here was cut open. Some of it still moves."]
+    }
+  },
+  "line": {}
+}

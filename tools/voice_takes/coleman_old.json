@@ -1,0 +1,445 @@
+{
+  "bark": {},
+  "line": {
+    "antenna_done": {"speaker": "coleman", "takes": [
+      "Mast is up.",
+      "The signal is clean, Fireteam. Helix is talking and I am listening. That was well done.",
+      "I am receiving. Their traffic is coming through loud and clear, and that is thanks to you. Excellent work out there, Fireteam, now keep your heads down."
+    ]},
+    "antenna_start": {"speaker": "coleman", "takes": [
+      "Radio mast, in the yard. Power it up.",
+      "Fireteam, the mast in the yard is our ear on Helix. Reach the control box and bring it online.",
+      "Find the control box at the radio mast and switch it on. Once it transmits, I can hear every word Helix says. Move."
+    ]},
+    "area_upper": {"speaker": "coleman", "takes": [
+      "Stairs are open. Upstairs is yours.",
+      "The barricade is gone, so the upper floor is open to you now. Get up there and use the height, Fireteam, it gives you the better angle on everything below.",
+      "You broke through on the stairs. Hold the upper floor, it is the best ground that house has."
+    ]},
+    "area_wing": {"speaker": "coleman", "takes": [
+      "Ground floor locks are open. More space, more doors.",
+      "Mag locks on the ground floor have given way, Fireteam. You have room to maneuver now, but every new door is one more way for them to come at you.",
+      "The ground floor is open. Use the room, but watch every door, because they will use them too."
+    ]},
+    "cellar_open": {"speaker": "coleman", "takes": [
+      "Cellar is open. Corners, Fireteam.",
+      "That door is open and the lab lies below. Go down slow and check every corner as you go.",
+      "Fireteam, the way to the lab is clear. I do not know what waits down there, so keep your weapons up and take every corner slowly. Stay together."
+    ]},
+    "codes_done": {"speaker": "coleman", "takes": [
+      "All codes collected. One step closer.",
+      "That is every code. Whatever Helix hid here, we are nearer to it now, and I intend to find out what it is.",
+      "Final code in. Good work, Fireteam. Helix buried something under this farm, and you just handed me the key to it."
+    ]},
+    "codes_found": {"speaker": "coleman", "takes": [
+      "Code logged.",
+      "Received. Keep looking, there are more.",
+      "That code is in. Do not stop now, Fireteam, we need every last one of them."
+    ]},
+    "codes_start": {"speaker": "coleman", "takes": [
+      "Helix staff died in that yard. Take their access codes. Markers are up.",
+      "The Helix researchers did not survive, but their codes did. Search the bodies out there and bring me every access code you find.",
+      "Fireteam, the dead in that yard are Helix staff, and each one carries an access code. I want every one. Follow the markers and search the bodies."
+    ]},
+    "crate_done": {"speaker": "coleman", "takes": [
+      "Crate is yours.",
+      "Good. You have the supplies, Fireteam. Make them count.",
+      "Supply crate secured. Take what you need, and do not waste it, because I cannot send another one soon."
+    ]},
+    "crate_start": {"speaker": "coleman", "takes": [
+      "Supplies coming down. Watch the flare.",
+      "Fireteam, a supply drop is on its way. Look for the flare outside the house and get to the crate before anything else does.",
+      "Listen up. A crate is dropping outside the house, marked by a flare. Grab it fast, because the noise will draw company."
+    ]},
+    "cru_ambush": {"speaker": "coleman", "takes": [
+      "Helix soldiers, incoming!",
+      "Fireteam, Helix has sent soldiers. C.R.U., armed and moving in together. Get behind something solid.",
+      "I have armed troops advancing out of the tree line, and they are moving like a trained unit. That is C.R.U., Fireteam. Take cover and prepare to return fire."
+    ]},
+    "cru_cleared": {"speaker": "coleman", "takes": [
+      "Squad eliminated.",
+      "Their unit is gone. Strip them of whatever is useful and stay sharp, Helix has more.",
+      "That was a trained C.R.U. squad and you just wiped it out. Impressive, Fireteam. Collect what they left behind, and brace yourselves for the next one."
+    ]},
+    "elite_seen": {"speaker": "coleman", "takes": [
+      "Masked one, gas grenades. Move when he throws.",
+      "Fireteam, I see an elite wearing a mask in that squad. He will throw gas at you, so do not stay where he puts it.",
+      "That masked soldier is a Helix elite, and gas is his weapon. Watch his arm, and the second a canister lands, get clear."
+    ]},
+    "evac_board": {"speaker": "coleman", "takes": [
+      "Get aboard, now!",
+      "The helicopter has landed. Everyone on board, right now, Fireteam.",
+      "The bird is on the ground, and it will not wait for you. Get everyone aboard, Fireteam, and get them aboard fast. Move, move!"
+    ]},
+    "evac_close": {"speaker": "coleman", "takes": [
+      "Helicopter is close. Hold the zone.",
+      "Fireteam, the helicopter is almost on top of you. Keep that landing zone clear until it touches down.",
+      "Final approach, Fireteam. Whatever comes at that landing zone, it does not get through. Hold your ground until the skids are down and everyone is aboard."
+    ]},
+    "evac_start": {"speaker": "coleman", "takes": [
+      "Extraction inbound. Get Nadja to the landing zone.",
+      "Fireteam, the helicopter is on its way. Escort Nadja to the landing zone, and make sure she arrives alive.",
+      "Extraction has been approved and it is inbound. Bring Nadja to the landing zone, and whatever happens out there, keep her alive until the helicopter gets to you."
+    ]},
+    "gas_house": {"speaker": "coleman", "takes": [
+      "Gas downstairs! Get upstairs!",
+      "The cellar is venting gas into the house. Climb the stairs or put your masks on.",
+      "Fireteam, gas is rising through the ground floor and it is spreading fast. Take the stairs up, or mask up if you cannot, but do not stay down there breathing it."
+    ]},
+    "gas_pocket": {"speaker": "coleman", "takes": [
+      "Gas in the yard. Step around it.",
+      "Pockets of gas are breaking open across the yard. Skirt around them, or put a mask on.",
+      "Fireteam, the ground is venting gas again, in several spots out in the yard. Do not walk through it unprotected, find a way around or mask up before you cross."
+    ]},
+    "gas_start": {"speaker": "coleman", "takes": [
+      "Gas is drifting in. Masks on or get inside.",
+      "Fireteam, the gas has reached part of the farm. Stay indoors if you can, and mask up if you cannot.",
+      "A cloud of gas is moving across one side of the farm, toward you. Get under a roof or put a mask on. Do not breathe that."
+    ]},
+    "generator_done": {"speaker": "coleman", "takes": [
+      "Upload finished. Stand down.",
+      "That is everything I needed. The generator can go quiet now, Fireteam. Excellent work.",
+      "Upload complete, and not a moment too soon. You held that generator under heavy pressure. You can leave it now, Fireteam, and take a breath."
+    ]},
+    "generator_down": {"speaker": "coleman", "takes": [
+      "Generator is dead!",
+      "Power just dropped on that generator. Somebody get back over there and start it up again.",
+      "The relay lost power. The generator has stopped, Fireteam, and the upload goes with it. Restart it, right now, before we lose everything we have gathered."
+    ]},
+    "generator_running": {"speaker": "coleman", "takes": [
+      "Generator is running. Hold it.",
+      "Good, the generator is running. Stay where you are and guard it until I say otherwise.",
+      "Power is flowing to the relay. Now comes the hard part, Fireteam. Defend that generator and do not leave your position until the upload is finished."
+    ]},
+    "generator_start": {"speaker": "coleman", "takes": [
+      "Start the generator in the yard. Keep it alive.",
+      "Fireteam, the generator in the yard still feeds the Helix relay. Fire it up and defend it. It is loud, and it will draw them to you.",
+      "I need that relay powered, and the yard generator is the only way. Start it and guard it until the upload is done. The noise will bring company."
+    ]},
+    "hack2_installed": {"speaker": "coleman", "takes": [
+      "Module is on her door. Brace yourselves.",
+      "The module is in place on her door. Helix will know exactly where you are, so expect their full response.",
+      "That module is running on her door, and it has just told Helix where you stand. Everything they have left will come for you, Fireteam."
+    ]},
+    "hack_drop": {"speaker": "coleman", "takes": [
+      "Module down. Follow the marker.",
+      "The module has hit the ground. Check your display for the marker, and move to it.",
+      "Drop confirmed. The hack module is lying out there, marked on your display. Get to it before the infected find it first, Fireteam."
+    ]},
+    "hack_dropped": {"speaker": "coleman", "takes": [
+      "Module dropped. Grab it!",
+      "Fireteam, you dropped the module. Go back and pick it up before anything gets to it.",
+      "The module is lying on the ground where you let go of it. Pick it back up, and this time hold on to it. We need that thing."
+    ]},
+    "hack_half": {"speaker": "coleman", "takes": [
+      "Halfway.",
+      "Half of the hack is done. Keep them off the module.",
+      "We are at the halfway mark, Fireteam. It is not over until it is over, so hold your ground and keep the module protected."
+    ]},
+    "hack_installed": {"speaker": "coleman", "takes": [
+      "Module active. Protect it.",
+      "The module has started. It is slow and it is noisy, so keep everything away from it.",
+      "Hack is in progress, Fireteam. It takes time, and it makes a racket that will draw every infected nearby. Stand guard over that module until it finishes."
+    ]},
+    "hack_jam": {"speaker": "coleman", "takes": [
+      "Hack stalled!",
+      "Fireteam, the module jammed. Restart it, quickly.",
+      "The connection dropped, and the hack has stopped dead. Get to that module and reset it, right now."
+    ]},
+    "hack_picked": {"speaker": "coleman", "takes": [
+      "Module in hand. Go.",
+      "Good, you have the module. Now take it to the door, and take care not to drop it.",
+      "That is the module. Keep it safe, Fireteam, and keep moving. If you lose it under fire, we lose the whole operation."
+    ]},
+    "hack_request": {"speaker": "coleman", "takes": [
+      "Hack module inbound. Bring it to the cellar door.",
+      "A hack module is coming your way. The helicopter will drop it in the yard. Collect it, carry it to the cellar door, and plug it in.",
+      "Fireteam, a hack module is on the way. When the bird drops it in the yard, carry it to the cellar door and plug it in. Guard it well."
+    ]},
+    "hack_resume": {"speaker": "coleman", "takes": [
+      "Running again.",
+      "The connection is back. Good, hold that position.",
+      "The module is back up and running, Fireteam. Do not let that happen twice. Keep them away from it."
+    ]},
+    "intel_1": {"speaker": "coleman", "takes": [
+      "First lead. Helix used this farm for months.",
+      "This is the first real piece of the puzzle. Helix was moving people and equipment through here for months, and nobody noticed.",
+      "One lead down. This farm was a hub for Helix, Fireteam. People and equipment passed through here for months, and we are only now finding out."
+    ]},
+    "intel_2": {"speaker": "coleman", "takes": [
+      "Another file. A researcher named Nadja. Helix is burning everything because of her work.",
+      "The second file names a researcher, first name Nadja. Everything Helix is burning down, they are burning because of her work.",
+      "This second file matters, Fireteam. It names a researcher, first name Nadja. Her work is the reason Helix is burning everything they ever built."
+    ]},
+    "intro_drop": {"speaker": "coleman", "takes": [
+      "Over the drop point. Ropes out.",
+      "You are at the drop point, Fireteam. Throw the ropes and go. Good luck down there.",
+      "Fireteam, the bird is holding over the drop point. Ropes are out, and the farm below is waiting. Stay together, stay alert, and good hunting."
+    ]},
+    "lab_enter": {"speaker": "coleman", "takes": [
+      "Helix black site. Find Nadja.",
+      "Fireteam, you are inside a Helix black site. Everything you see is evidence, and your first task is to find Nadja.",
+      "Welcome to a Helix black site. Whatever is down here, it is evidence, so mark it and move on. Your priority is Nadja. Find her."
+    ]},
+    "leech_seen": {"speaker": "coleman", "takes": [
+      "Leeches incoming.",
+      "Fireteam, small fast contacts, leeches. Do not let one stick to you, and shake it off if it does.",
+      "Those are leeches, small and very quick. If they get a hold of you they will not let go, so shoot them early and shake off any that stick to you."
+    ]},
+    "m2_a_coleman": {"speaker": "coleman", "takes": [
+      "Hm. Hunters guarding your exit. I have my doubts. Go.",
+      "So three Helix hunters will hold your way out. I would like to see that with my own eyes. Move out, Fireteam.",
+      "You trust those three to hold your way out. I have seen too much to take that on faith, but I will not stop you. Go, Fireteam."
+    ]},
+    "m2_arrival": {"speaker": "coleman", "takes": [
+      "You are over the villa. Helix owns it. Get the doctor inside.",
+      "Fireteam, that villa below you belongs to Helix. Doctor Nadja knows the way down, so get her through the door.",
+      "We are over the villa, and Helix runs that house. The doctor is the only one who knows the way down. Get her inside and keep her close."
+    ]},
+    "m2_b_coleman": {"speaker": "coleman", "takes": [
+      "Hunters at your side. Your call. I do not like it. Viper, hold the station.",
+      "I never thought I would see Helix hunters fighting beside you. It is your decision, Fireteam, and I do not like it. Viper, keep that station safe for me.",
+      "Hm. You take Helix hunters with you. I will not overrule you, but I want it on record that I do not like it. Viper, you hold that station for me."
+    ]},
+    "m2_back": {"speaker": "coleman", "takes": [
+      "Fireteam, do you read? It is Coleman. That was not me you heard these last hours.",
+      "Fireteam, this is Coleman. Can you hear me? Finally. For hours somebody has been speaking to you in my voice, and I swear to you that it was not me.",
+      "Fireteam, come in. Is anyone there? Listen to me, whoever has been giving you orders these last hours, that was never me."
+    ]},
+    "m2_behind": {"speaker": "coleman", "takes": [
+      "C.R.U. at your back!",
+      "Behind you, Fireteam! C.R.U. is breaking in through the lock!",
+      "Turn around! C.R.U. soldiers are coming in through the lock behind you, move, move!"
+    ]},
+    "m2_board": {"speaker": "coleman", "takes": [
+      "Get on the train.",
+      "The train has power. Everyone aboard, Fireteam, now.",
+      "Train is up and ready to roll. Do not leave anybody on that platform. Everyone aboard, right now."
+    ]},
+    "m2_cru": {"speaker": "coleman", "takes": [
+      "She runs the facility system, and now she is hiring C.R.U. Squads at every entrance.",
+      "Nadja holds the facility system, and now she has bought the C.R.U. Expect them at every entrance, Fireteam.",
+      "She controls that facility, and she is paying the C.R.U. to protect her. That means squads at every door and every junction. Watch your back, Fireteam."
+    ]},
+    "m2_depot": {"speaker": "coleman", "takes": [
+      "More coming out of the depot!",
+      "Fireteam, another group is coming out of the depot. All that noise is bringing them to you.",
+      "More are pouring out of the depot, drawn by the noise, and they are heading straight for you. Be ready, Fireteam."
+    ]},
+    "m2_end": {"speaker": "coleman", "takes": [
+      "You are in the lift. Signal is fading. Finish this, Fireteam.",
+      "Signal is breaking up, Fireteam. You are in the lift and going down. Whatever waits below, end it.",
+      "I am losing you. The lift is taking you deeper than my equipment can reach, and I cannot follow. Whatever is down there, Fireteam, finish it."
+    ]},
+    "m2_generator": {"speaker": "coleman", "takes": [
+      "No power on the research wing lock. Plant is east.",
+      "The research wing door is dead. East of your position there is a power plant, and it needs to be running.",
+      "The research wing lock has no power, Fireteam. The plant that feeds it lies east of your position. Get it running and the door will open."
+    ]},
+    "m2_guards": {"speaker": "coleman", "takes": [
+      "Last of the house guards. Aerosol is empty and the infected are on them. Stay clear.",
+      "Those are the last house guards. Their aerosol is spent, and the infected are tearing them apart. Do not step in between.",
+      "Fireteam, those are the last guards of that house. Their aerosol has run dry, and the infected are ripping them apart. Stay out of the middle of it, and let them finish."
+    ]},
+    "m2_hall": {"speaker": "coleman", "takes": [
+      "This is the containment hall. Next stop is the freight lift, so send for it and stand your ground.",
+      "This is the containment hall. Behind it you will find the freight lift, which takes you further down. Call it, then hold.",
+      "That is the containment hall, Fireteam. The freight lift behind it is the way further down, so call it, and then you hold that hall until it arrives."
+    ]},
+    "m2_labs": {"speaker": "coleman", "takes": [
+      "Nadja passed that lock ahead of you. Her goal lies behind the labs.",
+      "She went through that lock before you did. Whatever she wants, it is behind the laboratories.",
+      "Nadja has gone through that lock ahead of you, Fireteam. I cannot tell what she is after, but it lies somewhere beyond the laboratories. Follow her."
+    ]},
+    "m2_lift": {"speaker": "coleman", "takes": [
+      "In the lift.",
+      "Lift has arrived. Everyone in, now.",
+      "The lift is waiting for you, Fireteam. Get inside, and do not take your eyes off the doors."
+    ]},
+    "m2_lockdown": {"speaker": "coleman", "takes": [
+      "Facility is sealing. You are locked in until the system restarts.",
+      "The whole facility is locking itself down with you inside. The system must restart before it will open, so hold on.",
+      "Fireteam, the facility has sealed itself and you are trapped in there. The system is restarting. Until it comes back, you hold your ground and wait."
+    ]},
+    "m2_platform": {"speaker": "coleman", "takes": [
+      "Platform is crawling. Clear it!",
+      "Fireteam, that platform is swarming with them. Clear it out before more come.",
+      "They are all over the platform. Clear every one of them, and quickly, because more will arrive if you wait."
+    ]},
+    "m2_power": {"speaker": "coleman", "takes": [
+      "The train will be loud. Hold the platform.",
+      "Powering that train up makes noise, and it will carry down the tunnel. Hold the platform until it is done.",
+      "Fireteam, when that train comes alive, every infected in the tunnel will hear it. Stay on the platform and do not give it up."
+    ]},
+    "m2_power_on": {"speaker": "coleman", "takes": [
+      "Power restored. North lock, central hall.",
+      "Power is back. Return to the central hall, Fireteam. You will find the lock on the north side.",
+      "We have power again, so go back to the central hall. The lock you need is on the north side, and it should open for you now."
+    ]},
+    "m2_ride": {"speaker": "coleman", "takes": [
+      "That facility is on no map. Nadja wants in. Find out why.",
+      "I have never seen the facility ahead of you on any map. Nadja wants to get in there, and I want to know why.",
+      "Fireteam, that facility is not on any map I have, and I have seen a lot of maps. Nadja is desperate to get inside. Find out why."
+    ]},
+    "m2_security": {"speaker": "coleman", "takes": [
+      "Security office, east wing. North gate.",
+      "To open the gate in the north you must go through the security office, in the east wing.",
+      "That north gate is controlled from the security office, Fireteam. You will find it in the east wing, so head there and see what you can unlock."
+    ]},
+    "m2_terminal": {"speaker": "coleman", "takes": [
+      "Nobody left on guard in there. Whatever happened is still happening.",
+      "There is not a single guard left in that facility. Something happened there, and it has not stopped.",
+      "Fireteam, no guard detail is left in there, none at all. Whatever went wrong in that facility, it did not end, and I would not trust a single quiet corner."
+    ]},
+    "m2_truth": {"speaker": "coleman", "takes": [
+      "Not me. She sent you to that villa, in a voice made from your own radio traffic.",
+      "Hear me out. I never sent you to the villa. She did, using my voice, and she made it from your own radio traffic.",
+      "Fireteam, understand this. The orders to that villa did not come from me. She sent you there, and she built the voice you heard out of your own radio traffic, piece by piece."
+    ]},
+    "m2_villa": {"speaker": "coleman", "takes": [
+      "Stay on the doctor. She knows the way down, somewhere in this house.",
+      "Somewhere inside that house is the way down, and the doctor is the only one who knows where. Keep her close, Fireteam.",
+      "Fireteam, I do not know where the entrance is, but the doctor does. It is hidden somewhere in that house. Do not let her out of your sight."
+    ]},
+    "mate_down": {"speaker": "coleman", "takes": [
+      "Someone is down. Get to them.",
+      "Fireteam, one of yours has gone down. Get to them and get them up.",
+      "One of your people is on the ground and in trouble. Do not leave them there, Fireteam. Every second counts, so go and pick them up."
+    ]},
+    "medic_seen": {"speaker": "coleman", "takes": [
+      "Kill the one with the tanks first.",
+      "The one with the gas tanks is keeping the others on their feet. Take it out first, Fireteam.",
+      "Fireteam, look at the tanks on that one. It is healing every infected around it, and as long as it lives the others will keep getting up. Put it down first."
+    ]},
+    "mission_start": {"speaker": "coleman", "takes": [
+      "Coleman here. You are at Farm Nineteen, Fireteam. Hold the house.",
+      "Fireteam, Colonel Coleman. You have reached Farm Nineteen. Helix hid something under that house, and I intend to find out what. Get inside, hold it, and keep everyone breathing.",
+      "Coleman here. Welcome to Farm Nineteen, Fireteam. Helix kept something under that house and wanted it hidden. Take the house, secure it, and stay alive until I have more."
+    ]},
+    "nadja_found": {"speaker": "coleman", "takes": [
+      "That is her, locked in. Take the module to her door.",
+      "Fireteam, there she is, behind a sealed door. Carry the module over and free her.",
+      "We have eyes on Nadja. She is locked in, and the only way to get her out is the module. Take it to her door, and do it carefully."
+    ]},
+    "nadja_free": {"speaker": "coleman", "takes": [
+      "She is out. Now take her to the surface.",
+      "Nadja is free, and that was the objective, Fireteam. The job is not over until she is on the surface, so bring her up.",
+      "Well done. She is out of that cell. Get her to the surface and keep her alive, because we have not won anything yet."
+    ]},
+    "nadja_hurt": {"speaker": "coleman", "takes": [
+      "Doctor is hit!",
+      "Fireteam, the doctor is under fire and taking damage. Cover her, now.",
+      "She cannot take much more of this, Fireteam. Put yourselves between Nadja and those things, and keep her on her feet."
+    ]},
+    "nadja_located": {"speaker": "coleman", "takes": [
+      "Signal confirmed, Nadja is right below you. A lab under that house, door sealed.",
+      "Fireteam, I have found her. Her signal is coming from directly beneath your position. There is a lab under that house, and the entrance is sealed. Find a way down.",
+      "Good news for once, Fireteam. The signal from Nadja comes from a lab under that house. The way down is sealed, so find another way in."
+    ]},
+    "nadja_lost": {"speaker": "coleman", "takes": [
+      "Nadja is gone. No cure. Mission failed.",
+      "We have lost the doctor, and with her goes the cure. This mission is over.",
+      "Nadja is lost, Fireteam. Without her, there is no cure, and without a cure, everything we did here was for nothing. Mission failed."
+    ]},
+    "operator_seen": {"speaker": "coleman", "takes": [
+      "Not C.R.U. That is a Helix hunter. You cannot kill him, so hurt him until he backs off.",
+      "Fireteam, that is one of the three Helix hunters, and he is not like the soldiers. Do not try to kill him. Wound him enough and he will withdraw.",
+      "Careful. That is a Helix hunter, a different breed from C.R.U. You cannot put him down out here, so make it painful for him until he breaks off."
+    ]},
+    "out_of_area": {"speaker": "coleman", "takes": [
+      "Fireteam, back to the objective!",
+      "You have strayed too far from where you are needed. Get back to the mission area.",
+      "Fireteam, you are leaving the area of operation. Turn around and get back there. We cannot finish this from out there."
+    ]},
+    "player_down": {"speaker": "coleman", "takes": [
+      "Stay with me!",
+      "Hold on, Fireteam. They are coming. Keep your eyes open.",
+      "Listen to my voice. You are hurt, but your team is on its way and they will not leave you there. Just hold on."
+    ]},
+    "power_done": {"speaker": "coleman", "takes": [
+      "Power restored.",
+      "The lights are on again. Good work, Fireteam.",
+      "Breakers are reset, and the farm has light once more. I did not enjoy watching you fight blind. Good work."
+    ]},
+    "power_start": {"speaker": "coleman", "takes": [
+      "Breakers tripped, farm is dark. Find the boxes and reset them.",
+      "Fireteam, somebody has thrown the breakers and the whole farm is dark. Find the breaker boxes and switch them back on.",
+      "The farm just went dark. Someone tripped the breakers. You are blind out there until the power returns, so find those breaker boxes and reset every one of them."
+    ]},
+    "round_begin": {"speaker": "coleman", "takes": [
+      "Contacts inbound.",
+      "Movement at the fence. Eyes open, Fireteam.",
+      "I have a new group closing in on your position. Check your magazines, pick your spots, and let them come to you."
+    ]},
+    "round_clear": {"speaker": "coleman", "takes": [
+      "Clear.",
+      "All quiet for now. Take a moment, Fireteam.",
+      "That is the last of them, at least for the moment. Reload, patch yourselves up, and visit the shop while it is quiet. They will be back."
+    ]},
+    "round_cru": {"speaker": "coleman", "takes": [
+      "Shooters, not infected. C.R.U. Get behind cover.",
+      "Armed men this time, Fireteam. A C.R.U. unit sent by Helix to wipe you out. Find cover and go around their flank.",
+      "Heads up. This group carries rifles, not claws. Helix has deployed a Containment Response Unit, so stay behind cover and make every shot count."
+    ]},
+    "round_elite": {"speaker": "coleman", "takes": [
+      "Few contacts, all mutated. Watch the big ones.",
+      "Not many inbound this time, Fireteam, but every one of them is changed. Aim high and keep your distance.",
+      "The numbers are small this time, and that should worry you. Every single one of them is mutated, and they are stronger than anything you have fought so far."
+    ]},
+    "round_final": {"speaker": "coleman", "takes": [
+      "This is the last push, Fireteam. Hold that landing zone to the end.",
+      "Everything Helix has left is heading for the landing zone. Protect the doctor, and hold it at any cost.",
+      "The last of them are coming, and one of them is far bigger than the rest. Nothing reaches the landing zone. Hold on, Fireteam, we are almost out."
+    ]},
+    "round_horde": {"speaker": "coleman", "takes": [
+      "Horde on the fence! Do not get boxed in.",
+      "Fireteam, my sensors show a massive pack heading for your position. Stay on the move and do not let them surround you.",
+      "I have never seen so many heat signatures on one screen. A horde is coming for the farm. Do not get cornered, keep moving, and shoot straight."
+    ]},
+    "round_mixed": {"speaker": "coleman", "takes": [
+      "Infected and C.R.U. together. Watch both fronts.",
+      "Two threats at once. Infected out front, C.R.U. riflemen behind them. Do not let either one flank you.",
+      "This is a bad one, Fireteam. The infected come from the gas, a C.R.U. squad comes with them, and neither will give you a moment. Keep your cover tight."
+    ]},
+    "shield_seen": {"speaker": "coleman", "takes": [
+      "Shield up front. Flank him.",
+      "Fireteam, that one carries a shield. Do not shoot the plate, it will only bounce, so flank him.",
+      "Watch that soldier with the ballistic shield. Rounds on the plate are wasted, and he will keep walking at you. Circle around and hit him from the side or behind."
+    ]},
+    "stalker_dead": {"speaker": "coleman", "takes": [
+      "Finally, it is down. Do not ask me what it was.",
+      "Whatever that was, it is finished. Helix made something there that I would rather never see again.",
+      "It is dead. I have seen a great many things in my career, Fireteam, but nothing like that. Whatever Helix made, I am glad it is down."
+    ]},
+    "stalker_seen": {"speaker": "coleman", "takes": [
+      "Contact, then nothing. Something is out there.",
+      "Fireteam, my thermal flickered, and then it was empty. Something is out there, circling you.",
+      "I cannot explain this, Fireteam. For a moment there was a shape on my screen, and then it vanished. Something out there is following you. Cover your backs."
+    ]},
+    "task_failed": {"speaker": "coleman", "takes": [
+      "Objective lost. Move on.",
+      "That objective is gone, Fireteam. No time for regrets, so keep your heads in the fight.",
+      "We did not make it on that one, and I will not pretend otherwise. Put it behind you, there is still a fight in front of you."
+    ]},
+    "tunnel_breach": {"speaker": "coleman", "takes": [
+      "Tunnel breached! They are coming from behind the lab!",
+      "Fireteam, the service tunnel is blown open. Contacts are coming through from the other end of the lab.",
+      "Explosion in the service tunnel, and it has opened the far side of the lab. Contacts are pouring in from there. Turn and cover that side, Fireteam."
+    ]},
+    "victory": {"speaker": "coleman", "takes": [
+      "You made it out. Nadja is safe, and we have the proof. Outstanding.",
+      "Fireteam, you are in the air. The doctor is alive and the evidence is on board. Helix is done, and you are the reason. Well done.",
+      "That is the farm behind you. You brought Nadja out alive, you brought out the proof, and Helix can never bury it now. I am proud of you all."
+    ]},
+    "zone_done": {"speaker": "coleman", "takes": [
+      "Position released.",
+      "That is enough, Fireteam. You can move again.",
+      "Good. I have what I needed from that position, so you can leave it now. Stay sharp on the way out."
+    ]},
+    "zone_start": {"speaker": "coleman", "takes": [
+      "Hold the marker.",
+      "Fireteam, get on the marker and stay on it. I will tell you when you can leave.",
+      "I need that marked ground held, Fireteam. Whatever comes at you, you do not leave that spot until I tell you."
+    ]}
+  }
+}

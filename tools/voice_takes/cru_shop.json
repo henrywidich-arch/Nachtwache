@@ -1,0 +1,224 @@
+{
+  "bark": {
+    "bye": {
+      "shop": [
+        "Walk safe. My prices will not.",
+        "Do not die on my doorstep.",
+        "Come back when you are out of everything again."
+      ]
+    },
+    "greet": {
+      "shop": [
+        "Spend or move along.",
+        "Talk fast, I am busy. Time is money. Mostly money.",
+        "Look all you like. Touching costs extra."
+      ]
+    },
+    "sold": {
+      "shop": [
+        "Sold. No refunds.",
+        "It is yours now. Try not to break it.",
+        "Money well spent, or at least money spent."
+      ]
+    },
+    "contact": {
+      "cru": [
+        "Enemy contact, open fire!",
+        "They are here, take them down!",
+        "Fire, fire, fire!"
+      ],
+      "cru2": [
+        "Contact, front.",
+        "Hostiles sighted. Weapons hot.",
+        "Visual on the targets. Engaging now."
+      ],
+      "cru3": [
+        "There. Kill.",
+        "Found you. Now bleed.",
+        "Break them. All of them."
+      ],
+      "cru4": [
+        "Targets acquired.",
+        "Hostile presence confirmed. Proceeding to engage.",
+        "Contact verified."
+      ]
+    },
+    "cover": {
+      "cru": [
+        "I am dry, cover me!",
+        "Reloading, watch my back!",
+        "Reload, reload! Keep their heads down!"
+      ],
+      "cru2": [
+        "Reloading. Cover.",
+        "Magazine empty. Reloading now.",
+        "Need cover, reloading."
+      ],
+      "cru3": [
+        "Empty.",
+        "Keep them down while I reload.",
+        "Hold them off. Just a second."
+      ],
+      "cru4": [
+        "Ammunition depleted. Reloading.",
+        "Weapon dry.",
+        "Replacing magazine. Requesting cover."
+      ]
+    },
+    "flank": {
+      "cru": [
+        "Going right!",
+        "I am swinging wide, keep them busy!",
+        "Going around, cover the front!"
+      ],
+      "cru2": [
+        "Moving right.",
+        "Taking the side.",
+        "Shifting to the flank. Keep them pinned."
+      ],
+      "cru3": [
+        "Behind them.",
+        "Closing in from the side. They will not see it.",
+        "Their backs are open."
+      ],
+      "cru4": [
+        "Moving to the left flank.",
+        "Angle acquired. Circling.",
+        "Taking the secondary position."
+      ]
+    },
+    "frag": {
+      "cru": [
+        "Grenade out, get down!",
+        "Fire in the hole!",
+        "Frag, take cover!"
+      ],
+      "cru2": [
+        "Throwing frag.",
+        "Grenade away.",
+        "Fragmentation out."
+      ],
+      "cru3": [
+        "Catch.",
+        "Here is a gift.",
+        "Say goodbye."
+      ],
+      "cru4": [
+        "Fragmentation deployed.",
+        "Throwing grenade.",
+        "Ordnance away."
+      ]
+    },
+    "gas": {
+      "cru": [
+        "Gas, gas, gas!",
+        "Gas on the way, masks up!",
+        "Smoke them out, gas out!"
+      ],
+      "cru2": [
+        "Gas away. Masks.",
+        "Deploying gas. Masks on.",
+        "Gas thrown."
+      ],
+      "cru3": [
+        "Breathe deep.",
+        "Gas out. Cough.",
+        "Masks on. Let them choke."
+      ],
+      "cru4": [
+        "Gas canister away.",
+        "Chemical agent released.",
+        "Releasing gas. Masks confirmed."
+      ]
+    },
+    "man_down": {
+      "cru": [
+        "Ours is hit, get him out of there!",
+        "He is hit, he is hit!",
+        "Somebody get him!"
+      ],
+      "cru2": [
+        "Soldier down.",
+        "Casualty. One of ours.",
+        "Lost a man."
+      ],
+      "cru3": [
+        "Weak. Keep moving.",
+        "He fell. Step over him.",
+        "One less. Keep firing."
+      ],
+      "cru4": [
+        "Friendly down.",
+        "Unit lost.",
+        "Personnel down. Continuing."
+      ]
+    },
+    "medic": {
+      "cru": [
+        "Medic, get over here!",
+        "Medic, on him, now!",
+        "Get the medic up there!"
+      ],
+      "cru2": [
+        "Medic, go.",
+        "Sending the medic.",
+        "Medic to the wounded."
+      ],
+      "cru3": [
+        "Patch him. Quick.",
+        "Medic. Make him useful.",
+        "Medic, drag him back."
+      ],
+      "cru4": [
+        "Medic dispatched.",
+        "Medical support moving.",
+        "Medic responding."
+      ]
+    },
+    "push": {
+      "cru": [
+        "Move up, move up!",
+        "On them, keep going!",
+        "Forward, do not stop!"
+      ],
+      "cru2": [
+        "Moving up.",
+        "Closing the distance.",
+        "Stay tight and push on."
+      ],
+      "cru3": [
+        "Crush them.",
+        "Walk over them.",
+        "Keep going. Leave nothing standing."
+      ],
+      "cru4": [
+        "Moving forward.",
+        "Advancing on target.",
+        "Gaining ground."
+      ]
+    },
+    "retreat": {
+      "cru": [
+        "Back, back, back!",
+        "Get out of there, fall back!",
+        "Break off, regroup!"
+      ],
+      "cru2": [
+        "Falling back to cover.",
+        "Retreating. Cover fire.",
+        "Moving back."
+      ],
+      "cru3": [
+        "Not worth it. Back.",
+        "Back off. For now.",
+        "Pull out. We will return."
+      ],
+      "cru4": [
+        "Disengaging.",
+        "Retreat authorized.",
+        "Repositioning to the rear."
+      ]
+    }
+  },
+  "line": {}
+}

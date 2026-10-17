@@ -1,0 +1,212 @@
+{
+  "bark": {
+    "big_kill": {"havoc": [
+      "Ha! The big fella has left the building!",
+      "That was the big one. I felt that in my leg.",
+      "Bye bye, big boy."
+    ]},
+    "clear": {"havoc": [
+      "Quiet again. I hate quiet.",
+      "That is all of them? Somebody check under the floor, there must be more!",
+      "Done! Nobody touch anything, I want to look at the mess."
+    ]},
+    "contact": {"havoc": [
+      "Knock knock!",
+      "Found you! Hello, hello!",
+      "Oh, finally, company! Let us play."
+    ]},
+    "cover": {"havoc": [
+      "Reloading! Somebody keep them busy!",
+      "Cover me for a second, I am feeding the beast!",
+      "Hold them off. One second. Just one."
+    ]},
+    "cru": {"havoc": [
+      "Helix soldiers! They never learn!",
+      "Look at those matching uniforms. Adorable. Let us ruin them.",
+      "Company! Armed company! My favorite kind.",
+      "Hm. Paid killers. I used to be one. It was a better job than this."
+    ]},
+    "down": {"havoc": [
+      "Down, down, down! Little help here!",
+      "Ugh. Somebody pick me up, I am in pieces. Mostly metal pieces.",
+      "Hey! Anybody! I fell over! Not funny!",
+      "I am hit! Come get me before I get comfortable!"
+    ]},
+    "flank": {"havoc": [
+      "Going around! Do not wait up!",
+      "Coming in from the side! Do not turn around!",
+      "Sneaking now! Watch me be sneaky!"
+    ]},
+    "gas": {"havoc": [
+      "Green cloud ahead! Keep your lungs out of it!",
+      "That is gas! I am not walking through that! Not again!",
+      "Hm. Pretty color. Terrible idea. Stay out of it."
+    ]},
+    "grenade": {"havoc": [
+      "Incoming! Somebody is borrowing my hobby!",
+      "Grenade! Move your feet!",
+      "Something round and angry just landed! Get away!",
+      "Heads down, cover your ears... no, run!"
+    ]},
+    "horde": {"havoc": [
+      "They are all coming at once! Beautiful!",
+      "Oh, that is a crowd. Good. I hate being alone.",
+      "Look at that line! Whoever invited them, thank you!"
+    ]},
+    "hurt": {"havoc": [
+      "Ow! Rude!",
+      "Tch. That one left a mark.",
+      "Hey! That was my favorite spot!",
+      "Ugh! Still standing! I am fine, I am fine!"
+    ]},
+    "idle": {"havoc": [
+      "Did you know a wall is just a door you have not made yet?",
+      "Quiet. Too quiet. I am going to start counting the bricks.",
+      "My leg itches. How does a metal leg itch? Do not answer that."
+    ]},
+    "kill": {"havoc": [
+      "Pop!",
+      "Gone!",
+      "Sit down, ugly!",
+      "Bye bye!"
+    ]},
+    "leader_down": {"havoc": [
+      "No, no, no! Boss! Get up!",
+      "Leader down! Cover me, I am going in!",
+      "Hold on, I am on my way! Do not do anything dramatic!"
+    ]},
+    "leech": {"havoc": [
+      "Something is stuck on you! Do not move!",
+      "Leech! Ugh, that is disgusting! Let me get it!",
+      "Hold still, you have a passenger!"
+    ]},
+    "low_ammo": {"havoc": [
+      "Nearly dry here! Anybody spare a magazine?",
+      "Ammo is getting thin. Do not look at me like that.",
+      "Running low! I will have to hit things with my leg!"
+    ]},
+    "medic": {"havoc": [
+      "That one is the healer! Take the tanks first!",
+      "The one with the tanks! Shoot the tanks! Please!",
+      "Hey, the nurse is back! Pop him before he heals the whole room!"
+    ]},
+    "op_arrive": {"havoc": [
+      "Evening, Fireteam! Delivery for you: one very loud man!",
+      "Do not get up! I will let myself in, and probably a few walls too!",
+      "Hello, little squad! Havoc is here, and so is my bad mood! Oh, and a lot of things that go bang!"
+    ]},
+    "op_down": {"havoc": [
+      "And stay there!",
+      "Ha! That one is sleeping now!",
+      "Down is a good look on you!"
+    ]},
+    "op_flash": {"havoc": [
+      "Flash out! Close your eyes! Or do not!",
+      "Surprise light show!",
+      "Catch! It is a present!"
+    ]},
+    "op_hurt": {"havoc": [
+      "Ow! Do that again and I will get angry!",
+      "Hm. A hit. Cute.",
+      "Ha! You made me bleed! I am so proud!"
+    ]},
+    "op_leave": {"havoc": [
+      "I will be back! With more things that explode!",
+      "That is enough fun for today! See you soon, Fireteam!",
+      "Hm. Time to go. Do not miss me too much!"
+    ]},
+    "op_taunt": {"havoc": [
+      "Come on, make me work for it!",
+      "Hide if you want! I love finding things!",
+      "Hm. Almost good. Almost. Try again!"
+    ]},
+    "order_follow": {"havoc": [
+      "On my way, boss!",
+      "You walk, I trail behind and break things!",
+      "Following! Do not walk too fast, I have a metal leg!",
+      "Hm. Fine. Lead on."
+    ]},
+    "order_free": {"havoc": [
+      "Off the leash! Wonderful!",
+      "Hunting! See you later!",
+      "My own way? Everybody hide!",
+      "Free roam! I will bring you a souvenir."
+    ]},
+    "order_hold": {"havoc": [
+      "Staying put! Come back soon!",
+      "I will stand here and look dangerous.",
+      "Hold the spot. Hold the spot. Got it.",
+      "Nobody passes me! Except through me, in pieces!"
+    ]},
+    "praise": {"havoc": [
+      "Oh, that was pretty!",
+      "Look at you! A real artist!",
+      "Hm. Not bad. Not bad at all."
+    ]},
+    "reload": {"havoc": [
+      "Mag change! Keep dancing!",
+      "Hold on, hold on, I am almost there!",
+      "Dry! One moment, one moment!",
+      "Give me a second to feed it!"
+    ]},
+    "rescue": {"havoc": [
+      "Come on, up you get! There is a party!",
+      "I got you! Stop lying around!",
+      "Hm. You are heavier than you look. Up!"
+    ]},
+    "round": {"havoc": [
+      "Oh, they are coming again! Lovely!",
+      "Here we go once more!",
+      "Hm. Another batch. Fresh ones.",
+      "Get ready, more are on the way! I can smell them!"
+    ]},
+    "shield": {"havoc": [
+      "Shield! Ha! I love a challenge!",
+      "He is hiding behind a plate! Cute! Go around!",
+      "Hit his sides! The front is no fun!"
+    ]},
+    "special": {"havoc": [
+      "What is that? I want it!",
+      "Mutant! Everybody look, a mutant!",
+      "Hm. That one looks expensive.",
+      "Ooh, a big shiny freak! Shoot it!"
+    ]},
+    "stalker": {"havoc": [
+      "Something is watching us. I can feel it!",
+      "Hey, you in the dark! Show yourself!",
+      "Hm. Circling. It is circling. I hate being circled!"
+    ]},
+    "thanks": {"havoc": [
+      "Thanks! I owe you an explosion!",
+      "Up again! You are a lifesaver!",
+      "Ha! Good as new! Almost!"
+    ]}
+  },
+  "line": {
+    "m2_a_havoc": {"speaker": "havoc", "takes": [
+      "Let me stay behind! Someone has to greet the guests, and I brought gifts. Lots of gifts!",
+      "The way back will fill up with her hired guns. Leave that to me. I will make it very loud and very final!",
+      "I stay. I know what to do with a tunnel full of soldiers. Heh. Nothing good, but I know it!"
+    ]},
+    "m2_b_havoc": {"speaker": "havoc", "takes": [
+      "Locked doors are my favorite! A little push and they are not locked anymore! Take me with you!",
+      "Down there, somebody has to make new exits. I make excellent exits!",
+      "Pick me! I only break what you tell me to. Mostly!"
+    ]},
+    "m2_c_havoc": {"speaker": "havoc", "takes": [
+      "New plan! Ghost and I are in, whether you like it or not! You are welcome!",
+      "We are coming too! Ghost does the quiet part, I do the loud part. Perfect team!",
+      "Surprise! The two of us are tagging along. Ghost has not said anything yet, but I think he is happy!"
+    ]},
+    "m2_h_tunnel": {"speaker": "havoc", "takes": [
+      "We are holding the east tunnel! Mostly with insults! Be quick!",
+      "Still here at the tunnel, still breathing! More soldiers every minute! Hurry!",
+      "Hm. The tunnel is getting crowded. Not in a good way. Finish your business down there!"
+    ]},
+    "m2_h_used": {"speaker": "havoc", "takes": [
+      "She played you, and she played us! I am furious. Just so you know!",
+      "All that sweet talk, and it was a trap! I hate being tricked by somebody smarter than me!",
+      "Hm. The doctor tricked all of us. I will remember that when I find her."
+    ]}
+  }
+}

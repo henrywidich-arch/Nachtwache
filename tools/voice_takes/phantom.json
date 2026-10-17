@@ -1,0 +1,217 @@
+{
+  "bark": {
+    "big_kill": { "phantom": [
+      "Magnificent. Do applaud quietly.",
+      "That was a large one. It did not enjoy the evening, I think.",
+      "Down it goes. The heavy ones always fall so loudly."
+    ]},
+    "clear": { "phantom": [
+      "Quiet again. How restful.",
+      "That seems to be all of them. A pity.",
+      "Clear. Nobody move yet; let the silence settle."
+    ]},
+    "contact": { "phantom": [
+      "Ah. Company.",
+      "I see you, Fireteam. Do not trouble yourselves to hide.",
+      "Found you. That was hardly difficult."
+    ]},
+    "cover": { "phantom": [
+      "Changing magazines. Somebody keep them busy.",
+      "Cover me for a moment. Do not look so pleased about it.",
+      "Empty. Give me two seconds."
+    ]},
+    "cru": { "phantom": [
+      "Helix soldiers. They never learn.",
+      "Company, and so badly dressed for it.",
+      "C.R.U. ahead. Do not stand in the open.",
+      "Ah, the C.R.U. Shall we teach them some manners?"
+    ]},
+    "down": { "phantom": [
+      "I am down. This is most undignified.",
+      "I seem to be on the floor. Assistance, please.",
+      "Down. Do not admire the view; come and get me.",
+      "Help. Now would be pleasant."
+    ]},
+    "flank": { "phantom": [
+      "Going around. Do not turn.",
+      "The side is open. How careless.",
+      "I will take the long way. You will not see me coming."
+    ]},
+    "gas": { "phantom": [
+      "Gas ahead. I would rather not breathe it.",
+      "That cloud is poison. Stay clear of it.",
+      "Do mind that cloud. It is not fresh air."
+    ]},
+    "grenade": { "phantom": [
+      "Grenade incoming! Do get clear.",
+      "Down, now! A grenade!",
+      "Something round and unfriendly. Move!",
+      "Away from that, quickly!"
+    ]},
+    "horde": { "phantom": [
+      "Here is the whole crowd. Do not run out of bullets.",
+      "They are coming in numbers. Rude, really.",
+      "A great many guests, and I did not prepare enough."
+    ]},
+    "hurt": { "phantom": [
+      "Ugh. Careless of me.",
+      "A fine shot. I shall remember it.",
+      "That will leave a mark.",
+      "Tch. That one was personal."
+    ]},
+    "idle": { "phantom": [
+      "I trust this peace is not an invitation.",
+      "Do you know, I miss proper tea.",
+      "Silence is only the interval. Enjoy it while it lasts."
+    ]},
+    "kill": { "phantom": [
+      "Gone.",
+      "One less.",
+      "Pardon me.",
+      "Dispatched."
+    ]},
+    "leader_down": { "phantom": [
+      "The leader has fallen. How inconvenient. Hold them off.",
+      "Hold on. I am coming for you.",
+      "Leader down. Keep them off me while I help."
+    ]},
+    "leech": { "phantom": [
+      "You have a passenger. Stand still.",
+      "A leech on you. Do not touch it; I will deal with it.",
+      "Hold still, please. Something has attached itself to you."
+    ]},
+    "low_ammo": { "phantom": [
+      "Nearly dry. I dislike improvising.",
+      "Almost out. Do not waste yours.",
+      "The magazine is nearly empty. Shall we keep this brief?"
+    ]},
+    "medic": { "phantom": [
+      "That one heals the others. Remove it.",
+      "The one with the tanks keeps them alive. Tedious. Shoot it.",
+      "Healer. Priority."
+    ]},
+    "op_arrive": { "phantom": [
+      "Good evening. I am Phantom. Do try not to die before I have finished.",
+      "Fireteam. How nice. Helix sent me to tidy up, and I do so enjoy tidying.",
+      "Do not trouble yourselves to stand. You will be lying down shortly."
+    ]},
+    "op_down": { "phantom": [
+      "Down you go. Do not hurry to get up.",
+      "That is what happens, Fireteam. Take notes.",
+      "Lie there. It suits you."
+    ]},
+    "op_flash": { "phantom": [
+      "Close your eyes. Or do not.",
+      "A little light for you.",
+      "Brightness, courtesy of Helix."
+    ]},
+    "op_hurt": { "phantom": [
+      "Hm. You drew blood. Do not let it go to your head.",
+      "Impertinent. You will pay for that.",
+      "Ugh. A lucky shot. Savour it."
+    ]},
+    "op_leave": { "phantom": [
+      "We will finish this another night. Sleep badly.",
+      "I grow bored. Do not mistake that for mercy.",
+      "Until next time, Fireteam. I shall be closer than you think."
+    ]},
+    "op_taunt": { "phantom": [
+      "Run along if you like. I will find you anyway.",
+      "Do you always die so noisily?",
+      "I would applaud, but I am rather busy."
+    ]},
+    "order_follow": { "phantom": [
+      "As you wish. Lead the way.",
+      "Following. Mind where you step.",
+      "Very well. I shall be your shadow.",
+      "Go on, then. I am with you."
+    ]},
+    "order_free": { "phantom": [
+      "Splendid. I shall hunt in my own fashion.",
+      "Unleashed. How kind.",
+      "Then I shall go and enjoy myself.",
+      "Do not wait for me."
+    ]},
+    "order_hold": { "phantom": [
+      "Staying put. Do hurry back.",
+      "I will guard this spot. Gladly.",
+      "Waiting. I am rather good at it.",
+      "As you say. Nobody passes."
+    ]},
+    "praise": { "phantom": [
+      "Rather neat work.",
+      "That was almost elegant. Almost.",
+      "Well placed. I shall allow it."
+    ]},
+    "reload": { "phantom": [
+      "Reloading.",
+      "A moment, please. Changing magazines.",
+      "Dry. Give me a breath.",
+      "Fresh magazine. Do not let them near me meanwhile."
+    ]},
+    "rescue": { "phantom": [
+      "Come, take my hand. Quickly.",
+      "Easy now. I have you.",
+      "Up. You are of no use to me on the floor."
+    ]},
+    "round": { "phantom": [
+      "More of them. Naturally.",
+      "They are arriving. Do be ready.",
+      "Another round, then. What a pity.",
+      "Brace yourselves; we have visitors."
+    ]},
+    "shield": { "phantom": [
+      "He hides behind a plate. Go around him.",
+      "A shield. Do not waste ammunition on it.",
+      "Cowardly. Get to his side."
+    ]},
+    "special": { "phantom": [
+      "Something unusual is coming.",
+      "That one is not ordinary. Take care.",
+      "Look at that. Truly hideous.",
+      "A special, ahead. I will keep it entertained."
+    ]},
+    "stalker": { "phantom": [
+      "Something is watching us. Rather rudely.",
+      "There, in the dark. It circles us.",
+      "Do you feel that? We are being studied."
+    ]},
+    "thanks": { "phantom": [
+      "Thank you. Do not expect it twice.",
+      "Kind of you.",
+      "My gratitude. Truly."
+    ]}
+  },
+  "line": {
+    "m2_b_phantom": { "speaker": "phantom", "takes": [
+      "Nobody here knows these corridors better than we do. Leave us behind and you will simply get lost, however politely.",
+      "She built traps in those halls and we know every one of them. Take us along, or take your chances.",
+      "Take us with you. We have walked her halls and we know what waits there. Consider it a favour."
+    ]},
+    "m2_c_phantom": { "speaker": "phantom", "takes": [
+      "Someone must stay behind and keep this tunnel closed. I volunteer, since nobody else is competent. Go. Come back alive.",
+      "I will hold this place. Do not look so worried; I have done far worse before breakfast.",
+      "Go ahead, both of you. Nothing gets past me here, and that is a promise, not a boast."
+    ]},
+    "m2_p_alive": { "speaker": "phantom", "takes": [
+      "So you survived. I confess I had placed a small wager against it.",
+      "Ah, Fireteam. Still upright. How tiresome for certain people.",
+      "You again, and breathing. Remarkable."
+    ]},
+    "m2_p_join": { "speaker": "phantom", "takes": [
+      "We are coming along. Do not argue; the doctor and I have unfinished business.",
+      "New arrangement, Fireteam. We walk with you now. Try to be grateful.",
+      "The doctor has wronged us as well. We are joining you, and she will answer for it."
+    ]},
+    "m2_p_truce": { "speaker": "phantom", "takes": [
+      "Lower your weapons. For tonight, we are on the same side.",
+      "No shooting, Fireteam. We have a larger problem than each other.",
+      "Consider this a truce. I would prefer you did not make me regret it."
+    ]},
+    "m2_p_tunnel": { "speaker": "phantom", "takes": [
+      "Take the train; it will bring you to her. We keep the east tunnel closed behind you.",
+      "Go on to the train. We will hold the east tunnel for you. This time only.",
+      "The east tunnel is ours. Board the train and leave the rest to us. I do not offer this twice."
+    ]}
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "bark": {
+    "big_kill": {
+      "raven": ["Big and dead.", "That one was loud. Now it is quiet.", "Mutated flesh is still flesh. And now it is on the floor."],
+      "scorpion": ["Boom! Down goes the big one!", "Ha! Who is next, ugly?", "Look how big that thing was, and look at it now. Beautiful."],
+      "viper": ["Heavy target down.", "Special neutralized. Reposition.", "That was a big one. Good work, everyone."]
+    },
+    "clear": {
+      "raven": ["Quiet.", "Nothing breathes here now.", "Done. Check the corners anyway."],
+      "scorpion": ["Is that it? Shame.", "Ha! The floor is covered. Looks good on it.", "Clear. Somebody wake me when the next lot shows up."],
+      "viper": ["Area secure.", "Hostiles eliminated. Stay alert.", "That is all of them. Check ammo, check each other, then we move."]
+    },
+    "cru": {
+      "raven": ["Gunmen.", "Humans. They bleed faster.", "Helix soldiers. Stay low and pick them off.", "Real soldiers. Do not stand up."],
+      "scorpion": ["Uniforms! Somebody paid these boys!", "Hey, they brought rifles to the party!", "Bullets incoming, get your heads down!", "Helix goons! Make them regret it!"],
+      "viper": ["Hostile soldiers! Take cover and return fire!", "Armed contacts, Helix uniform!", "C.R.U. ahead. Use the cover, make every shot count.", "Gunfire! Keep low!"]
+    },
+    "down": {
+      "raven": ["Down. Come now.", "I am bleeding. Help me.", "Cover me... I need a hand.", "Hit hard. Need a hand."],
+      "scorpion": ["Ah, damn! I am down!", "Somebody grab me, I am bleeding out here!", "Not like this! Help me up!", "I am down, you hear me? Get over here!"],
+      "viper": ["Down! Cover and revive me!", "Wounded! Somebody get to me!", "I am down, I repeat, I am down!", "Hit hard, cannot stand. Pull me up!"]
+    },
+    "gas": {
+      "raven": ["Green cloud. Do not breathe.", "Gas.", "Stay clear of the cloud. It kills slowly."],
+      "scorpion": ["Gas! Hold your breath and run!", "Ugh. Gas. Who let that one off?", "Poison fog, damn it! Go around it!"],
+      "viper": ["Toxic cloud, avoid it.", "Gas on the route. Find another way.", "Do not walk into that. Gas!"]
+    },
+    "grenade": {
+      "raven": ["Grenade.", "Incoming! Run!", "Frag, get low!", "Something thrown. Move now."],
+      "scorpion": ["Grenade! Haul it!", "Pineapple! Go, go, go!", "Ha! They throw things now? Run!", "Frag, frag, frag! Get out of there!"],
+      "viper": ["Frag incoming, move!", "Grenade! Spread out!", "Get away from it, now!", "Grenade on the ground! Clear the area!"]
+    },
+    "horde": {
+      "raven": ["Many. Too many.", "Keep a wall behind you.", "A flood. Fine. I count them as they fall."],
+      "scorpion": ["Here they come, all of them! Ha!", "Whole damn crowd! Make some room!", "Okay, now it is a party!"],
+      "viper": ["Huge pack incoming! Tight formation!", "Heavy pressure ahead. Hold the line, short bursts.", "They are coming in force. Stay together."]
+    },
+    "hurt": {
+      "raven": ["Hit.", "Scratch. Keep going.", "Ugh. That one found me.", "Blood. Mine. Fine."],
+      "scorpion": ["Ow! Son of a gun!", "Damn it, that stung!", "Ugh! Tore my jacket!", "Now I am angry!"],
+      "viper": ["Hit! Still fighting!", "Taking hits, staying up.", "That hurt. Keep going.", "I am fine. Focus!"]
+    },
+    "idle": {
+      "raven": ["Quiet never lasts.", "Someone is always watching in a place like this.", "Keep your eyes open. Rest later."],
+      "scorpion": ["You know what this place needs? A bar.", "I have been shot, bitten and shouted at today. Still better than my last job.", "Hey, anyone have a smoke? No? Figures."],
+      "viper": ["Stay close. We move out soon.", "Reload what you can, rest what you cannot.", "Keep your voices down and your guns up."]
+    },
+    "kill": {
+      "raven": ["Finished.", "Down for good.", "Cold now.", "Over."],
+      "scorpion": ["Lights out!", "Take that!", "Ha! Not so tough!", "Goodnight, pal."],
+      "viper": ["Neutralized.", "Target eliminated.", "Contact down.", "Moving on."]
+    },
+    "leader_down": {
+      "raven": ["Hold on. I am here.", "Do not close your eyes.", "You are not allowed to die yet. Hold on."],
+      "scorpion": ["Oh no you do not! Hang in there, boss!", "Boss, talk to me! I am coming!", "Not on my watch! Hold on, damn it!"],
+      "viper": ["Leader down! Covering fire, now!", "Stay with me. I am on my way!", "Stay awake! I am almost there!"]
+    },
+    "leech": {
+      "raven": ["Leech. It will drain you. Move.", "Something is on you. Strike it off.", "Leech. Hold still."],
+      "scorpion": ["Hey, you got a hitchhiker! Get it off!", "Ugh, a leech! Hold still, I will smack it!", "Bloodsucker on you! Peel it off!"],
+      "viper": ["Leech attached! Get it off, now!", "Do not panic. Shake it off!", "It is draining you! Strike it!"]
+    },
+    "low_ammo": {
+      "raven": ["Almost empty.", "Last rounds. Careful.", "I need ammunition soon."],
+      "scorpion": ["Shells are nearly gone, damn it!", "Running on fumes here!", "Anybody got spare shells? Anybody?"],
+      "viper": ["Ammo is nearly gone.", "Magazines running thin. Resupply needed.", "Short on ammunition. I need to conserve."]
+    },
+    "m2_a_raven": {
+      "raven": ["Good. We go on together. I have a question for the doctor, and it needs a short answer.", "I am coming along. Somebody has to look her in the eye, and I do not blink.", "Fine. Nobody else needs to carry this. She lied to us, and I will hear her say it."]
+    },
+    "m2_a_scorpion": {
+      "scorpion": ["Good. I never liked relying on strangers anyway. Let us go and ask the doctor a few questions.", "Just us, then. Suits me. Fewer people to trust, more shells for me.", "We started this, we finish it. Besides, I want to see her face when she hears me coming."]
+    },
+    "m2_a_viper": {
+      "viper": ["Decision made. We go on as a team, the way we came. Check your gear, we move out in a minute.", "We bring this to the end ourselves. Nobody else carries our mission. Weapons ready, then we go.", "Agreed. We started this together and we finish it together. Stay tight and cover each other."]
+    },
+    "m2_b_raven": {
+      "raven": ["I hold the relay. Someone has to keep her out of the radio. If the line goes dead, I will know why.", "My place is here. I see everything that comes through. Go, and tell me when you need a shot taken.", "I will stay and keep the relay alive. If anything crawls up that tunnel, it meets me first. Go."]
+    },
+    "m2_b_scorpion": {
+      "scorpion": ["I will keep the door, then. Nobody walks past me, that is a promise. Hurry, I get bored fast.", "Fine, I stay. Somebody has to hold this hole, and it is as ugly as I am. I have got it.", "Ha! You go be a hero, I will babysit the tunnel. Just bring me back a story."]
+    },
+    "m2_b_viper": {
+      "viper": ["Then we hold here. Nothing gets past this platform while I am alive. Go, and bring her back.", "My team stays and keeps the way open. You go ahead. Move fast, we cannot hold forever.", "Understood. We take the station and keep your back covered. Finish it and come back to us."]
+    },
+    "medic": {
+      "raven": ["Tanks on its back. It heals them. Shoot it.", "The healer. Now.", "Kill the one that mends. The others will fall after."],
+      "scorpion": ["Tank boy keeps patching them up! Pop him!", "Hey, the walking gas can! Shoot it!", "Healer! Drop him first, then we party!"],
+      "viper": ["Healer in sight. Eliminate it first!", "Medic! Focus fire, now!", "That one keeps them alive. Take it out, quickly."]
+    },
+    "order_follow": {
+      "raven": ["Understood.", "Move. I follow.", "Walk. I am behind you.", "Go ahead."],
+      "scorpion": ["Lead on, boss.", "Right, right, I am coming.", "Tail you like a bad habit.", "Go on, I have got your back."],
+      "viper": ["Copy, following.", "Falling in.", "Roger. Staying close.", "Stay in front, I follow."]
+    },
+    "order_free": {
+      "raven": ["Hunting.", "Alone. As usual.", "Understood. I pick my targets.", "Then I find my own shots."],
+      "scorpion": ["Hell yes. Let me at them.", "Unleashed! Watch out, world!", "Free hand? You will regret it. Ha!", "I go where the noise is."],
+      "viper": ["Copy, moving independently.", "On my own, then.", "I will take the flank.", "Roger, I will hunt on my own."]
+    },
+    "order_hold": {
+      "raven": ["Holding.", "I will not move.", "This is my place now.", "Understood. Eyes on the area."],
+      "scorpion": ["Staying right here, boss.", "This hole is mine now.", "Nobody passes, I swear it.", "Got it, parking myself here."],
+      "viper": ["Position held.", "Roger, I stay put.", "Copy. I hold this ground.", "Anchored. Go ahead."]
+    },
+    "praise": {
+      "raven": ["Precise.", "Better than expected.", "That was clean."],
+      "scorpion": ["Hell of a shot!", "You are making me look bad!", "Ha! Keep that up and I buy the beer!"],
+      "viper": ["Nice work.", "Well done. Keep it up.", "That is how it is done."]
+    },
+    "reload": {
+      "raven": ["Changing!", "Mag change!", "Covering fire, I am reloading.", "Empty. Swapping."],
+      "scorpion": ["Shells in, hold on!", "Reloading, do not die!", "Loading up, keep them busy!", "Hold on, stuffing more shells in!"],
+      "viper": ["Reload, cover!", "Magazine empty, reloading!", "Switching mags!", "Loading, one moment!"]
+    },
+    "rescue": {
+      "raven": ["Stand. Now.", "I have you. Move.", "You are not dying here. Up."],
+      "scorpion": ["Gotcha, big guy! Up!", "Easy, easy. I have got your arm.", "Do not make me carry you. Up!"],
+      "viper": ["Easy. Take my hand.", "Stay with me. I am pulling you up.", "You are okay. Up, slowly."]
+    },
+    "round": {
+      "raven": ["More.", "Here they come again.", "Reload. They are coming.", "Quiet is over."],
+      "scorpion": ["Another round! Drinks are on them!", "Ha! Fresh meat!", "Here they come, finally!", "Get your guns up, boys!"],
+      "viper": ["Enemy wave inbound. Positions!", "Heads up, more on the way.", "Brace. Here they come.", "Next wave. Hold your lanes."]
+    },
+    "shield": {
+      "raven": ["He hides behind a wall. Go around.", "Shield. Aim at the sides.", "Armored front. Hit the flank."],
+      "scorpion": ["Ha, he brought a door! Get around him!", "Tin can guy! Hit his flank!", "That shield is a pain! Go wide!"],
+      "viper": ["Shielded hostile! Flank him!", "Front is armored. Go around!", "Spread out, hit his sides!"]
+    },
+    "special": {
+      "raven": ["Mutant coming.", "Big one. Focus.", "Not normal. Kill it.", "Something is wrong with that one."],
+      "scorpion": ["Hey, ugly! Come here!", "Special delivery! Ha!", "Big nasty! Make some room!", "Whoa, now that is a monster!"],
+      "viper": ["Special, spread out!", "Heavy hostile, concentrate fire!", "Mutant approaching. Stay calm.", "Watch that one, it is not like the rest."]
+    },
+    "stalker": {
+      "raven": ["It is watching.", "Eyes in the dark.", "It stays out of reach. For now."],
+      "scorpion": ["I do not like being watched!", "Damn thing is playing games with us.", "There it is again... creepy."],
+      "viper": ["We are not alone out here.", "Eyes open, it is circling.", "Contact in the shadows. Do not split up."]
+    },
+    "thanks": {
+      "raven": ["Thanks.", "Noted. I owe you.", "I was fine. Almost."],
+      "scorpion": ["Ha! Thanks, buddy!", "You saved my skin. Again.", "Good timing. I owe you big."],
+      "viper": ["Thank you. Let us keep moving.", "Good work. I owe you one.", "I am up. Thanks."]
+    }
+  }
+}

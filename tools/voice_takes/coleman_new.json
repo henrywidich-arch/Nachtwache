@@ -1,0 +1,179 @@
+{
+  "bark": {},
+  "line": {
+    "m2_derail": { "speaker": "coleman", "takes": [
+      "Fireteam, report! Are you alive? Get out of that wreck and find the emergency exit in the tunnel. Move.",
+      "I lost your signal for a moment. Respond if you can hear me. Out of the wreck, then follow the tunnel to the emergency exit.",
+      "Fireteam, status. I want to hear voices. Leave the train now and find the way out through the tunnel.",
+      "Good to hear you. Get clear of the wreck. The emergency exit is somewhere along that tunnel. Find it."
+    ]},
+    "m2_sector": { "speaker": "coleman", "takes": [
+      "You are in sector C. There is no guard detail on the platform and nobody answering my calls. Something went badly wrong here. Move carefully.",
+      "Fireteam, the train made it. I know very little about what lies inside, only that it is quiet. Too quiet. Get moving.",
+      "Stay sharp, stay together, and keep moving. I will tell you what I learn.",
+      "Platform clear, no guards, no welcome. That tells me enough. Go in."
+    ]},
+    "m2_lock_done": { "speaker": "coleman", "takes": [
+      "Through the lock, Fireteam. The research wing lies directly ahead. Keep going.",
+      "That is the last of the decontamination. Ahead is the research wing. Do not stop now.",
+      "Lock cleared. Laboratories ahead. Keep moving.",
+      "Good work getting through that. The research wing begins beyond this lock. Stay tight and keep pushing forward."
+    ]},
+    "m2_area_haifischlabor": { "speaker": "coleman", "takes": [
+      "A flooded laboratory. My scans show two large heat signatures in the water. Keep to the walkways and do not trust the edge.",
+      "That is a basin hall, Fireteam, and something is swimming in it. Stay on the steel and away from the water.",
+      "Pumps on an island, observation rooms along the wall. I read movement below you. Watch your footing.",
+      "Water on every side. Whatever is in there is large. Do not slip."
+    ]},
+    "m2_area_gartenlabor": { "speaker": "coleman", "takes": [
+      "A laboratory garden under glass. The growth is out of control and my scans show movement in the beds. Watch the ground as well as the walkway.",
+      "Fireteam, those beds are not empty. Keep to the walkway and watch the bridge.",
+      "Plants everywhere, and things crawling among them. Do not let them close in.",
+      "Grow lights still burning after all this time. Someone kept this place alive. Be careful what comes out of the soil."
+    ]},
+    "m2_area_reaktorschacht": { "speaker": "coleman", "takes": [
+      "Reactor shaft. The core is still hot and it is making my readings jump. Stay off the open edges.",
+      "Galleries on three levels around the core. They will come at you from above and below. Keep moving.",
+      "It is loud and it is hot in there, Fireteam. Do not stand still, and watch the stairs.",
+      "The heat will play tricks on my scans. Trust your eyes. Do not linger beside the core."
+    ]},
+    "m2_area_kryoarchiv": { "speaker": "coleman", "takes": [
+      "A cryo archive. Cold, mist, and rows of pods, some of them lit. Visibility is poor, so take your time.",
+      "My scans fog out in there. Narrow lanes, Fireteam. Watch your corners.",
+      "Frosted pods as far as I can see. I do not know what is inside them. Do not stand beside one longer than you must.",
+      "Mist and catwalks. Anything can walk up on you in that. Stay close together."
+    ]},
+    "m2_area_isolationstrakt": { "speaker": "coleman", "takes": [
+      "Isolation ward. Cells, a ring corridor, a guard tower in the center. The patients are out. Expect them anywhere along the ring.",
+      "Those cells are open, Fireteam. I read movement all around the tower. Do not walk the ring alone.",
+      "Barred windows, and nobody behind them anymore. Check every corner before you pass it.",
+      "This is where they kept the sick. Whatever broke them out is not friendly. Stay sharp."
+    ]},
+    "m2_area_lagerhalle": { "speaker": "coleman", "takes": [
+      "A storage hall. Very high racks and a crane overhead. Long lines of sight, but plenty of places for an ambush.",
+      "Racks as tall as buildings. Watch the aisles, Fireteam, and keep an eye on that suspended container.",
+      "Concrete and shelving, with a gallery above. Someone could be watching you from the office. Move with care.",
+      "The hall is bigger than my map shows. Check above you as often as ahead."
+    ]},
+    "m2_area_sezierlabor": { "speaker": "coleman", "takes": [
+      "Pathology. An autopsy hall with a sunken pit, and cold rooms below. I do not like the look of it. Stay together.",
+      "Dissection laboratory, two floors. Whatever they cut open in here may not have stayed dead. Watch the pit.",
+      "Cold cellar, specimen storage, nothing friendly. Take it room by room, Fireteam.",
+      "Quiet is a bad sign in a place like this. Keep your weapons up and your eyes on the floor below."
+    ]},
+    "obj_collect_start": { "speaker": "coleman", "takes": [
+      "Search this area and collect everything you need. The way out stays shut until you have it all.",
+      "Fireteam, what you need is scattered through here. Find all of it. The exit will not open before you do.",
+      "Sweep the area. Markers will show when you are near. No exit until everything is in hand.",
+      "Look everywhere. All of it has to be found before the way out opens. Take your time, but not too much."
+    ]},
+    "obj_collect_3": { "speaker": "coleman", "takes": [
+      "One recovered. Three more still to find.",
+      "That is one. Three left out there, Fireteam. Keep searching.",
+      "Good. Three more to go before the way out opens.",
+      "Noted. Three still missing. Keep looking, and keep your backs covered."
+    ]},
+    "obj_collect_2": { "speaker": "coleman", "takes": [
+      "Two more to find, Fireteam.",
+      "That makes two still out there. Keep going.",
+      "Good. Two left, and the exit stays closed until you have them.",
+      "Two to go. Stay focused."
+    ]},
+    "obj_collect_1": { "speaker": "coleman", "takes": [
+      "Only one more left.",
+      "One to go, Fireteam. Find it and the way opens.",
+      "Almost there. One more still out there somewhere.",
+      "Just the last one now. Keep your eyes open and finish it."
+    ]},
+    "obj_collect_done": { "speaker": "coleman", "takes": [
+      "That is everything. The way out is open. Move on.",
+      "All of it found, Fireteam. The exit is open. Go.",
+      "Good work. You have it all and the way is open.",
+      "Complete. The doors are open. Do not waste the opening, move."
+    ]},
+    "obj_hack_start": { "speaker": "coleman", "takes": [
+      "The hack is running. Stay near the terminal and protect it. They will come for it.",
+      "It is working, but only while you stand close. Keep the terminal safe, Fireteam.",
+      "Hack is under way. Do not leave the terminal. Anything that comes, you stop it.",
+      "Running. It will not finish if you walk away. Hold the position and cover that terminal."
+    ]},
+    "obj_hack_half": { "speaker": "coleman", "takes": [
+      "Halfway through the hack. Keep holding.",
+      "Half done, Fireteam. Stay near the terminal.",
+      "The hack is at the halfway mark. Hold on a little longer.",
+      "Half of it is behind us. Do not give ground now."
+    ]},
+    "obj_hack_done": { "speaker": "coleman", "takes": [
+      "The hack is complete. The door is open. Go.",
+      "Done, Fireteam. The door is open, so move through.",
+      "That did it. Door is open. Move before something else turns up.",
+      "The terminal has finished and the way is open. Well held. Now go."
+    ]},
+    "obj_restore_start": { "speaker": "coleman", "takes": [
+      "The system must be brought back online. Find all the switches in this hall and throw every one.",
+      "Fireteam, there are switches spread through here. Find them and throw them. Nothing starts until all are set.",
+      "Search the hall for the switches. Throw each one you find.",
+      "It has to be switched on at more than one point. Locate the switches and throw them all. Watch your flanks while you search."
+    ]},
+    "obj_restore_switch": { "speaker": "coleman", "takes": [
+      "Switch is thrown. Keep going.",
+      "Good, that switch is on. Find the next.",
+      "Registered, Fireteam. There are more to find. Keep moving.",
+      "That switch has taken. Do not stop now, the rest is still waiting."
+    ]},
+    "obj_restore_rising": { "speaker": "coleman", "takes": [
+      "All switches are set and the system is coming up. Hold on a little longer.",
+      "It is starting, Fireteam. Give it a few seconds and stay alert while it rises.",
+      "Coming up now. Do not relax yet.",
+      "That did it, it is starting. Stay where you are until it is fully up."
+    ]},
+    "obj_restore_done": { "speaker": "coleman", "takes": [
+      "It is running. The way is open.",
+      "System is fully up, Fireteam. The way onward is open. Go.",
+      "Good. Everything is running and the path is clear. Move out.",
+      "That is it. Up and running, and the way is open. Do not stand around."
+    ]},
+    "obj_hold_start": { "speaker": "coleman", "takes": [
+      "Stay on the mark. Do not give it up. Hold until it is done.",
+      "Fireteam, this position is yours until the process finishes. Stay close to the mark.",
+      "Hold that spot. Whatever comes, you do not leave the marker.",
+      "It needs time and it needs you in place. Stay on the mark and hold the line."
+    ]},
+    "obj_hold_half": { "speaker": "coleman", "takes": [
+      "Halfway. Keep holding.",
+      "Half done, Fireteam. Do not leave the mark now.",
+      "You are at the midpoint. Hold on.",
+      "Half the time is gone. Stay put and keep them off."
+    ]},
+    "obj_hold_done": { "speaker": "coleman", "takes": [
+      "That is it. You can move.",
+      "Done, Fireteam. You may leave the position. Move.",
+      "It is finished. Well held. The way is open.",
+      "Process complete. Go, before more arrive."
+    ]},
+    "obj_lock_done": { "speaker": "coleman", "takes": [
+      "The lockdown has lifted. The doors are open. Move out.",
+      "Sealed doors are opening again, Fireteam. Go.",
+      "The facility has released the area. Do not wait for it to change its mind.",
+      "Lockdown is over and the doors are open. Move out now."
+    ]},
+    "obj_clear_start": { "speaker": "coleman", "takes": [
+      "Clear the hall. Every contact in it. The exit stays closed until you do.",
+      "Fireteam, kill everything in this area. Nothing opens until it is empty.",
+      "The way onward is sealed until the area is clean. Hunt down every contact.",
+      "Leave nothing alive in here. The exit will not open otherwise."
+    ]},
+    "obj_clear_few": { "speaker": "coleman", "takes": [
+      "Only a few contacts left. Finish them.",
+      "Nearly there, Fireteam. A few left in the area. Hunt them down.",
+      "Just a handful remain. Do not let them slip away.",
+      "My scans show only a few left. Finish the job."
+    ]},
+    "obj_clear_done": { "speaker": "coleman", "takes": [
+      "Hall is clear. The exit is open.",
+      "Area is clean, Fireteam. The exit has opened. Move on.",
+      "That was the last of them. The exit is open.",
+      "Clear. Good shooting. The way out is open."
+    ]}
+  }
+}

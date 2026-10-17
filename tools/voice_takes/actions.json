@@ -1,0 +1,84 @@
+{
+  "bark": {
+    "frag": {
+      "viper": ["Frag out!", "Grenade, get down!", "Throwing, heads down."],
+      "scorpion": ["Fire in the hole!", "Eat this, ugly!", "Here is a present, duck!"],
+      "raven": ["Grenade.", "Throwing. Stay low.", "Cover your ears."],
+      "phantom": ["Do mind the blast.", "A little parting gift.", "Allow me. Heads down, please."],
+      "havoc": ["Special delivery, get down!", "Catch this, you rotten lot!", "Boom incoming, duck, duck, duck!"],
+      "ghost": ["Grenade out.", "Down.", "Thrown. Wait for it."]
+    },
+    "molotov": {
+      "viper": ["Molotov out, stay clear!", "Fire going down, back off.", "Burning bottle, keep away from it.", "Torching them, hold the line."],
+      "scorpion": ["Hot stuff coming through!", "Let them burn, boys!", "Barbecue time, step back!", "Flame on, ugly, flame on!"],
+      "raven": ["Fire.", "Burn.", "Throwing fire. Stay out of it.", "That should warm them up."],
+      "phantom": ["Do enjoy the warmth.", "A little fire for the occasion.", "Burn beautifully, all of you.", "Mind the flames, I would hate for you to singe."],
+      "havoc": ["Fire, fire, fire, everybody burns!", "Hot, hot, hot, ha!", "Light them up, baby, light them all up!", "Cocktail time, and nobody is invited!"],
+      "ghost": ["Burn.", "Fire thrown.", "Stay out of the flames.", "Let them burn."]
+    },
+    "heal": {
+      "viper": ["Healing field, step in.", "Stay in the green, it will patch you up.", "Medical coming down, get in it.", "Hold there, this will help."],
+      "scorpion": ["Patch job coming, step in!", "Get in there and heal up, pal.", "Free repairs, do not say I never give you anything.", "Stand in it, tough guy, it fixes you up."],
+      "raven": ["Healing. Step in.", "Stand in the field.", "Do not waste it.", "Fix yourself. Quickly."],
+      "phantom": ["Do step into the field, it will mend you.", "How thoughtful of me. Stand in it.", "A little restoration, if you please.", "Allow me to patch you up."],
+      "havoc": ["Healing party, everybody in!", "Get in the glowy bubble, ha!", "Doctor Havoc is in, step right up!", "Fresh and shiny, in you go!"],
+      "ghost": ["Healing. Step in.", "Stay in the field.", "Mending.", "Heal. Now."]
+    },
+    "mate_rescue": {
+      "viper": ["Up you get. Stay with me.", "On your feet, we are not done.", "You are good, keep moving."],
+      "scorpion": ["Up, you lazy bum, back to work!", "Heh. Dust yourself off, pal.", "Good to go? Then go!"],
+      "raven": ["Up. Move.", "Do not do that again.", "Stand. Shoot."],
+      "phantom": ["Do try to stay upright this time.", "There. Quite presentable again.", "On your feet, my friend. How tiresome."],
+      "havoc": ["Up, up, up, back in the party!", "Ha! Do not nap on the job!", "Boom, good as new, go go!"],
+      "ghost": ["Up.", "Back on your feet.", "Stay close."]
+    },
+    "arms_up": {
+      "viper": ["Weapons are tighter, nice.", "Feels better in my hands. Good.", "We are getting stronger, keep it up.", "Upgrade confirmed. Let us use it."],
+      "scorpion": ["Now that is more like it, hits like a truck!", "Heh. My gun just got meaner.", "We are getting dangerous, boys.", "Hell, that kicks harder. I love it."],
+      "raven": ["Better.", "The rifle is sharper now.", "We are improving. Good.", "Stronger. Fine by me."],
+      "phantom": ["Our tools are improving. How pleasant.", "Rather better. I approve.", "A sharper instrument, at last.", "The night makes us stronger, it seems."],
+      "havoc": ["Whoa, bigger bang, I feel it!", "Weapons are growing, ha ha, yes!", "Everything hits harder, I love this night!", "Boom, we got stronger, can you feel it?"],
+      "ghost": ["Sharper.", "Weapons improved.", "Stronger now.", "Better. Good."]
+    },
+    "gear_up": {
+      "viper": ["New gear received. Thank you, leader.", "Good kit, that helps.", "Resupplied. Appreciated."],
+      "scorpion": ["Now we are talking, thanks, boss!", "Fresh plates, fresh ammo, I feel like a king.", "Heh. You spoil us, leader."],
+      "raven": ["Good gear. Thanks.", "Better equipped. Noted.", "Useful."],
+      "phantom": ["How generous of you, leader.", "Splendid, we are properly dressed now.", "Gear of quality. I shall try not to ruin it."],
+      "havoc": ["Presents! Thank you, thank you, thank you!", "New toys, ha ha, I love it!", "Boom, now we are cooking, leader!"],
+      "ghost": ["Gear received.", "Thanks, leader.", "Better kit."]
+    },
+    "obj_found": {
+      "viper": ["Got it, good work.", "Nice find, keep it safe.", "One more, keep going."],
+      "scorpion": ["That is one down, boss.", "Pocket it, move on.", "Heh. Nice grab."],
+      "raven": ["Good.", "One more. Keep moving.", "Secured."],
+      "phantom": ["Splendid, one more in hand.", "Well found, leader.", "Do keep that safe."],
+      "havoc": ["Got it, got it, ha, nice!", "Another one for the pile!", "Shiny! Pocket it, pocket it!"],
+      "ghost": ["Found.", "Good find.", "One more."]
+    },
+    "obj_switch": {
+      "viper": ["Switch thrown, good.", "That is one done.", "Nice, next one."],
+      "scorpion": ["Click, and there it goes!", "Heh. One more flipped.", "That is the way, boss."],
+      "raven": ["Done.", "Thrown. Next.", "It is running."],
+      "phantom": ["How satisfying, it is running.", "A switch well thrown, leader.", "Splendid, onward."],
+      "havoc": ["Flip, flip, ha, it works!", "Zap, power on, yes!", "Another lever, I love levers!"],
+      "ghost": ["Switched.", "It is on.", "One done."]
+    },
+    "obj_done": {
+      "viper": ["It is done. The way is open.", "Path clear, let us move on.", "Objective complete, on me."],
+      "scorpion": ["Door is open, let us get out of here!", "Done and dusted, move it, people.", "Heh. About time, let us go."],
+      "raven": ["Open. Go.", "Finished. Moving.", "The way is clear."],
+      "phantom": ["The way is open, how delightful.", "All finished. Shall we proceed?", "Splendid, the path awaits."],
+      "havoc": ["It is open, it is open, go go go!", "Boom, done! Next room, next room!", "Way is open, party onward!"],
+      "ghost": ["Open.", "It is done.", "Moving on."]
+    },
+    "obj_hack": {
+      "viper": ["Hold here, keep them off the terminal!", "Hack running, nobody gets near it.", "Cover the terminal, stay close."],
+      "scorpion": ["Nobody touches that box, hold!", "Stay put, let them come, I have got this!", "Keep them off the terminal, boys."],
+      "raven": ["Hold. Protect the terminal.", "Stay near. They are coming.", "Keep it alive."],
+      "phantom": ["Do stay close, the terminal needs us.", "Hold your ground, I insist.", "Keep the rabble away from the machine."],
+      "havoc": ["Hold the line, nobody touch the machine!", "Come on, come on, we are guarding it!", "Stay here, let them come, ha!"],
+      "ghost": ["Hold position.", "Guard the terminal.", "Stay. They come."]
+    }
+  }
+}

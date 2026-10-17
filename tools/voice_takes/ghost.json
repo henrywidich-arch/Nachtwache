@@ -1,0 +1,65 @@
+{
+  "bark": {
+    "big_kill": { "ghost": ["Big. Quiet now.", "That one will not get up.", "Heavy. Finished."] },
+    "clear": { "ghost": ["Nothing left.", "Still. Finally.", "All quiet. I do not trust it."] },
+    "contact": { "ghost": ["Found you.", "There you are.", "Do not run. It is pointless."] },
+    "cover": { "ghost": ["Cover me. Quietly.", "One moment.", "Changing. Hold them off."] },
+    "cru": { "ghost": ["Helix soldiers. Loud ones.", "Boots, not claws. C.R.U.", "They walk like they are paid by the hour.", "C.R.U. Do not give them a clean line."] },
+    "down": { "ghost": ["Down. Need a hand.", "Cannot move. Help.", "Ugh. I am hit. Come.", "Someone. Now."] },
+    "flank": { "ghost": ["Moving around.", "Left side. Quiet.", "I take the edge."] },
+    "gas": { "ghost": ["Poison ahead. Do not breathe.", "Gas. Go around.", "Smells wrong. Back off."] },
+    "grenade": { "ghost": ["Incoming. Away.", "Grenade! Down.", "Hm. Thrown. Move.", "That is a grenade. Leave."] },
+    "horde": { "ghost": ["A flood. Pick your spot.", "All of them. At once.", "The dark is moving. Ready."] },
+    "hurt": { "ghost": ["Ugh.", "Tch. Seen.", "A scratch. Probably.", "They touched me. They will regret it."] },
+    "idle": { "ghost": ["Hm. The silence is thinking.", "I like it when nobody talks.", "Check your corners. Then check them again."] },
+    "kill": { "ghost": ["Two.", "Quiet.", "Taken.", "Finished."] },
+    "leader_down": { "ghost": ["Leader down. I am there.", "Hold on. Do not make a sound.", "Do not die. It is rude."] },
+    "leech": { "ghost": ["It clings to you. Do not twitch.", "Parasite. Stay calm.", "On your back. Still. I will remove it."] },
+    "low_ammo": { "ghost": ["Nearly dry.", "Last few rounds. Careful now.", "Running thin. I will make them count."] },
+    "medic": { "ghost": ["The healer. Kill it first.", "Tanks on its back. Mine.", "That one keeps the others up. Not for long."] },
+    "op_arrive": { "ghost": ["You will not hear the next step.", "Ghost. Remember the name, if you can.", "I was here before you noticed. Think about that."] },
+    "op_down": { "ghost": ["Stay down.", "One less.", "Quiet now. Stay there."] },
+    "op_flash": { "ghost": ["Eyes shut.", "Light.", "Do not look. Too late."] },
+    "op_hurt": { "ghost": ["Hm.", "Careful. That was your one.", "You found me. Once."] },
+    "op_leave": { "ghost": ["We are done here.", "Later.", "Sleep badly. I will."] },
+    "op_taunt": { "ghost": ["Behind you. ... Joking.", "Quiet, are we?", "I am patient. You are not."] },
+    "order_follow": { "ghost": ["Lead.", "Right behind you.", "Go. I follow.", "Understood. Moving."] },
+    "order_free": { "ghost": ["Alone is better.", "I will find them.", "Do not look for me.", "Gone."] },
+    "order_hold": { "ghost": ["Staying.", "Here, then.", "Eyes on this spot.", "Waiting is easy."] },
+    "praise": { "ghost": ["Hm. Nicely done.", "Precise.", "You learn quickly. I noticed."] },
+    "reload": { "ghost": ["Fresh magazine.", "Reload.", "Empty. Covering myself.", "One second."] },
+    "rescue": { "ghost": ["Up. I am here.", "Take my hand.", "Breathe. Now stand."] },
+    "round": { "ghost": ["More.", "Listen. They come.", "Another wave. Quiet, then fast.", "Steps. Many steps."] },
+    "shield": { "ghost": ["Shield. Go behind him.", "Hard front. Soft back.", "He hides. I walk around."] },
+    "special": { "ghost": ["That one is wrong.", "Not like the rest. Watch.", "Special. Kill it early.", "Mutant. Focus."] },
+    "stalker": { "ghost": ["Something circles us.", "Eyes in the dark. Not mine.", "It watches. I know the look."] },
+    "thanks": { "ghost": ["Noted. Thank you.", "Debt owed.", "Hm. I owe you."] }
+  },
+  "line": {
+    "m2_a_ghost": { "speaker": "ghost", "takes": [
+      "I stay with the relay. Leave it unguarded and she hears every word you say.",
+      "Someone has to hold this relay. It will be me. Go on without me.",
+      "I am staying here. The relay is the only thing between her and your radio."
+    ] },
+    "m2_b_ghost": { "speaker": "ghost", "takes": [
+      "She owns every door down there. I know a few she forgot to lock.",
+      "The doors listen to her. Some of them will listen to me, if I am close enough.",
+      "Down there, she watches everything. I can blind part of it. Not all."
+    ] },
+    "m2_g_clear": { "speaker": "ghost", "takes": [
+      "Clean again. The man on that channel is the real colonel.",
+      "No more tricks. That is Coleman, the real one.",
+      "The channel is clear. The voice on it is honest now."
+    ] },
+    "m2_g_list": { "speaker": "ghost", "takes": [
+      "She struck us from her list. Now we are targets like everyone else.",
+      "We are no longer her people. Her guns know it.",
+      "Those are her orders. We are the enemy now. Remember that."
+    ] },
+    "m2_g_radio": { "speaker": "ghost", "takes": [
+      "Your radio was hers from the moment she walked free. Give me a moment with the relay.",
+      "She has been listening through your radio. I will cut her off. Quietly.",
+      "Every word you said went to her. Hold still while I fix the relay."
+    ] }
+  }
+}

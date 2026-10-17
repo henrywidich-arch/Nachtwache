@@ -1,0 +1,214 @@
+{
+  "line": {
+    "drives_done": {"speaker": "nadja", "takes": [
+      "That is every drive. Helix cannot hide this anymore. Thank you.",
+      "It is done... all of it is safe. They will have to answer for this now.",
+      "Everything they tried to erase is in your hands. Let them explain that to the world!"
+    ]},
+    "drives_found": {"speaker": "nadja", "takes": [
+      "Another one safe! Keep going!",
+      "Yes, that is a drive! Quickly, the next!",
+      "Got it... good. More, we need more!"
+    ]},
+    "drives_start": {"speaker": "nadja", "takes": [
+      "The servers are being wiped, right now! Find the drives and pull them before it is all gone!",
+      "Hurry! Everything on these machines is about to vanish. Pull the drives, every last one!",
+      "They are erasing the evidence down here. Please, pull the drives. Quickly!"
+    ]},
+    "m2_n_cru": {"speaker": "nadja", "takes": [
+      "Attention, all Containment Response Units. Intruders in the Hive. Whoever brings them to me gets the aerosol, and a bonus you will not forget.",
+      "All Containment Response Units, this is Doctor Nadja. The Fireteam is among you. Stop them, and the reward is yours. Fresh aerosol, and triple pay.",
+      "Containment Response Units, listen carefully. Bring me the Fireteam. You will be well paid, and well protected."
+    ]},
+    "m2_n_home": {"speaker": "nadja", "takes": [
+      "Go home. Please. I will not say it again.",
+      "There is still a way back for you. Take it... before I close it.",
+      "Leave. Forget my name, forget this place. It is kinder than what is coming."
+    ]},
+    "m2_n_house": {"speaker": "nadja", "takes": [
+      "Three years I walked these halls. Strange, how the dust still smells the same.",
+      "This house kept my secrets for a long time. Quietly now... it still does.",
+      "I did not expect to stand here again. Stay close, and speak softly."
+    ]},
+    "m2_n_lock": {"speaker": "nadja", "takes": [
+      "The doors are closing. I told you to go home. I am sorry it has come to this.",
+      "This is for the best, truly. Do not fight the locks. You will only hurt yourselves.",
+      "Please stay calm. The doors are sealed, and nothing you do will change that... I wish you had listened."
+    ]},
+    "m2_n_mirror": {"speaker": "nadja", "takes": [
+      "It is behind this mirror. Be quiet while I work the lock.",
+      "There. Do you see the seam in the glass? One moment, please.",
+      "Hold still... the lock is old, and it is stubborn. Almost there."
+    ]},
+    "m2_n_open": {"speaker": "nadja", "takes": [
+      "There. The door is open. Beneath it lies a station nobody ever drew on a map.",
+      "It is open. Go down carefully... the stairs lead to a place that officially does not exist.",
+      "Open at last. Quietly now. A hidden station waits at the bottom of the stairs."
+    ]},
+    "m2_n_sorry": {"speaker": "nadja", "takes": [
+      "I am sorry. I truly am... but I needed you to open the way, and you did.",
+      "Forgive me. You were never more than the key I needed.",
+      "It was kind of you to bring me here. I am sorry it ends like this."
+    ]},
+    "m2_n_tanks": {"speaker": "nadja", "takes": [
+      "Look at them. Each tank was one attempt, one failure. The last one frightened Helix. It does not frighten me.",
+      "These tanks hold every step I took. Helix stopped at the final one, out of fear. I will not stop.",
+      "Do you understand what stands in these tanks? Steps, one after another. Helix feared the last. I do not."
+    ]},
+    "m2_n_taunt": {"speaker": "nadja", "takes": [
+      "Still on your feet? How very stubborn of you.",
+      "You are doing better than I expected. That is not a compliment, merely an observation.",
+      "Do rest, if you can. I am watching, and I am in no hurry."
+    ]},
+    "m2_n_wait": {"speaker": "nadja", "takes": [
+      "Stay here. I will go and fetch the train from the siding.",
+      "Wait for me. The train is somewhere down the siding, and I will bring it round.",
+      "Just a moment. I will get the train moving. Do not wander off."
+    ]},
+    "m2_n_work": {"speaker": "nadja", "takes": [
+      "Everything beneath your feet is the work of my whole life. I will see it finished, with your help or without it.",
+      "This is what I have built for years. Stand aside, or I will finish it over you.",
+      "My life work lies under you. I will complete it... one way or the other."
+    ]},
+    "nadja_board": {"speaker": "nadja", "takes": [
+      "We are out... oh, thank God, we are out!",
+      "Safe. We are safe. I did not dare to hope!",
+      "We are on board... I cannot stop shaking. We made it!"
+    ]},
+    "nadja_channel": {"speaker": "nadja", "takes": [
+      "Your colonel speaks to you openly, over the air? Hm. Never mind, it is not my business. Move.",
+      "An open channel... that is careless. But what do I know. Let us just go.",
+      "Your colonel again? Forget it. Please, keep moving."
+    ]},
+    "nadja_contact": {"speaker": "nadja", "takes": [
+      "Is anyone there? Please answer! I am Nadja, I am trapped in the laboratory under the farmhouse. I beg you, do not leave me down here!",
+      "Hello? Can you hear me? I am Nadja, I am locked in, underneath the farmhouse. Somebody, please... please come!",
+      "Anybody? My name is Nadja. I am shut in the lab below the farmhouse. Please, I am begging you, come and get me out!"
+    ]},
+    "nadja_follow": {"speaker": "nadja", "takes": [
+      "Do not go without me!",
+      "I am coming, I am coming!",
+      "Please, slow down! I am right here!"
+    ]},
+    "nadja_freed": {"speaker": "nadja", "takes": [
+      "The door is open! Thank you, oh thank you! I have the formula on me. Please, take me away from here!",
+      "Free... I am free! The formula is with me, I carried it all along. Please, let us leave!",
+      "You opened it! Thank you! I still have the formula. Get me out, please, hurry!"
+    ]},
+    "nadja_jam": {"speaker": "nadja", "takes": [
+      "It is stuck! Quickly, the module, please!",
+      "No! The door is not moving anymore! Do something, anything!",
+      "Please, not now... it stopped again! The module, hurry!"
+    ]},
+    "nadja_pain": {"speaker": "nadja", "takes": [
+      "Ah! I am hurt!",
+      "Please, somebody help me!",
+      "Get them off me!"
+    ]},
+    "nadja_see": {"speaker": "nadja", "takes": [
+      "Somebody came... I had stopped believing it. The door is locked through the control system, I cannot open it from inside!",
+      "You are really here! Please, the door only opens from the control system. I am stuck in here, I cannot do anything!",
+      "Oh, you came for me... Listen, the lock is controlled from outside. I cannot get out by myself, please help!"
+    ]},
+    "nadja_static": {"speaker": "nadja", "takes": [
+      "The crackling on your radio is only the gas. It disturbs the signal, nothing more.",
+      "Ignore the noise. That is interference from the gas, it always does this.",
+      "Static? Yes, I hear it too. It is the gas in the air, it eats the signal."
+    ]},
+    "nadja_story_1": {"speaker": "nadja", "takes": [
+      "It was no accident. Helix let the infection spread on purpose, to watch what it did to people!",
+      "They did not lose control. They chose to let it run... they wanted to see what it would do to people!",
+      "Helix never lost the infection. They allowed it, they wanted to study what happens to people. Real people!"
+    ]},
+    "nadja_story_2": {"speaker": "nadja", "takes": [
+      "I created the counter agent. Only one batch works. Helix wants it, and afterwards they want everybody who knows about it dead.",
+      "There is a counter agent, and I made it. One working batch. When Helix has it, they will kill everyone who knows!",
+      "One batch of the counter agent works. That is mine. They want it... and then they want every witness gone."
+    ]},
+    "nadja_story_3": {"speaker": "nadja", "takes": [
+      "The soldiers are called C.R.U. They wear an aerosol that the infected ignore, and that was my work as well. I am so sorry.",
+      "Those men are C.R.U. The infected leave them alone because of the aerosol they wear. That was my work, too... forgive me.",
+      "Do you wonder why the infected do not touch the C.R.U.? An aerosol on their gear. My work as well. I am so sorry!"
+    ]},
+    "samples_done": {"speaker": "nadja", "takes": [
+      "All the samples! Thank God... Helix will get none of it!",
+      "That is all of them? Then we have won something at last. Nothing for Helix, nothing!",
+      "Every case... oh, thank you. They will never have it!"
+    ]},
+    "samples_found": {"speaker": "nadja", "takes": [
+      "That is one! Thank you, bless you!",
+      "Yes, that case is right. Please, bring the others!",
+      "Good... but not enough. Keep looking, there are more."
+    ]},
+    "samples_start": {"speaker": "nadja", "takes": [
+      "My colleagues fled with the sample cases, but they did not make it. Search the yard and bring the cases back. Without them there is no cure!",
+      "The samples are out in the yard, with my colleagues who ran. Please, take the cases. No samples, no cure. Hurry!",
+      "Look in the yard, they did not get far. Take the cases from them. Without those there is no cure, nothing!"
+    ]},
+    "m2_n_sector": {"speaker": "nadja", "takes": [
+      "Welcome to sector C. I have been expecting you. Please, turn around while the way back is still open.",
+      "So you found the platform. How persistent. I ask you once more: leave, or at least stay out of my way.",
+      "I see you standing on the platform. Do not look for the cameras, there are too many. Go back, all of you."
+    ]},
+    "m2_n_lift": {"speaker": "nadja", "takes": [
+      "Enjoying the ride? Freight lifts are slow. It gives me plenty of time to watch you.",
+      "A lift made for crates, carrying a Fireteam. How undignified. I am watching every second of it.",
+      "Rest while it lasts. The lift is slow, and I am watching you the whole way."
+    ]},
+    "m2_n_decon": {"speaker": "nadja", "takes": [
+      "Do enjoy the cleaning. I opened this gate for you. Consider it a courtesy.",
+      "Decontamination, how thoughtful. Wash off the dirt, you will need a clear head.",
+      "Such a tidy ritual. I let you in, you know. Breathe slowly while the cycle runs."
+    ]},
+    "m2_n_area_haifischlabor": {"speaker": "nadja", "takes": [
+      "I spent years in this hall, watching the water and what lived in it. Mind the edge. They are always hungry.",
+      "The basin was built to study how a predator heals. It healed too well. Do not fall in.",
+      "How quiet it looks from here. Walk carefully on the steel... the water has teeth."
+    ]},
+    "m2_n_area_gartenlabor": {"speaker": "nadja", "takes": [
+      "I used to love this garden. The light, the green, the silence. Now look at what grows in the beds.",
+      "We grew life under this glass, and it grew back at us. Do mind the roots.",
+      "Such a pretty greenhouse. I watered those beds myself, once. They remember me, I think."
+    ]},
+    "m2_n_area_reaktorschacht": {"speaker": "nadja", "takes": [
+      "The reactor shaft. It feeds this whole facility, and it never forgives a mistake. Mind the heat... and the rails.",
+      "I spent many long nights near this core. It hums like a living thing. Do not stand too close.",
+      "Up and down, round and round. The shaft will take you wherever you hurry, and not always where you wish."
+    ]},
+    "m2_n_area_kryoarchiv": {"speaker": "nadja", "takes": [
+      "The cryo archive. Rows of sleepers, patient and cold. I hope you do not wake anything up.",
+      "I visited the pods often, to remember what we were saving. Whisper, if you must speak.",
+      "How cold it is in here. We kept our best failures asleep on ice. Please do not disturb them."
+    ]},
+    "m2_n_area_isolationstrakt": {"speaker": "nadja", "takes": [
+      "The isolation ward. I signed the forms that put them in those cells. They signed nothing, of course.",
+      "Every cell here once held a patient with a name. Now they have all come out to greet you.",
+      "I know this ring corridor by heart. The tower in the middle sees everything... as do I."
+    ]},
+    "m2_n_area_lagerhalle": {"speaker": "nadja", "takes": [
+      "The storage hall. Everything Helix could not afford to lose was kept here, and everything it could not afford to show.",
+      "So many shelves, so many sealed crates. Not one of them contains what you are looking for.",
+      "Mind the crane. It is heavier than it looks, and it is rarely careful."
+    ]},
+    "m2_n_area_sezierlabor": {"speaker": "nadja", "takes": [
+      "The dissection hall. I learned most of what I know here, from the ones who could no longer object.",
+      "Cold, clean, and quiet, the way pathology should be. Pardon the smell... the cellar has never been kind.",
+      "Many people were opened on these tables. Try not to join them."
+    ]},
+    "m2_n_obj_hack": {"speaker": "nadja", "takes": [
+      "Hacking my doors? Go ahead. I could lock you out with one touch, but I am curious how far you get.",
+      "That terminal will not give you what you want. Still, I admire the effort.",
+      "I see your fingers on the panel. Take your time. It will change nothing."
+    ]},
+    "m2_n_obj_restore": {"speaker": "nadja", "takes": [
+      "How kind of you to switch my systems back on. I could not have asked for better help.",
+      "You are doing my work for me, and quite well. Do keep going... though it will cost you.",
+      "Restoring power, are you? Be careful. Things that wake up rarely wake up friendly."
+    ]},
+    "m2_n_obj_hold": {"speaker": "nadja", "takes": [
+      "You are holding better than I thought. But no one holds forever.",
+      "Hold your little corner. I am watching, and counting how long you have left.",
+      "Well done. Honestly. It will not be enough, but it is well done."
+    ]}
+  }
+}
