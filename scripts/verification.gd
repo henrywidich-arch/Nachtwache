@@ -2777,6 +2777,79 @@ func _later(game: Node3D) -> void:
 			prowl_lurks = prowl_lurks or prowl_c.mode == "lurk"
 			prowl_near = minf(prowl_near, prowl_c.global_position.distance_to(player.global_position))
 	expect(prowl_quiet and prowl_came and prowl_lurks and prowl_near > 6.0 and (not is_instance_valid(prowl_c) or (prowl_c.leaving and not prowl_c.broke_hurt)) and prowl_dir.wounds == 0, "It does not come to a squad in a tight place; it comes to one in the open, and when they withdraw into something tight it waits outside and goes without having been driven off (never nearer than %.0f m)" % prowl_near)
+	# Its way: what it has learnt it does not get through, its ways leave out - and only its.
+	var prowl_way_from: Vector3 = game.hive._point("junction")
+	var prowl_way_to: Vector3 = game.hive._point("security")
+	var prowl_g := Prowler.new()
+	prowl_g.game = game
+	prowl_g.kind = "prowler"
+	prowl_g.uncounted = true
+	prowl_g.position = prowl_way_from + Vector3(0, 0.08, 0)
+	game.enemies.add_child(prowl_g)
+	prowl_g.set_physics_process(false)
+	var prowl_shared: PackedVector3Array = game.cabin.path_between(prowl_way_from, prowl_way_to)
+	var prowl_mid: Vector3 = prowl_shared[prowl_shared.size() / 2] if prowl_shared.size() > 4 else prowl_way_from
+	var prowl_level: int = game.cabin.level_of(prowl_mid)
+	var prowl_cells := {}
+	for prowl_dx in range(-2, 3):
+		for prowl_dz in range(-2, 3):
+			prowl_cells[Vector2i(roundi(prowl_mid.x / CabinMap.CELL) + prowl_dx, roundi(prowl_mid.z / CabinMap.CELL) + prowl_dz)] = Time.get_ticks_msec() / 1000.0
+	Prowler.blocked.clear()
+	Prowler.blocked_map = game.cabin.get_instance_id()
+	Prowler.blocked[prowl_level] = prowl_cells
+	var prowl_own: PackedVector3Array = prowl_g.way_between(prowl_way_from, prowl_way_to)
+	var prowl_avoids := true
+	for prowl_point in prowl_own:
+		prowl_avoids = prowl_avoids and Vector2(prowl_point.x - prowl_mid.x, prowl_point.z - prowl_mid.z).length() > 0.6
+	var prowl_others: bool = game.cabin.path_between(prowl_way_from, prowl_way_to) == prowl_shared
+	Prowler.blocked.clear()
+	expect(prowl_shared.size() > 4 and prowl_avoids and prowl_others, "The Prowler's ways leave out what it has learnt it does not get through, and nobody else's way changes for that")
+	# Another way round: out of sight it is gone, and it comes again on its prey's level, out of
+	# everybody's sight, at a distance, growling first. (Seeded: the same places every time.)
+	seed(4242)
+	face(game, prowl_wide + Vector3(0, 0.05, 0), 0.0)
+	prowl_g.global_position = prowl_way_to + Vector3(0, 0.08, 0)
+	prowl_g.prey = player
+	prowl_g.nerve = 0.0
+	prowl_g.roomy = prowl_dir.may_follow
+	prowl_g.width = prowl_dir.width_of
+	prowl_g.ground = prowl_dir.open_ground
+	prowl_g.mode = "close"
+	prowl_g.shift_rest = 0.0
+	prowl_g._start_shift()
+
+	for prowl_step in range(300):
+		prowl_g._physics_process(1.0 / 60.0)
+		if prowl_g.shift_phase == "away":
+			break
+	var prowl_hidden: bool = prowl_g.shift_phase == "away" and not prowl_g.is_targetable() and prowl_g.collision_layer == 0 and prowl_g.absent
+	var prowl_back := Vector3.INF
+	for prowl_step in range(int((Prowler.SHIFT_HIDDEN + Prowler.SHIFT_GIVE_UP) * 60.0) + 30):
+		prowl_g._physics_process(1.0 / 60.0)
+		if prowl_g.shift_phase == "warn":
+			prowl_back = prowl_g.global_position
+			break
+	var prowl_off: float = Vector2(prowl_back.x - player.global_position.x, prowl_back.z - player.global_position.z).length() if prowl_back != Vector3.INF else -1.0
+	var prowl_fair: bool = prowl_back != Vector3.INF and prowl_off >= Prowler.SHIFT_REACH.x - 0.6 and prowl_off <= Prowler.SHIFT_REACH.y + 0.6 and game.cabin.level_of(prowl_back) == game.cabin.level_of(player.global_position) and not prowl_g._seen_by_any(prowl_back) and prowl_g.is_targetable() and prowl_g.shift_rest > Prowler.SHIFT_REST - Prowler.SHIFT_HIDDEN - Prowler.SHIFT_GIVE_UP - 1.0
+	var prowl_rests: bool = prowl_g.shift_rest > 0.0
+	# (The dice of the rest of the run are their own again.)
+	randomize()
+	expect(prowl_hidden and prowl_fair and prowl_rests and prowl_g.mode == "shift", "Out of sight the Prowler can be gone and come again on its prey's level - %.0f m off him, where nobody of the squad can see, growling first - and not again for a while" % prowl_off)
+	# Through narrow parts at a prowl, in the open at a gallop.
+	prowl_g.shift_phase = ""
+	prowl_g._set_mode("close")
+	prowl_g.global_position = prowl_way_from + Vector3(0, 0.08, 0)
+	prowl_g.prey = player
+	face(game, prowl_way_to + Vector3(0, 0.05, 0), 0.0)
+	prowl_g.width = func(_at: Vector3) -> float: return 2.0
+	prowl_g.roomy = Callable()
+	var prowl_slow := 0.0
+	for prowl_step in range(90):
+		prowl_g._physics_process(1.0 / 60.0)
+		prowl_slow = maxf(prowl_slow, prowl_g.gait_pace)
+	expect(prowl_slow > 0.5 and prowl_slow <= Prowler.NARROW_PACE + 0.01, "Where the passage is narrow it goes at a prowl, not a gallop (%.1f m/s)" % prowl_slow)
+	prowl_g._retire()
+	prowl_g.queue_free()
 	game.return_to_menu()
 	game.profile.mission = prowl_mission
 	game.intro_skipped = prowl_skipped

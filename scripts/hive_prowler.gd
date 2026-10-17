@@ -274,6 +274,7 @@ func _arrive(for_good: bool) -> void:
 	beast.lair = _way_out
 	beast.roomy = may_follow
 	beast.width = width_of
+	beast.ground = open_ground
 	# The first time it shows itself before it attacks.
 	beast.herald = visits == 0 and not for_good and not shown
 	shown = true
@@ -373,13 +374,15 @@ func width_of(pos: Vector3) -> float:
 
 ## True when the way between two places has no tight stretch longer than a doorway.
 func wide_way(from: Vector3, to: Vector3) -> bool:
-	if director.map.level_of(from) != director.map.level_of(to):
-		return false
 	var way: PackedVector3Array = director.map.path_between(from, to)
 	if way.size() < 2:
 		return false
 	var tight := 0.0
 	for i in range(1, way.size()):
+		# (A flight of stairs is not a passage: it may take one, if the floors at both ends are wide.)
+		if absf(way[i].y - way[i - 1].y) > 0.3:
+			tight = 0.0
+			continue
 		var piece := way[i - 1].distance_to(way[i])
 		var parts := maxi(1, ceili(piece / CabinMap.CELL))
 		for part in range(parts):

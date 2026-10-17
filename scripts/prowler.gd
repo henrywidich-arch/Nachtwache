@@ -105,6 +105,44 @@ const EVADE_REST := 5.0
 const EVADE_REACH := Vector2(5.0, 11.0)
 ## Every step of boldness adds this share to what its blows do.
 const BOLD_HARM := 0.1
+## Its own way along the path (not the small infected's point by point, which steers its
+## three-metre body into every door frame): a point of the way this near counts as
+## reached, and it looks LOOK_AHEAD metres along the way for the furthest point it can go
+## to in a straight line with its whole body (a ball of BODY_RADIUS swept there), every
+## AIM_EVERY seconds. What it brushes it keeps off.
+const WAY_NEAR := 0.9
+const LOOK_AHEAD := 7.0
+const BODY_RADIUS := 0.55
+const AIM_EVERY := 0.15
+## Where the passage is narrower than NARROW metres it goes at a prowl (NARROW_PACE m/s),
+## not at a gallop into the frame; and it does not turn over its haunches there.
+const NARROW := 3.4
+const NARROW_PACE := 4.2
+## Stuck: it wants to go and does not move for STUCK_AFTER seconds - it backs off a step
+## (BACKUP seconds) and finds its way anew. STUCK_MOST times within STUCK_WINDOW seconds
+## and it goes another way round (below).
+const STUCK_AFTER := 0.7
+const BACKUP := 0.45
+const STUCK_MOST := 3
+const STUCK_WINDOW := 10.0
+## Another way round. When its prey is on another level (for SHIFT_AFTER.x seconds), where
+## it does not follow (SHIFT_AFTER.y), at the end of a way LONG_WAY times as long as the
+## straight line (and over LONG_FROM metres), or it is stuck: once nobody of the squad can
+## see it, it is gone - and SHIFT_HIDDEN seconds later it is on its prey's level again,
+## SHIFT_REACH metres off him where none of them can see, growls (SHIFT_WARN seconds) and
+## attacks. Not again for SHIFT_REST seconds; if it finds no such place within SHIFT_GIVE_UP
+## seconds it gives the way round up.
+const SHIFT_AFTER := Vector2(1.0, 2.5)
+## A level change on a way that is good (not too long, not too tight): it takes the stairs,
+## and only goes another way round if it has not got up (or down) in STAIR_TRY seconds.
+const STAIR_TRY := 9.0
+const LONG_WAY := 1.9
+const LONG_FROM := 22.0
+const SHIFT_REACH := Vector2(9.0, 16.0)
+const SHIFT_HIDDEN := 1.6
+const SHIFT_WARN := 0.9
+const SHIFT_REST := 14.0
+const SHIFT_GIVE_UP := 4.0
 ## The spit: rare. It stands, draws its head back while its throat works (SPIT_WIND
 ## seconds: the tell), and spits a glob in an arc at where its prey stands at that
 ## moment - whoever keeps moving is not there any more. Where it comes down a pool
@@ -152,6 +190,8 @@ var lair: Callable
 var roomy: Callable
 ## Asked how wide the passage is at a place, in metres.
 var width: Callable
+## Asked how much free ground there is around a place (square metres).
+var ground: Callable
 ## Its prey is where it does not follow (asked a few times a second).
 var tight := false
 var tight_left := 0.0
@@ -190,6 +230,31 @@ var spit_most := SPIT_MOST
 var still_at := Vector3.INF
 var still_for := 0.0
 var spat := false
+## Its way: the point it goes to straight, when it looks again, whether the way is far
+## too long, and its backing off when it is stuck.
+var aim_point := Vector3.INF
+## What every Prowler has learnt of this map: cells (by level) the path finder counts as
+## free that its body does not get through - the gap between two scanner gates, a door
+## half blocked by a cabinet. Its ways leave them out. (The shared path finder is only
+## lent these cells as solid for the moment of its own question.)
+## (Each for BLOCK_KEEP seconds: a door that was slow to open is not shut to it for good.)
+static var blocked: Dictionary = {}
+static var blocked_map := 0
+const BLOCK_KEEP := 45.0
+var aim_left := 0.0
+var way_long := false
+var backup_left := 0.0
+var backup_way := Vector3.ZERO
+var stuck_times: Array[float] = []
+var stuck_still := 0.0
+## The way round: hide (getting out of sight), away (gone), warn (come again, growling).
+var shift_phase := ""
+var shift_left := 0.0
+var shift_rest := 0.0
+var shift_cover := Vector3.INF
+var shifts := 0
+var other_for := 0.0
+var tight_for := 0.0
 ## How well it fights on this level (the level's "tactics"; who sends it says so).
 var level := 1.0
 var pin_hurt := 0.0
@@ -318,7 +383,7 @@ func gauge() -> Vector2:
 	return Vector2(maxf(0.0, health), max_health)
 
 func is_targetable() -> bool:
-	return not dead and not leaving
+	return not dead and not leaving and shift_phase != "away"
 
 ## The Medic's gas does nothing for it.
 func soak() -> void:
@@ -623,8 +688,40 @@ func _special(delta: float, toward: Vector3) -> void:
 				cue("spit", [mouth() + facing() * 0.9, aim, clampf(away / SPIT_PACE, SPIT_FLIGHT.x, SPIT_FLIGHT.y), _harm()])
 			elif spat and mode_left <= 0.0:
 				_set_mode("circle")
+		"shift":
+			shift_left -= delta
+			match shift_phase:
+				"hide":
+					if not _seen_by_any(global_position):
+						_vanish()
+						return
+					if shift_cover == Vector3.INF:
+						shift_cover = _cover_from_all()
+					if shift_cover == Vector3.INF or shift_left <= 0.0:
+						_end_shift()
+						return
+					go = _route(shift_cover, delta)
+					pace = speed
+					look = go if go != Vector3.ZERO else toward
+					if go == Vector3.ZERO:
+						shift_cover = Vector3.INF
+				"away":
+					if mode_left <= 0.0:
+						var spot := _hidden_near(prey.global_position) if is_instance_valid(prey) else Vector3.INF
+						if spot != Vector3.INF:
+							_appear(spot)
+						elif shift_left <= 0.0:
+							_appear(global_position)
+						else:
+							mode_left = 0.5
+					return
+				"warn":
+					look = toward
+					if mode_left <= 0.0:
+						_end_shift()
+						return
 		"evade":
-			go = _steer(evade_to, delta)
+			go = _route(evade_to, delta)
 			pace = speed
 			look = go if go != Vector3.ZERO else toward
 			if go == Vector3.ZERO or mode_left <= 0.0 or global_position.distance_to(evade_to) < 1.3:
@@ -708,6 +805,15 @@ func _physics_process(delta: float) -> void:
 		tight = roomy.is_valid() and not roomy.call(global_position, target)
 	if tight and mode in ["close", "circle", "rush"]:
 		_set_mode("lurk")
+	# Its prey is on another level, where it does not follow, or at the end of a way far too
+	# long: it goes another way round.
+	shift_rest -= delta
+	other_for = other_for + delta if not same_floor and mode in ["close", "circle", "rush", "lurk"] else 0.0
+	# (Only when its prey stands in the open and the way to him is what is tight: where he
+	# himself has no room, no way round helps, and it waits outside as before.)
+	tight_for = tight_for + delta if tight and mode == "lurk" and (not ground.is_valid() or float(ground.call(target)) >= HiveProwler.ROOM_STAY) else 0.0
+	if shift_rest <= 0.0 and mode in ["close", "circle", "rush", "lurk"] and (other_for > (STAIR_TRY if not way_long and path.size() >= 2 else SHIFT_AFTER.x) or tight_for > SHIFT_AFTER.y or (way_long and mode == "close")):
+		_start_shift()
 	turn_wait -= delta
 	spit_cooldown -= delta
 	# Has its prey stayed where it is?
@@ -720,7 +826,7 @@ func _physics_process(delta: float) -> void:
 	charge_cooldown -= delta
 	evade_cooldown -= delta
 	dash_left -= delta
-	if mode in ["pin", "wind", "charge", "evade", "spit"]:
+	if mode in ["pin", "wind", "charge", "evade", "spit", "shift"]:
 		_special(delta, toward)
 		return
 	match mode:
@@ -786,7 +892,7 @@ func _physics_process(delta: float) -> void:
 				break_off(false)
 				return
 		"flee":
-			direction = _steer(flee_to, delta)
+			direction = _route(flee_to, delta)
 			pace = sprint
 			look = direction if direction != Vector3.ZERO else -toward
 			flee_unseen = 0.0 if _observed() else flee_unseen + delta
@@ -829,7 +935,7 @@ func _physics_process(delta: float) -> void:
 			elif clear and special_cooldown <= 0.0 and distance > LEAP_REACH.x and distance < LEAP_REACH.y and is_on_floor() and _has_room(target) and randf() < delta * 2.5:
 				_start_leap()
 			else:
-				direction = _steer(target, delta)
+				direction = _route(target, delta)
 				pace = sprint
 				look = direction if direction != Vector3.ZERO else toward
 		"circle":
@@ -871,7 +977,7 @@ func _physics_process(delta: float) -> void:
 				if cooldown <= 0.0 and _clear_line(target):
 					_strike()
 			else:
-				direction = toward if same_floor and distance < 6.0 and _clear_line(target, true) else _steer(target, delta)
+				direction = toward if same_floor and distance < 6.0 and _clear_line(target, true) else _route(target, delta)
 				pace = sprint
 				look = direction if direction != Vector3.ZERO else toward
 			if mode == "rush" and mode_left <= 0.0:
@@ -902,7 +1008,7 @@ func _physics_process(delta: float) -> void:
 				orbit = 1.0 if randf() < 0.5 else -1.0
 				_set_mode("circle")
 	# What it wants lies behind it: it comes round over its haunches, out of a gallop after a slide.
-	if direction != Vector3.ZERO and not back and turn_wait <= 0.0 and is_on_floor() and mode in ["close", "rush", "lurk", "flee"]:
+	if direction != Vector3.ZERO and not back and turn_wait <= 0.0 and is_on_floor() and mode in ["close", "rush", "lurk", "flee"] and _has_room(global_position):
 		var behind := wrapf(atan2(-direction.x, -direction.z) - model.rotation.y, -PI, PI)
 		if absf(behind) > deg_to_rad(PIVOT_FROM):
 			turn_wait = TURN_REST
@@ -914,17 +1020,44 @@ func _physics_process(delta: float) -> void:
 			else:
 				_pivot()
 			return
-	# Snagged on a corner on its way: a step aside, and a new way.
+	# Stuck on its way: it backs off a step and finds the way anew - and if that keeps
+	# happening, it goes another way round.
 	if mode in ["close", "rush", "flee"]:
-		if pace > 2.0 and flat_speed < pace * 0.25:
-			stuck_for += delta
-			if stuck_for > 0.4:
-				stuck_for = 0.0
-				orbit = -orbit
-				knock = Vector3(-direction.z, 0, direction.x) * orbit * 5.0
+		if backup_left > 0.0:
+			backup_left -= delta
+			direction = backup_way
+			pace = 2.5
+			back = true
+			look = -backup_way
+		elif pace > 2.0 and gait_pace > 1.5 and flat_speed < 0.6:
+			stuck_still += delta
+			if stuck_still > STUCK_AFTER:
+				stuck_still = 0.0
+				backup_left = BACKUP
+				backup_way = -facing()
+				_learn_block()
 				repath_left = 0.0
+				aim_left = 0.0
+				var now := Time.get_ticks_msec() / 1000.0
+				stuck_times.append(now)
+				var kept: Array[float] = []
+				for at in stuck_times:
+					if now - at < STUCK_WINDOW:
+						kept.append(at)
+				stuck_times = kept
+				if stuck_times.size() >= STUCK_MOST and shift_rest <= 0.0 and not leaving:
+					stuck_times.clear()
+					_start_shift()
+					return
 		else:
-			stuck_for = 0.0
+			stuck_still = 0.0
+	# Through doors and narrow parts at a prowl.
+	if pace > NARROW_PACE and mode in ["close", "rush", "flee"] and width.is_valid():
+		var room_here := float(width.call(global_position))
+		if aim_point != Vector3.INF:
+			room_here = minf(room_here, float(width.call(aim_point.lerp(global_position, 0.5))))
+		if room_here < NARROW:
+			pace = NARROW_PACE
 	knock = knock.move_toward(Vector3.ZERO, delta * 16.0)
 	# It has weight: it gathers speed and loses it, and goes slower as long as it does not
 	# face where it is going.
@@ -957,6 +1090,229 @@ func _physics_process(delta: float) -> void:
 	if growl_left <= 0.0 and mode != "flee":
 		growl_left = randf_range(3.0, 6.5)
 		game.sounds.play_at(str(voices.voice), mouth())
+
+# ---------------------------------------------------------------- its way
+
+## Where to go now along the way to `to`: the furthest point ahead it can reach straight
+## with its whole body, away from whatever it brushes. (Its own following of the shared
+## path; the path finder itself is the same as everybody's.)
+func _route(to: Vector3, delta: float) -> Vector3:
+	repath_left -= delta
+	aim_left -= delta
+	if repath_left <= 0.0 or path.is_empty():
+		path = way_between(global_position, to)
+		path_index = 1 if path.size() > 1 else 0
+		repath_left = 0.5
+		aim_left = 0.0
+		var length := 0.0
+		for i in range(1, path.size()):
+			length += path[i - 1].distance_to(path[i])
+		way_long = length > LONG_FROM and length > global_position.distance_to(to) * LONG_WAY
+	while path_index < path.size():
+		var point := path[path_index]
+		var off := Vector3(point.x - global_position.x, 0, point.z - global_position.z)
+		var passed := false
+		if path_index > 0:
+			var piece := Vector3(point.x - path[path_index - 1].x, 0, point.z - path[path_index - 1].z)
+			passed = piece.dot(off) < 0.0 and absf(point.y - global_position.y) < 0.6
+		if off.length() < WAY_NEAR or passed:
+			path_index += 1
+			aim_left = 0.0
+		else:
+			break
+	if path_index >= path.size():
+		aim_point = Vector3.INF
+		var last := Vector3(to.x - global_position.x, 0, to.z - global_position.z)
+		return last.normalized() if last.length() > 0.3 else Vector3.ZERO
+	if aim_left <= 0.0 or aim_point == Vector3.INF:
+		aim_left = AIM_EVERY
+		aim_point = path[path_index]
+		for i in range(path_index + 1, mini(path.size(), path_index + 14)):
+			var ahead := path[i]
+			if ahead.distance_to(global_position) > LOOK_AHEAD or absf(ahead.y - global_position.y) > 0.6:
+				break
+			if not _fits(ahead):
+				break
+			aim_point = ahead
+	var way := Vector3(aim_point.x - global_position.x, 0, aim_point.z - global_position.z).normalized()
+	for i in range(get_slide_collision_count()):
+		var hit := get_slide_collision(i)
+		var wall := hit.get_normal()
+		if absf(wall.y) < 0.5 and not (hit.get_collider() is CharacterBody3D) and way.dot(wall) < 0.0:
+			way += Vector3(wall.x, 0, wall.z) * 0.7
+	return way.normalized() if way.length() > 0.01 else Vector3.ZERO
+
+## The shared path finder's way between two places, without the cells it has learnt it
+## does not get through.
+func way_between(from: Vector3, to: Vector3) -> PackedVector3Array:
+	var map: CabinMap = game.cabin
+	if blocked_map != map.get_instance_id():
+		blocked.clear()
+		blocked_map = map.get_instance_id()
+	var lent: Array = []
+	var now := Time.get_ticks_msec() / 1000.0
+	for level: int in blocked:
+		if level < 0 or level >= map.navigation.size():
+			continue
+		var grid: AStarGrid2D = map.navigation[level]
+		for cell: Vector2i in blocked[level]:
+			if now - float(blocked[level][cell]) < BLOCK_KEEP and grid.is_in_boundsv(cell) and not grid.is_point_solid(cell):
+				grid.set_point_solid(cell, true)
+				lent.append([grid, cell])
+	var way: PackedVector3Array = map.path_between(from, to)
+	for pair: Array in lent:
+		(pair[0] as AStarGrid2D).set_point_solid(pair[1], false)
+	return way
+
+## It is stuck: what is in front of it, where its way goes on, it does not get through.
+func _learn_block() -> void:
+	var map: CabinMap = game.cabin
+	var level: int = map.level_of(global_position)
+	if level < 0 or level >= map.navigation.size():
+		return
+	var ahead := facing()
+	if aim_point != Vector3.INF:
+		var to_aim := Vector3(aim_point.x - global_position.x, 0, aim_point.z - global_position.z)
+		if to_aim.length() > 0.2:
+			ahead = to_aim.normalized()
+	var front := global_position + ahead * 1.0
+	var middle := Vector2i(roundi(front.x / CabinMap.CELL), roundi(front.z / CabinMap.CELL))
+	var standing := Vector2i(roundi(global_position.x / CabinMap.CELL), roundi(global_position.z / CabinMap.CELL))
+	if not blocked.has(level):
+		blocked[level] = {}
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			var cell := middle + Vector2i(dx, dz)
+			if cell != standing:
+				(blocked[level] as Dictionary)[cell] = Time.get_ticks_msec() / 1000.0
+
+## Whether its whole body gets straight to `point` from where it stands.
+func _fits(point: Vector3) -> bool:
+	var ball := SphereShape3D.new()
+	ball.radius = BODY_RADIUS
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = ball
+	query.collision_mask = 1
+	query.transform = Transform3D(Basis(), global_position + Vector3(0, 0.75, 0))
+	query.motion = Vector3(point.x - global_position.x, point.y - global_position.y, point.z - global_position.z)
+	var free := get_world_3d().direct_space_state.cast_motion(query)
+	return free.size() == 2 and free[0] >= 0.999
+
+# ---------------------------------------------------------------- another way round
+
+## Whether anybody of the squad sees this place (the survivor: in his view; a companion:
+## with a clear line at all).
+func _seen_by_any(pos: Vector3) -> bool:
+	for survivor in _squad():
+		var eye: Vector3 = survivor.global_position + Vector3(0, 1.6, 0)
+		if survivor == game.player:
+			eye = game.player.camera.global_position
+		for height: float in [0.4, 1.1]:
+			var spot := pos + Vector3(0, height, 0)
+			var line := spot - eye
+			if line.length() > 45.0:
+				continue
+			if survivor == game.player and line.length() > 4.0 and _facing_of(survivor).dot(Vector3(line.x, 0, line.z).normalized()) < 0.15:
+				continue
+			if _line(eye, spot):
+				return true
+	return false
+
+## Out of everybody's sight, near and straight to reach.
+func _cover_from_all() -> Vector3:
+	var best := Vector3.INF
+	var best_gap := INF
+	for attempt in range(16):
+		var turn := randf() * TAU
+		var spot := global_position + Vector3(cos(turn), 0, sin(turn)) * randf_range(3.0, 12.0)
+		if not _has_room(spot) or not _fits(spot) or _seen_by_any(spot):
+			continue
+		var gap := spot.distance_to(global_position)
+		if gap < best_gap:
+			best_gap = gap
+			best = spot
+	return best
+
+## A place on its prey's level, SHIFT_REACH metres off him, that none of the squad can see,
+## with room, and from where it may go for him - behind his back if there is one.
+func _hidden_near(center: Vector3) -> Vector3:
+	var level: int = game.cabin.level_of(center)
+	if level < 0 or level >= game.cabin.navigation.size():
+		return Vector3.INF
+	var grid: AStarGrid2D = game.cabin.navigation[level]
+	var height: float = game.cabin.level_height(level)
+	var ahead := _facing_of(prey) if is_instance_valid(prey) else Vector3.FORWARD
+	var best := Vector3.INF
+	var best_worth := -9.0
+	for attempt in range(20):
+		var turn := randf() * TAU
+		var far := randf_range(SHIFT_REACH.x, SHIFT_REACH.y)
+		var cell := Vector2i(roundi((center.x + cos(turn) * far) / CabinMap.CELL), roundi((center.z + sin(turn) * far) / CabinMap.CELL))
+		if not grid.is_in_boundsv(cell) or grid.is_point_solid(cell):
+			continue
+		var spot := Vector3(cell.x * CabinMap.CELL, height, cell.y * CabinMap.CELL)
+		if not _has_room(spot) or _seen_by_any(spot):
+			continue
+		if roomy.is_valid():
+			if not roomy.call(spot, center):
+				continue
+		if way_between(spot, center).size() < 2:
+			continue
+		var value := -ahead.dot(Vector3(spot.x - center.x, 0, spot.z - center.z).normalized()) + randf() * 0.4
+		if value > best_worth:
+			best_worth = value
+			best = spot
+	return best
+
+func _start_shift() -> void:
+	mode = "shift"
+	shift_phase = "hide"
+	shift_left = SHIFT_GIVE_UP
+	shift_cover = Vector3.INF
+	shift_rest = SHIFT_REST
+	other_for = 0.0
+	tight_for = 0.0
+	attack_clock = -1.0
+	shifts += 1
+
+## Out of sight: gone.
+func _vanish() -> void:
+	shift_phase = "away"
+	mode_left = SHIFT_HIDDEN
+	absent = true
+	velocity = Vector3.ZERO
+	gait_pace = 0.0
+	collision_layer = 0
+	collision_mask = 0
+	head_box.collision_layer = 0
+	for flank in flanks:
+		flank.collision_layer = 0
+	cue("hide")
+
+## Here again: it growls, and a moment later it goes for its prey.
+func _appear(spot: Vector3) -> void:
+	global_position = spot + Vector3(0, 0.08, 0)
+	if is_instance_valid(prey):
+		var to := prey.global_position - spot
+		model.rotation.y = atan2(-to.x, -to.z)
+	absent = false
+	collision_layer = 4
+	collision_mask = 1 | 2 | 4 | 16
+	head_box.collision_layer = 8
+	for flank in flanks:
+		flank.collision_layer = 8
+	path = PackedVector3Array()
+	repath_left = 0.0
+	shift_phase = "warn"
+	mode_left = SHIFT_WARN
+	cue("show")
+
+func _end_shift() -> void:
+	if shift_phase == "away":
+		_appear(global_position)
+	shift_phase = ""
+	shift_cover = Vector3.INF
+	_set_mode("close")
 
 ## True where it has room to come down or to walk (always, when nobody tells it how wide a place is).
 func _has_room(at: Vector3) -> bool:
@@ -1158,6 +1514,13 @@ func enrage() -> void:
 func break_off(hurt: bool) -> void:
 	if dead or leaving:
 		return
+	if shift_phase == "away":
+		# Gone already: it simply does not come again.
+		leaving = true
+		if game.boss == self:
+			game.boss = null
+		depart()
+		return
 	if clung_to != null:
 		release(false)
 	(model as ProwlerVisual).charging = false
@@ -1228,6 +1591,11 @@ func show_cue(action: String, args: Array) -> void:
 			model.attack(float(args[1]), float(args[2]), str(args[0]))
 			game.sounds.play_at("swipe", global_position + Vector3.UP, 2.0, 0.75)
 			game.sounds.play_at("prowler_strike", mouth())
+		"hide":
+			model.hide()
+		"show":
+			model.show()
+			game.sounds.play_at("prowler_growl", mouth(), 6.0, 0.9)
 		"spit_wind":
 			(model as ProwlerVisual).spit()
 			game.sounds.play_at("gurgle", mouth(), 7.0, 0.55)

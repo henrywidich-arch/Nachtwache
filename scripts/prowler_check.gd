@@ -433,3 +433,275 @@ func _pose(body: ProwlerVisual, clip: String, seconds: float, speed: float) -> v
 	var steps := int(round(seconds * 120.0))
 	for i in range(steps):
 		body.animate(1.0 / 120.0, speed)
+
+# ---------------------------------------------------------------- the ways it finds
+
+## A stand-in for somebody it hunts: it only stands there.
+class Target extends Node3D:
+	func is_targetable() -> bool:
+		return true
+
+	func receive_damage(_amount: float, _from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
+		pass
+
+## How it finds its way (`--prowler-check --prowler-paths`, headless, with --hive-layout=all):
+## the Prowler is put into many places of the facility and the areas, its prey somewhere
+## else in the same area - in the same room, through doors, on another level - and every
+## run says whether it got there, how long it took, how long it stood against something,
+## how long it scraped along walls and how often it turned back. A PROWLER_PATHS line sums
+## it up. Same pairs every time (the dice are seeded).
+func run_paths() -> void:
+	await get_tree().create_timer(1.0).timeout
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.team_enabled = false
+	game.hive.resume_at = "labs"
+	# (Every area of the pool in its seam: the night the tools call "all".)
+	game.hive.seed_wanted = -4
+	game.start_run()
+	await get_tree().create_timer(1.0).timeout
+	var hive: HiveDirector = game.hive
+	var map: HiveMap = hive.map
+	game.set_process(false)
+	hive.set_process(false)
+	hive.set_physics_process(false)
+	hive.prowl.set_process(false)
+	if hive.entries != null:
+		hive.entries.set_process(false)
+		hive.entries.set_physics_process(false)
+	for id in map.areas:
+		map.unlock(id, true)
+	hive._clear_enemies()
+	game.player.global_position = Vector3(0, -400, 0)
+	game.player.set_physics_process(false)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 1717
+	# Places: a free spot near the middle of every room one can walk in.
+	var spots: Array[Dictionary] = []
+	for room: Dictionary in map.rooms:
+		var outer: Rect2 = room.outer
+		var middle := Vector3(outer.get_center().x, float(room.y) + 0.1, outer.get_center().y)
+		var level: int = int(room.level)
+		var cell: Vector2i = map.nearest_cell(middle, level)
+		var at := Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL)
+		if at.distance_to(middle) > 4.0 or str(room.get("zone", "")) == "" and map.area_of(at) == "":
+			continue
+		# (The random areas have no area name of their own: their zone tells them apart.)
+		var group: String = map.area_of(at) if map.area_of(at) != "" else "~" + str(room.zone)
+		# (Only where it comes: the facility from the administration on, and the areas.)
+		if group in ["~house", "~terminal", "descent", "station", "~park"]:
+			continue
+		spots.append({"at": at, "room": str(room.id), "area": group, "level": map.level_of(at)})
+	var pairs: Array = []
+	for a in spots:
+		for b in spots:
+			if a == b or a.area != b.area:
+				continue
+			var gap := Vector2(a.at.x - b.at.x, a.at.z - b.at.z).length()
+			if gap >= 6.0 and gap <= 34.0 and map.path_between(a.at, b.at).size() >= 2:
+				pairs.append([a, b])
+	# A fixed choice of them: as many of other levels as there are, the rest at random.
+	var chosen: Array = []
+	var other: Array = pairs.filter(func(p: Array) -> bool: return int(p[0].level) != int(p[1].level))
+	var same: Array = pairs.filter(func(p: Array) -> bool: return int(p[0].level) == int(p[1].level))
+	for list: Array in [other, same]:
+		for i in range(list.size() - 1, 0, -1):
+			var j := dice.randi_range(0, i)
+			var keep: Variant = list[i]
+			list[i] = list[j]
+			list[j] = keep
+	var limit := 96
+	for p in other.slice(0, 40):
+		chosen.append(p)
+	for p in same:
+		if chosen.size() >= limit:
+			break
+		chosen.append(p)
+	var trace := false
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--prowler-trace="):
+			var ends := arg.trim_prefix("--prowler-trace=").split(":")
+			trace = true
+			chosen = pairs.filter(func(p: Array) -> bool: return str(p[0].room) == ends[0] and str(p[1].room) == ends[1])
+	# Four times as fast, in steps as short as at normal speed (a step of a fifteenth of a
+	# second would carry it past the points of its way).
+	Engine.time_scale = 4.0
+	Engine.physics_ticks_per_second = 240
+	var totals := {"open": 0, "open_reached": 0, "tight": 0, "tight_kept_out": 0, "open_time": 0.0, "runs": 0, "reached": 0, "time": 0.0, "stuck": 0.0, "scrape": 0.0, "flips": 0, "levels": 0, "levels_reached": 0, "moved": 0}
+	var batch := 6
+	for first in range(0, chosen.size(), batch):
+		var runs: Array[Dictionary] = []
+		for k in range(first, mini(first + batch, chosen.size())):
+			var p: Array = chosen[k]
+			var target := Target.new()
+			game.add_child(target)
+			target.global_position = p[1].at
+			# (Put in as the director does it: spawn_enemy would send it through a way in.)
+			var beast := Prowler.new()
+			beast.game = game
+			beast.wave = 1
+			beast.kind = "prowler"
+			beast.uncounted = true
+			beast.position = p[0].at + Vector3(0, 0.08, 0)
+			game.enemies.add_child(beast)
+			beast.prey = target
+			beast.nerve = 0.0
+			beast.roomy = hive.prowl.may_follow
+			beast.width = hive.prowl.width_of
+			runs.append({"open": hive.prowl.open_ground(p[1].at) >= HiveProwler.ROOM_STAY, "near": 99.0, "beast": beast, "target": target, "from": p[0], "to": p[1], "t": -1.0, "stuck": 0.0, "scrape": 0.0, "flips": 0, "last": Vector3.ZERO, "modes": {}, "start": beast.position})
+		var clock := 0.0
+		var feel_left := 0.0
+		while clock < 30.0:
+			await get_tree().physics_frame
+			var step := get_physics_process_delta_time()
+			clock += step
+			# Doors open for whoever comes near them (the director does this; it is switched off here).
+			feel_left -= step
+			if feel_left <= 0.0:
+				feel_left = 0.12
+				var actors := PackedVector3Array()
+				for run in runs:
+					if is_instance_valid(run.beast):
+						actors.append((run.beast as Node3D).global_position)
+				map.feel(actors)
+			var open := 0
+			for run in runs:
+				var beast: Prowler = run.beast
+				if not is_instance_valid(beast) or float(run.t) >= 0.0:
+					continue
+				open += 1
+				beast.swap_left = 99.0
+				beast.prey = run.target
+				run.modes[beast.mode] = true
+				var at: Vector3 = beast.global_position
+				var to: Vector3 = run.to.at
+				if beast.collision_layer != 0:
+					run.near = minf(float(run.near), at.distance_to(to))
+				if Vector2(at.x - to.x, at.z - to.z).length() < 2.6 and absf(at.y - to.y) < 1.5:
+					run.t = clock
+					continue
+				var real := beast.get_real_velocity()
+				var going := Vector2(real.x, real.z).length()
+				if trace and run == runs[0] and fmod(clock, 0.5) < step:
+					var next: Vector3 = beast.path[beast.path_index] if beast.path_index < beast.path.size() else Vector3.INF
+					print("PROWLER_TRACE t=%.1f at=(%.1f %.1f %.1f) mode=%s pace=%.1f go=%.1f path=%d/%d next=(%.1f %.1f) hits=%d aim=%s shift=%s tight=%s back=%.1f" % [clock, at.x, at.y, at.z, beast.mode, beast.gait_pace, going, beast.path_index, beast.path.size(), next.x, next.z, beast.get_slide_collision_count(), str(beast.get("aim_point")), str(beast.get("shift_phase")), str(beast.tight), float(beast.get("backup_left")) if "backup_left" in beast else 0.0])
+				if beast.mode in ["close", "rush", "flee", "evade"] and beast.gait_pace > 2.0 and going < 0.6:
+					run.stuck = float(run.stuck) + step
+				for i in range(beast.get_slide_collision_count()):
+					var hit := beast.get_slide_collision(i)
+					if not (hit.get_collider() is CharacterBody3D) and absf(hit.get_normal().y) < 0.5 and going > 0.5:
+						run.scrape = float(run.scrape) + step
+						break
+				var heading := Vector3(real.x, 0, real.z).normalized()
+				if heading.dot(run.last) < -0.5:
+					run.flips = int(run.flips) + 1
+				if going > 0.5:
+					run.last = heading
+			if open == 0:
+				break
+		for run in runs:
+			var beast: Prowler = run.beast
+			var levels := int(run.from.level) != int(run.to.level)
+			var moved := is_instance_valid(beast) and beast.global_position.distance_to(run.start) > 3.0
+			print("PROWLER_PATH %s %-10s %-14s -> %-14s %s gap=%4.1f %s t=%4.1f stuck=%4.1f scrape=%4.1f flips=%d end=%s shifts=%d modes=%s" % ["open " if bool(run.open) else "TIGHT", str(run.from.area), str(run.from.room), str(run.to.room), "LEVELS" if levels else "same  ", Vector2(run.from.at.x - run.to.at.x, run.from.at.z - run.to.at.z).length(), "REACHED" if float(run.t) >= 0.0 else "missed ", maxf(0.0, float(run.t)), float(run.stuck), float(run.scrape), int(run.flips), beast.mode if is_instance_valid(beast) else "-", int(beast.get("shifts")) if is_instance_valid(beast) and "shifts" in beast else -1, ",".join(run.modes.keys())])
+			totals.runs += 1
+			if bool(run.open):
+				totals.open += 1
+				totals.open_reached += 1 if float(run.t) >= 0.0 else 0
+				totals.open_time += maxf(0.0, float(run.t))
+			else:
+				totals.tight += 1
+				totals.tight_kept_out += 1 if float(run.t) < 0.0 and float(run.near) > 3.0 else 0
+			totals.reached += 1 if float(run.t) >= 0.0 else 0
+			totals.time += maxf(0.0, float(run.t))
+			totals.stuck += float(run.stuck)
+			totals.scrape += float(run.scrape)
+			totals.flips += int(run.flips)
+			totals.levels += 1 if levels else 0
+			totals.levels_reached += 1 if levels and float(run.t) >= 0.0 else 0
+			totals.moved += 1 if moved else 0
+			if is_instance_valid(beast):
+				beast._retire()
+				beast.queue_free()
+			(run.target as Node).queue_free()
+		await get_tree().physics_frame
+	Engine.time_scale = 1.0
+	Engine.physics_ticks_per_second = 60
+	print("PROWLER_OPEN prey on open ground: reached %d of %d, mean %.1f s | prey somewhere tight: kept out %d of %d" % [totals.open_reached, totals.open, totals.open_time / maxf(1.0, totals.open_reached), totals.tight_kept_out, totals.tight])
+	print("PROWLER_PATHS runs=%d reached=%d (other level %d of %d) mean_time=%.1f stuck=%.1f scrape=%.1f flips=%d moved=%d" % [totals.runs, totals.reached, totals.levels_reached, totals.levels, totals.time / maxf(1.0, totals.reached), totals.stuck, totals.scrape, totals.flips, totals.moved])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()
+
+## A frame sequence of it on its way (`--prowler-check --prowler-way=<room>:<room>[:<name>]`,
+## through the hidden runner): from one room to another of every area's night, seen from
+## behind and above it every third of a second, twelve pictures.
+func run_way() -> void:
+	var folder: String = game._capture_dir()
+	var ends: PackedStringArray = []
+	var name := "way"
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--prowler-way="):
+			ends = arg.trim_prefix("--prowler-way=").split(":")
+	if ends.size() >= 3:
+		name = ends[2]
+	await get_tree().create_timer(1.0).timeout
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.team_enabled = false
+	game.hive.resume_at = "labs"
+	game.hive.seed_wanted = -4
+	game.start_run()
+	await get_tree().create_timer(1.0).timeout
+	var hive: HiveDirector = game.hive
+	var map: HiveMap = hive.map
+	game.set_process(false)
+	hive.set_process(false)
+	hive.set_physics_process(false)
+	hive.prowl.set_process(false)
+	if hive.entries != null:
+		hive.entries.set_process(false)
+		hive.entries.set_physics_process(false)
+	for id in map.areas:
+		map.unlock(id, true)
+	hive._clear_enemies()
+	game.hud.banner_left = 0
+	game.hud.radio_left = 0
+	var places := {}
+	for room: Dictionary in map.rooms:
+		if str(room.id) in ends:
+			var outer: Rect2 = room.outer
+			var middle := Vector3(outer.get_center().x, float(room.y) + 0.1, outer.get_center().y)
+			var cell: Vector2i = map.nearest_cell(middle, int(room.level))
+			places[str(room.id)] = Vector3(cell.x * CabinMap.CELL, map.level_height(int(room.level)), cell.y * CabinMap.CELL)
+	if ends.size() < 2 or not places.has(ends[0]) or not places.has(ends[1]):
+		print("PROWLER_WAY no such rooms")
+		get_tree().quit()
+		return
+	game.player.global_position = places[ends[1]] + Vector3(0, 0.05, 0)
+	var beast := Prowler.new()
+	beast.game = game
+	beast.kind = "prowler"
+	beast.uncounted = true
+	beast.position = places[ends[0]] + Vector3(0, 0.08, 0)
+	game.enemies.add_child(beast)
+	beast.prey = game.player
+	beast.nerve = 0.0
+	beast.roomy = hive.prowl.may_follow
+	beast.width = hive.prowl.width_of
+	beast.ground = hive.prowl.open_ground
+	for shot in range(18):
+		var clock := 0.0
+		while clock < 0.33:
+			await get_tree().physics_frame
+			clock += get_physics_process_delta_time()
+			map.feel(PackedVector3Array([beast.global_position, game.player.global_position]))
+			game.player.health = 100.0
+			beast.swap_left = 99.0
+		var at := beast.global_position
+		if beast.shift_phase == "away":
+			# Gone: the picture shows where its prey is, where it will come again.
+			at = game.player.global_position
+		await game._capture_from(folder, "%s_%02d.png" % [name, shot], at - beast.facing() * 5.5 + Vector3(0, 3.6, 0), at + Vector3(0, 0.6, 0), 60)
+	print("PROWLER_WAY %s from %s to %s: mode=%s shifts=%d at=%s" % [name, ends[0], ends[1], beast.mode, beast.shifts, str(beast.global_position.snapped(Vector3.ONE * 0.1))])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()
