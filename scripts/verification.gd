@@ -5135,7 +5135,7 @@ func _company(game: Node3D) -> void:
 	hive.line("m2_g_list")
 	hive.line_left = 0.0
 	await _turn(hive)
-	silent = silent and hud.radio_label.text == _words("ghost", "m2_g_list")
+	silent = silent and _is(hud.radio_label.text, "ghost", "m2_g_list")
 	# The squad is gone once it has reached the tunnel; when the doors of the train open
 	# Viper calls a last word over from there; and once the train has left nobody is seen.
 	for leaver: Dictionary in hive.leavers:
@@ -5154,7 +5154,7 @@ func _company(game: Node3D) -> void:
 		if hud.radio_label.text != shown:
 			shown = hud.radio_label.text
 			read.append(shown)
-	var parting: bool = read == [_words("coleman", "m2_board"), _words("viper", "m2_stay")]
+	var parting: bool = read.size() == 2 and _is(read[0], "coleman", "m2_board") and _is(read[1], "viper", "m2_stay")
 	hive._station_left()
 	await frames(2)
 	gone = gone and hive.leavers.is_empty() and hive.puppets.is_empty()
@@ -5210,7 +5210,7 @@ func _company(game: Node3D) -> void:
 		(puppet.node as Node3D).global_position = puppet.goal
 	hive.line_left = 0.0
 	await _turn(hive)
-	var power_first: bool = hud.radio_label.text == _words("coleman", "m2_power") and hive.puppets.size() == 2
+	var power_first: bool = _is(hud.radio_label.text, "coleman", "m2_power") and hive.puppets.size() == 2
 	read.clear()
 	shown = hud.radio_label.text
 	for turn in range(60):
@@ -5279,12 +5279,21 @@ func _words(speaker: String, cue: String) -> String:
 	var variants: Array = Radio.BARKS[cue][speaker] if Radio.BARKS.has(cue) and (Radio.BARKS[cue] as Dictionary).has(speaker) else Radio.LINES[cue][1]
 	return "%s:  %s" % [Radio.NAMES[speaker], variants[0]]
 
+## Whether a text on the radio's panel is what the speaker says in this cue: any of its takes
+## (the picker chooses among them).
+func _is(text: String, speaker: String, cue: String) -> bool:
+	var variants: Array = Radio.BARKS[cue][speaker] if Radio.BARKS.has(cue) and (Radio.BARKS[cue] as Dictionary).has(speaker) else Radio.LINES[cue][1]
+	for variant: String in variants:
+		if text == "%s:  %s" % [Radio.NAMES[speaker], variant]:
+			return true
+	return false
+
 ## Whether what was read ends with these lines ([speaker, cue] each), in this order.
 func _tail(read: Array[String], parts: Array) -> bool:
 	if read.size() < parts.size():
 		return false
 	for index in range(parts.size()):
-		if read[read.size() - parts.size() + index] != _words(str(parts[index][0]), str(parts[index][1])):
+		if not _is(read[read.size() - parts.size() + index], str(parts[index][0]), str(parts[index][1])):
 			return false
 	return true
 
