@@ -2767,7 +2767,9 @@ func _later(game: Node3D) -> void:
 	var prowl_near := 99.0
 	if prowl_came:
 		face(game, prowl_tight + Vector3(0, 0.05, 0), 0.0)
-		for prowl_step in range(900):
+		# (Up to 40 s: it has to get there, settle into waiting and wait out Prowler.LURK_SECONDS
+		# - 15 s were sometimes not enough, on next as well.)
+		for prowl_step in range(2400):
 			await get_tree().physics_frame
 			game.hive.stage_time = 30.0
 			player.health = 100.0
