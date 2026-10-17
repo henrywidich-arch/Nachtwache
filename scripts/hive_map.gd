@@ -5997,7 +5997,9 @@ func _lay_seam_lifts() -> void:
 		var spec: Dictionary = HiveLayout.LIFTS[id]
 		var old: Dictionary = room_of[str(spec.room)]
 		_begin_zone(str(old.zone))
-		area = ""
+		# (Of the area of its room: a way leads into it from there while that area is closed off,
+		# as the canteen is during and after its lockdown.)
+		area = str(old.area)
 		HiveAreale.lift_cabin(self, "lift_" + id, spec.rect, int(spec.door), deep, str(spec.title))
 		_door("lift_" + id, str(spec.room), HiveAreale.lift_door_at(spec.rect, int(spec.door)), AreaKit.PORT_WIDE, {"kind": "script", "name": "lift_" + id})
 		_end_zone()

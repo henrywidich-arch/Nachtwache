@@ -9564,10 +9564,13 @@ func _areas(game: Node3D) -> void:
 					await _idle_frames()
 					hive.use()
 				"s3":
+					put.call(map.points.cafeteria)
 					hive._enter("lockdown")
 					hive.progress = 0.99999
 			await _idle_frames()
-			var to_lift: bool = hive.stage == "c%d_lift" % index and map.door_open("lift_%s" % chain.out)
+			# (And a way leads to it from where the survivor stands - in the canteen, closed off by
+			# its lockdown, too.)
+			var to_lift: bool = hive.stage == "c%d_lift" % index and map.door_open("lift_%s" % chain.out) and not map.path_between(player.global_position, map.points["lift_%s_mid" % chain.out]).is_empty()
 			# Into the real lift: its door shuts, it rides, and the squad stands in its twin.
 			put.call(map.points["lift_%s_mid" % chain.out])
 			await _idle_frames()
@@ -9679,7 +9682,7 @@ func _areas(game: Node3D) -> void:
 			await _idle_frames()
 			var real: Rect2 = map.room_of["lift_%s" % chain.in].outer
 			# (The old stage it leads to may already be over: the lift of the canteen opens into it.)
-			seam_ok = seam_ok and riding and hive.order.find(hive.stage) >= hive.order.find(str(chain.to)) and real.grow(0.6).has_point(Vector2(player.global_position.x, player.global_position.z)) and map.door_open("lift_%s" % chain.in)
+			seam_ok = seam_ok and riding and hive.order.find(hive.stage) >= hive.order.find(str(chain.to)) and real.grow(0.6).has_point(Vector2(player.global_position.x, player.global_position.z)) and map.door_open("lift_%s" % chain.in) and not map.path_between(player.global_position, hive.marker).is_empty()
 		seam_ok = seam_ok and run.passed.has(index) and run.redirect(str(chain.to)) == str(chain.to)
 		if seam_ok:
 			seams_done.append("%s %s>%s" % [chain.seam, chain.from, chain.to])

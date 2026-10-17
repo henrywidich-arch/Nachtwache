@@ -254,6 +254,9 @@ var sandbox: Sandbox
 var hive: HiveDirector
 var farm: CabinMap
 var hive_map: HiveMap
+## The night a visit of the test room is built with ({}: the showcase; the picture run of
+## the areas sets another with --areas-night=all).
+var visit_night: Dictionary = {}
 
 func _ready() -> void:
 	_configure_input()
@@ -800,7 +803,7 @@ func start_run(test: bool = false) -> void:
 	# The test room on the map of the second mission: every area of its random part, to
 	# walk through alone (Sandbox.visit).
 	var visit: bool = sandbox.on and sandbox.visit_id != ""
-	use_map(second or visit, HiveLayout.showcase() if visit else {})
+	use_map(second or visit, (HiveLayout.showcase() if visit_night.is_empty() else visit_night) if visit else {})
 	if second:
 		# The staff of the Hive: prepared the first time a night begins there, not before.
 		InfectedVisual.warm_up(self, 2)
@@ -2864,6 +2867,10 @@ func _run_areas_check() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--areas-part="):
 			part = arg.trim_prefix("--areas-part=")
+		# (A night with a chain in every seam: its pieces, and the freight lifts of the old
+		# route it rides - part "lift" for those alone.)
+		if arg == "--areas-night=all":
+			visit_night = HiveLayout.every_seam()
 	await tick.call(1.0)
 	sandbox.visit_id = HiveLayout.POOL[0]
 	start_run(true)
@@ -2896,6 +2903,19 @@ func _run_areas_check() -> void:
 			await tick.call(0.5)
 			await _capture_from(folder, "%s%s_%s.png" % [def, "" if count == 0 else "_%d" % count, view[0]], view[1], view[2], 72.0)
 			print("AREAS_VIEW %s %s draws=%d fps=%d" % [def, view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)), int(Engine.get_frames_per_second())])
+	# The real freight lifts in the rooms of the old route: from the room, and out of the cabin.
+	for id: String in map.night.get("lifts", []):
+		if (part != "" and part != "lift") or not map.points.has("lift_%s_mid" % id):
+			continue
+		var mid: Vector3 = map.points["lift_%s_mid" % id]
+		var out: Vector2 = HiveCore.OUT[int(HiveLayout.LIFTS[id].door)]
+		var ahead := Vector3(out.x, 0, out.y)
+		for view: Array in [["raum", mid + ahead * 7.0 + Vector3(0, 1.62, 0), mid + Vector3(0, 1.2, 0)], ["kabine", mid - ahead * 1.4 + Vector3(0, 1.62, 0), mid + ahead * 6.0 + Vector3(0, 1.3, 0)]]:
+			player.position = (view[1] as Vector3) - Vector3(0, 1.5, 0)
+			player.velocity = Vector3.ZERO
+			await tick.call(0.5)
+			await _capture_from(folder, "lift_%s_%s.png" % [id, view[0]], view[1], view[2], 72.0)
+			print("AREAS_VIEW lift_%s %s draws=%d" % [id, view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
 	get_tree().quit()
 
 const CRUSHER_SHOTS := ["plain", "tell", "shell", "guard", "both"]
