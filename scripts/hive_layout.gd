@@ -83,7 +83,7 @@ const ATTEMPTS := 60
 const STEP_TRIES := 24
 
 ## The pieces: what they are called and where their scripts are.
-const POOL := ["haifischlabor", "gartenlabor", "reaktorschacht", "kryoarchiv", "isolationstrakt", "lagerhalle"]
+const POOL := ["haifischlabor", "gartenlabor", "reaktorschacht", "kryoarchiv", "isolationstrakt", "lagerhalle", "sezierlabor"]
 const TRANSITIONS := ["laborgang", "buerogang", "schleuse", "treppenhaus"]
 const ARRIVALS := ["ankunft", "absturz"]
 const END := "schleuse_ende"
@@ -94,6 +94,7 @@ const SCRIPTS := {
 	"kryoarchiv": "res://scripts/areale/kryoarchiv.gd",
 	"isolationstrakt": "res://scripts/areale/isolationstrakt.gd",
 	"lagerhalle": "res://scripts/areale/lagerhalle.gd",
+	"sezierlabor": "res://scripts/areale/sezierlabor.gd",
 	"laborgang": "res://scripts/areale/laborgang.gd",
 	"buerogang": "res://scripts/areale/buerogang.gd",
 	"schleuse": "res://scripts/areale/schleuse.gd",

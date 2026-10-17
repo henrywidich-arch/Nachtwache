@@ -56,7 +56,7 @@ func info() -> Dictionary:
 		"id": "haifischlabor", "kind": "area", "label": "HAIFISCHLABOR", "name": "Haifischlabor (geflutet)", "class": "gross",
 		"size": Vector2(56.0, 48.0), "levels": [0.0, 4.2], "mood": "water", "sharks": 2,
 		"staff": ["hive_lab2", "hive_lab", "hive_worker"],
-		"views": [["oben_sw", Vector3(4, 10.5, 45), Vector3(34, 0, 18)], ["oben_no", Vector3(52, 10.5, 3), Vector3(20, 0, 32)], ["auge_einstieg", Vector3(8, 1.62, 45.5), Vector3(27, 1, 26)], ["auge_engstelle", Vector3(4, 1.62, 26), Vector3(27, 1, 26)], ["auge_damm", Vector3(49.2, 1.62, 40), Vector3(49.2, 1, 12)], ["beobachtung", Vector3(18, 5.82, 2), Vector3(28, 0, 26)]],
+		"views": [["bild", Vector3(53, 2.2, 46.6), Vector3(24, 2.5, 8)], ["oben_sw", Vector3(4, 10.5, 45), Vector3(34, 0, 18)], ["oben_no", Vector3(52, 10.5, 3), Vector3(20, 0, 32)], ["auge_einstieg", Vector3(8, 1.62, 45.5), Vector3(27, 1, 26)], ["auge_engstelle", Vector3(4, 1.62, 26), Vector3(27, 1, 26)], ["auge_damm", Vector3(49.2, 1.62, 40), Vector3(49.2, 1, 12)], ["beobachtung", Vector3(18, 5.82, 2), Vector3(28, 0, 26)]],
 		"ports": [
 			{"side": SOUTH, "at": 8.0, "y": 0.0, "room": "halle", "role": "in"},
 			{"side": WEST, "at": 20.0, "y": 0.0, "room": "halle", "role": "in"},
@@ -86,9 +86,10 @@ func lay() -> void:
 	var dark := Color(0.32, 0.34, 0.34)
 	room("halle", 0.0, 0, 0, 56, 48, 12.0, "tech", {
 		"floor": false, "walk": walks(_walk_inner()), "seed": Vector2(o.x + 8.0, o.z + 46.0),
-		"look": {"lamp": "hang", "lamp_gap": 18.0, "lamp_every": 1, "lamp_height": 6.5, "light": Color("a8e0e8"), "energy": 2.0, "reach": 20.0}
+		"lamps": "none"
 	})
 	# --- the basin and the walkways over it
+	_sea()
 	water(Rect2(0.2, 0.2, 55.6, 47.6), SURFACE, BOTTOM, true, true)
 	shark_water(SURFACE, BOTTOM, OPEN)
 	# Steps up out of the water, and the railings that are left.
@@ -121,10 +122,10 @@ func lay() -> void:
 	railing(Vector3(38.2, 0, 8.9), Vector3(43.8, 0, 8.9))
 	light(Vector3(46.0, 3.4, 5.0), Color("ffcf8a"), 2.4, 12.0, 0.03)
 	# --- the observation rooms over the north strip, behind glass, and the stair up to them
-	var looks := {"look": {"light": Color("d6f0f0"), "energy": 1.6}}
+	var looks := {"look": {"light": Color("e2f6ff"), "energy": 2.6}}
 	# (They begin at the face of the hall's wall, which is theirs on that side.)
 	room("beob_w", 4.2, 0.2, 0.2, 11.8, 6.8, 3.2, "lab", _with(looks, {"bare": [NORTH, WEST]}))
-	room("beob_m", 4.2, 12, 0.2, 12, 6.8, 3.2, "lab", _with(looks, {"bare": [NORTH]}))
+	room("beob_m", 4.2, 12, 0.2, 12, 6.8, 3.2, "lab", _with({"look": {"light": Color("ff5a52"), "energy": 2.4}}, {"bare": [NORTH]}))
 	room("beob_o", 4.2, 24, 0.2, 12, 6.8, 3.2, "lab", _with(looks, {"bare": [NORTH]}))
 	door("beob_w", "beob_m", 1.8, 1.8, {"kind": "slide"})
 	door("beob_m", "beob_o", 1.8, 1.8, {"kind": "slide"})
@@ -144,9 +145,10 @@ func lay() -> void:
 	# --- light at the walkways: warm lamps on the walls, low
 	for spot in [Vector3(10, 2.4, 47.7), Vector3(30, 2.4, 47.7), Vector3(46, 2.4, 47.7), Vector3(0.3, 2.4, 12), Vector3(0.3, 2.4, 36), Vector3(55.7, 2.4, 20), Vector3(55.7, 2.4, 36)]:
 		var into := Vector3(-0.5 if spot.x > 50 else (0.5 if spot.x < 1 else 0.0), 0, -0.5 if spot.z > 47 else 0.0)
-		glow(spot, Vector3(0.2, 0.26, 0.2), Color("ffc27a"), 5.0)
-		light(spot + into * 1.6, Color("ffc27a"), 1.4, 9.0, 0.04)
-	m._haze(p(28.0, 1.0, 24.0), Vector3(54.0, 2.0, 46.0), 0.03, Color(0.6, 0.85, 0.85))
+		glow(spot, Vector3(0.2, 0.26, 0.2), Color("ffc27a"), 7.0)
+		m._part("plate", o + spot + Vector3(0, 0.17, 0), Vector3(0.3, 0.06, 0.3), Color("2a2620"))
+		light(spot + into * 1.2, Color("ffb866"), 1.8, 9.0, 0.04, 0.7)
+	_mood()
 	stencil("halle", NORTH, 48.0, 5.0, "AUSGANG", 110, Color(0.6, 0.5, 0.2))
 	stencil("halle", SOUTH, 30.0, 6.5, "BECKEN  B-7", 260, Color(0.42, 0.5, 0.5))
 	stencil("halle", WEST, 24.0, 6.5, "VORSICHT  ·  TIEFES WASSER", 90, Color(0.6, 0.5, 0.2))
@@ -198,3 +200,112 @@ static func _with(base: Dictionary, extra: Dictionary) -> Dictionary:
 	var out := base.duplicate(true)
 	out.merge(extra, true)
 	return out
+
+## The water of the basin, lit from below: the facility's water (HiveCore.FLOOD) with a
+## teal glow of its own that the swell breaks up, brighter round the lamps in the basin.
+const SEA := """shader_type spatial;
+render_mode cull_back, shadows_disabled;
+uniform sampler2D ripples : hint_normal, repeat_enable, filter_linear_mipmap;
+uniform vec3 deep : source_color = vec3(0.01, 0.06, 0.07);
+uniform vec3 body : source_color = vec3(0.0, 0.1, 0.11);
+uniform float floor_y = -9.6;
+uniform vec4 lamps[8];
+uniform vec4 tints[8];
+varying vec3 world;
+void vertex() {
+	world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+void fragment() {
+	float depth = world.y - floor_y;
+	if (depth < 0.006) {
+		discard;
+	}
+	vec3 a = texture(ripples, world.xz * 0.19 + vec2(TIME * 0.011, TIME * 0.016)).rgb * 2.0 - 1.0;
+	vec3 b = texture(ripples, world.xz * 0.43 + vec2(-TIME * 0.019, TIME * 0.008)).rgb * 2.0 - 1.0;
+	vec2 tilt = (a.xy + b.xy) * 0.05;
+	vec3 up = normalize(vec3(tilt.x, 1.0, tilt.y));
+	NORMAL = normalize((VIEW_MATRIX * vec4(up, 0.0)).xyz);
+	float shore = smoothstep(0.006, 0.08, depth);
+	ALBEDO = mix(vec3(0.045, 0.06, 0.06), deep, shore);
+	ROUGHNESS = mix(0.22, 0.03, shore);
+	METALLIC = 0.0;
+	SPECULAR = 0.9;
+	float c = texture(ripples, world.xz * 0.7 + vec2(TIME * 0.03, -TIME * 0.02)).r;
+	float caustic = smoothstep(0.45, 0.8, c + (a.x + b.y) * 0.25);
+	vec3 glow = body * (0.45 + 0.9 * caustic);
+	for (int i = 0; i < 8; i++) {
+		float reach = lamps[i].w;
+		if (reach > 0.0) {
+			vec2 off = world.xz - lamps[i].xz;
+			glow += tints[i].rgb * tints[i].a * exp(-dot(off, off) / (reach * reach)) * (0.7 + 0.6 * caustic);
+		}
+	}
+	EMISSION = glow * shore;
+}
+"""
+## The lamps in the basin, under the water (local x, z), and their colours.
+const DEEP_LAMPS := [Vector2(8, 22), Vector2(14, 40), Vector2(26, 36), Vector2(40, 30), Vector2(44, 12), Vector2(30, 8), Vector2(18, 10), Vector2(52, 30)]
+const DEEP_TINTS := [Color("3affd8"), Color("2ad8ff"), Color("5aff8a"), Color("2ad8ff"), Color("3affd8"), Color("2ad8ff"), Color("5aff8a"), Color("3affd8")]
+
+## The water's own material, made before the basin is (HiveAreale.water takes the one
+## that is there for its depth).
+func _sea() -> void:
+	var shader := Shader.new()
+	shader.code = SEA
+	var sea := ShaderMaterial.new()
+	sea.shader = shader
+	sea.set_shader_parameter("ripples", (m.mats["flood"] as ShaderMaterial).get_shader_parameter("ripples"))
+	sea.set_shader_parameter("floor_y", y(BOTTOM))
+	var spots: Array[Vector4] = []
+	var tints: Array[Vector4] = []
+	for k in range(DEEP_LAMPS.size()):
+		var at: Vector2 = DEEP_LAMPS[k]
+		var tint: Color = DEEP_TINTS[k]
+		spots.append(Vector4(o.x + at.x, 0.0, o.z + at.y, 1.3))
+		tints.append(Vector4(tint.r, tint.g, tint.b, 0.65))
+	sea.set_shader_parameter("lamps", spots)
+	sea.set_shader_parameter("tints", tints)
+	m.mats["flood_%.2f" % y(BOTTOM)] = sea
+
+## The light and the air of the hall (after the user's pictures hai.jpeg and the shark lab
+## set): deep teal water lit from below, a few hard white cones from hanging lamps
+## through the mist, red warning lights high up, warm amber lamps along the walkways and
+## the observation windows lit above.
+func _mood() -> void:
+	m._chunk("Kit", false)
+	# The lamps under the water: they light the walkways' edges and the walls from below.
+	for k in range(DEEP_LAMPS.size()):
+		var at: Vector2 = DEEP_LAMPS[k]
+		light(Vector3(at.x, SURFACE - 0.4, at.y), DEEP_TINTS[k], 1.5, 8.0, 0.0, 0.5)
+	# Hanging lamps, hard white cones through the mist.
+	for spot in [Vector3(27.0, 7.2, 26.0), Vector3(14.0, 7.6, 12.0), Vector3(42.0, 7.4, 17.0), Vector3(12.0, 7.4, 36.0), Vector3(40.0, 7.8, 38.0)]:
+		m._pipe(p(spot.x, spot.y + 0.2, spot.z), p(spot.x, 12.0, spot.z), 0.015, Color("101010"), 4, "plain")
+		m.batch.cylinder(m.mats["steel"], p(spot.x, spot.y - 0.05, spot.z), 0.42, 0.12, 0.3, Color("23272a"), 12)
+		glow(Vector3(spot.x, spot.y - 0.06, spot.z), Vector3(0.5, 0.02, 0.5), Color("eaf8ff"), 7.0)
+		var beam := cone(Vector3(spot.x, spot.y - 0.1, spot.z), Vector3.DOWN, Color("dff2ff"), 11.0, 14.0, 38.0, 3.0)
+		beam.spot_attenuation = 0.7
+	# Trusses under the roof, chains with hooks from them.
+	for z in [10.0, 22.0, 34.0]:
+		truss(Vector3(0.3, 11.8, z), Vector3(55.7, 11.8, z), 1.0)
+	for spot in [Vector3(20.0, 10.8, 22.0), Vector3(36.0, 10.8, 34.0), Vector3(46.0, 10.8, 10.0)]:
+		chain(spot, m.random.randf_range(3.4, 5.0))
+	# Red warning lights high on the walls; two of them pulse.
+	var k := 0
+	for spot in [Vector3(0.3, 9.4, 8.0), Vector3(0.3, 9.4, 30.0), Vector3(55.7, 9.4, 14.0), Vector3(55.7, 9.4, 36.0), Vector3(20.0, 9.4, 47.7), Vector3(40.0, 9.4, 47.7), Vector3(8.0, 9.4, 0.3), Vector3(30.0, 9.4, 0.3)]:
+		var into := Vector3(0.6 if spot.x < 1.0 else (-0.6 if spot.x > 55.0 else 0.0), 0, 0.6 if spot.z < 1.0 else (-0.6 if spot.z > 47.0 else 0.0))
+		glow(spot + into * 0.15, Vector3(0.26, 0.2, 0.26), Color("ff2a1e"), 7.0)
+		var red := light(spot + into * 1.2, Color("ff2a20"), 1.2, 7.0, 0.0, 1.6)
+		if k % 4 == 1:
+			pulse(red, 0.2, 1.8, 1.6)
+		k += 1
+	# Mist low over the water, and pipes along the walls.
+	mist(Vector3(28.0, 0.5, 24.0), Vector3(55.0, 1.4, 47.0), 0.08, Color(0.72, 0.92, 0.92), false, 0.5)
+	# A cold light from high up keeps the walls and the walkways in sight.
+	for spot in [Vector3(14.0, 9.5, 24.0), Vector3(42.0, 9.5, 24.0), Vector3(28.0, 9.5, 40.0)]:
+		light(spot, Color("9fd8e0"), 2.6, 24.0, 0.0, 0.8)
+	for x in [0.5, 55.5]:
+		m._pipe(p(x, 3.4, 0.6), p(x, 3.4, 47.4), 0.2, Color("2c3234"), 10, "steel")
+		m._pipe(p(x, 9.0, 0.6), p(x, 9.0, 47.4), 0.3, Color("2a2f31"), 10, "steel")
+	# Cables over the walkway where one comes in, and from the pumps to the island's edge.
+	for pair in [[Vector3(4.0, 0.0, 47.4), Vector3(14.0, 0.0, 45.4)], [Vector3(20.0, 0.0, 47.5), Vector3(28.0, 0.0, 45.0)], [Vector3(38.0, 0.0, 47.4), Vector3(46.0, 0.0, 45.6)], [Vector3(24.5, 0.0, 25.0), Vector3(21.0, 0.0, 30.5)], [Vector3(31.0, 0.0, 29.0), Vector3(33.0, 0.0, 22.0)]]:
+		cable(pair[0], pair[1], 0.6)

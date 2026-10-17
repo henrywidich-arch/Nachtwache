@@ -209,8 +209,9 @@ func block(material: String, centre: Vector3, size: Vector3, color: Color, solid
 func glow(centre: Vector3, size: Vector3, color: Color, strength: float = 4.0) -> void:
 	m._glow_box(o + centre, size, color, strength)
 
-func light(at: Vector3, color: Color, energy: float, reach: float, flicker: float = 0.0) -> OmniLight3D:
-	return m._light(o + at, color, energy, reach, false, flicker, 0.4, HiveCore.LAMP_FADE)
+## A light without shadows (`fog`: how much of it the haze takes up).
+func light(at: Vector3, color: Color, energy: float, reach: float, flicker: float = 0.0, fog: float = 0.4) -> OmniLight3D:
+	return m._light(o + at, color, energy, reach, false, flicker, fog, HiveCore.LAMP_FADE)
 
 ## Lettering on a wall of a room of the piece.
 func stencil(room_name: String, side: int, at: float, high: float, text: String, size: int = 120, color: Color = Color(0.2, 0.22, 0.24)) -> void:
@@ -238,6 +239,359 @@ func shark_water(surface: float, bottom: float, open: Array) -> void:
 	for rect: Rect2 in open:
 		boxes.append(AABB(p(rect.position.x, bottom, rect.position.y), Vector3(rect.size.x, surface - bottom, rect.size.y)))
 	m.shark_waters[str(piece.id)] = SharkWater.from_boxes(y(surface), boxes)
+
+# ---------------------------------------------------------------- light and air
+## What gives an area its mood besides HiveCore.MOODS: lamps whose cones stand in the
+## haze, strips that glow, mist, things that drift in the air, light that pulses or turns,
+## and the cheap dressing that carries it (trusses, chains, cables on the floor). None of
+## it is solid (CabinMap.snag_kind stays clean) and no light of it casts a shadow unless
+## it says so. Mist is volumetric fog and what drifts is hidden while the fog is switched
+## off (the test room's SCHATTEN & NEBEL AUS).
+
+## What drifts in the air (see drift()) and what moves (pulse(), sweep()), started and
+## watched by one timer of the piece.
+var airs: Array = []
+var watcher: Timer
+
+## A lamp that shines in a cone and casts no shadow (aimed down it cannot leak through a
+## floor above). `fog`: how much of it the haze takes up - 0 none, 2 to 4 a cone one sees.
+func cone(at: Vector3, aim: Vector3, color: Color, energy: float, reach: float, angle: float, fog: float = 1.5, flicker: float = 0.0) -> SpotLight3D:
+	return m._spot(o + at, aim, color, energy, reach, angle, flicker, fog, HiveCore.LAMP_FADE + 14.0)
+
+## A strip light: a dark housing with a glowing tube, `long` metres along x or z.
+func strip(at: Vector3, long: float, along_x: bool, color: Color, strength: float = 6.0, housing: bool = true) -> void:
+	var size := Vector3(long, 0.05, 0.11) if along_x else Vector3(0.11, 0.05, long)
+	if housing:
+		m._part("plate", o + at + Vector3(0, 0.05, 0), size + Vector3(0.08, 0.05, 0.12) if along_x else size + Vector3(0.12, 0.05, 0.08), Color("191c1e"))
+	m._glow_box(o + at, size, color, strength)
+
+## A truss under a roof, from `from` to `to` (both on its upper chord, along x or along
+## z): two chords and the struts between them. Only seen.
+func truss(from: Vector3, to: Vector3, deep: float = 0.8, color: Color = Color("24282b")) -> void:
+	var along := to - from
+	var long := along.length()
+	var axis := along / maxf(0.01, long)
+	var chord := Vector3(long, 0.14, 0.14) if absf(axis.x) > 0.5 else Vector3(0.14, 0.14, long)
+	var middle := (from + to) * 0.5
+	m._part("plate", o + middle, chord, color)
+	m._part("plate", o + middle - Vector3(0, deep, 0), chord, color)
+	var count := maxi(1, roundi(long / deep))
+	for k in range(count):
+		var a := from + axis * (long * k / count)
+		var b := from + axis * (long * (k + 1) / count)
+		m._pipe(o + a, o + b - Vector3(0, deep, 0), 0.035, color, 5, "steel")
+		m._pipe(o + b, o + b - Vector3(0, deep, 0), 0.035, color, 5, "steel")
+
+## A chain hanging from `top` down `long` metres, a hook at its end. Only seen.
+func chain(top: Vector3, long: float, hook: bool = true, color: Color = Color("2b2b29")) -> void:
+	var links := maxi(2, int(long / 0.11))
+	for k in range(links):
+		var turn := Basis(Vector3.UP, PI / 2) if k % 2 == 1 else Basis.IDENTITY
+		m.batch.box(m.mats["steel"], o + top - Vector3(0, 0.055 + k * 0.11, 0), Vector3(0.06, 0.13, 0.016), color, turn)
+	if hook:
+		var end := o + top - Vector3(0, links * 0.11 + 0.12, 0)
+		m._part("plate", end, Vector3(0.05, 0.22, 0.05), color)
+		m._part("plate", end + Vector3(0.07, -0.11, 0), Vector3(0.18, 0.05, 0.05), color)
+		m._part("plate", end + Vector3(0.14, -0.05, 0), Vector3(0.05, 0.12, 0.05), color)
+
+## A cable lying on the floor from `from` to `to` (local, at their height), winding to
+## the sides by `wind`. Thin and only seen: nothing to stumble over.
+func cable(from: Vector3, to: Vector3, wind: float = 0.6, color: Color = Color("0f1112"), radius: float = 0.03) -> void:
+	var along := to - from
+	var side := Vector3(-along.z, 0, along.x).normalized()
+	var pieces := maxi(4, int(along.length() / 0.7))
+	var phase := m.random.randf() * TAU
+	var lift := Vector3(0, radius, 0)
+	var last := o + from + lift
+	for k in range(1, pieces + 1):
+		var t := float(k) / pieces
+		var bend := sin(t * PI * 2.2 + phase) * wind * sin(t * PI)
+		var point := o + from + along * t + side * bend + lift
+		m._pipe(last, point, radius, color, 5, "plain")
+		last = point
+
+## A bundle of cables hanging between two points under a roof, sagging.
+func cables(from: Vector3, to: Vector3, count: int = 3, sag: float = 1.2, color: Color = Color("101213")) -> void:
+	for k in range(count):
+		var shift := Vector3(0, 0, 0.09 * k) if absf(to.x - from.x) > absf(to.z - from.z) else Vector3(0.09 * k, 0, 0)
+		m._hose(o + from + shift, o + to + shift, 0.025, color, sag + 0.25 * k, Vector3.ZERO, 8)
+
+## A line of light along a wall of the piece (its outer wall on `side`, local `from` to
+## `to` along it, `high` above the base): broken where a port of that side may get its
+## doorway, so that nothing of it stands in one, whichever ports a night uses.
+func wall_glow(side: int, from: float, to: float, high: float, color: Color, strength: float = 4.0, thick: float = 0.05) -> void:
+	var size: Vector2 = info().size
+	var gaps: Array = []
+	for port: Dictionary in info().ports:
+		if int(port.side) == side and high > float(port.y) - 0.3 and high < float(port.y) + PORT_TALL + 0.6:
+			gaps.append([float(port.at) - PORT_WIDE * 0.5 - 0.5, float(port.at) + PORT_WIDE * 0.5 + 0.5])
+	var stretches: Array = [[from, to]]
+	for gap: Array in gaps:
+		var kept: Array = []
+		for stretch: Array in stretches:
+			if float(gap[1]) <= float(stretch[0]) or float(gap[0]) >= float(stretch[1]):
+				kept.append(stretch)
+				continue
+			if float(gap[0]) > float(stretch[0]):
+				kept.append([stretch[0], gap[0]])
+			if float(gap[1]) < float(stretch[1]):
+				kept.append([gap[1], stretch[1]])
+		stretches = kept
+	for stretch: Array in stretches:
+		var a := float(stretch[0])
+		var b := float(stretch[1])
+		if b - a < 0.2:
+			continue
+		match side:
+			NORTH:
+				glow(Vector3((a + b) * 0.5, high, 0.25), Vector3(b - a, thick, 0.04), color, strength)
+			SOUTH:
+				glow(Vector3((a + b) * 0.5, high, size.y - 0.25), Vector3(b - a, thick, 0.04), color, strength)
+			WEST:
+				glow(Vector3(0.25, high, (a + b) * 0.5), Vector3(0.04, thick, b - a), color, strength)
+			EAST:
+				glow(Vector3(size.x - 0.25, high, (a + b) * 0.5), Vector3(0.04, thick, b - a), color, strength)
+
+## A patch of mist: volumetric fog of its own (`drum`: a standing cylinder).
+func mist(centre: Vector3, size: Vector3, density: float, tint: Color = Color(0.78, 0.86, 0.95), drum: bool = false, fade: float = 0.25) -> FogVolume:
+	var cloud := FogVolume.new()
+	cloud.name = "Mist"
+	cloud.shape = RenderingServer.FOG_VOLUME_SHAPE_CYLINDER if drum else RenderingServer.FOG_VOLUME_SHAPE_BOX
+	cloud.size = size
+	var stuff := FogMaterial.new()
+	stuff.density = density
+	stuff.albedo = tint
+	stuff.edge_fade = fade
+	cloud.material = stuff
+	cloud.position = o + centre
+	m.add_child(cloud)
+	return cloud
+
+## What drifts in the air of a box (local centre and size): spores, dust, steam. Options:
+## size (of a speck, metres), life (seconds), rise (metres a second up; below 0 it sinks),
+## spread (sideways speed), glow (it shines by itself), grow (it swells as it goes: steam),
+## alpha. Hidden while the fog is off.
+func drift(centre: Vector3, box: Vector3, amount: int, color: Color, options: Dictionary = {}) -> GPUParticles3D:
+	var life := float(options.get("life", 8.0))
+	var speck := float(options.get("size", 0.04))
+	var flow := ParticleProcessMaterial.new()
+	flow.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	flow.emission_box_extents = box * 0.5
+	flow.direction = Vector3.UP
+	flow.spread = 180.0 if float(options.get("rise", 0.0)) == 0.0 else 25.0
+	flow.gravity = Vector3(0, float(options.get("rise", 0.0)), 0)
+	flow.initial_velocity_min = 0.0
+	flow.initial_velocity_max = float(options.get("spread", 0.15))
+	flow.damping_min = 0.02
+	flow.damping_max = 0.08
+	flow.scale_min = 0.6
+	flow.scale_max = 1.4
+	if options.has("grow"):
+		var curve := Curve.new()
+		curve.add_point(Vector2(0, 0.3))
+		curve.add_point(Vector2(1, float(options.grow)))
+		var swell := CurveTexture.new()
+		swell.curve = curve
+		flow.scale_curve = swell
+	# It comes and goes softly.
+	var fade := Gradient.new()
+	fade.set_color(0, Color(1, 1, 1, 0))
+	fade.set_color(1, Color(1, 1, 1, 0))
+	fade.add_point(0.2, Color(1, 1, 1, 1))
+	fade.add_point(0.75, Color(1, 1, 1, 1))
+	var ramp := GradientTexture1D.new()
+	ramp.gradient = fade
+	flow.color_ramp = ramp
+	flow.color = color
+	var look := StandardMaterial3D.new()
+	look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	look.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	look.vertex_color_use_as_albedo = true
+	look.albedo_texture = _soft_dot()
+	look.cull_mode = BaseMaterial3D.CULL_DISABLED
+	if bool(options.get("glow", false)):
+		look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		look.albedo_color = Color(2.2, 2.2, 2.2, float(options.get("alpha", 1.0)))
+	else:
+		look.albedo_color = Color(1, 1, 1, float(options.get("alpha", 1.0)))
+		look.roughness = 1.0
+	var card := QuadMesh.new()
+	card.size = Vector2(speck, speck)
+	card.material = look
+	var cloud := GPUParticles3D.new()
+	cloud.name = "Drift"
+	cloud.amount = amount
+	cloud.lifetime = life
+	cloud.preprocess = life
+	cloud.process_material = flow
+	cloud.draw_pass_1 = card
+	cloud.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var reach := maxf(4.0, absf(float(options.get("rise", 0.0))) * life + speck * 3.0)
+	cloud.visibility_aabb = AABB(-box * 0.5 - Vector3(2, reach, 2), box + Vector3(4, reach * 2.0, 4))
+	cloud.position = o + centre
+	m.add_child(cloud)
+	airs.append(cloud)
+	_watch()
+	return cloud
+
+## A soft round speck, shared by everything that drifts (kept with the map's materials).
+func _soft_dot() -> Texture2D:
+	if not m.mats.has("areal_dot"):
+		var shade := Gradient.new()
+		shade.set_color(0, Color(1, 1, 1, 1))
+		shade.set_color(1, Color(1, 1, 1, 0))
+		var dot := GradientTexture2D.new()
+		dot.gradient = shade
+		dot.fill = GradientTexture2D.FILL_RADIAL
+		dot.fill_from = Vector2(0.5, 0.5)
+		dot.fill_to = Vector2(0.5, 0.0)
+		dot.width = 64
+		dot.height = 64
+		m.mats["areal_dot"] = dot
+	return m.mats["areal_dot"]
+
+## A light whose energy breathes between `low` and `high` every `seconds`, with an
+## unsteady flutter on top (`flutter`: its share) - a core that burns.
+func pulse(lamp: Light3D, low: float, high: float, seconds: float, flutter: float = 0.0) -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = m.random.randi()
+	noise.frequency = 0.9
+	var clock := [m.random.randf() * 50.0]
+	_motion(func() -> void:
+		var breathe := func(phase: float) -> void:
+			clock[0] += 0.016
+			var energy := lerpf(low, high, 0.5 + 0.5 * sin(phase))
+			lamp.light_energy = energy * (1.0 + noise.get_noise_1d(float(clock[0]) * 12.0) * flutter)
+		lamp.create_tween().set_loops().tween_method(breathe, 0.0, TAU, seconds))
+	_watch()
+
+## The same for the glow of a material (its albedo, which sets how bright it shines).
+## (`low` and `high` scale the colour it has; its see-through stays.)
+func pulse_glow(material: StandardMaterial3D, low: float, high: float, seconds: float) -> void:
+	var base := material.albedo_color
+	wave(func(phase: float) -> void:
+		var value := lerpf(low, high, 0.5 + 0.5 * sin(phase))
+		material.albedo_color = Color(base.r * value, base.g * value, base.b * value, base.a), seconds)
+
+## Anything that goes round and round: `step` is called with a phase from 0 to TAU every
+## `seconds` (the density of a mist that breathes, ...).
+func wave(step: Callable, seconds: float) -> void:
+	_motion(func() -> void:
+		watcher.create_tween().set_loops().tween_method(step, 0.0, TAU, seconds))
+	_watch()
+
+## What is built after this until the next chunk casts shadows (for the one lamp of a
+## piece that throws them: bars before a core). The areas are under the ground, where
+## nothing else of the map does.
+func shadow_chunk(id: String) -> void:
+	m._chunk(id, true)
+	m.chunk_shadows[m.zone + "|" + id] = true
+
+## A sign that is lit (DANGER over a gallery): a dark plate on a wall of a room of the
+## piece with a glowing frame, its words shining, and a little of its light on the wall.
+func lit_sign(room_name: String, side: int, at: float, high: float, text: String, color: Color, size: int = 90, wide: float = 2.4, tall: float = 0.8) -> void:
+	var room: Dictionary = m.room_of[n(room_name)]
+	var a := along(side, at)
+	m._face_box(room, side, "plate", a - wide * 0.5, a + wide * 0.5, high - tall * 0.5, high + tall * 0.5, -0.06, 0.0, Color("120d0c"))
+	for edge in [-1.0, 1.0]:
+		m._face_glow(room, side, a - wide * 0.5, a + wide * 0.5, high + edge * (tall * 0.5 - 0.03) - 0.025, high + edge * (tall * 0.5 - 0.03) + 0.025, -0.075, -0.06, color, 5.5)
+		m._face_glow(room, side, a + edge * (wide * 0.5 - 0.03) - 0.025, a + edge * (wide * 0.5 - 0.03) + 0.025, high - tall * 0.5 + 0.03, high + tall * 0.5 - 0.03, -0.075, -0.06, color, 5.5)
+	var words := m._wall_sign(text, m._face_point(room, side, a, high, -0.08), size, color, m._model_yaw(side))
+	words.shaded = false
+	words.modulate = Color(color.r * 1.8, color.g * 1.8, color.b * 1.8)
+	m._light(m._face_point(room, side, a, high, -0.7), color, 0.7, 4.0, false, 0.0, 0.6, HiveCore.LAMP_FADE)
+
+## A pivot at `at` that turns about the vertical once every `seconds` (a beacon: what is
+## hung on it turns with it). Returns the pivot.
+func sweep(at: Vector3, seconds: float) -> Node3D:
+	var pivot := Node3D.new()
+	pivot.name = "Sweep"
+	pivot.position = o + at
+	m.add_child(pivot)
+	_motion(func() -> void:
+		pivot.create_tween().set_loops().tween_property(pivot, "rotation:y", TAU, seconds).from(0.0))
+	_watch()
+	return pivot
+
+## A floor that shines wet: a skin over it, dark and smooth in patches (`rect` local, at
+## `height`), which mirrors the lamps.
+func wet_floor(rect: Rect2, height: float, color: Color = Color(0.06, 0.07, 0.08), patchy: float = 1.0) -> void:
+	var key := "areal_wet_%s" % color.to_html()
+	if not m.mats.has(key):
+		var noise := FastNoiseLite.new()
+		noise.seed = 4711
+		noise.frequency = 0.05
+		var patches := NoiseTexture2D.new()
+		patches.width = 256
+		patches.height = 256
+		patches.seamless = true
+		patches.noise = noise
+		var skin := StandardMaterial3D.new()
+		skin.albedo_color = color
+		skin.roughness = 0.5
+		skin.roughness_texture = patches
+		skin.metallic_specular = 0.75
+		skin.uv1_triplanar = true
+		skin.uv1_world_triplanar = true
+		skin.uv1_scale = Vector3.ONE * 0.06 * patchy
+		m.mats[key] = skin
+	var y0 := y(height) + 0.012
+	m.batch.quad(m.mats[key], Vector3(o.x + rect.position.x, y0, o.z + rect.position.y), Vector3(o.x + rect.position.x, y0, o.z + rect.end.y), Vector3(o.x + rect.end.x, y0, o.z + rect.end.y), Vector3(o.x + rect.end.x, y0, o.z + rect.position.y))
+
+## Frosted glass lit from inside (a cryo pod, a grow dome): see-through in part, it
+## shines by itself and lets a shape behind it show dark.
+func frost(color: Color, alpha: float = 0.62, energy: float = 2.4) -> StandardMaterial3D:
+	var key := "areal_frost_%s_%.2f_%.1f" % [color.to_html(), alpha, energy]
+	if not m.mats.has(key):
+		var glass := StandardMaterial3D.new()
+		glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		glass.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		glass.albedo_color = Color(color.r * energy, color.g * energy, color.b * energy, alpha)
+		glass.cull_mode = BaseMaterial3D.CULL_DISABLED
+		glass.render_priority = 1
+		m.mats[key] = glass
+	return m.mats[key]
+
+## A small panel on a wall with lamps that blink red and green and a screen (the
+## consoles along a catwalk): `at` its middle on the wall's face, `out` the way it faces.
+func panel(at: Vector3, out: Vector3, picture: int = 3) -> void:
+	var side := Vector3(-out.z, 0, out.x)
+	var turn := Basis(Vector3.UP, atan2(out.x, out.z))
+	m.batch.box(m.mats["steel"], o + at + out * 0.06, Vector3(0.7, 0.55, 0.12), Color("22272a"), turn)
+	m._screen(Transform3D(turn, o + at + out * 0.125 + Vector3(0, 0.06, 0)), Vector3.ZERO, Vector2(0.36, 0.24), picture)
+	for k in range(3):
+		var tint := Color("ff2a1e") if k != 1 else Color("38ff6a")
+		m._led(o + at + out * 0.13 + side * (0.26) + Vector3(0, 0.16 - k * 0.12, 0), Vector3(0.05, 0.05, 0.05), tint, 6.0, [1.0, 0.4, 0.7][k])
+
+## One timer of the piece: it starts what moves once the map stands, and hides what
+## drifts in the air while the fog is off.
+func _watch() -> void:
+	if watcher != null:
+		return
+	watcher = Timer.new()
+	watcher.name = "AirWatch"
+	watcher.wait_time = 0.5
+	watcher.autostart = true
+	# (What is to move waits on the timer, not on the piece: the piece holding it would
+	# be held by it in turn, and stay with all it reaches when the map is gone.)
+	watcher.set_meta("motions", [])
+	var started := [false]
+	watcher.timeout.connect(func() -> void:
+		if not started[0]:
+			started[0] = true
+			for start: Callable in watcher.get_meta("motions"):
+				start.call()
+			watcher.set_meta("motions", [])
+		var on: bool = m.environment == null or m.environment.volumetric_fog_enabled
+		for cloud in airs:
+			if is_instance_valid(cloud):
+				(cloud as Node3D).visible = on)
+	m.add_child(watcher)
+
+## Something that moves, started by the timer once the map stands.
+func _motion(start: Callable) -> void:
+	_watch()
+	(watcher.get_meta("motions") as Array).append(start)
 
 # ---------------------------------------------------------------- ways in
 

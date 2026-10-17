@@ -48,6 +48,8 @@ var slow := 1.0
 ## `bare` - the HUD and the weapon out of the picture while the menu is closed (F1 brings
 ## both back with the menu).
 var flat := false
+## Whether that even light is in force right now (the maps leave their moods alone then).
+static var holding_flat := false
 var bare := false
 var look_left := 0.0
 ## Coleman's lines as they sound once Nadja is out of her room.
@@ -456,6 +458,7 @@ func set_bare(value: bool) -> void:
 ## puts everything back as it was once they are off or the test room is left.
 func _keep_look(delta: float) -> void:
 	var flat_now := flat and on
+	holding_flat = flat_now
 	look_left -= delta
 	if look_left <= 0.0:
 		look_left = 0.5
