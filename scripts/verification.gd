@@ -10744,8 +10744,8 @@ func _skull_skin(body: ProwlerVisual) -> Array[Vector3]:
 ## The squad across levels (after v0.63: "vor allem mit dem Folgen haben die dann
 ## Probleme ... im Sezierlabor"). In the dissection laboratory the survivor goes from its
 ## pit up to the hall and the gallery and down again, and every time he stops both
-## companions are with him on his floor; over the lip at the head of the pit's flight a
-## companion's body steps up by itself; a freight lift waits until the squad is in; a
+## companions are with him on his floor; no flight anywhere has an edge at its ends that a
+## body does not get over (and where one is, a companion steps up); a freight lift waits until the squad is in; a
 ## companion cut off from him turns up near him, but never where he sees it.
 ## (The survivor is walked along the path finder's ways, as scripts/squad_check.gd walks
 ## him, which measures the same in every place with several levels.)
@@ -10776,6 +10776,10 @@ func _squad_levels(game: Node3D) -> void:
 	hive.set_physics_process(false)
 	hive.prowl.end()
 	hive.prowl.set_process(false)
+	helper._calm()
+	for mate: Teammate in helper.mates:
+		if mate.down:
+			mate.revive(true)
 	player.set_physics_process(false)
 	for id in map.areas:
 		map.unlock(str(id), true)
@@ -10818,55 +10822,44 @@ func _squad_levels(game: Node3D) -> void:
 				var away: Array[String] = []
 				for mate: Teammate in helper.mates:
 					if not helper._near(mate):
-						away.append("%s at %s" % [mate.label, str(mate.global_position.snapped(Vector3.ONE * 0.1))])
+						away.append("%s at %s (path %d at %d to %s, following %s, lost %.0f s, queued %.1f)" % [mate.label, str(mate.global_position.snapped(Vector3.ONE * 0.1)), mate.path.size(), mate.path_index, str(mate.path[mate.path.size() - 1].snapped(Vector3.ONE * 0.1)) if mate.path.size() > 0 else "-", str(mate.following), mate.lost_for, mate.queued_for])
 				lost.append("%s (%s)" % [str((spots[k] as Vector3).snapped(Vector3.ONE * 0.1)), ", ".join(PackedStringArray(away))])
 	var seen_jumps := 0
 	for mate: Teammate in helper.mates:
 		seen_jumps += int(helper.stats[mate.label].seen)
 	expect(legs >= 8 and heights.size() >= 3 and with_him == legs and seen_jumps == 0, "In the dissection laboratory the companions follow the survivor over all its heights - the pit, the hall, the gallery - and are with him on his floor every time he stops (%d of %d stops, %d heights)%s" % [with_him, legs, heights.size(), "" if lost.is_empty() else " - not at: " + ", ".join(PackedStringArray(lost.slice(0, 4)))])
-	# --- the lip at the head of the pit's flight: a companion's body gets over it by itself
-	var climbed := [false, false]
-	if not lab.is_empty():
-		var nearest := -1
-		var best := INF
-		var pit_foot: Vector3 = (lab.origin as Vector3) + Vector3(24.2, -8.4, 26.2)
-		for index in range(map.stairs.size()):
-			var gap: float = (map.stairs[index].foot as Vector3).distance_to(pit_foot)
-			if gap < best:
-				best = gap
-				nearest = index
-		for k in range(2):
-			var body := CharacterBody3D.new()
-			body.collision_layer = 0
-			body.collision_mask = 1 | 4 | 16
-			body.floor_snap_length = 0.3
-			var capsule := CapsuleShape3D.new()
-			capsule.radius = 0.3
-			capsule.height = 1.75
-			var shape := CollisionShape3D.new()
-			shape.shape = capsule
-			shape.position.y = 0.88
-			body.add_child(shape)
-			map.add_child(body)
-			var route: PackedVector3Array = map.stairs[nearest].points
-			body.global_position = route[0] + Vector3(0, 0.05, 0)
-			var at := 1
-			var frames := 0
-			while at < route.size() and frames < 900:
-				await get_tree().physics_frame
-				frames += 1
-				var to := route[at] - body.global_position
-				if Vector2(to.x, to.z).length() < 0.35:
-					at += 1
-					continue
-				var dir := Vector3(to.x, 0, to.z).normalized()
-				body.velocity = Vector3(dir.x * 4.6, 0.0 if body.is_on_floor() else body.velocity.y - 0.37, dir.z * 4.6)
-				body.move_and_slide()
-				if k == 1:
-					Teammate.step_up(body, dir)
-			climbed[k] = at >= route.size()
-			body.queue_free()
-	expect(not climbed[0] and climbed[1], "At the head of the pit's flight in the dissection laboratory the floor's edge stands over the steps: a body of a companion's size does not get over it by its round foot alone, and steps up onto it by itself (without: %s, with: %s)" % ["over" if climbed[0] else "stuck", "over" if climbed[1] else "stuck"])
+	# --- the flights: no edge at either end of any of them (in the areas, the transitions and
+	# the old map) that a body of a companion's size does not get over by itself - and the
+	# step-up still lifts it over such an edge where one is (here a sill laid for the check)
+	var lips: Array = map.flight_lips()
+	var stuck_on: Array[String] = []
+	var walker := _capsule_body(map)
+	for index in range(map.stairs.size()):
+		var points: PackedVector3Array = map.stairs[index].points
+		for way in ["up", "down"]:
+			var route := points.duplicate()
+			if way == "down":
+				route.reverse()
+			if not await _walk_body(walker, route, false):
+				stuck_on.append("%d %s at %s" % [index, way, str(walker.global_position.snapped(Vector3.ONE * 0.1))])
+	expect(lips.is_empty() and stuck_on.is_empty(), "No flight of the night - in the areas, the transitions, the old facility - has an edge at its head or its foot higher than a body steps over: the floor meets the top step flush, and a body of a companion's size walks up and down every one of them without help (%d flights%s%s)" % [map.stairs.size(), "" if lips.is_empty() else ", edges at " + ", ".join(PackedStringArray(lips.map(func(lip: Dictionary) -> String: return "%d (%.2f m)" % [int(lip.index), float(lip.height)]))), "" if stuck_on.is_empty() else ", stuck: " + ", ".join(PackedStringArray(stuck_on))])
+	var floor_at: Vector3 = map.points.terminal
+	var sill := StaticBody3D.new()
+	var sill_shape := CollisionShape3D.new()
+	var sill_box := BoxShape3D.new()
+	sill_box.size = Vector3(3.0, 0.12, 0.3)
+	sill_shape.shape = sill_box
+	sill.add_child(sill_shape)
+	map.add_child(sill)
+	sill.global_position = floor_at + Vector3(0, 0.06, -2.0)
+	await get_tree().physics_frame
+	var over_sill := []
+	for helped in [false, true]:
+		var ok: bool = await _walk_body(walker, PackedVector3Array([floor_at, floor_at + Vector3(0, 0, -4.0)]), helped)
+		over_sill.append(ok)
+	sill.queue_free()
+	walker.queue_free()
+	expect(not over_sill[0] and over_sill[1], "Where an edge is all the same (a sill of 0.12 m), a companion steps up onto it by itself, which its round foot alone does not do (without: %s, with: %s)" % ["over" if over_sill[0] else "stuck", "over" if over_sill[1] else "stuck"])
 	# --- a freight lift waits for the squad: both walk in before its door shuts
 	var boarded := ""
 	var lift_note := ""
@@ -10963,3 +10956,50 @@ func _squad_levels(game: Node3D) -> void:
 	game.team_enabled = false
 	profile.mode = kept_mode
 	profile.mission = kept_mission
+
+## A body of a companion's size (Teammate: a capsule 0.3 m round, 1.75 m tall) on the
+## map, for walking it over flights and edges.
+func _capsule_body(map: Node3D) -> CharacterBody3D:
+	var body := CharacterBody3D.new()
+	body.collision_layer = 0
+	body.collision_mask = 1 | 4 | 16
+	body.floor_snap_length = 0.3
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = 0.3
+	capsule.height = 1.75
+	var shape := CollisionShape3D.new()
+	shape.shape = capsule
+	shape.position.y = 0.88
+	body.add_child(shape)
+	map.add_child(body)
+	return body
+
+## Walks a body from point to point as a companion moves (straight at the next one; with
+## `helped` its step-up too). True if it got to the last one.
+func _walk_body(body: CharacterBody3D, route: PackedVector3Array, helped: bool) -> bool:
+	body.global_position = route[0] + Vector3(0, 0.05, 0)
+	body.velocity = Vector3.ZERO
+	await get_tree().physics_frame
+	var at := 1
+	var still := 0.0
+	var last := body.global_position
+	while at < route.size():
+		await get_tree().physics_frame
+		var dt := get_physics_process_delta_time()
+		var to := route[at] - body.global_position
+		if Vector2(to.x, to.z).length() < 0.35:
+			at += 1
+			continue
+		var dir := Vector3(to.x, 0, to.z).normalized()
+		body.velocity = Vector3(dir.x * 4.6, 0.0 if body.is_on_floor() else body.velocity.y - 22.0 * dt, dir.z * 4.6)
+		body.move_and_slide()
+		if helped:
+			Teammate.step_up(body, dir)
+		if body.global_position.distance_to(last) > 0.25:
+			last = body.global_position
+			still = 0.0
+		else:
+			still += dt
+		if still > 1.0:
+			return false
+	return true

@@ -1338,6 +1338,10 @@ func _handrail(foot: Vector3, head: Vector3, offset: float, tint: Color = Color(
 		snag_firm += 1
 		_add_shape(rails, Vector3((low.x + high.x) * 0.5, (bottom + top) * 0.5, (low.z + high.z) * 0.5), Vector3(0.08, top - bottom, Vector2(high.x - low.x, high.z - low.z).length()), Basis(slope.x, Vector3.UP, forward))
 		snag_firm -= 1
+		# The paths know it too, on whatever floor it stands at body height: where the head of a
+		# flight comes up beside a gallery, a way from the steps sideways onto it ran through
+		# the railing, and a companion on it walked into the rail for good.
+		_register(Vector3((low.x + high.x) * 0.5, (bottom + top) * 0.5, (low.z + high.z) * 0.5), Vector3(Vector2(high.x - low.x, high.z - low.z).length(), top - bottom, 0.08), atan2(forward.z, forward.x))
 
 ## A level steel railing between two points on a floor; bodies stop, shots pass.
 func _guard_rail(from: Vector3, to: Vector3, tint: Color = Color("2a2d2f"), height: float = 1.05) -> void:
@@ -2059,6 +2063,48 @@ func nearest_cell(pos: Vector3, level: int = -1) -> Vector2i:
 	if hidden_distance < INF:
 		return hidden
 	return hubs[level]
+
+## The edges a body meets on its way over a flight - from the landing below over the steps
+## to the landing above, along the middle line and to both sides of it - where the ground
+## rises (or falls) more at once than the flight itself does there: a floor that stands
+## over the head of the steps, a sill at the foot. The round foot of a companion's capsule
+## gets over 0.08 m by itself, a player's no more (he jumps). Every flight with one higher
+## than `limit`: {index, height, at}. (Rays against the world: the map must be built and
+## in the tree.)
+func flight_lips(limit: float = 0.06) -> Array:
+	var out: Array = []
+	var space := get_world_3d().direct_space_state
+	for index in range(stairs.size()):
+		var points: PackedVector3Array = stairs[index].points
+		var width := float(stairs[index].width)
+		var worst := 0.0
+		var where := Vector3.ZERO
+		for k in range(points.size() - 1):
+			var a := points[k]
+			var b := points[k + 1]
+			var run := Vector3(b.x - a.x, 0, b.z - a.z)
+			var span := run.length()
+			if span < 0.01:
+				continue
+			var side := Vector3(-run.z, 0, run.x) / span
+			var count := int(ceil(span / 0.04))
+			var expected := absf(b.y - a.y) / count
+			for lateral in [-0.3, 0.0, 0.3]:
+				var last := INF
+				for n in range(count + 1):
+					var spot := a.lerp(b, float(n) / count) + side * (float(lateral) * width)
+					var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 0.7, spot + Vector3.DOWN * 0.7, 1))
+					if hit.is_empty():
+						last = INF
+						continue
+					var height := (hit.position as Vector3).y
+					if last != INF and absf(height - last) - expected > worst:
+						worst = absf(height - last) - expected
+						where = spot
+					last = height
+		if worst > limit:
+			out.append({"index": index, "height": worst, "at": where})
+	return out
 
 ## The flight a position is on (its index in `stairs`) and the sample of its middle line
 ## nearest to it, or [-1, 0]. Flights may lie above one another: the height decides.

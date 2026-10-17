@@ -6,6 +6,7 @@ extends SceneTree
 ## an edge. Lines:
 ##   FLIGHT <index> <up|down> stuck at <point> (<k> of <n>) ...   it got no further
 ##   STAIRS flights=<n> walked=<n> stuck=<n>
+##   LIP flight <index> <height> at <point> ...   an edge higher than a body steps over (HiveCore.flight_lips)
 ##   Godot --headless --path <project> -s res://tools/stair_walk.gd [-- --hive-layout=all|<seed>|classic] [--assist]
 ## --assist: with the step-up of the companions (Teammate.step_up), to see what it mends.
 
@@ -28,6 +29,12 @@ func _initialize() -> void:
 		map.set_port(str(name), true, true)
 	await physics_frame
 	await physics_frame
+	# The edges at the flights first (HiveCore.flight_lips): LIP lines.
+	var lips: Array = map.flight_lips()
+	for lip: Dictionary in lips:
+		var stair: Dictionary = map.stairs[int(lip.index)]
+		print("LIP flight %d %.2f m at %s foot=%s head=%s zone=%s" % [int(lip.index), float(lip.height), str((lip.at as Vector3).snapped(Vector3.ONE * 0.01)), str((stair.foot as Vector3).snapped(Vector3.ONE * 0.1)), str((stair.head as Vector3).snapped(Vector3.ONE * 0.1)), str(stair.zone)])
+	print("LIPS %d" % lips.size())
 	var assist := "--assist" in OS.get_cmdline_user_args()
 	var body := CharacterBody3D.new()
 	body.collision_layer = 0
@@ -85,4 +92,4 @@ func _initialize() -> void:
 				stuck += 1
 				print("FLIGHT %d %s stuck at %s (%d of %d) foot=%s head=%s" % [index, way, str(body.global_position.snapped(Vector3.ONE * 0.01)), at, route.size(), str((stair.foot as Vector3).snapped(Vector3.ONE * 0.1)), str((stair.head as Vector3).snapped(Vector3.ONE * 0.1))])
 	print("STAIRS flights=%d walked=%d stuck=%d" % [map.stairs.size(), walked, stuck])
-	quit(0 if stuck == 0 else 1)
+	quit(0 if stuck == 0 and lips.is_empty() else 1)

@@ -2207,9 +2207,10 @@ func _lay_descent() -> void:
 	_steps(bottom, rest_b, 2.4, "betonfloor", grey)
 	_part("betonfloor", Vector3(0, UNDER * 0.5 - 0.3, -19.0), Vector3(2.4, 0.6, 2.6), grey)
 	_solid(Vector3(0, UNDER * 0.5 - 0.3, -19.0), Vector3(2.4, 0.6, 2.6), false)
-	# The floors of the two rooms reach the first and the last step.
-	for sill in [Vector3(0, -0.15, -9.225), Vector3(0, UNDER - 0.15, -28.625)]:
-		_part("betonfloor", sill, Vector3(2.4, 0.3, 0.45 if sill.y > -1.0 else 0.35), grey)
+	# The floors of the two rooms reach the first and the last step - and no further: the
+	# upper one, laid over the top step, stood as an edge over it.
+	for sill in [Vector3(0, -0.15, -9.15), Vector3(0, UNDER - 0.15, -28.625)]:
+		_part("betonfloor", sill, Vector3(2.4, 0.3, 0.5 if sill.y > -1.0 else 0.35), grey)
 		_solid(sill, Vector3(2.4, 0.3, 0.5), false)
 	for side in [-1.0, 1.0]:
 		# Above the ground the annex behind the house; below it the shaft.

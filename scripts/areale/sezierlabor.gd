@@ -211,8 +211,10 @@ func _levels() -> void:
 	_ramp(Vector3(1.6, KELLER, 46.8), Vector3(1.6, SAAL, 38.0), 2.4, Vector3(1.6, KELLER, 47.3), Vector3(1.6, SAAL, 36.4))
 	# --- the pit: two flights up its west and east walls to the hall floor north of it,
 	# and a railing round its edge
-	flight(Vector3(24.2, KELLER, 26.2), Vector3(24.2, SAAL, 19.0), Vector3(24.2, KELLER, 27.6), Vector3(24.2, SAAL, 17.4))
-	flight(Vector3(31.8, KELLER, 26.2), Vector3(31.8, SAAL, 19.0), Vector3(31.8, KELLER, 27.6), Vector3(31.8, SAAL, 17.4))
+	# (Their heads at the face of the pit's north wall, whose top is the hall's floor there: the
+	# floor meets the top step flush - at the wall's middle line it stood 0.12 m over it.)
+	flight(Vector3(24.2, KELLER, 26.2), Vector3(24.2, SAAL, GRUBE.position.y + 0.2), Vector3(24.2, KELLER, 27.6), Vector3(24.2, SAAL, 17.4))
+	flight(Vector3(31.8, KELLER, 26.2), Vector3(31.8, SAAL, GRUBE.position.y + 0.2), Vector3(31.8, KELLER, 27.6), Vector3(31.8, SAAL, 17.4))
 	railing(Vector3(25.4, SAAL, 18.9), Vector3(30.6, SAAL, 18.9))
 	railing(Vector3(22.9, SAAL, 29.1), Vector3(33.1, SAAL, 29.1))
 	railing(Vector3(22.9, SAAL, 19.0), Vector3(22.9, SAAL, 29.0))
@@ -221,7 +223,8 @@ func _levels() -> void:
 	gallery("steg_s", OBEN, Rect2(18, 31, 20, 3), [], [[NORTH, 18.0, 35.5]], [], Rect2(18.2, 31.0, 19.6, 2.8))
 	for x in [21.0, 31.0]:
 		_post_on(Vector2(x, 31.3), SAAL, OBEN)
-	flight(Vector3(36.6, SAAL, 23.6), Vector3(36.6, OBEN, 30.8), Vector3(36.6, SAAL, 22.2), Vector3(36.6, OBEN, 32.6))
+	# (Its head at the gallery's edge, where its floor begins.)
+	flight(Vector3(36.6, SAAL, 23.6), Vector3(36.6, OBEN, 31.0), Vector3(36.6, SAAL, 22.2), Vector3(36.6, OBEN, 32.6))
 	door("oflur_w", "steg_s", 32.5, 2.4, {"kind": "frame"})
 	cut("halle", WEST, 32.5, 2.8, OBEN - SAAL, OBEN - SAAL + 2.6)
 	door("steg_s", "oflur_o", 32.5, 2.4, {"kind": "frame"})

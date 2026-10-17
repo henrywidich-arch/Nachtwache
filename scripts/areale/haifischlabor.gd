@@ -135,7 +135,9 @@ func lay() -> void:
 		pane(name, SOUTH, room_x + 6.0, 10.0, 0.9, 2.7, "glass")
 	m._chunk("Kit", false)
 	m._deck_stairs(p(44.0, 0, 1.7), p(36.8, 4.2, 1.7), lv(0.0), lv(4.2), p(45.2, 0, 1.7), p(35.0, 4.2, 1.7))
-	slab(Rect2(36.0, 0.4, 0.9, 2.6), 4.2, "tread", Color(0.42, 0.44, 0.46), 0.2)
+	# (The landing ends at the head of the flight: reaching 0.1 m over it, it stood as an edge
+	# over the top step.)
+	slab(Rect2(36.0, 0.4, 0.8, 2.6), 4.2, "tread", Color(0.42, 0.44, 0.46), 0.2)
 	for x in [3.0, 15.0, 27.0, 35.4]:
 		post(Vector2(x, 6.7), 4.2, 0.4)
 	for name in ["beob_w", "beob_m", "beob_o"]:

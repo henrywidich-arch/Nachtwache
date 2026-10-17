@@ -154,10 +154,10 @@ var buff_left := 0.0
 var post := Vector3.INF
 var post_left := 0.0
 ## Since how long it has had no way to where it wants to go or has not got on along it (see
-## _rejoin), and where it stood when that was last measured.
+## _rejoin), and how far from him and where it was in the last seconds.
 var lost_for := 0.0
 var lost_check := 0.0
-var lost_from := Vector3.INF
+var lost_gaps: Array = []
 ## Waiting on a flight for the one ahead of it to get on.
 var queued_for := 0.0
 
@@ -524,6 +524,32 @@ func _behind_unseen(player: Survivor) -> Vector3:
 				return spot + Vector3(0, 0.05, 0)
 	return Vector3.INF
 
+## On a new way: straight on to the farthest of its next few points that it can walk to in a
+## straight line on its floor (nothing in between, floor all the way). A way that begins on
+## a flight first runs to the flight's end and only then turns off; a companion near that
+## end went back to it, was sent on again by the next way, and went back - for good.
+func _skip_ahead() -> void:
+	if path.size() < 3:
+		return
+	var space := get_world_3d().direct_space_state
+	var here := global_position
+	for k in range(mini(path.size() - 1, path_index + 6), path_index, -1):
+		var spot := path[k]
+		if absf(spot.y - here.y) > 0.3 or Vector2(spot.x - here.x, spot.z - here.z).length() > 3.5:
+			continue
+		if not _clear_between(here, spot):
+			continue
+		var floor_all_the_way := true
+		for share in [0.25, 0.5, 0.75, 1.0]:
+			var probe := here.lerp(spot, share)
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(probe + Vector3.UP * 0.5, probe + Vector3.DOWN * 0.45, 1))
+			if hit.is_empty() or absf((hit.position as Vector3).y - probe.y) > 0.3:
+				floor_all_the_way = false
+				break
+		if floor_all_the_way:
+			path_index = k
+			return
+
 ## Whether it stands on a flight of stairs (where it neither steps aside nor overtakes).
 func _on_stairs() -> bool:
 	return game.cabin.has_method("_on_flight") and int(game.cabin.call("_on_flight", global_position)[0]) >= 0
@@ -713,6 +739,7 @@ func _physics_process(delta: float) -> void:
 			if path.is_empty() and goal.distance_to(player.global_position) > 0.5 and (following or order == "free"):
 				path = game.cabin.path_between(global_position, player.global_position)
 			path_index = 1 if path.size() > 1 else 0
+			_skip_ahead()
 			repath_left = 0.5
 		while path_index < path.size():
 			var point := Vector2(path[path_index].x - global_position.x, path[path_index].z - global_position.z)
@@ -817,8 +844,16 @@ func _rejoin(delta: float, player: Survivor, wants: bool) -> void:
 	lost_check -= delta
 	if lost_check <= 0.0:
 		lost_check = 1.0
-		var got_on := lost_from == Vector3.INF or global_position.distance_to(lost_from) > 0.6
-		lost_from = global_position
+		# (Getting on: getting nearer to him by half a metre in three seconds, or at least
+		# going somewhere - two metres in three seconds. Going to and fro on one spot, as at
+		# the end of a flight, is no getting on.)
+		lost_gaps.append([global_position.distance_to(player.global_position), global_position])
+		if lost_gaps.size() > 4:
+			lost_gaps.pop_front()
+		var got_on := true
+		if lost_gaps.size() == 4:
+			var then: Array = lost_gaps[0]
+			got_on = float(then[0]) - float(lost_gaps[3][0]) > 0.5 or (then[1] as Vector3).distance_to(global_position) > 2.0
 		if wants and job.is_empty() and order != "hold" and (path.is_empty() or not got_on):
 			lost_for += 1.0
 		else:
@@ -837,7 +872,7 @@ func _rejoin(delta: float, player: Survivor, wants: bool) -> void:
 	path = PackedVector3Array()
 	repath_left = 0.0
 	lost_for = 0.0
-	lost_from = Vector3.INF
+	lost_gaps.clear()
 
 func _shoot(aim_point: Vector3, moving: bool) -> void:
 	ammo -= 1
