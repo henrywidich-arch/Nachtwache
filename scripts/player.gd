@@ -31,6 +31,10 @@ const WEAPONS := {
 	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 8, "reserve_max": 48, "reload_time": 0.4, "interval": 0.7, "damage": 24.0, "head_multiplier": 1.5, "spread": 0.1, "kick": 0.066, "flash": 2.2, "pellets": 12, "carry": [0.7, 0.5], "shells": true, "punch": 3.1, "settle": 0.72, "push": 8.5},
 	# group: the shop tab it is sold on. from_round: the round after which the shop has it.
 	"pistol": {"label": "M9 PISTOLE", "slot": 2, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
+	# The HORNISSE (tools/blender_make_hornet.py): a machine pistol - a sidearm that empties
+	# its long magazine in a second and a half, light rounds, good up close. Its interval is
+	# under three physics steps, so that it really fires every third one: 1200 a minute.
+	"hornet": {"label": "HORNISSE MP-9", "slot": 2, "price": 380, "group": "sidearms", "from_round": 3, "sound": "hornet", "magazine": 30, "reserve_max": 180, "reload_time": 1.7, "interval": 0.049, "damage": 13.0, "head_multiplier": 2.4, "spread": 0.022, "kick": 0.0075, "flash": 0.7, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
 	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 12, "reserve_max": 72, "reload_time": 2.0, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.085, "kick": 0.038, "flash": 2.0, "pellets": 10, "carry": [0.65, 0.4], "punch": 2.1, "settle": 0.7, "push": 4.5},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
@@ -64,8 +68,8 @@ const WEAPONS := {
 	"fifty": {"label": "M107 KALIBER .50", "slot": 3, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
-const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil"]
-const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
+const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil", "hornet_sil"]
+const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "hornet", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
 ## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
 ## kind, and as many more of any kind as slings were bought (extra_slots).
@@ -118,6 +122,10 @@ const ATTACHMENTS := {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	},
+	"hornet": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 110, "slot": "sight", "note": "Kleines Leuchtpunktvisier auf dem Schlitten: genauer beim Zielen", "set": {"zoom": 46.0, "aim_spread": 0.6}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 150, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "hornet_sil", "flash": 0.25, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"mp7": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
@@ -406,6 +414,7 @@ func _build_weapon() -> void:
 	weapon_models["ump"] = WeaponView.build_gun("ump")
 	weapon_models["ak"] = WeaponView.build_gun("ak")
 	weapon_models["mp7"] = WeaponView.build_gun("mp7")
+	weapon_models["hornet"] = WeaponView.build_gun("hornet")
 	for id in WeaponView.MODELS:
 		weapon_models[id] = WeaponView.build_model(id)
 	for id in weapon_models:

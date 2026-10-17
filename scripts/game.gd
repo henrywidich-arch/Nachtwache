@@ -4382,7 +4382,9 @@ func _run_gun_check() -> void:
 		looks = [["1_plain", []]]
 	for entry in looks:
 		for part in entry[1]:
-			player.fit(id, str(part))
+			# (Only the parts this gun takes.)
+			if (Survivor.ATTACHMENTS[id] as Dictionary).has(str(part)):
+				player.fit(id, str(part))
 		await get_tree().create_timer(0.6).timeout
 		await _capture(folder, "%s_%s_hip.png" % [id, entry[0]])
 		Input.action_press("aim")
@@ -4390,6 +4392,12 @@ func _run_gun_check() -> void:
 		await _capture(folder, "%s_%s_aim.png" % [id, entry[0]])
 		Input.action_release("aim")
 		await get_tree().create_timer(0.35).timeout
+	# --gun-fire: a picture of a shot, its flash at the muzzle.
+	if "--gun-fire" in OS.get_cmdline_user_args():
+		player.shot_cooldown = 0.0
+		player.shoot()
+		await _capture(folder, "%s_4b_fire.png" % id)
+		await get_tree().create_timer(0.4).timeout
 	player.ammo = 3
 	player.start_reload()
 	var waits := [0.2, 0.25, 0.28, 0.38, 0.33, 0.24, 0.16, 0.16]

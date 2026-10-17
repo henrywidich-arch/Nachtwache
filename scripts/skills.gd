@@ -122,7 +122,7 @@ const OWN_BLAST_LEFT := 0.1
 ## WISH_ROUNDS rounds earlier (Game.shelf, Game.weapon_round). The wish that counts is
 ## that of the tree in force. It never makes a weapon a rare one.
 const WISHES := {
-	"sweeper": {"plain": ["p90", "mp7", "shotgun"], "heavy": ["autoshotgun", "minigun"]},
+	"sweeper": {"plain": ["p90", "mp7", "shotgun", "hornet"], "heavy": ["autoshotgun", "minigun"]},
 	"hunter": {"plain": ["m14", "badger", "revolver"], "heavy": ["sniper", "svd"]},
 	"breacher": {"plain": ["g36", "shotgun"], "heavy": ["launcher", "mg", "mg2", "minigun"]}
 }

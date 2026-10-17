@@ -37,6 +37,8 @@ const MIX := {
 	# sustained fire is as loud to the ear as that of the other small guns (between the UMP
 	# and the P90), not as loud as the AK's.
 	"mp7": [-5.5, 0.05, 0], "mp7_sil": [-5.0, 0.04, 0],
+	# The HORNISSE: 1200 a minute of a light round (tools/make_hornet_sounds.js).
+	"hornet": [-7.0, 0.05, 0], "hornet_sil": [-6.0, 0.04, 0],
 	"ring": [-4.0, 0.0, 2], "glitch": [-6.0, 0.06, 1],
 	# The M32: its drum swung open, a shell pushed home, the frame shut, the turn of the drum
 	# after a shot, and its shell in flight (heard from the shell itself, see play_on).
@@ -97,7 +99,7 @@ const STAND_INS := {
 	"attack": "growl", "moan": "growl", "death_female": "growl", "pain_female": "growl",
 	"melee": "thud", "molotov": "pop", "fire": "hiss", "flamer": "hiss", "m14": "shot", "svd": "shot", "fifty": "shot", "nitro": "shot", "syringe": "click", "g36": "shot", "g36_sil": "p90",
 	"g36_mag_out": "click", "g36_mag_in": "click", "g36_bolt": "click",
-	"mp7": "p90", "mp7_sil": "p90",
+	"mp7": "p90", "mp7_sil": "p90", "hornet": "p90", "hornet_sil": "p90",
 	"m32_open": "click", "m32_shell": "click", "m32_close": "click", "m32_turn": "click", "shell_flight": "wind",
 	"hit_body": "hit", "hit_head": "hit", "hit_kill": "squish", "boomer_burst": "squish",
 	"ding_glas": "hit", "ding_glas_head": "hit", "ding_glas_kill": "hit", "ding_messing": "hit", "ding_messing_head": "hit", "ding_messing_kill": "hit",
