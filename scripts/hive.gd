@@ -280,6 +280,7 @@ func _seed_for_night() -> int:
 ## Called when a night starts on the map of the second mission.
 func begin() -> void:
 	on = true
+	HiveVoice.reset()
 	map = game.cabin as HiveMap
 	done.clear()
 	guards.clear()
@@ -680,6 +681,7 @@ func _enter(id: String) -> void:
 		_:
 			if run.owns(id):
 				run.enter(id)
+	HiveVoice.entered(self, id)
 
 func _update(delta: float) -> void:
 	var player: Survivor = game.player
@@ -1709,6 +1711,7 @@ func _process(delta: float) -> void:
 		return
 	_watch_nadja(delta)
 	_update(delta)
+	HiveVoice.watch(self, delta)
 	_run_puppets(delta)
 	_run_leavers(delta)
 	_run_overrun()

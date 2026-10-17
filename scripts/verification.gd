@@ -2,6 +2,8 @@ extends Node
 ## Run with Godot --headless --path <project> -- --smoke-test.
 var failures := 0
 var checks := 0
+## Cues the hooks of the voices name that the tables do not hold yet (see _standins).
+var unwritten: Array[String] = []
 
 func expect(condition: bool, description: String) -> void:
 	checks += 1
@@ -47,6 +49,8 @@ func run(game: Node3D) -> void:
 	# of that toughness switch it on for themselves, see _toughness.)
 	game.team_enabled = false
 	game.brood_on = false
+	# (The new voice cues are written later: stand-ins keep the hooks working while they are missing.)
+	_standins()
 	# --only=threats runs one of the later blocks on its own (handy while working on it);
 	# --only=operators,sandbox runs several, one after the other.
 	for arg in OS.get_cmdline_user_args():
@@ -1172,6 +1176,7 @@ func run(game: Node3D) -> void:
 	await _sandbox(game)
 	await _hive(game)
 	await _areas(game)
+	await _voices(game)
 	game.sounds.stop_all()
 	await wait(0.2)
 	print("INTEGRATION_RESULT: %d checks, %d failures" % [checks, failures])
@@ -1281,7 +1286,7 @@ func _latest(game: Node3D) -> void:
 	game.spawn_queue.clear()
 	game.phase = "preparing"
 	game.preparation_left = 9999.0
-	expect(rich and fresh and (Radio.BARKS.gas.cru as Array).size() == 2 and not game.squad_call("gas", player.global_position, 20.0), "The squad has at least three ways to say most things, and new things to say")
+	expect(rich and fresh and (Radio.BARKS.gas.cru as Array).size() >= 2 and not game.squad_call("gas", player.global_position, 20.0), "The squad has at least three ways to say most things, and new things to say")
 	# --- the trees of abilities
 	var skills: Skills = game.skills
 	var totals := {"kills": 1697, "special_kills": 635, "cru_kills": 91, "objectives": 28, "revives": 10, "victories": 3}
@@ -1945,7 +1950,15 @@ func _arsenal(game: Node3D) -> void:
 	game.interact()
 	var mate: Teammate = game.team[0]
 	var price: int = game.item_price("squad_armor")
+	game.bark_until.clear()
+	game.talk_until = 0
+	for one in game.team:
+		Radio.last.erase(one.look + "/gear_up")
 	var kit: bool = game.buy_item("squad_armor") and game.buy_item("squad_ammo") and game.buy_item("squad_ammo")
+	var said_gear := false
+	for one in game.team:
+		said_gear = said_gear or Radio.last.has(one.look + "/gear_up")
+	expect(said_gear, "Somebody of the squad says so when an upgrade for the squad is bought")
 	var outfit: bool = is_equal_approx(mate.max_health, 130.0) and is_equal_approx(mate.health, 130.0) and is_equal_approx(mate.damage_factor, 1.4) and is_equal_approx(game.team[1].max_health, 130.0)
 	game.buy_item("squad_ammo")
 	var full: bool = game.item_price("squad_ammo") == -1 and not game.buy_item("squad_ammo") and int(game.squad_levels.squad_ammo) == 3
@@ -3041,7 +3054,13 @@ func _squad_awake(game: Node3D) -> void:
 	game.squad_arms = 0
 	var plain: float = mate.arms()
 	game.wave = 5
+	game.bark_until.clear()
+	game.talk_until = 0
+	for cue in ["frag", "molotov", "heal", "mate_rescue", "rescue", "arms_up"]:
+		Radio.last.erase(mate.look + "/" + cue)
 	mate._keep_up()
+	var said_up: bool = Radio.last.has(mate.look + "/arms_up")
+	expect(said_up, "The squad calls out a better weapon step")
 	var stepped: bool = is_equal_approx(plain, 1.0) and Teammate.arms_level(1) == 0 and Teammate.arms_level(1 + Teammate.ARMS_EVERY) == 1 and Teammate.arms_level(60) == Teammate.ARMS_TOP and is_equal_approx(mate.arms(), 1.0 + Teammate.ARMS_STEP * Teammate.arms_level(5)) and int(game.squad_arms) == Teammate.arms_level(5) and is_equal_approx(mate.strength(), mate.damage_factor * mate.arms() * lerpf(Teammate.GREEN_DAMAGE, 1.0, mate.seasoned()))
 	game.brood_on = true
 	game.level = "hard"
@@ -3117,7 +3136,13 @@ func _squad_awake(game: Node3D) -> void:
 		one.crowd = 0
 	game.squad_throw_ready = 0.0
 	var thrown_before: int = game.squad_throws
+	game.bark_until.clear()
+	game.talk_until = 0
+	for cue in ["frag", "molotov", "heal", "mate_rescue", "rescue", "arms_up"]:
+		Radio.last.erase(mate.look + "/" + cue)
 	mate._awake()
+	var said_throw: bool = Radio.last.has(mate.look + "/frag") != Radio.last.has(mate.look + "/molotov")
+	expect(said_throw, "A companion who throws calls what it is: a bottle is a molotov, a grenade a frag")
 	other._awake()
 	mate.throw_rest = 0.0
 	mate._awake()
@@ -3143,8 +3168,14 @@ func _squad_awake(game: Node3D) -> void:
 	var not_needed: bool = game.ordnance.get_child_count() == 0 and mate._wounded() == null
 	player.health = 30.0
 	var treats_before: int = game.squad_treats
+	game.bark_until.clear()
+	game.talk_until = 0
+	for cue in ["frag", "molotov", "heal", "mate_rescue", "rescue", "arms_up"]:
+		Radio.last.erase(mate.look + "/" + cue)
 	mate._awake()
 	other._awake()
+	var said_heal: bool = Radio.last.has(mate.look + "/heal")
+	expect(said_heal, "A companion who opens a heal field calls it out")
 	var can: Throwable = null
 	var cans := 0
 	for node in game.ordnance.get_children():
@@ -3194,11 +3225,17 @@ func _squad_awake(game: Node3D) -> void:
 	leech.clung_to = null
 	mate._may_tend(INF)
 	mate.global_position = other.global_position + Vector3(1.0, 0, 0)
+	game.bark_until.clear()
+	game.talk_until = 0
+	for cue in ["frag", "molotov", "heal", "mate_rescue", "rescue", "arms_up"]:
+		Radio.last.erase(mate.look + "/" + cue)
 	var held := 0.0
 	while other.down and held < 6.0:
 		mate._lift_friend(0.05)
 		held += 0.05
 	other._recover(0.05)
+	var said_help: bool = Radio.last.has(mate.look + "/mate_rescue") and not Radio.last.has(mate.look + "/rescue")
+	expect(said_help, "A companion who helps a fallen friend up says so (mate_rescue, not the call for the survivor)")
 	expect(goes and holds and as_ever and covers and frees and not other.down and absf(held - Teammate.TEND_SECONDS) < 0.2 and mate.tending == null, "A companion goes to help a fallen one up (%.1f s at its side) unless it was told to hold or something is at its throat; a Leech on the survivor is shot before anything else, and whoever comes near somebody who is being helped before what is merely nearer" % held)
 	for one in [far, nearer, leech]:
 		_take_off(game, one)
@@ -4491,6 +4528,322 @@ func _turn(hive: HiveDirector) -> void:
 		if hive.clock != before:
 			return
 
+## The new voice cues are written later (tools/voice_takes, RadioTakes): while a cue the hooks
+## name is missing from the tables, a one-line stand-in takes its place, so that the hooks can
+## be checked. `unwritten` lists what the real tables lack.
+func _standins() -> void:
+	unwritten.clear()
+	for need: Array in HiveVoice.needs():
+		var cue := str(need[1])
+		for speaker: String in need[2]:
+			if str(need[0]) == "line":
+				if not Radio.LINES.has(cue):
+					unwritten.append("line " + cue)
+					Radio.LINES[cue] = [speaker, ["Stand-in for " + cue + "."]]
+			else:
+				if not Radio.BARKS.has(cue):
+					Radio.BARKS[cue] = {}
+				if not (Radio.BARKS[cue] as Dictionary).has(speaker):
+					unwritten.append("bark %s/%s" % [cue, speaker])
+					Radio.BARKS[cue][speaker] = ["Stand-in for " + cue + "."]
+
+## What waits in the director's queue, as "kind:cue" (a talk of several voices once).
+func _queued(hive: HiveDirector) -> Array[String]:
+	var out: Array[String] = []
+	for entry: Dictionary in hive.lines:
+		var tag := "%s:%s" % [entry.kind, entry.get("cue", entry.get("id", ""))]
+		if out.is_empty() or out[-1] != tag:
+			out.append(tag)
+	return out
+
+## What a hook adds to an empty queue.
+func _adds(hive: HiveDirector, action: Callable) -> Array[String]:
+	hive.lines.clear()
+	action.call()
+	return _queued(hive)
+
+## The takes of a cue of one speaker that have a recording.
+func _recorded_takes(speaker: String, cue: String, count: int) -> int:
+	var found := 0
+	for index in range(count):
+		found += 1 if Radio._sound(speaker, cue, index) != "" else 0
+	return found
+
+## The takes from index `from` on that have no recording (their paths are added to `out`).
+func _unrecorded(speaker: String, cue: String, from: int, count: int, out: Array[String]) -> void:
+	for index in range(from, count):
+		var path := "%s%s/%s_%d.ogg" % [Radio.VOICE_FOLDER, speaker, cue, index + 1]
+		if not ResourceLoader.exists(path):
+			out.append(path.trim_prefix(Radio.VOICE_FOLDER))
+
+## Whether a cue is said once the picker has run 30 times, never the same recording twice in a row.
+func _varies(picker: Callable) -> bool:
+	var before := "-"
+	for i in range(30):
+		var sound := str(picker.call().sound)
+		if sound == before:
+			return false
+		before = sound
+	return true
+
+## What was added in v0.62: the voices of the random part of the second mission and of the
+## companions' own actions. The hooks are checked without dice and without timers, with
+## stand-ins for the takes that are not written yet.
+func _voices(game: Node3D) -> void:
+	var hive: HiveDirector = game.hive
+	var run: HiveAreaRun = hive.run
+	# --- (1) every cue the hooks name is written, for each who is to say it
+	var gap := "" if unwritten.is_empty() else " - not written yet (%d): %s" % [unwritten.size(), str(unwritten.slice(0, 6))]
+	expect(unwritten.is_empty(), "Every cue the voice hooks name (%d) is written, for each speaker who is to say it%s" % [HiveVoice.needs().size(), gap])
+	# --- (2) no silent cue: every take of RadioTakes has its recording
+	var silent: Array[String] = []
+	var takes := 0
+	for cue: String in RadioTakes.LINES:
+		var extra: int = (RadioTakes.LINES[cue][1] as Array).size()
+		takes += extra
+		_unrecorded(str(RadioTakes.LINES[cue][0]), cue, (Radio.LINES[cue][1] as Array).size() - extra, (Radio.LINES[cue][1] as Array).size(), silent)
+	for cue: String in RadioTakes.BARKS:
+		for speaker: String in RadioTakes.BARKS[cue]:
+			var extra: int = (RadioTakes.BARKS[cue][speaker] as Array).size()
+			takes += extra
+			_unrecorded(speaker, cue, (Radio.BARKS[cue][speaker] as Array).size() - extra, (Radio.BARKS[cue][speaker] as Array).size(), silent)
+	expect(silent.is_empty(), "Every later take (%d) has a recording%s" % [takes, "" if silent.is_empty() else " - without: %d, e.g. %s" % [silent.size(), str(silent.slice(0, 4))]])
+	# --- (3) the picker never says a recording twice in a row (a talk of several voices: one take for all, another next time)
+	var stuck: Array[String] = []
+	var sampled := 0
+	for cue: String in Radio.LINES:
+		var speaker := str(Radio.LINES[cue][0])
+		if _recorded_takes(speaker, cue, (Radio.LINES[cue][1] as Array).size()) >= 2:
+			sampled += 1
+			if not _varies(func() -> Dictionary: return Radio.pick(cue)):
+				stuck.append(cue)
+	for cue: String in Radio.BARKS:
+		if RadioTakes.PAIRED.has(cue):
+			continue
+		for speaker: String in Radio.BARKS[cue]:
+			if _recorded_takes(speaker, cue, (Radio.BARKS[cue][speaker] as Array).size()) >= 2:
+				sampled += 1
+				if not _varies(func() -> Dictionary: return Radio.bark(speaker, cue)):
+					stuck.append(speaker + "/" + cue)
+	for cue: String in RadioTakes.PAIRED:
+		var speakers: Array = (Radio.BARKS[cue] as Dictionary).keys()
+		var count := 1000
+		for speaker: String in speakers:
+			count = mini(count, (Radio.BARKS[cue][speaker] as Array).size())
+		var pool: Array = []
+		for index in range(count):
+			var heard := true
+			for speaker: String in speakers:
+				heard = heard and Radio._sound(speaker, cue, index) != ""
+			if heard:
+				pool.append(index)
+		if pool.is_empty():
+			pool = range(count)
+		Radio.pair_state.erase(cue)
+		var previous := -1
+		sampled += 1
+		for turn in range(12):
+			var used := {}
+			for speaker: String in speakers:
+				used[(Radio.BARKS[cue][speaker] as Array).find(Radio.bark(speaker, cue).text)] = true
+			if used.size() != 1 or (pool.size() > 1 and used.has(previous)):
+				stuck.append(cue)
+				break
+			previous = int(used.keys()[0])
+	expect(stuck.is_empty(), "The picker never repeats the last take (%d cues with two or more recordings tried)%s" % [sampled, "" if stuck.is_empty() else " - repeated: " + str(stuck.slice(0, 5))])
+	# --- (4a) the companions: which calls break through the talk lock
+	var urgent: bool = true
+	for cue in ["frag", "molotov", "heal"]:
+		urgent = urgent and game.URGENT_CALLS.has(cue)
+	for cue in ["arms_up", "gear_up", "mate_rescue"]:
+		urgent = urgent and not game.URGENT_CALLS.has(cue)
+	expect(urgent and game.URGENT_CALLS.has("rescue"), "A grenade, a bottle and a heal field are called out through the talk of the mission; a better weapon, new gear and a hand for a fallen friend wait for it to be over")
+	# --- (4b) the hooks of the director: the arrival, the crash, an area
+	var kept := {"on": run.on, "pieces": run.piece_of, "task": run.task, "ride": run.ride, "lock": run.lock_left, "stage": hive.stage, "progress": hive.progress, "guards": hive.guards, "lines": hive.lines}
+	run.on = true
+	run.task = {}
+	run.ride = {}
+	run.lock_left = 0.0
+	var area := {"id": "p9", "kind": "area", "def": "haifischlabor", "event": {"kind": "collect"}}
+	run.piece_of = {"a0": area, "a0_out": area}
+	hive.stage = "a0"
+	hive.progress = -1.0
+	HiveVoice.roll = 0.0
+	HiveVoice.reset()
+	var arrival := _adds(hive, func() -> void: HiveVoice.entered(hive, "g_arrive"))
+	var old: Array = [{"kind": "radio", "cue": "m2_ride"}, {"kind": "squad", "cue": "m2_arrived", "who": "viper"}, {"kind": "squad", "cue": "m2_arrived", "who": "raven"}, {"kind": "radio", "cue": "m2_terminal"}]
+	hive.lines = old.duplicate(true)
+	HiveVoice.entered(hive, "g_crash")
+	var crash := _queued(hive)
+	expect(arrival == ["radio:m2_sector", "squad:m2_sector_c", "radio:m2_n_sector"] and crash == ["radio:m2_ride", "squad:m2_crash", "radio:m2_derail", "squad:m2_crash_after", "squad:m2_arrived", "radio:m2_terminal"], "Arriving in the sector Coleman, the squad and Nadja have a word; at the crash the squad shouts and Coleman answers before the words about the arrival - %s / %s" % [str(arrival), str(crash)])
+	var gone: Array = Radio.LINES["m2_derail"]
+	Radio.LINES.erase("m2_derail")
+	hive.lines = old.duplicate(true)
+	HiveVoice.entered(hive, "g_crash")
+	var without := _queued(hive)
+	Radio.LINES["m2_derail"] = gone
+	expect(not without.has("radio:m2_derail") and without.has("squad:m2_crash") and without.size() == 5, "A cue that is not written is left out and nothing else breaks")
+	var entering := _adds(hive, func() -> void: HiveVoice.entered(hive, "a0"))
+	HiveVoice.roll = 0.99
+	var squad_way := _adds(hive, func() -> void: HiveVoice.entered(hive, "a0"))
+	hive.lines = [{"kind": "radio", "cue": "m2_x"}, {"kind": "radio", "cue": "m2_y"}, {"kind": "radio", "cue": "m2_z"}]
+	HiveVoice.entered(hive, "a0")
+	var piled := _queued(hive)
+	HiveVoice.roll = 0.0
+	expect(entering == ["radio:m2_area_haifischlabor", "radio:m2_n_area_haifischlabor"] and squad_way == ["radio:m2_area_haifischlabor", "squad:m2_area_haifischlabor"] and piled == ["radio:m2_x", "radio:m2_y", "radio:m2_z", "radio:m2_area_haifischlabor"], "An area: Coleman says where they are, then Nadja or the squad has a word, never both and never on top of a full queue - %s / %s / %s" % [str(entering), str(squad_way), str(piled)])
+	# --- (4c) the objectives, one kind after the other
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "collect", "state": "reach", "time": 0.0, "items": [{"taken": false}, {"taken": false}, {"taken": false}, {"taken": false}]}
+	var collect: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	run.task.state = "work"
+	collect.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	for index in range(4):
+		run.task.items[index].taken = true
+		collect.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	collect.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	var collected: bool = str(collect) == str([[], ["radio:obj_collect_start"], ["radio:obj_collect_3", "call:obj_found"], ["radio:obj_collect_2", "call:obj_found"], ["radio:obj_collect_1", "call:obj_found"], [], []])
+	HiveVoice.roll = 0.99
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "collect", "state": "work", "time": 0.0, "items": [{"taken": false}, {"taken": false}]}
+	HiveVoice.watch(hive, 0.1)
+	run.task.items[0].taken = true
+	var quiet_find := _adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))
+	HiveVoice.roll = 0.0
+	expect(collected and quiet_find == ["radio:obj_collect_1"], "Collecting: a word when it begins, and for each of the last three things found - and the squad's shout only now and then - %s" % str(collect))
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "hack", "state": "work", "time": 0.0}
+	var hacked: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	run.task.state = "hacking"
+	hive.progress = 0.2
+	hacked.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	hive.progress = 0.6
+	hacked.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	hacked.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "restore", "state": "work", "time": 0.0, "places": [{"done": false}, {"done": false}, {"done": false}]}
+	var restored: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	for index in range(3):
+		run.task.places[index].done = true
+		restored.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	run.task.state = "rising"
+	restored.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	expect(str(hacked) == str([[], ["radio:obj_hack_start", "call:obj_hack", "radio:m2_n_obj_hack"], ["radio:obj_hack_half"], []]) and str(restored) == str([["radio:obj_restore_start", "radio:m2_n_obj_restore"], ["radio:obj_restore_switch", "call:obj_switch"], ["radio:obj_restore_switch", "call:obj_switch"], [], ["radio:obj_restore_rising"]]), "Hacking: the start and the half, Nadja now and then; restoring: the start, each switch but the last, and the power coming up - %s / %s" % [str(hacked), str(restored)])
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "hold", "state": "work", "time": 0.0}
+	var held: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	run.task.state = "holding"
+	hive.progress = 0.2
+	held.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	hive.progress = 0.6
+	held.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	held.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "lockdown", "state": "work", "time": 0.0}
+	HiveVoice.watch(hive, 0.1)
+	run.task.state = "holding"
+	hive.progress = 0.7
+	var locked := _adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))
+	HiveVoice.entered(hive, "a0")
+	var guards: Array = []
+	for i in range(5):
+		guards.append(Infected.new())
+	hive.guards = guards
+	run.task = {"kind": "clear", "state": "work", "time": 0.0}
+	var cleared: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	for index in range(3):
+		(guards[index] as Infected).dead = true
+		cleared.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	expect(str(held) == str([[], ["radio:obj_hold_start", "radio:m2_n_obj_hold"], ["radio:obj_hold_half"], []]) and locked.is_empty() and str(cleared) == str([["radio:obj_clear_start"], [], ["radio:obj_clear_few"], []]), "Holding: the start and the half; a lockdown has its own words already; clearing: the start, and a word when only a few are left - %s / %s / %s" % [str(held), str(locked), str(cleared)])
+	hive.guards = []
+	for guard in guards:
+		(guard as Infected).free()
+	# --- (4d) the end of an objective, by its kind
+	var ended := true
+	var report := ""
+	for kind in HiveVoice.DONE_LINES:
+		var piece := {"id": "p9", "kind": "area", "def": "haifischlabor", "event": {"kind": kind}}
+		run.piece_of = {"a0": piece, "a0_out": piece}
+		run.task = {}
+		HiveVoice.roll = 0.0
+		hive.lines = [{"kind": "radio", "cue": "m2_x"}]
+		HiveVoice.entered(hive, "a0_out")
+		var said := _queued(hive)
+		HiveVoice.roll = 0.99
+		hive.lines = [{"kind": "radio", "cue": "m2_x"}]
+		HiveVoice.entered(hive, "a0_out")
+		var plain := _queued(hive)
+		hive.lines = [{"kind": "radio", "cue": "m2_x"}, {"kind": "call", "cue": "clear"}]
+		HiveVoice.roll = 0.0
+		HiveVoice.entered(hive, "a0_out")
+		var after_clear := _queued(hive)
+		var cue: String = HiveVoice.DONE_LINES[kind]
+		if said != ["radio:" + cue, "radio:m2_x", "call:obj_done"] or plain != ["radio:" + cue, "radio:m2_x"] or after_clear != ["radio:" + cue, "radio:m2_x", "call:clear"]:
+			ended = false
+			report += " %s: %s %s %s" % [kind, str(said), str(plain), str(after_clear)]
+	HiveVoice.roll = 0.0
+	expect(ended and HiveVoice.DONE_LINES.size() == 6, "Every kind of objective has its word when it is done, before the rest of the queue, and the squad adds a shout unless it is shouting already%s" % report)
+	# --- (4e) the freight lifts and the lock at the end
+	run.piece_of = {"a0": area, "a1": area}
+	run.task = {}
+	HiveVoice.entered(hive, "a1")
+	run.ride = {"phase": "wait"}
+	var lift: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	run.ride = {"phase": "ride"}
+	lift.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	lift.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	run.ride = {}
+	lift.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	lift.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	run.ride = {"phase": "ride"}
+	HiveVoice.watch(hive, 0.1)
+	run.ride = {}
+	var arriving := _adds(hive, func() -> void: HiveVoice.entered(hive, "a0"))
+	hive.stage = "g_lock"
+	HiveVoice.entered(hive, "g_lock")
+	run.lock_left = -1.0
+	var lock: Array = [_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1))]
+	run.lock_left = 5.0
+	lock.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	run.lock_left = 4.0
+	lock.append(_adds(hive, func() -> void: HiveVoice.watch(hive, 0.1)))
+	hive.lines = [{"kind": "radio", "cue": "m2_labs"}]
+	HiveVoice.entered(hive, "labs")
+	var opened := _queued(hive)
+	expect(str(lift) == str([[], ["squad:m2_lift_in", "radio:m2_n_lift"], [], ["squad:m2_lift_out"], []]) and arriving == ["squad:m2_lift_out", "radio:m2_area_haifischlabor", "radio:m2_n_area_haifischlabor"] and str(lock) == str([[], ["radio:m2_n_decon", "squad:m2_decon"], []]) and opened == ["radio:m2_lock_done", "radio:m2_labs"], "A lift ride and the lock at the end are talked through, the word about the lift before the area it leads to, the lock's before the laboratories - %s / %s / %s / %s" % [str(lift), str(arriving), str(lock), str(opened)])
+	# --- (4f) never a flood
+	hive.stage = "a0"
+	run.piece_of = {"a0": area, "a0_out": area}
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "hold", "state": "work", "time": 0.0}
+	HiveVoice.watch(hive, 0.1)
+	run.task.state = "holding"
+	hive.progress = 0.2
+	hive.lines = [{"kind": "radio", "cue": "m2_x"}, {"kind": "radio", "cue": "m2_y"}, {"kind": "radio", "cue": "m2_z"}]
+	HiveVoice.watch(hive, 0.1)
+	var crowded := _queued(hive)
+	HiveVoice.entered(hive, "a0")
+	run.task = {"kind": "hold", "state": "work", "time": 0.0}
+	HiveVoice.watch(hive, 0.1)
+	run.task.state = "holding"
+	hive.lines.clear()
+	for i in range(HiveVoice.QUEUE_LIMIT):
+		hive.line("m2_x%d" % i)
+	HiveVoice.watch(hive, 0.1)
+	expect(crowded == ["radio:m2_x", "radio:m2_y", "radio:m2_z", "radio:obj_hold_start"] and hive.lines.size() == HiveVoice.QUEUE_LIMIT, "The words of the random part never flood the queue: optional ones wait for room, and a full queue takes nothing")
+	# --- what was borrowed is put back
+	HiveVoice.roll = -1.0
+	HiveVoice.reset()
+	run.on = kept.on
+	run.piece_of = kept.pieces
+	run.task = kept.task
+	run.ride = kept.ride
+	run.lock_left = kept.lock
+	hive.stage = kept.stage
+	hive.progress = kept.progress
+	hive.guards = kept.guards
+	hive.lines = kept.lines
+	await frames(1)
+
 ## What is said in the second mission (v0.24): its own lines instead of stand-ins, one
 ## queue for the radio and the squad, the taken channel until the station.
 func _spoken(game: Node3D) -> void:
@@ -4513,7 +4866,22 @@ func _spoken(game: Node3D) -> void:
 		used[found.get_string(1) + ":" + cue] = true
 		if (found.get_string(1) == "talk" and not Radio.BARKS.has(cue)) or (found.get_string(1) != "talk" and not Radio.LINES.has(cue)):
 			unknown.append(cue)
+	# What the voice hooks say stands in hive_voice.gd: the m2_ cues it names count as said, and
+	# so do the cues of the areas (named after them there); the cues that came later (RadioTakes)
+	# are not reported when nobody says them yet.
+	finder.compile("\"(m2_[a-z_0-9]+)\"")
+	for found: RegExMatch in finder.search_all(FileAccess.get_file_as_string("res://scripts/hive_voice.gd")):
+		used["line:" + found.get_string(1)] = true
+		used["talk:" + found.get_string(1)] = true
+	for def in HiveVoice.AREAS:
+		for cue in ["m2_area_" + def, "m2_n_area_" + def]:
+			used["line:" + cue] = true
+			used["talk:" + cue] = true
 	var later: Array[String] = []
+	for cue: String in RadioTakes.LINES:
+		later.append(cue)
+	for cue: String in RadioTakes.BARKS:
+		later.append(cue)
 	var unsaid: Array[String] = []
 	for cue: String in Radio.LINES:
 		if cue.begins_with("m2_") and not later.has(cue) and not (used.has("line:" + cue) or used.has("face:" + cue) or used.has("radio:" + cue)):
@@ -7323,6 +7691,14 @@ func _sandbox(game: Node3D) -> void:
 	for cue in Radio.BARKS:
 		for who in Radio.BARKS[cue]:
 			written += (Radio.BARKS[cue][who] as Array).size()
+	var phantom_written := 0
+	for cue in Radio.LINES:
+		phantom_written += (Radio.LINES[cue][1] as Array).size() if str(Radio.LINES[cue][0]) == "phantom" else 0
+	for cue in Radio.BARKS:
+		phantom_written += (Radio.BARKS[cue]["phantom"] as Array).size() if (Radio.BARKS[cue] as Dictionary).has("phantom") else 0
+	var shop_recorded := 0
+	for line in room.lines_of("shop"):
+		shop_recorded += 1 if str(line.sound) != "" else 0
 	room.say("phantom", "op_taunt", 1)
 	var taunt: bool = room.now_playing.begins_with("PHANTOM:") and room.voice_left > 0.5 and hud.radio_label.text.begins_with("PHANTOM:") and game.sounds.radio_voice.playing
 	room.say("ghost", "contact", 0)
@@ -7339,7 +7715,7 @@ func _sandbox(game: Node3D) -> void:
 	await wait(0.3)
 	var first_of_all: bool = room.now_playing.begins_with("HÄNDLERIN:") and room.queue.size() == queued - 1
 	room.hush()
-	expect(spoken == written and recorded == spoken and room.lines_of("phantom").size() == 85 and taunt and call_heard and taken and honest and queued == 6 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, all recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of a speaker in a row" % spoken)
+	expect(spoken == written and recorded <= spoken and room.lines_of("phantom").size() == phantom_written and taunt and call_heard and taken and honest and queued == shop_recorded and queued > 0 and first_of_all and room.now_playing == "" and room.queue.is_empty(), "Every line of every speaker (%d, %d recorded) can be played from the test room - Coleman on the taken-over channel too - one by one or all of the recorded ones of a speaker in a row" % [spoken, recorded])
 	# --- the menu
 	game.open_test()
 	var pages := {}

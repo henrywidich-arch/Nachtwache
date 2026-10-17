@@ -213,6 +213,7 @@ func _keep_up() -> void:
 		game.squad_arms = level
 		game.hud.kill_feed("TEAM  ·  Waffen verbessert  ·  Stufe %d" % level, 0, false, true)
 		game.sounds.play_sound("equip", -5.0, 1.2)
+		game.bark(self, look, "arms_up")
 
 ## Strengthened for `seconds` (a heal field has put it back on its feet).
 func strengthen(seconds: float) -> void:
@@ -317,7 +318,7 @@ func _may_tend(threat: float) -> bool:
 func _lift_friend(delta: float) -> bool:
 	if tending == null or not tending.lift(delta * float(game.REVIVE_SECONDS) / TEND_SECONDS):
 		return false
-	game.bark(self, look, "rescue")
+	game.bark(self, look, "mate_rescue")
 	game.hud.kill_feed("%s hilft %s auf" % [label, tending.label], 0, false, true)
 	tending = null
 	return true
@@ -404,6 +405,7 @@ func _awake() -> void:
 		var hurt := _wounded()
 		if hurt != null:
 			_lob("heal", hurt.global_position)
+			game.bark(self, look, "heal")
 			treat_rest = TREAT_REST
 			game.squad_treat_ready = float(game.elapsed) + SQUAD_TREAT_REST
 			game.squad_treats += 1
@@ -417,7 +419,7 @@ func _awake() -> void:
 			throw_rest = randf_range(THROW_REST.x, THROW_REST.y) * (0.5 if crowd >= HORDE_COUNT else 1.0)
 			game.squad_throw_ready = float(game.elapsed) + SQUAD_THROW_REST
 			game.squad_throws += 1
-			game.bark(self, look, "frag")
+			game.bark(self, look, "molotov" if bottle else "frag")
 			game.hud.kill_feed("%s  ·  %s" % [label, "Molotow" if bottle else "Granate"], 0, false, true)
 
 ## Free roaming: where the fight is. Vector3.INF means "stay where you are".

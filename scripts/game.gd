@@ -179,7 +179,7 @@ var bark_until: Dictionary = {}
 ## Until this tick the squad keeps its small talk to itself: a line of the mission's own
 ## dialogue is being said (the second mission). What cannot wait is called out all the same.
 var talk_until := 0
-const URGENT_CALLS := ["down", "grenade", "leech", "gas", "hurt", "leader_down", "thanks", "rescue"]
+const URGENT_CALLS := ["down", "grenade", "leech", "gas", "hurt", "leader_down", "thanks", "rescue", "frag", "molotov", "heal"]
 ## A kill of the survivor's that is worth a word to whoever of the squad stands within
 ## PRAISE_REACH of him: how often a shot to the head is, how often one of the special
 ## infected brought down, and the seconds until the squad says such a thing again.
@@ -1582,11 +1582,19 @@ func buy_item(id: String) -> bool:
 		squad_levels[id] = int(squad_levels[id]) + 1
 		for mate in team:
 			mate.outfit(int(squad_levels.squad_armor), int(squad_levels.squad_ammo))
+		_gear_up_call()
 	else:
 		player.take_item(id)
 	sounds.play_menu("buy")
 	hud.refresh_counter()
 	return true
+
+## A squad upgrade was bought: one of the living companions says so.
+func _gear_up_call() -> void:
+	var living: Array = team.filter(func(mate: Teammate) -> bool: return not mate.down and not mate.unarmed)
+	if not living.is_empty():
+		var mate: Teammate = living.pick_random()
+		bark(mate, mate.look, "gear_up")
 
 ## Buys a part for a weapon the survivor owns and fits it. A part that is owned already
 ## is put on or taken off for nothing.
