@@ -27,6 +27,11 @@ const not = ((args.find(a => a.startsWith('--not=')) || '--not=').slice(6)).spli
 // For talk in which several speak in turn (stimmen8: --lift=-18.5), so that a long, calm
 // sentence does not sink between two short loud ones.
 const lift = Number((args.find(a => a.startsWith('--lift=')) || '--lift=NaN').slice(7));
+// --bonus=<speaker>:<dB>[,<speaker>:<dB>]: extra gain for a speaker's lines in this run. The takes of 2026-10-17 (recorded
+// with voice settings of their own per take) came out a little thinner than the first recordings of Raven (1.3 dB under
+// their median level) and Ghost (0.7 dB): measured over all new takes of a speaker against all old ones.
+const bonus = {};
+for (const part of ((args.find(a => a.startsWith('--bonus=')) || '--bonus=').slice(8)).split(',').filter(x => x)) bonus[part.split(':')[0]] = Number(part.split(':')[1]);
 const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
 // (Since 2026-10-10 the squad, Nadja and Coleman speak with voices the user made himself.)
@@ -142,7 +147,7 @@ let problems = 0;
 for (let i = 0; i < files.length; i++) {
   const line = lines[i];
   const file = path.join(raw, files[i]);
-  if (!VOICES[line.speaker] || !files[i].includes('_' + VOICES[line.speaker] + '_')) {
+  if (!VOICES[line.speaker] || !(files[i].includes('_' + VOICES[line.speaker] + '_') || files[i].includes('_' + VOICES[line.speaker] + ' - '))) {
     console.log('VOICE MISMATCH', i, files[i], line.speaker, line.cue);
     problems++;
     continue;
@@ -154,7 +159,7 @@ for (let i = 0; i < files.length; i++) {
   const measured = probe(file, chain);
   // Radio lines sit a little under full level; the calls of people nearby use all of it.
   const sound = line.speaker === 'coleman' ? 'radio' : (intruder ? 'set' : (radio ? 'speaker' : 'clean'));
-  let gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0) + level(line, sound);
+  let gain = (radio ? -2.0 : -1.0) - measured.peak + ((HARD[line.speaker] || {}).level || 0) + level(line, sound) + (bonus[line.speaker] || 0);
   if (!isNaN(lift) && lift > measured.mean + gain) gain += Math.min(lift - (measured.mean + gain), Math.max(0, -level(line, sound)));
   const rate = line.text.length / measured.seconds;
   const entry = { file: line.speaker + '/' + line.cue + '_' + line.n, sound, seconds: +measured.seconds.toFixed(2), chars: line.text.length, rate: +rate.toFixed(1), gain: +gain.toFixed(1), mean: measured.mean };
