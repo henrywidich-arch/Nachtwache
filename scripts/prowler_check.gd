@@ -818,12 +818,13 @@ func run_duel() -> void:
 			feel -= step
 			var actors := PackedVector3Array()
 			for run in runs:
-				var beast: Prowler = run.beast
-				if not is_instance_valid(beast):
+				var beast = run.beast if is_instance_valid(run.beast) else null
+				if beast == null:
 					continue
 				beast.swap_left = 99.0
 				beast.prey = run.walker
 				actors.append(beast.global_position)
+				run.last = {"idle": beast.idle_in_view.duplicate(), "hurt": beast.idle_hurt, "first": beast.first_attack, "text": beast.idle_report()}
 				# The prey shoots while it can see it (its body, not in hiding).
 				if fire <= 0.0 and beast.collision_layer != 0 and beast._line((run.walker as Node3D).global_position + Vector3(0, 1.5, 0), beast.global_position + Vector3(0, 0.9, 0)):
 					beast.receive_hit(12.0, ((beast.global_position - (run.walker as Node3D).global_position) * Vector3(1, 0, 1)).normalized(), false, null)
@@ -833,20 +834,21 @@ func run_duel() -> void:
 				feel = 0.12
 				map.feel(actors)
 		for run in runs:
-			var beast: Prowler = run.beast
-			if is_instance_valid(beast) and beast.clung_to != null:
+			var beast = run.beast if is_instance_valid(run.beast) else null
+			if beast != null and beast.clung_to != null:
 				beast.release(false)
-			if is_instance_valid(beast):
-				# (For this count "in view" means: the prey that shoots it sees it.)
-				print("PROWLER_DUEL %-10s %-14s -> %-14s %s" % [str(run.from.area), str(run.from.room), str(run.to.room), beast.idle_report()])
+			if run.has("last"):
+				var last: Dictionary = run.last
+				print("PROWLER_DUEL %-10s %-14s -> %-14s %s%s" % [str(run.from.area), str(run.from.room), str(run.to.room), str(last.text), "" if beast != null else " (gone)"])
 				sums.runs += 1
-				for key: String in beast.idle_in_view:
-					sums.idle += float(beast.idle_in_view[key])
-					sums.states[key] = float(sums.states.get(key, 0.0)) + float(beast.idle_in_view[key])
-				sums.hurt += beast.idle_hurt
-				if beast.first_attack >= 0.0:
+				for key: String in last.idle:
+					sums.idle += float(last.idle[key])
+					sums.states[key] = float(sums.states.get(key, 0.0)) + float(last.idle[key])
+				sums.hurt += float(last.hurt)
+				if float(last.first) >= 0.0:
 					sums.attacked += 1
-					sums.first += beast.first_attack
+					sums.first += float(last.first)
+			if beast != null:
 				beast._retire()
 				beast.queue_free()
 			(run.walker as Node).queue_free()

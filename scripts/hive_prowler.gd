@@ -72,6 +72,8 @@ const END_HUSH := 0.6
 const END_SPITS := 4
 ## Nearer than this to the survivor it has to have come for a visit to count as one.
 const REACHED := 10.0
+## Seconds until it comes again after it left a squad that sat somewhere tight.
+const LURK_RETURN := Vector2(10.0, 18.0)
 ## It feeds between its visits: from this visit on (counted from 0) it comes as the elite
 ## look - bigger, its back all spikes (ProwlerVisual.LOOKS.prowler_elite) - and in the hall
 ## it always does. Its numbers stay those of its visit; what makes it worse is the boldness
@@ -414,13 +416,17 @@ func _attend(delta: float, stage: String) -> void:
 
 ## The visit is over: it runs (`hurt`: because it had taken enough), or it is dead.
 func _close(hurt: bool, died: bool) -> void:
-	var lurked: bool = is_instance_valid(beast) and beast.lurked > 0.0
+	var lurked: bool = is_instance_valid(beast) and beast.lurked > 1.0
 	if game.check_mode:
 		print("PROWLER_GONE n=%d stage=%s after=%.1f hurt=%s died=%s landed=%d nearest=%.1f lurked=%.1f %s" % [visits, director.stage, present_for, str(hurt), str(died), beast.landed if is_instance_valid(beast) else -1, nearest, beast.lurked if is_instance_valid(beast) else -1.0, beast.idle_report() if is_instance_valid(beast) else ""])
 	beast = null
 	visiting = false
 	if not last:
-		if nearest > REACHED and not hurt and not lurked:
+		if lurked and not hurt:
+			# They sat where it does not follow: it comes again soon, from somewhere else.
+			visits += 1
+			wait_left = randf_range(LURK_RETURN.x, LURK_RETURN.y)
+		elif nearest > REACHED and not hurt:
 			# It never got to them (a door shut between them): that was no visit, and it tries again soon.
 			wait_left = randf_range(8.0, 20.0)
 		else:
