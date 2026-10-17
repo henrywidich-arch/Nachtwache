@@ -2647,14 +2647,15 @@ func _later(game: Node3D) -> void:
 	var prowl_side: float = prowl_d.orbit
 	for prowl_step in range(4):
 		prowl_d.receive_hit(50.0, Vector3.BACK, false)
-	var prowl_dodged: bool = prowl_d.mode == "evade" or (prowl_d.mode == "circle" and prowl_d.dash_left > 0.5)
+	# (Somewhere to hide from the shooter: it goes there; nothing to get behind: it goes in at once - v0.65.)
+	var prowl_dodged: bool = prowl_d.mode == "evade" or (prowl_d.mode == "rush" and prowl_d.attack_left <= 0.0)
 	player.reload_left = 1.0
 	var prowl_reloading: float = prowl_d.worth(player)
 	player.reload_left = 0.0
 	player.health = 40.0
 	var prowl_hurt: float = prowl_d.worth(player)
 	player.health = 100.0
-	expect(prowl_dodged and prowl_d.orbit == -prowl_side and prowl_d.evade_cooldown > 0.0 and prowl_reloading > prowl_d.worth(player) + 1.0 and prowl_hurt > prowl_d.worth(player) + 0.5, "Hit hard on its way in it does not stand and take it: it breaks off, gets out of the line of fire and comes round the other way; and whoever reloads or is hurt is worth more to it as prey")
+	expect(prowl_dodged and prowl_d.orbit == -prowl_side and prowl_d.evade_cooldown > 0.0 and prowl_reloading > prowl_d.worth(player) + 1.0 and prowl_hurt > prowl_d.worth(player) + 0.5, "Hit hard on its way in it does not stand and take it: it breaks off and gets out of the line of fire, or with nothing to hide behind goes in at once; and whoever reloads or is hurt is worth more to it as prey")
 	prowl_d._retire()
 	prowl_d.queue_free()
 	# It does not hang about in view: a short stalk, then it commits; shot at meanwhile, at once.
