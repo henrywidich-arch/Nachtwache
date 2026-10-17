@@ -386,7 +386,9 @@ func _stand() -> void:
 
 func _near(mate: Teammate) -> bool:
 	var gap := mate.global_position - player.global_position
-	return Vector2(gap.x, gap.z).length() < NEAR and absf(gap.y) < 1.2
+	# (Under FREI a companion only comes back when it is more than 8 m off or on another
+	# level: near enough is within 9 m there.)
+	return Vector2(gap.x, gap.z).length() < (9.0 if order_now == "free" else NEAR) and absf(gap.y) < 1.2
 
 func _wait_for(seconds: float) -> void:
 	var spent := 0.0
@@ -411,7 +413,9 @@ func _calm() -> void:
 ## Every physics frame: what each of them does that is worth counting.
 func _watch(dt: float) -> void:
 	clock += dt
-	if not walking and order_now != "fight":
+	# (Nobody else is about, unless a fight is the point: the guards a stage posted when the
+	# night was taken up would knock the squad down.)
+	if order_now != "fight":
 		_calm()
 	# The sliding doors open for whoever comes near, as the director has them do in a night
 	# (HiveDirector._physics_process, which does not run here).
@@ -468,7 +472,11 @@ func _watch(dt: float) -> void:
 			var stuck := pos.distance_to(two_back) < 0.4
 			if stuck and not bool(s.stuck_on):
 				s.stuck += 1
-				_event("stuck", mate, "%s - path %d at %d to %s, he at %s level %d" % [_where(pos), mate.path.size(), mate.path_index, str(mate.path[mate.path.size() - 1].snapped(Vector3.ONE * 0.1)) if mate.path.size() > 0 else "-", str(here.snapped(Vector3.ONE * 0.1)), my_level])
+				var touching: Array[String] = []
+				for c in range(mate.get_slide_collision_count()):
+					var hit := mate.get_slide_collision(c)
+					touching.append("%s n%s" % [str(hit.get_collider()).get_slice(":", 0), str(hit.get_normal().snapped(Vector3.ONE * 0.01))])
+				_event("stuck", mate, "%s - path %d at %d to %s (next %s), he at %s level %d, touching %s; down %s following %s velocity %s queued %.1f lost %.0f rising %.1f" % [_where(pos), mate.path.size(), mate.path_index, str(mate.path[mate.path.size() - 1].snapped(Vector3.ONE * 0.1)) if mate.path.size() > 0 else "-", str(mate.path[mate.path_index].snapped(Vector3.ONE * 0.1)) if mate.path_index < mate.path.size() else "-", str(here.snapped(Vector3.ONE * 0.1)), my_level, ", ".join(PackedStringArray(touching)), str(mate.down), str(mate.following), str(mate.velocity.snapped(Vector3.ONE * 0.1)), mate.queued_for, mate.lost_for, mate.rising_left])
 			# (One episode until it has really got going again.)
 			if stuck:
 				s.stuck_on = true
