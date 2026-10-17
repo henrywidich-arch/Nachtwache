@@ -75,9 +75,13 @@ const GUNS := {
 	# its front sight; a sight sits on the slide just before the rear sight.
 	"hornet": {
 		"scene": "res://assets/models/hornet.glb", "mount": Vector3(0, -0.075, 0.076), "muzzle": Vector3(0, 0.06, -0.15), "bore": 0.0046,
-		"rail": 0.081, "optic": 0.012, "irons": 0.0868, "hands": "cup", "holo": 0.62,
-		"support": Vector3(-0.014, -0.012, 0.004), "handle": Vector3(0, 0.064, 0.05),
-		"magazine_out": Vector3(0, -0.9563, 0.2924), "magazine_foot": Vector3(0, -0.1212, 0.0453)
+		"rail": 0.081, "optic": 0.012, "irons": 0.0868, "hands": "cup", "holo": 0.62, "metal": 0.65,
+		"support": Vector3(-0.014, -0.012, 0.004), "handle": Vector3(-0.02, 0.02, -0.01),
+		"magazine_out": Vector3(0, -0.9563, 0.2924), "magazine_foot": Vector3(0, -0.1212, 0.0453),
+		# slide: how far the slide ("Breech" in the model) runs back with a shot; port: where
+		# the empty cases leave it (right side, before the rear sight). A red dot does not ride
+		# the slide (it came back into the eye with every shot): it stays where it is fitted.
+		"slide": 0.026, "port": Vector3(0.0128, 0.068, -0.022)
 	},
 	"mp7": {
 		"scene": "res://assets/models/mp7.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.1238, -0.315), "bore": 0.0115,
@@ -683,6 +687,21 @@ static func build_gun(id: String) -> Node3D:
 	magazine.get_parent().remove_child(magazine)
 	clip.add_child(magazine)
 	magazine.position += mount
+	# A slide that runs with the shots: the model's "Breech" under a holder of its own.
+	var slide := model.find_child("Breech", true, false) as Node3D
+	if slide != null:
+		var holder := Node3D.new()
+		holder.name = "Breech"
+		view.add_child(holder)
+		slide.owner = null
+		slide.get_parent().remove_child(slide)
+		holder.add_child(slide)
+		slide.position += mount
+	if gun.has("port"):
+		var port := Node3D.new()
+		port.name = "Port"
+		port.position = mount + (gun.port as Vector3)
+		view.add_child(port)
 	var hand := Node3D.new()
 	hand.name = "Support"
 	view.add_child(hand)

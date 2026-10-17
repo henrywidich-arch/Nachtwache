@@ -34,7 +34,7 @@ const WEAPONS := {
 	# The HORNISSE (tools/blender_make_hornet.py): a machine pistol - a sidearm that empties
 	# its long magazine in a second and a half, light rounds, good up close. Its interval is
 	# under three physics steps, so that it really fires every third one: 1200 a minute.
-	"hornet": {"label": "HORNISSE MP-9", "slot": 2, "price": 380, "group": "sidearms", "from_round": 3, "sound": "hornet", "magazine": 30, "reserve_max": 180, "reload_time": 1.7, "interval": 0.049, "damage": 13.0, "head_multiplier": 2.4, "spread": 0.022, "kick": 0.0075, "flash": 0.7, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	"hornet": {"label": "HORNISSE MP-9", "slot": 2, "price": 380, "group": "sidearms", "from_round": 3, "sound": "hornet", "magazine": 30, "reserve_max": 180, "reload_time": 1.7, "interval": 0.049, "damage": 13.0, "head_multiplier": 2.4, "spread": 0.022, "kick": 0.0075, "flash": 0.7, "casing": "9mm", "buzz": 1.0, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
 	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 12, "reserve_max": 72, "reload_time": 2.0, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.085, "kick": 0.038, "flash": 2.0, "pellets": 10, "carry": [0.65, 0.4], "punch": 2.1, "settle": 0.7, "push": 4.5},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
@@ -163,6 +163,11 @@ const PLATE_SHARES := [0.0, 0.25, 0.4, 0.55]
 const PUMP_BACK := 0.26
 const PUMP_DONE := 0.56
 const PUMP_TRAVEL := 0.09
+## A pistol's slide (WeaponView.GUNS[id].slide): seconds to run back after a shot and to
+## come home again, and the moment of a reload (0..1) the hand lets a locked slide go.
+const SLIDE_BACK := 0.012
+const SLIDE_HOME := 0.03
+const SLIDE_DROP := 0.86
 ## Moments of a reload, as a share of its duration, and the sound each one makes.
 const RELOAD_CUES := [[0.07, "mag_out"], [0.56, "mag_in"], [0.84, "bolt"]]
 ## The steps of loading a drum (the launcher, an M32), with the times of its first-person animations in
@@ -318,6 +323,8 @@ var recoil := 0.0
 var climb := 0.0
 ## Shotgun: seconds since the last blast while the pump is being worked; negative when idle.
 var pump_clock := -1.0
+## Seconds since the slide of the weapon in hand was last sent back by a shot.
+var slide_clock := 1.0
 var pump_cued := false
 ## Sniper rifle: seconds since the shot while the bolt is still to be worked.
 var bolt_clock := -1.0
@@ -1504,6 +1511,20 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 			target += Vector3(0.0, -0.012, 0.012) * stroke
 			angles += Vector3(0.06, 0.03, -0.12) * stroke
 		slide.position.z = stroke * PUMP_TRAVEL
+	# A pistol's slide runs back with every shot and home again; after the last shot it stays
+	# back until the hand lets it go near the end of the reload.
+	var breech := weapon.get_node_or_null("Breech") as Node3D
+	if breech != null:
+		slide_clock += delta
+		var travel: float = float(WeaponView.GUNS[current_weapon].get("slide", 0.0))
+		var back := slide_clock / SLIDE_BACK if slide_clock < SLIDE_BACK else maxf(0.0, 1.0 - (slide_clock - SLIDE_BACK) / SLIDE_HOME)
+		if ammo == 0:
+			back = 1.0
+			if reload_left > 0.0:
+				var through := 1.0 - reload_left / reload_of(current_weapon)
+				if through >= SLIDE_DROP:
+					back = maxf(0.0, 1.0 - (through - SLIDE_DROP) * reload_of(current_weapon) / SLIDE_HOME)
+		breech.position.z = travel * back
 	# A blow with the weapon: it is thrust forward and across, and comes back.
 	if melee_pose > 0.0:
 		var swing := sin(melee_pose * PI)
@@ -1550,6 +1571,16 @@ func _update_mist(delta: float) -> void:
 		filter_left = minf(filter_capacity(), filter_left + delta * 0.6)
 
 ## Where the muzzle appears on screen, expressed as a world position for tracers.
+## The empty case of the shot just fired flies from the weapon's port (brass.gd); like the
+## muzzle, the port is placed where the eye sees it in the view's own field of view.
+func _eject_case() -> void:
+	var port := weapon.get_node_or_null("Port") as Node3D
+	if port == null or game.get("brass") == null:
+		return
+	var local := camera.to_local(port.global_position)
+	var ratio := tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(WeaponView.VIEW_FOV) * 0.5)
+	game.brass.eject(camera.to_global(Vector3(local.x * ratio, local.y * ratio, local.z)), camera.global_basis, velocity)
+
 func _visible_muzzle() -> Vector3:
 	var local := camera.to_local(flash.global_position)
 	var ratio := tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(WeaponView.VIEW_FOV) * 0.5)
@@ -1591,12 +1622,21 @@ func shoot() -> void:
 	# A suppressor leaves only a small, dim flash; a shotgun lights up the room.
 	var blaze: float = data.flash
 	flash_left = 0.03 if blaze < 0.5 else (0.075 if blaze > 1.5 else 0.045)
+	if float(data.interval) < 0.06:
+		flash_left = 0.02
 	flash_mesh.rotation.z = randf() * TAU
 	flash_mesh.scale = Vector3.ONE * randf_range(0.75, 1.3) * blaze
 	flash_light.light_energy = 3.5 * blaze
 	var punch: float = data.get("punch", 1.0)
 	recoil = punch
 	game.sounds.play_sound(data.sound)
+	if data.has("casing"):
+		slide_clock = 0.0
+		_eject_case()
+	if data.has("buzz"):
+		var knock: float = float(data.buzz) * (0.45 if aiming else 1.0)
+		weapon.rotation += Vector3(randf_range(0.6, 1.0) * 0.045, randf_range(-1.0, 1.0) * 0.022, randf_range(-1.0, 1.0) * 0.035) * knock
+		weapon.position += Vector3(randf_range(-1.0, 1.0) * 0.002, 0.003, 0.014) * knock
 	if data.has("pellets"):
 		# The blast shoves the whole view; a pump gun has to be worked before the next shot.
 		trauma = minf(1.0, trauma + (0.44 if data.has("shells") else 0.24))

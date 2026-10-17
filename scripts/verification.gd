@@ -2422,22 +2422,62 @@ func _loadout(game: Node3D) -> void:
 	player.shot_cooldown = 0.0
 	player.reload_left = 0.0
 	var hn_fired := 0
+	# The slide runs back with each shot and home again: seen back and seen home, again and again.
+	var hn_breech := hornet.get_node_or_null("Breech") as Node3D
+	var hn_travel: float = float(WeaponView.GUNS.hornet.slide)
+	var hn_back := 0
+	var hn_home := 0
+	var hn_cases: int = game.brass.thrown
 	for i in range(60):
 		var before: int = player.ammo
 		player.shoot()
 		hn_fired += before - player.ammo
 		await get_tree().physics_frame
+		if hn_breech != null:
+			hn_back += 1 if hn_breech.position.z > hn_travel * 0.5 else 0
+			hn_home += 1 if hn_breech.position.z < hn_travel * 0.3 else 0
 	player.trigger_held = false
-	# The reload: the magazine leaves the grip downwards and comes back full.
-	player.ammo = 2
+	# Every shot threw a case, and they lie about.
+	var hn_thrown: int = game.brass.thrown - hn_cases
+	var hn_about: int = game.brass.count()
+	# The last shot leaves the slide back.
+	player.ammo = 1
+	player.shot_cooldown = 0.0
+	player.shoot()
+	await frames(3)
+	var hn_locked: bool = hn_breech != null and player.ammo == 0 and is_equal_approx(hn_breech.position.z, hn_travel)
+	# The reload: the magazine leaves the grip downwards and comes back full; the slide stays
+	# back until the hand lets it go near the end, then it is home.
 	player.start_reload()
 	var hn_clip := hornet.get_node_or_null("Magazine") as Node3D
 	var hn_out := 0.0
-	for i in range(int(float(Survivor.WEAPONS.hornet.reload_time) * 60.0) + 20):
+	var hn_held := true
+	var hn_steps := int(float(Survivor.WEAPONS.hornet.reload_time) * 60.0)
+	for i in range(hn_steps + 20):
 		await get_tree().physics_frame
 		if hn_clip != null:
 			hn_out = maxf(hn_out, hn_clip.position.length())
+		if i < int(hn_steps * 0.8) and hn_breech != null:
+			hn_held = hn_held and is_equal_approx(hn_breech.position.z, hn_travel)
+	var hn_released: bool = hn_breech != null and hn_breech.position.z < 0.0005
 	var hn_way: Vector3 = WeaponView.reload_step("hornet", 0.38).magazine
+	# The cases lie a few seconds and are gone.
+	for k in range(20):
+		game.brass._physics_process(0.5)
+	var hn_gone: bool = game.brass.count() == 0
+	# A partner's HORNISSE in co-op throws its cases as well (by the sound of the shot).
+	var hn_partner := RemoteSurvivor.new()
+	hn_partner.game = game
+	game.mates.add_child(hn_partner)
+	hn_partner.global_position = player.global_position + Vector3(1.4, 0, 0.6)
+	await frames(2)
+	var hn_before_partner: int = game.brass.thrown
+	hn_partner.show_shot(hn_partner.global_position + Vector3(0, 1.4, -10), "hornet")
+	hn_partner.show_shot(hn_partner.global_position + Vector3(0, 1.4, -10), "p90")
+	var hn_partner_cases: int = game.brass.thrown - hn_before_partner
+	hn_partner.queue_free()
+	await frames(2)
+	expect(hn_back >= 15 and hn_home >= 15 and hn_thrown == hn_fired and hn_about > 0 and hn_locked and hn_held and hn_released and hn_gone and hn_partner_cases == 1 and hornet.get_node_or_null("Port") != null and BrassCasings.SOUNDS.has("hornet") and BrassCasings.SOUNDS.has("hornet_sil"), "The HORNISSE's slide runs back and home with every shot and stays back after the last one until the reload lets it go; every shot throws a case, which lies a while and is gone, in a co-op partner's hand too (back %d, home %d, cases %d of %d shots, about %d, partner %d)" % [hn_back, hn_home, hn_thrown, hn_fired, hn_about, hn_partner_cases])
 	expect(hn_early and hn_shelved and hn_got and hn_dot and hn_hushed and hn_heard and hn_fired >= 19 and hn_fired <= 21 and hn_clip != null and hn_out > 0.1 and hn_way.y < -0.1 and hn_clip.position.length() < 0.001 and player.ammo == 30 and Survivor.kind_of("hornet") == "secondary" and int(Survivor.KINDS.secondary.key) == 3 and Survivor.ORDER.find("hornet") == Survivor.ORDER.find("pistol") + 1 and float(Survivor.WEAPONS.hornet.interval) < float(Survivor.WEAPONS.pistol.interval) and float(Survivor.WEAPONS.hornet.damage) < float(Survivor.WEAPONS.pistol.damage) and SurvivalHUD.SHOP_NOTES.has("hornet") and Skills.WISHES.sweeper.plain.has("hornet"), "The HORNISSE is a sidearm on key 3, sold from round three: it fires twenty rounds a second, takes a red dot and a suppressor of its own sound, and its magazine leaves the grip and comes back full (fired %d, shelved %s, bought %s)" % [hn_fired, hn_shelved, hn_got])
 	_wipe(game)
 	# --- the keys
