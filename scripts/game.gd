@@ -525,6 +525,9 @@ func _ready() -> void:
 	elif "--areas-check" in args:
 		check_mode = true
 		call_deferred("_run_areas_check")
+	elif "--areas-hud" in args:
+		check_mode = true
+		call_deferred("_run_areas_hud")
 	elif "--stations-check" in args:
 		check_mode = true
 		HiveStations.pictures.call_deferred(self)
@@ -2921,6 +2924,58 @@ func _run_areas_check() -> void:
 			await tick.call(0.5)
 			await _capture_from(folder, "lift_%s_%s.png" % [id, view[0]], view[1], view[2], 72.0)
 			print("AREAS_VIEW lift_%s %s draws=%d" % [id, view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
+	get_tree().quit()
+
+## Pictures of what is seen of the areas while playing (hud_*.png): the card of an area as
+## the squad comes in, with the map in the corner, and a freight lift on its way and on
+## arrival. A night with a chain in every seam; nobody attacks.
+##   hid.sh "--areas-hud" <capture folder>
+func _run_areas_hud() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.0)
+	profile.mission = 2
+	profile.mode = "story"
+	intro_skipped = true
+	hive.seed_wanted = -4
+	hive.night = {}
+	hive.night_fresh = false
+	hive.resume_at = "g_crash"
+	start_run()
+	await tick.call(2.0)
+	var map := hive_map
+	var calm := func() -> void:
+		for node in enemies.get_children():
+			node.queue_free()
+		alive_count = 0
+	var areas: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return str(piece.kind) == "area")
+	for piece: Dictionary in areas.slice(0, 3):
+		calm.call()
+		hive._enter("a%d" % int(piece.area_index))
+		var entry: Vector3 = map.points["%s_entry" % piece.id]
+		var middle := HiveAreaRun._middle_of(map, piece)
+		player.global_position = entry + Vector3(0, 0.1, 0)
+		player.velocity = Vector3.ZERO
+		player.rotation.y = atan2(-(middle.x - entry.x), -(middle.z - entry.z))
+		player.camera.rotation.x = -0.05
+		await tick.call(1.2)
+		calm.call()
+		await _capture(folder, "hud_card_%s.png" % piece.def)
+	# A lift of the old route on its way down, from the back of its cabin.
+	var chain: Dictionary = map.night.chains[1]
+	calm.call()
+	hive._enter("c1_lift")
+	var mid: Vector3 = map.points["lift_%s_mid" % chain.out]
+	var out: Vector2 = HiveCore.OUT[int(HiveLayout.LIFTS[chain.out].door)]
+	player.global_position = mid - Vector3(out.x, 0, out.y) * 1.4 + Vector3(0, 0.1, 0)
+	player.velocity = Vector3.ZERO
+	player.rotation.y = atan2(-out.x, -out.y)
+	player.camera.rotation.x = 0.28
+	await tick.call(1.3)
+	await _capture(folder, "hud_lift_ride.png")
+	await tick.call(2.6)
+	calm.call()
+	await _capture(folder, "hud_lift_arrived.png")
 	get_tree().quit()
 
 ## Pictures of what the objectives of the areas are done with (HiveAreaRun.lay_props):

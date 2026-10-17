@@ -486,9 +486,20 @@ func _begin_ride_fx(room: Dictionary) -> void:
 	sign_line.outline_size = 10
 	sign_line.outline_modulate = Color(0.1, 0.02, 0.0, 0.95)
 	sign_line.modulate = Color("ffb02e")
-	sign_line.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
-	sign_line.position = Vector3(0, 2.55, 0)
 	ride_fx.add_child(sign_line)
+	# Over the inside of the cabin door, facing in (in the middle of the cabin up high, when
+	# the door is not known).
+	var door: Dictionary = map.door_of.get(str(ride.get("door", "")), {})
+	if door.is_empty():
+		sign_line.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+		sign_line.position = Vector3(0, 2.55, 0)
+	else:
+		var at: Vector3 = door.pos
+		var inward := Vector3(cabin.get_center().x - at.x, 0, cabin.get_center().y - at.z)
+		inward = Vector3(0, 0, signf(inward.z)) if bool(door.along_x) else Vector3(signf(inward.x), 0, 0)
+		sign_line.global_position = Vector3(at.x, floor_y + 2.72, at.z) + inward * 0.26
+		sign_line.rotation.y = atan2(inward.x, inward.z)
+		sign_line.pixel_size = 0.0028
 	var band := OmniLight3D.new()
 	band.light_color = Color("ffe2b0")
 	band.light_energy = 1.4
