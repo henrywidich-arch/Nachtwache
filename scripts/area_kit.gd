@@ -433,13 +433,40 @@ func pulse(lamp: Light3D, low: float, high: float, seconds: float, flutter: floa
 	_watch()
 
 ## The same for the glow of a material (its albedo, which sets how bright it shines).
+## (`low` and `high` scale the colour it has; its see-through stays.)
 func pulse_glow(material: StandardMaterial3D, low: float, high: float, seconds: float) -> void:
+	var base := material.albedo_color
+	wave(func(phase: float) -> void:
+		var value := lerpf(low, high, 0.5 + 0.5 * sin(phase))
+		material.albedo_color = Color(base.r * value, base.g * value, base.b * value, base.a), seconds)
+
+## Anything that goes round and round: `step` is called with a phase from 0 to TAU every
+## `seconds` (the density of a mist that breathes, ...).
+func wave(step: Callable, seconds: float) -> void:
 	motions.append(func() -> void:
-		var breathe := func(phase: float) -> void:
-			var value := lerpf(low, high, 0.5 + 0.5 * sin(phase))
-			material.albedo_color = Color(value, value, value)
-		watcher.create_tween().set_loops().tween_method(breathe, 0.0, TAU, seconds))
+		watcher.create_tween().set_loops().tween_method(step, 0.0, TAU, seconds))
 	_watch()
+
+## What is built after this until the next chunk casts shadows (for the one lamp of a
+## piece that throws them: bars before a core). The areas are under the ground, where
+## nothing else of the map does.
+func shadow_chunk(id: String) -> void:
+	m._chunk(id, true)
+	m.chunk_shadows[m.zone + "|" + id] = true
+
+## A sign that is lit (DANGER over a gallery): a dark plate on a wall of a room of the
+## piece with a glowing frame, its words shining, and a little of its light on the wall.
+func lit_sign(room_name: String, side: int, at: float, high: float, text: String, color: Color, size: int = 90, wide: float = 2.4, tall: float = 0.8) -> void:
+	var room: Dictionary = m.room_of[n(room_name)]
+	var a := along(side, at)
+	m._face_box(room, side, "plate", a - wide * 0.5, a + wide * 0.5, high - tall * 0.5, high + tall * 0.5, -0.06, 0.0, Color("120d0c"))
+	for edge in [-1.0, 1.0]:
+		m._face_glow(room, side, a - wide * 0.5, a + wide * 0.5, high + edge * (tall * 0.5 - 0.03) - 0.025, high + edge * (tall * 0.5 - 0.03) + 0.025, -0.075, -0.06, color, 5.5)
+		m._face_glow(room, side, a + edge * (wide * 0.5 - 0.03) - 0.025, a + edge * (wide * 0.5 - 0.03) + 0.025, high - tall * 0.5 + 0.03, high + tall * 0.5 - 0.03, -0.075, -0.06, color, 5.5)
+	var words := m._wall_sign(text, m._face_point(room, side, a, high, -0.08), size, color, m._model_yaw(side))
+	words.shaded = false
+	words.modulate = Color(color.r * 1.8, color.g * 1.8, color.b * 1.8)
+	m._light(m._face_point(room, side, a, high, -0.7), color, 0.7, 4.0, false, 0.0, 0.6, HiveCore.LAMP_FADE)
 
 ## A pivot at `at` that turns about the vertical once every `seconds` (a beacon: what is
 ## hung on it turns with it). Returns the pivot.
