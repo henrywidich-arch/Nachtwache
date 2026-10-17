@@ -61,7 +61,7 @@ const MOODS := {
 	"cryo": {"ambient": Color(0.4, 0.52, 0.7), "energy": 0.42, "fog": 0.006, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.13, 0.2)},
 	"reactor": {"ambient": Color(0.58, 0.4, 0.26), "energy": 0.34, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.09, 0.03)},
 	"store": {"ambient": Color(0.52, 0.48, 0.42), "energy": 0.36, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.17, 0.12, 0.07)},
-	"ward": {"ambient": Color(0.44, 0.52, 0.62), "energy": 0.4, "fog": 0.003, "haze": 0.012, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.13, 0.18)}
+	"ward": {"ambient": Color(0.44, 0.52, 0.62), "energy": 0.32, "fog": 0.003, "haze": 0.012, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.13, 0.18)}
 }
 ## The moods of places under the ground (no moon, no shadows of it).
 const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo", "reactor", "store", "ward"]
