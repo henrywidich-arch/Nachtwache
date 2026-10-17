@@ -752,10 +752,10 @@ func _physics_process(delta: float) -> void:
 		if move == Vector3.ZERO and absf(last.y) < 1.2 and Vector2(last.x, last.z).length() > 0.4:
 			move = Vector3(last.x, 0, last.z).normalized()
 		# One behind the other: whoever of the squad is farther from where they are going waits
-		# while the other is right ahead of it (on a flight, in a doorway), instead of pushing
-		# into it - for a moment; then it goes round.
+		# while the other is right ahead of it on a flight, instead of pushing into it - for a
+		# moment; then it goes round. (Elsewhere there is room to pass.)
 		var waiting := false
-		if move != Vector3.ZERO and queued_for < 1.6:
+		if move != Vector3.ZERO and queued_for < 1.6 and _on_stairs():
 			for mate in game.team:
 				if mate == self or mate.down:
 					continue
