@@ -533,7 +533,7 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 	var here: Vector3 = game.player.global_position
 	var origin: Vector3 = piece.origin
 	var spots: Dictionary = HiveLayout.info(str(piece.def)).get("spots", {})
-	var goal: Vector3 = origin + (spots.get("goal", Vector3.ZERO) as Vector3)
+	var goal: Vector3 = free_spot(map, origin + (spots.get("goal", Vector3.ZERO) as Vector3))
 	task.time = float(task.time) + delta
 	if str(task.state) == "reach":
 		director.marker = map.points.get("%s_entry" % piece.id, director.marker)
@@ -681,7 +681,7 @@ func _begin_task(piece: Dictionary, event: Dictionary, _spots: Dictionary, _goal
 static func lay_props(props: AreaProps, map: HiveMap, piece: Dictionary, event: Dictionary) -> Dictionary:
 	var origin: Vector3 = piece.origin
 	var spots: Dictionary = HiveLayout.info(str(piece.def)).get("spots", {})
-	var goal: Vector3 = origin + (spots.get("goal", Vector3.ZERO) as Vector3)
+	var goal: Vector3 = free_spot(map, origin + (spots.get("goal", Vector3.ZERO) as Vector3))
 	var middle := _middle_of(map, piece)
 	var look := AreaProps.look_of(event)
 	var laid := {"items": [], "places": [], "slot": false, "detail": str(event.get("goal", "Den Bereich durchqueren"))}
@@ -689,7 +689,7 @@ static func lay_props(props: AreaProps, map: HiveMap, piece: Dictionary, event: 
 		"collect":
 			var indices: Array = event.get("items", [])
 			for k in range(indices.size()):
-				var at: Vector3 = origin + (spots.items[int(indices[k])] as Vector3)
+				var at: Vector3 = free_spot(map, origin + (spots.items[int(indices[k])] as Vector3))
 				var made := props.item(look, at, _open_way(map, at, middle), k)
 				(laid.items as Array).append({"pos": at, "known": false, "taken": false, "node": made.item, "base": made.base})
 			laid.detail += "  ·  %d %s im Bereich verteilt" % [indices.size(), _plural(str(event.get("word", "Fundstück")), indices.size())]
@@ -700,7 +700,7 @@ static func lay_props(props: AreaProps, map: HiveMap, piece: Dictionary, event: 
 				laid.detail += ", dann in den Sicherungskasten"
 		"restore":
 			for index: int in event.get("switches", []):
-				var at: Vector3 = origin + (spots.switches[index] as Vector3)
+				var at: Vector3 = free_spot(map, origin + (spots.switches[index] as Vector3))
 				(laid.places as Array).append({"pos": at, "done": false, "known": false, "node": props.place(look, at, _open_way(map, at, middle))})
 		"hack":
 			props.terminal(goal, _open_way(map, goal, middle))
@@ -730,6 +730,17 @@ static func _middle_of(map: HiveMap, piece: Dictionary) -> Vector3:
 		return map.points["%s_middle" % piece.id]
 	var size: Vector2 = piece.size
 	return (piece.origin as Vector3) + Vector3(size.x * 0.5, 0, size.y * 0.5)
+
+## The open ground nearest to a place of an objective (the place itself when it is open):
+## where its things stand and where it is worked, so that neither is inside something solid
+## of the area (a planter, a column).
+static func free_spot(map: HiveMap, at: Vector3) -> Vector3:
+	var level := map.level_of(at + Vector3(0, 0.3, 0))
+	if level < 0 or level >= map.navigation.size():
+		return at
+	var cell := map.nearest_cell(at, level)
+	var spot := Vector3(cell.x * CabinMap.CELL, at.y, cell.y * CabinMap.CELL)
+	return at if Vector2(spot.x - at.x, spot.z - at.z).length() < 0.4 else spot
 
 ## Where a thing at `at` faces: the way from it that stays open longest on the floor (so
 ## that a terminal or a valve is not turned to a wall), among equals the one nearest to

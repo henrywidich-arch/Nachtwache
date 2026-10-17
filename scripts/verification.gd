@@ -9524,6 +9524,37 @@ func _areas(game: Node3D) -> void:
 			lifts_before = lifts_before and hive.order.find("c%d_lift" % index) >= 0 and hive.order.find("c%d_lift" % index) < hive.order.find(before) and hive.order.find("c%d_lift" % index) > hive.order.find(str(chain.from))
 	var began: bool = hive.on and run.on and hive.stage == "g_crash" and map.layout_key == "all" and chains.size() == HiveLayout.SEAMS.size() and areas.size() == HiveLayout.pool().size() and old_kept and lifts_before and hive.order.has("g_lock") and not hive.order.has("decon")
 	expect(began, "A night with areas in every seam keeps the old route of the facility - terminal, administration, security, canteen, lockdown, atrium, generator, research wing, hall, lift - and puts each chain of areas with its freight lift between two of its parts (%s)" % ", ".join(PackedStringArray(hive.order.slice(hive.order.find("ride")))))
+	# --- the map in the corner on every piece of the night: the floor one stands on is one of
+	# the chain's (named by its sector) and its picture is open ground there - at every way
+	# in, at every place of an objective; the lifts are marked
+	var unmapped: Array[String] = []
+	var mapped := 0
+	for piece: Dictionary in map.night.pieces:
+		var spots_here: Array = []
+		for key in ["%s_entry" % piece.id, "%s_mid" % piece.id]:
+			if map.points.has(key):
+				spots_here.append(map.points[key])
+		if str(piece.kind) == "area":
+			var p_spots: Dictionary = HiveLayout.info(str(piece.def)).get("spots", {})
+			for list_key in ["items", "switches"]:
+				for local: Vector3 in p_spots.get(list_key, []):
+					spots_here.append(HiveAreaRun.free_spot(map, (piece.origin as Vector3) + local))
+			if p_spots.has("goal"):
+				spots_here.append(HiveAreaRun.free_spot(map, (piece.origin as Vector3) + (p_spots.goal as Vector3)))
+		for spot: Vector3 in spots_here:
+			var lvl := map.level_of(spot + Vector3(0, 0.3, 0))
+			var label := map.level_label(lvl)
+			var region: Rect2i = map.navigation[lvl].region
+			var cell := map.nearest_cell(spot, lvl)
+			var near := Vector2(cell.x * CabinMap.CELL - spot.x, cell.y * CabinMap.CELL - spot.z).length() < 0.8
+			var open_ground: bool = map.plan_pictures[lvl].get_pixelv(cell - region.position).r < 0.5
+			var named := label.begins_with("SEKTOR %s" % HiveAreaRun.sector(piece)) or label.ends_with("· OBEN")
+			if absf(float(map.floors[lvl].y) - spot.y) < 1.0 and near and open_ground and named:
+				mapped += 1
+			else:
+				unmapped.append("%s %s at %s (%s, floor %.1f)" % [piece.def, piece.id, str(spot.snapped(Vector3.ONE * 0.1)), label, float(map.floors[lvl].y)])
+	var lifts_marked: int = map.lift_marks().size()
+	expect(unmapped.is_empty() and mapped > 50 and lifts_marked == (map.night.lifts as Array).size() * 2, "The map in the corner knows every piece of the night: wherever one stands in an area, a transition or a lift - its way in, every place of its objective - it shows the floor of that height (named SEKTOR and the chain's letter) with open ground there, and it marks the night's lifts, the real ones and their twins (%d places, %d lifts)%s" % [mapped, lifts_marked, "" if unmapped.is_empty() else " - not: " + ", ".join(PackedStringArray(unmapped.slice(0, 6)))])
 	var put := func(at: Vector3) -> void:
 		player.global_position = at + Vector3(0, 0.08, 0)
 		player.velocity = Vector3.ZERO
@@ -9754,7 +9785,7 @@ func _areas(game: Node3D) -> void:
 			await _idle_frames()
 			hive.use()
 			await _idle_frames()
-		var waiting: bool = bool(run.task.get("slot", false)) and hive.stage == "a%d" % area and not map.door_open("%s_out" % piece.id) and hive.marker.distance_to((piece.origin as Vector3) + (spots.goal as Vector3)) < 0.5
+		var waiting: bool = bool(run.task.get("slot", false)) and hive.stage == "a%d" % area and not map.door_open("%s_out" % piece.id) and hive.marker.distance_to(HiveAreaRun.free_spot(map, (piece.origin as Vector3) + (spots.goal as Vector3))) < 0.5
 		put.call((piece.origin as Vector3) + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 		await _idle_frames()
 		var asked: bool = hive.use_key == "g_slot" and hive.use_text.contains("Sicherungen")
@@ -9763,6 +9794,54 @@ func _areas(game: Node3D) -> void:
 		fused = waiting and asked and hive.stage == "a%d_out" % area and map.door_open("%s_out" % piece.id) and (run.props.fuse_box.slots as Array).all(func(fuse: Node3D) -> bool: return fuse.visible)
 		break
 	expect(fused, "Fuses that are found are not enough: the way out opens when they are slotted into the fuse box at the area's goal ([E] Sicherungen einsetzen), and they glow in it then")
+	# --- the whole way of a chain in one ask of the path finder (as somebody far behind asks
+	# for it): from the lift's twin or the crashed car to the chain's last piece, also where it
+	# has to leave a floor by one flight and come back to it by another
+	var long_found: Array[String] = []
+	for index in range(chains.size()):
+		var members: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.chain) == index)
+		var from: Vector3 = map.points.get("%s_mid" % members[0].id, map.points.get("%s_car" % members[0].id, Vector3.INF))
+		var to: Vector3 = map.points.get("%s_entry" % members[members.size() - 1].id, Vector3.INF)
+		# (Every door open, as at the end of a night.)
+		for id in map.areas:
+			map.unlock(str(id), true)
+		for door in map.doors:
+			if str(door.kind) == "script":
+				map.set_door(str(door.name), true, true)
+		var whole: PackedVector3Array = map.path_between(from, to)
+		if not whole.is_empty() and whole[whole.size() - 1].distance_to(to) < 2.0:
+			long_found.append("%s %.0f m" % [chains[index].seam, map._length(whole)])
+	expect(long_found.size() == chains.size(), "The path finder finds the whole way of every chain at once, from its lift's twin (or the crashed car) to its last piece - also where it leaves a floor by one flight and comes back to it by another (%s)" % ", ".join(PackedStringArray(long_found)))
+	# (A night whose crashed car lies on the floor of the first area after it, with only the
+	# emergency stair up and a stairwell down between them: its way leaves that floor and
+	# comes back to it, and is found at once all the same.)
+	var loop_night := {}
+	for seed_value in range(1, 400):
+		var candidate := HiveLayout.plan(seed_value)
+		var first: Array = (candidate.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.chain) == 0)
+		if bool(candidate.crash) and first.size() >= 3 and str(first[1].def) == "treppenhaus" and is_equal_approx((first[2].origin as Vector3).y, (first[0].origin as Vector3).y):
+			loop_night = candidate
+			break
+	var looped := ""
+	if not loop_night.is_empty():
+		var loop_map := HiveMap.new()
+		loop_map.night = loop_night
+		loop_map._ready()
+		for id in loop_map.areas:
+			loop_map.unlock(str(id), true)
+		for door in loop_map.doors:
+			if str(door.kind) == "script":
+				loop_map.set_door(str(door.name), true, true)
+		var car: Vector3 = loop_map.points["%s_car" % loop_night.pieces[0].id]
+		var area_in: Vector3 = loop_map.points["%s_entry" % loop_night.pieces[2].id]
+		var way: PackedVector3Array = loop_map.path_between(car, area_in)
+		var highest := -INF
+		for spot in way:
+			highest = maxf(highest, spot.y)
+		if not way.is_empty() and way[way.size() - 1].distance_to(area_in) < 2.0 and highest > car.y + 2.0:
+			looped = "seed %d, %.0f m, up to %.1f m over the tunnel" % [int(loop_night.seed), loop_map._length(way), highest - car.y]
+		loop_map.free()
+	expect(looped != "", "The path finder also finds a way that leaves a floor by one flight and comes back to it by another: from a crashed car up the emergency stair and down a stairwell into the area on the tunnel's floor (%s)" % looped)
 	# --- a defeat taken up again keeps its night: the same map, not built anew, the chains
 	# before the checkpoint behind the squad
 	var built := map

@@ -2092,12 +2092,14 @@ func area_of(pos: Vector3) -> String:
 	return "" if room.is_empty() else str(room.area)
 
 ## Chains of flights that lead from one level to another, as lists of indices into
-## `stairs`; no level is passed twice.
+## `stairs`; no level is passed twice, but the one it starts on may be returned to (out by one
+## flight and in again by another: the only way between two parts of one floor that do not
+## meet on it, as the tunnel of the crash and the areas beside it), to end there or go on.
 func _routes(from_level: int, to_level: int) -> Array:
 	var key := from_level * 100 + to_level
 	if not route_cache.has(key):
 		var found: Array = []
-		_chains(from_level, to_level, [], [from_level], found)
+		_chains(from_level, to_level, [], [], found)
 		route_cache[key] = found
 	return route_cache[key]
 
@@ -2108,13 +2110,15 @@ func _chains(at: int, goal: int, chain: Array, seen: Array, found: Array) -> voi
 		var stair: Dictionary = stairs[i]
 		if int(stair.low) != at and int(stair.high) != at:
 			continue
-		var next: int = int(stair.high) if int(stair.low) == at else int(stair.low)
-		if seen.has(next):
+		if chain.has(i):
 			continue
+		var next: int = int(stair.high) if int(stair.low) == at else int(stair.low)
 		if next == goal:
 			found.append(chain + [i])
-		else:
-			_chains(next, goal, chain + [i], seen + [next], found)
+			continue
+		if seen.has(next):
+			continue
+		_chains(next, goal, chain + [i], seen + [next], found)
 
 ## As on the farm, with one difference: a closed area is a place of its own. No way leads
 ## into it or out of it, but whoever is inside finds his way about in there.
@@ -2153,13 +2157,14 @@ func _path(from: Vector3, to: Vector3) -> PackedVector3Array:
 				if base + _gap(start_cell, goal_cell) >= best_cost:
 					continue
 				var route := _grid_path(start.level, start_cell, goal_cell)
-				if route.is_empty():
+				# (Where the floor itself has no way between the two, one may lead off it by one
+				# flight and back on to it by another - see _routes.)
+				if not route.is_empty():
+					var cost := base + _length(route)
+					if cost < best_cost:
+						best_cost = cost
+						best = lead + route + tail
 					continue
-				var cost := base + _length(route)
-				if cost < best_cost:
-					best_cost = cost
-					best = lead + route + tail
-				continue
 			var options: Array = []
 			for chain in _routes(start.level, goal.level):
 				var bound := base
