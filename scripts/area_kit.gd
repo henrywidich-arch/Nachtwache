@@ -317,6 +317,42 @@ func cables(from: Vector3, to: Vector3, count: int = 3, sag: float = 1.2, color:
 		var shift := Vector3(0, 0, 0.09 * k) if absf(to.x - from.x) > absf(to.z - from.z) else Vector3(0.09 * k, 0, 0)
 		m._hose(o + from + shift, o + to + shift, 0.025, color, sag + 0.25 * k, Vector3.ZERO, 8)
 
+## A line of light along a wall of the piece (its outer wall on `side`, local `from` to
+## `to` along it, `high` above the base): broken where a port of that side may get its
+## doorway, so that nothing of it stands in one, whichever ports a night uses.
+func wall_glow(side: int, from: float, to: float, high: float, color: Color, strength: float = 4.0, thick: float = 0.05) -> void:
+	var size: Vector2 = info().size
+	var gaps: Array = []
+	for port: Dictionary in info().ports:
+		if int(port.side) == side and high > float(port.y) - 0.3 and high < float(port.y) + PORT_TALL + 0.6:
+			gaps.append([float(port.at) - PORT_WIDE * 0.5 - 0.5, float(port.at) + PORT_WIDE * 0.5 + 0.5])
+	var stretches: Array = [[from, to]]
+	for gap: Array in gaps:
+		var kept: Array = []
+		for stretch: Array in stretches:
+			if float(gap[1]) <= float(stretch[0]) or float(gap[0]) >= float(stretch[1]):
+				kept.append(stretch)
+				continue
+			if float(gap[0]) > float(stretch[0]):
+				kept.append([stretch[0], gap[0]])
+			if float(gap[1]) < float(stretch[1]):
+				kept.append([gap[1], stretch[1]])
+		stretches = kept
+	for stretch: Array in stretches:
+		var a := float(stretch[0])
+		var b := float(stretch[1])
+		if b - a < 0.2:
+			continue
+		match side:
+			NORTH:
+				glow(Vector3((a + b) * 0.5, high, 0.25), Vector3(b - a, thick, 0.04), color, strength)
+			SOUTH:
+				glow(Vector3((a + b) * 0.5, high, size.y - 0.25), Vector3(b - a, thick, 0.04), color, strength)
+			WEST:
+				glow(Vector3(0.25, high, (a + b) * 0.5), Vector3(0.04, thick, b - a), color, strength)
+			EAST:
+				glow(Vector3(size.x - 0.25, high, (a + b) * 0.5), Vector3(0.04, thick, b - a), color, strength)
+
 ## A patch of mist: volumetric fog of its own (`drum`: a standing cylinder).
 func mist(centre: Vector3, size: Vector3, density: float, tint: Color = Color(0.78, 0.86, 0.95), drum: bool = false, fade: float = 0.25) -> FogVolume:
 	var cloud := FogVolume.new()

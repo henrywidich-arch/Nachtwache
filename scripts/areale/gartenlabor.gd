@@ -141,8 +141,9 @@ func _mood() -> void:
 		m._part("plate", o + spot + into * 0.08, Vector3(0.16, 1.7, 0.16), Color("1a1d1c"))
 		glow(spot + into * 0.2, Vector3(0.08, 1.5, 0.08), green, 6.5)
 		light(spot + into * 0.8, green, 0.9, 4.5, 0.0, 1.0)
-	for side in [[Vector3(0.24, 0.45, 22.0), Vector3(0.03, 0.04, 43.0)], [Vector3(47.76, 0.45, 22.0), Vector3(0.03, 0.04, 43.0)], [Vector3(24.0, 0.45, 43.76), Vector3(47.0, 0.04, 0.03)]]:
-		glow(side[0], side[1], green, 4.5)
+	for side in [WEST, EAST]:
+		wall_glow(side, 0.5, 43.5, 0.45, green, 4.5, 0.04)
+	wall_glow(SOUTH, 0.5, 47.5, 0.45, green, 4.5, 0.04)
 	# Spores in the air, green and violet, and the haze they float in.
 	drift(Vector3(24.0, 4.5, 22.0), Vector3(44.0, 8.0, 40.0), 260, Color(0.55, 1.0, 0.45), {"size": 0.06, "life": 14.0, "rise": 0.02, "spread": 0.12, "glow": true, "alpha": 0.9})
 	drift(Vector3(24.0, 6.0, 22.0), Vector3(44.0, 6.0, 40.0), 160, Color(0.85, 0.6, 1.0), {"size": 0.05, "life": 14.0, "rise": -0.01, "spread": 0.1, "glow": true, "alpha": 0.8})

@@ -120,8 +120,8 @@ func _mood() -> void:
 			k += 1
 			z += 4.4
 	# Light strips along the walls under the catwalks, and the glow over the north door.
-	for x in [0.25, 35.75]:
-		glow(Vector3(x, 2.7, 22.0), Vector3(0.04, 0.05, 32.0), Color("9fe0ff"), 3.4)
+	for side in [WEST, EAST]:
+		wall_glow(side, 6.0, 38.0, 2.7, Color("9fe0ff"), 3.4)
 	glow(Vector3(18.0, 6.3, 0.25), Vector3(9.0, 0.05, 0.04), Color("9fe0ff"), 3.0)
 	glow(Vector3(18.0, 4.9, 0.3), Vector3(0.5, 0.18, 0.06), Color("ff2a1e"), 6.0)
 	light(Vector3(18.0, 4.6, 1.0), Color("ff3a2a"), 0.8, 4.0, 0.0, 0.8)
