@@ -834,6 +834,8 @@ func run_duel() -> void:
 				map.feel(actors)
 		for run in runs:
 			var beast: Prowler = run.beast
+			if is_instance_valid(beast) and beast.clung_to != null:
+				beast.release(false)
 			if is_instance_valid(beast):
 				# (For this count "in view" means: the prey that shoots it sees it.)
 				print("PROWLER_DUEL %-10s %-14s -> %-14s %s" % [str(run.from.area), str(run.from.room), str(run.to.room), beast.idle_report()])

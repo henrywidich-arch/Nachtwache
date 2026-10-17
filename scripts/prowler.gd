@@ -535,7 +535,7 @@ func shake() -> void:
 
 ## It lets go. thrown: shaken off or shot off - it reels back.
 func release(thrown: bool) -> void:
-	var victim := clung_to
+	var victim: Node3D = clung_to if is_instance_valid(clung_to) else null
 	clung_to = null
 	(model as ProwlerVisual).pinning = false
 	if is_instance_valid(victim):
