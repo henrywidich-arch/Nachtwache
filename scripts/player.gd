@@ -348,6 +348,10 @@ var landing := 0.0
 var airborne := false
 var shake_noise := FastNoiseLite.new()
 
+func toggle_flashlight() -> void:
+	flashlight.visible = not flashlight.visible
+	game.sounds.play_sound("click", -6.0, 1.5)
+
 func _ready() -> void:
 	collision_layer = 2
 	# World, infected and railings.
@@ -977,8 +981,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("reload"):
 		start_reload()
 	if event.is_action_pressed("flashlight"):
-		flashlight.visible = not flashlight.visible
-		game.sounds.play_sound("click", -6.0, 1.5)
+		if not game.can_start_wave() and not event.is_echo():
+			toggle_flashlight()
 	if event.is_action_pressed("interact"):
 		game.interact()
 	for slot in range(1, THROW_GROUP_KEY + 1):

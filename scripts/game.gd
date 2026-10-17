@@ -20,8 +20,8 @@ const ROUNDS := [
 ]
 ## Shares of the window's pixels the 3D picture can be drawn with (menu: 3D).
 const RENDER_SCALES := [1.0, 0.85, 0.7, 0.6, 0.5, 0.4]
-## Seconds between two rounds; the weapon shop is open for exactly this long.
-const BREAK_SECONDS := 20.0
+## A round begins only after the survivor deliberately holds the start key.
+const WAVE_HOLD_SECONDS := 1.5
 ## What the end of a round gives back: health (all of it on normal difficulty; ammunition:
 ## see Survivor.ROUND_AMMO).
 const ROUND_HEAL := 100.0
@@ -105,6 +105,9 @@ var score := 0
 var kills := 0
 var elapsed := 0.0
 var preparation_left := 12.0
+var wave_hold := 0.0
+var wave_start_sent := false
+var wave_flashlight_pending := false
 var spawn_queue: Array[String] = []
 var remaining_to_spawn: int:
 	get: return spawn_queue.size()
@@ -563,6 +566,9 @@ func _ready() -> void:
 	elif "--crusher-ttk" in args:
 		check_mode = true
 		call_deferred("_run_crusher_ttk")
+	elif "--coop-session-check" in args:
+		check_mode = true
+		call_deferred("_run_coop_session_check")
 	elif "--mp-host-test" in args or "--mp-join-test" in args:
 		check_mode = true
 		call_deferred("_run_mp_test", "--mp-host-test" in args)
@@ -675,14 +681,14 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("interact") and (state in ["shop", "bench"] or overlay in ["shop", "bench"]):
 		resume_run()
 		get_viewport().set_input_as_handled()
-	if event.is_action_pressed("next_wave") and state == "playing" and phase == "preparing" and not hive.on:
-		# In the test room: a real round of the strength chosen there.
-		if sandbox.on:
-			sandbox.start_round()
-		elif net.joined:
-			net.request_next_wave()
-		else:
-			begin_wave()
+	if event.is_action_pressed("next_wave") and state == "playing" and phase == "preparing" and sandbox.on:
+		sandbox.start_round()
+	if event.is_action_pressed("flashlight") and not event.is_echo() and can_start_wave():
+		wave_flashlight_pending = true
+	if event.is_action_released("flashlight"):
+		if wave_flashlight_pending and not wave_start_sent and can_start_wave():
+			player.toggle_flashlight()
+		wave_flashlight_pending = false
 	for order in ORDERS:
 		if event.is_action_pressed("squad_" + order) and not event.is_echo() and overlay == "":
 			command_squad(order)
@@ -701,6 +707,7 @@ func _aim_menu_camera() -> void:
 
 func _process(delta: float) -> void:
 	_run_radio(delta)
+	_update_wave_hold(delta)
 	if state == "menu":
 		menu_time += delta
 		_aim_menu_camera()
@@ -708,7 +715,8 @@ func _process(delta: float) -> void:
 		return
 	_update_pickups(delta)
 	sounds.set_shelter(cabin.is_indoors(player.global_position))
-	mission.update(delta)
+	if not hive.on:
+		mission.update(delta)
 	# [E] held beside somebody who is down: he is helped up for as long as it is held.
 	if Input.is_action_pressed("interact") and player.controlled and not player.menu_open:
 		help_up(delta)
@@ -729,15 +737,12 @@ func _process(delta: float) -> void:
 		finish(false)
 		return
 	if phase == "preparing":
-		preparation_left -= delta
 		if idle_wait > 0.0:
 			idle_wait -= delta
-			if idle_wait <= 0.0 and preparation_left > 4.0:
+			if idle_wait <= 0.0:
 				var talker := squad_voice()
 				if talker != null and randf() < 0.55:
 					bark(talker, talker.look, "idle")
-		if preparation_left <= 0:
-			begin_wave()
 	elif phase == "wave":
 		spawn_left -= delta
 		if not spawn_queue.is_empty() and spawn_left <= 0 and alive_count < alive_cap():
@@ -745,6 +750,34 @@ func _process(delta: float) -> void:
 			spawn_left = maxf(0.4, 1.5 - wave * 0.09) / (1.0 + 0.3 * extra_guns()) * mission.interval_factor()
 		if spawn_queue.is_empty() and alive_count == 0 and mission.round_clear():
 			complete_wave()
+
+func can_start_wave() -> bool:
+	return state == "playing" and phase == "preparing" and not hive.on and not sandbox.on and overlay == "" and player.controlled and not player.menu_open and not player.down
+
+## F remains the flashlight on a short press; an uninterrupted hold starts a round.
+## N also accepts a hold, so an old binding never starts a round by accident.
+func _update_wave_hold(delta: float) -> void:
+	var held := Input.is_action_pressed("flashlight") or Input.is_action_pressed("next_wave")
+	if not can_start_wave() or not held:
+		wave_hold = 0.0
+		if not held:
+			wave_start_sent = false
+		if not can_start_wave():
+			wave_flashlight_pending = false
+		return
+	if wave_start_sent:
+		return
+	wave_hold = minf(WAVE_HOLD_SECONDS, wave_hold + delta)
+	if wave_hold >= WAVE_HOLD_SECONDS:
+		wave_start_sent = true
+		wave_flashlight_pending = false
+		if net.joined:
+			net.request_next_wave()
+		else:
+			begin_wave()
+
+func wave_hold_share() -> float:
+	return clampf(wave_hold / WAVE_HOLD_SECONDS, 0.0, 1.0) if can_start_wave() else 0.0
 
 func _clear_match_nodes() -> void:
 	for container in [enemies, pickups, mates, ordnance]:
@@ -798,18 +831,20 @@ func start_run(test: bool = false) -> void:
 	get_tree().paused = false
 	process_mode = Node.PROCESS_MODE_PAUSABLE
 	overlay = ""
+	wave_hold = 0.0
+	wave_start_sent = false
+	wave_flashlight_pending = false
 	if net.hosting:
 		net.start_match()
 	_clear_match_nodes()
 	sandbox.end()
 	hive.end()
 	sandbox.on = test and not net.active
-	# The second mission is played alone with the squad for now: a co-op night is the farm.
-	var second: bool = profile.mission == 2 and not test and not net.active
+	var second: bool = (net.match_mission == 2 if net.joined else profile.mission == 2) and not test
 	# The test room on the map of the second mission: every area of its random part, to
 	# walk through alone (Sandbox.visit).
 	var visit: bool = sandbox.on and sandbox.visit_id != ""
-	use_map(second or visit, (HiveLayout.showcase() if visit_night.is_empty() else visit_night) if visit else {})
+	use_map(second or visit, ((HiveLayout.showcase() if visit_night.is_empty() else visit_night) if visit else (net.match_night if second and net.joined else {})))
 	if second:
 		# The staff of the Hive: prepared the first time a night begins there, not before.
 		InfectedVisual.warm_up(self, 2)
@@ -818,6 +853,9 @@ func start_run(test: bool = false) -> void:
 		level = profile.difficulty
 		mode = "endless" if sandbox.on else ("villa" if second else profile.mode)
 		modifiers_on = profile.modifiers and not sandbox.on and not second
+	elif second:
+		mode = "villa"
+		modifiers_on = false
 	last_modifier = ""
 	_set_modifier("")
 	for key in stats:
@@ -830,10 +868,11 @@ func start_run(test: bool = false) -> void:
 	squad_treats = 0
 	last_place = 0
 	operators.clear()
-	if not net.joined and not second:
+	if not second:
 		story.begin()
-		mission.prepare()
-		plan_operators()
+		if not net.joined:
+			mission.prepare()
+			plan_operators()
 	for station in cabin.stations:
 		if station.has("label"):
 			(station.label as Label3D).text = "%s\n%d VORRAT" % [station.title, price(int(station.detail))]
@@ -924,7 +963,7 @@ func _aim_shop_camera(view: Dictionary) -> void:
 ## Whether starting the night that is chosen builds the map of the second mission first
 ## (it takes a moment: the menu says so meanwhile).
 func hive_needs_build() -> bool:
-	if profile.mission != 2 or net.active:
+	if profile.mission != 2 or net.joined:
 		return false
 	var night := hive.prepare_night()
 	return not is_instance_valid(hive_map) or hive_map.layout_key != str(night.get("key", "classic"))
@@ -1153,7 +1192,8 @@ func op_radio(speaker: String, cue: String, seconds: float = 6.0, must: bool = f
 	if not must and (radio_busy > 0.0 or not radio_queue.is_empty()):
 		return
 	_say(cue, seconds, speaker)
-	net.send_radio(cue, seconds, speaker)
+	if not hive.on:
+		net.send_radio(cue, seconds, speaker)
 
 ## A flashbang thrown at the survivors has gone off: whoever sees it is blinded, the squad
 ## holds its fire for a moment. In a co-op match the host tells the guest.
@@ -1391,7 +1431,7 @@ func complete_wave() -> void:
 		finish(true)
 		return
 	phase = "preparing"
-	preparation_left = BREAK_SECONDS
+	preparation_left = 0.0
 	idle_wait = randf_range(8.0, 12.0)
 	for mate in team:
 		mate.revive(true)
@@ -1834,6 +1874,8 @@ func interaction_prompt() -> String:
 	if partner_needs_help():
 		return "Mitspieler aufhelfen  ·  %d %%" % int(help_share() * 100.0) if help_share() > 0.0 else "[E] halten  ·  Mitspieler aufhelfen"
 	if hive.on:
+		if not hive.coop.fallen_nearby().is_empty():
+			return "[E] halten · Begleiter aufhelfen · %d %%" % int(help_share() * 100.0)
 		var hint := hive.prompt()
 		if hint != "":
 			return hint
@@ -1859,6 +1901,8 @@ func interaction_prompt() -> String:
 func help_up(delta: float) -> bool:
 	if player.down:
 		return false
+	if hive.on and not hive.coop.fallen_nearby().is_empty():
+		return true
 	var fallen := fallen_mate()
 	if fallen != null:
 		if fallen.lift(delta):
@@ -1877,6 +1921,10 @@ func help_up(delta: float) -> bool:
 
 ## How far along the help is that the player is giving (0 to 1; 0: he helps nobody).
 func help_share() -> float:
+	if hive.on:
+		var nearby: Dictionary = hive.coop.fallen_nearby()
+		if not nearby.is_empty():
+			return clampf(float(nearby.get("lifted", 0.0)) / REVIVE_SECONDS, 0.0, 1.0)
 	var fallen := fallen_mate()
 	if fallen != null:
 		return clampf(fallen.lifted / REVIVE_SECONDS, 0.0, 1.0)
@@ -1902,6 +1950,8 @@ func interact() -> void:
 		return
 	if fallen_mate() != null or partner_needs_help():
 		# Helping somebody up takes holding the key (see help_up): a press is its beginning.
+		return
+	if hive.on and not hive.coop.fallen_nearby().is_empty():
 		return
 	if hive.on and hive.use():
 		return
@@ -1972,6 +2022,8 @@ func _run_radio(delta: float) -> void:
 ## seconds until the channel is free again (0 if there was nothing to say). `tint`: the
 ## ink of the words, for a speaker who is not command.
 func speak_radio(cue: String, seconds: float, intruder: String = "", tint: Color = Color(0, 0, 0, 0)) -> float:
+	if hive.on and net.hosting:
+		net.send_radio(cue, seconds, intruder)
 	# From the moment Nadja is out of her cell the voice of command is not Coleman's - and
 	# in the second mission not until the channel has been cleared at the station.
 	Radio.hijacked = (story.enabled and story.stage in ["escort", "evac", "done"]) or hive.channel_taken()
@@ -2102,7 +2154,8 @@ func squad_voice() -> Teammate:
 ## A radio line for both players of a co-op match.
 func radio(cue: String, seconds: float = 7.0) -> void:
 	_say(cue, seconds)
-	net.send_radio(cue, seconds)
+	if not hive.on:
+		net.send_radio(cue, seconds)
 
 ## Keeps something the player has set in a menu for the next start. Automatic runs keep
 ## nothing.
@@ -2315,6 +2368,8 @@ func buy_upgrade(line: String, id: String = "") -> bool:
 # ---------------------------------------------------------------- flow
 
 func pause_run() -> void:
+	wave_hold = 0.0
+	wave_flashlight_pending = false
 	if net.active:
 		# Nobody can stop time for the other player; only the menu opens.
 		overlay = "pause"
@@ -2432,6 +2487,13 @@ func _run_smoke_test() -> void:
 	var runner = load("res://scripts/verification.gd").new()
 	add_child(runner)
 	await runner.run(self)
+
+func _run_coop_session_check() -> void:
+	var runner = load("res://tools/coop_session_check.gd").new()
+	runner.name = "CoopCheck"
+	runner.game = self
+	add_child(runner)
+	await runner.run()
 
 func _run_mp_test(as_host: bool) -> void:
 	# Two instances on one PC play a short co-op match against each other's reports.

@@ -25,7 +25,7 @@ Die Hauptszene ist `scenes/main.tscn`. Die Karte wird von `scripts/cabin.gd` erz
 | Leertaste | Springen (geduckt: aufstehen) |
 | C | **Ducken**, an und aus: Du bist niedriger und langsamer, die Waffe streut und tritt 30 % weniger. Hinter hüfthoher Deckung sehen dich Soldaten nicht, und was sie trotzdem schießen, geht in die Deckung. Sprinten oder die Leertaste richten dich auf |
 | E | Station / Waffenshop benutzen, Teammitglied, Mitspieler oder Nadja aufhelfen |
-| F | Taschenlampe |
+| F | Kurz drücken: Taschenlampe · 1,5 Sekunden halten: nächste Runde starten |
 | 1 / 2 / 3 / Mausrad | **Primärwaffe / Sekundärwaffe / schwere Waffe** – mehr trägst du ohne Waffengurt nicht (siehe „Waffen-Plätze“). Mit Gurten wechselt die Taste zwischen den Waffen ihrer Art; das Mausrad geht alle durch. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
 | Q | **Heilspritze:** gibt sofort 30 Lebenspunkte zurück (nie über 100) und braucht dann 8 Sekunden, bis sie wieder bereit ist. Immer dabei, kostet nichts; die Kachel unten rechts zählt die Sekunden herunter |
 | V | **Nahkampf:** ein Schlag mit der Waffe. Wer direkt vor dir steht, wird einen Schritt zurückgeworfen und taumelt knapp zwei Sekunden. Kleiner Schaden, alle 0,85 Sekunden möglich. Schwere Soldaten werden nur kurz aufgehalten, den Crusher bewegt nichts |
@@ -33,7 +33,7 @@ Die Hauptszene ist `scenes/main.tscn`. Die Karte wird von `scripts/cabin.gd` erz
 | G / T / H / B | Splittergranate / Blendgranate / **Molotowcocktail** / Claymore (aus dem Shop). Wurfkörper: **Taste halten** zeigt die Flugbahn und wo sie aufschlägt, **loslassen** wirft. Kurz antippen wirft sofort. Mit einem Wurfkörper in der Hand kannst du nicht schießen |
 | E halten | Auftragsgegenstand benutzen (Code bergen, Generator starten, Sicherung, Kiste, Hack-Modul anbringen oder neu starten) |
 | Leertaste / Enter / Mausklick | Die Ankunft per Helikopter am Anfang überspringen |
-| N | In der Pause die nächste Runde sofort starten |
+| N | Nächste Runde starten (halten, alternativ zu F) |
 | Esc | Pausieren / fortsetzen (im Koop läuft das Spiel weiter) |
 | F11 oder Alt + Enter | Vollbild (auch als Knopf im Menü; am Mac gehört F11 dem System) |
 | F2 | Testhilfe: aktuelle Runde sofort abschließen |
@@ -154,7 +154,7 @@ Mehr als 24 Angreifer sind nie gleichzeitig auf dem Hof (plus drei je Mitkämpfe
 
 **Nicht alles ist von Anfang an offen.** Bretter versperren das Kaminzimmer (samt Seitentür), eine Barrikade die Treppe im Haus, ein Gittertor die Außentreppe; die Kellertür, Nadjas Tür und der Tunnel sind verriegelt. Das Kaminzimmer öffnet sich nach Runde 1, das Obergeschoss nach Runde 3, der Rest durch die Geschichte. Rote Lampen an den Sperren werden grün, wenn der Weg frei ist. Auch die Infizierten kommen nur durch, wo offen ist.
 
-Der **Waffenshop** in der Halle ist **vor der ersten und nach jeder überstandenen Runde geöffnet** (grüne Lampe, Rollladen oben) und **während einer Runde geschlossen**. Die Pause dauert 20 Sekunden; im Solo-Spiel steht die Zeit, solange das Shop-Menü offen ist.
+Der **Waffenshop** in der Halle ist **vor der ersten und nach jeder überstandenen Runde geöffnet** (grüne Lampe, Rollladen oben) und **während einer Runde geschlossen**. Die Pause ist unbegrenzt: Halte **F für 1,5 Sekunden**, wenn du für die nächste Runde bereit bist. Das gilt auch vor der ersten Runde. Loslassen bricht den Start ab; kurzes Drücken schaltet weiter die Taschenlampe.
 
 ### Die Karte in der Ecke
 
@@ -397,7 +397,7 @@ Technisch ist der Testraum eine Endlos-Nacht, die nie beginnt. Alles dazu steht 
 
 ## Mission 2 – Die Villa
 
-Im Hauptmenü stehen beide Missionen nebeneinander: **MISSION 1 · HOF 19** und **MISSION 2 · DIE VILLA**. Die gewählte ist hervorgehoben, und „EINSATZ STARTEN“ startet sie. Bei Mission 2 wird dann die zweite Karte aufgebaut (beim ersten Mal dauert das ein paar Sekunden): eine Villa im ummauerten Park, darunter ein versteckter Bahnhof, und am Ende der Gleise eine Forschungsanlage tief unter der Erde. MODUS (Geschichte oder Endlos) und MODIFIKATIONEN gelten nur für Mission 1 und sind bei Mission 2 ausgegraut. Mission 2 gibt es vorerst **nur allein mit dem Trupp**; im Koop wird weiter der Hof gespielt, auch wenn Mission 2 gewählt ist.
+Im Hauptmenü stehen beide Missionen nebeneinander: **MISSION 1 · HOF 19** und **MISSION 2 · DIE VILLA**. Die gewählte ist hervorgehoben, und „EINSATZ STARTEN“ startet sie. Bei Mission 2 wird dann die zweite Karte aufgebaut (beim ersten Mal dauert das ein paar Sekunden): eine Villa im ummauerten Park, darunter ein versteckter Bahnhof, und am Ende der Gleise eine Forschungsanlage tief unter der Erde. MODUS (Geschichte oder Endlos) und MODIFIKATIONEN gelten nur für Mission 1 und sind bei Mission 2 ausgegraut. Mission 2 lässt sich auch **zu zweit im Koop** spielen: Der Host wählt sie vor dem Hosten im Hauptmenü. Beide erhalten dieselbe zufällige Karte, gemeinsame Ziele, Türen und Kontrollpunkte; Zug und Lastenaufzüge nehmen beide mit. Der Host startet auch einen erneuten Versuch am Kontrollpunkt. Waffenverstecke und die darin gefundenen Waffen werden je Spieler geführt.
 
 Es gibt **keine Runden**. Die Nacht ist ein Weg in Etappen: Oben links steht, wo du bist und was zu tun ist, und eine Markierung („ZIEL“) zeigt die Richtung – im Bild und auf der Karte in der Ecke. Gegner warten in den Räumen vor dir, und solange eine Etappe läuft, kommen weitere von dort, wo gerade niemand hinsieht. Dreimal muss eine Stellung gehalten werden.
 
@@ -426,7 +426,7 @@ Technisch: Die Karte steht in `scripts/hive_map.gd` (Räume, Türen und Einricht
 ## Koop zu zweit
 
 1. **Dein Mitspieler braucht dasselbe Spiel.** `KOOP_PAKET_ERSTELLEN.cmd` packt das Projekt samt Godot in `Nachtwache-Koop-Paket.zip` (neben dem Projektordner). Er entpackt die ZIP und startet im Ordner `Nachtwache` die `SPIELEN.cmd`. Beim allerersten Start bereitet Godot die Spieldaten vor – das dauert etwa eine Minute (auf langsameren PCs länger). Hat dein Mitspieler einen **Mac**, baut `KOOP_PAKET_MAC_ERSTELLEN.cmd` stattdessen `Nachtwache-Koop-Paket-Mac.zip` – ohne Godot, das lädt er selbst (siehe „Auf dem Mac“). Bequemer für Updates ist **GitHub** (siehe „Über GitHub“).
-2. **Du:** Hauptmenü → **KOOP HOSTEN**. Das Menü zeigt deine Adressen; dort stellst du auch die Stufe ein.
+2. **Du:** Im Hauptmenü zuerst **MISSION 1** oder **MISSION 2** wählen, dann **KOOP HOSTEN**. Das Menü zeigt deine Adressen; dort stellst du auch die Stufe ein.
 3. **Er:** **KOOP BEITRETEN** → deine Adresse eintragen → **VERBINDEN**. Sobald er verbunden ist, startest du den Einsatz.
 
 **Beide brauchen dieselbe Version** (sie steht unten rechts im Hauptmenü). Seit v0.19 prüft das Spiel das beim Verbinden: Passt es nicht, steht bei beiden in der Lobby **„VERSIONEN PASSEN NICHT ✗ – Du hast v0.19, dein Mitspieler v0.20“**, und der Einsatz lässt sich nicht starten. Wer die ältere hat, holt das Update (siehe „Über GitHub“) und startet neu. Gegenüber v0.18 und älter weiß nur die neuere Seite Bescheid („… eine ältere Version (vor v0.19)“, nach drei Sekunden) – die alte kann es noch nicht sagen; bis v0.18 scheiterte so ein Einsatz einfach stumm.
@@ -579,6 +579,8 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 - **Stimme ergänzen oder tauschen:** Text in `scripts/radio.gd` eintragen, bei ElevenLabs erzeugen, die MP3s in einen Ordner legen und `node tools/make_voices.js ORDNER order.json` laufen lassen (schneidet, pegelt und legt `assets/voice/<sprecher>/<stichwort>_<nummer>.ogg` an). Eine Pause von mehr als 0,9 Sekunden mitten in einer Zeile kürzt das Werkzeug. Die Rohdateien und die Zuordnung liegen in `Nachtwache-ElevenLabs/stimmen`, `stimmen2`, `stimmen3`, `stimmen4`, `stimmen5` und `stimmen6`. Ob jede Zeile ihre Aufnahme hat und keine Aufnahme übrig ist, zeigt `-s res://tools/voice_check.gd` (nach einem `--import`). Hat ein Stichwort mehrere Texte, aber nur für einige eine Aufnahme, benutzt das Spiel nur die vertonten.
 
 ## Stand und Grenzen
+
+**v0.67** – Koop: Der erste Story-Abgleich beendet die Landesequenz des Gastes nicht mehr vorzeitig; danach ist die Figur des Hosts sichtbar. Mission 1 wartet vor und zwischen Runden auf **F halten (1,5 s)**, ohne automatischen Countdown. Kurzes F bleibt die Taschenlampe. Mission 2 kann der Host ebenfalls wählen: gemeinsame Karte, Missionsfortschritt, Türen, Begleiter und Transporte, dazu Neustart am gemeinsamen Kontrollpunkt. Beide Spieler brauchen diesen Stand.
 
 **v0.66** – die Begleiter folgen über Ebenen. **Ursache vor allem die Karte:** Oben an vier Treppen (beide Grubentreppen im Sezierlabor, die Treppe im Haifischlabor, die Treppe vom Park hinunter) stand der Boden bis zu 12 cm über der letzten Stufe – darüber kamen die Begleiter nicht. Jetzt schließt der Boden bündig an, auch für dich; eine Prüfung misst jede Treppe jeder Nacht (`HiveCore.flight_lips`, `tools/stair_walk.gd`). **Begleiter (`scripts/teammate.gd`):** steigen über Kanten bis 0,32 m, stellen sich nur dorthin, wo man auf deiner Ebene stehen kann (sonst hinter dich), gehen auf Treppen hintereinander, laufen nicht mehr durch Geländer (Handläufe sind jetzt Hindernisse für die Wegfindung), und wer abgeschnitten ist, taucht hinter dir nur dort wieder auf, wo du es nicht siehst. **Lastenaufzug:** Er wartet bis zu 6 s auf den Trupp („Wartet auf das Team“). Gemessen über alle mehrstöckigen Orte: FOLGT 0 statt 32 von 232 Halten verloren, HALTEN auf einer anderen Ebene 1 statt 43 von 112 Punkten verfehlt, im Kampf 0 statt 50 verloren, Teleports vor deinen Augen 0 statt 20; im Sezierlabor 0 statt 22 von 36 Halten verloren, im Schnitt 0,4 s bis zur Rückkehr. Messwerkzeug: `--squad-check`. Nicht von Hand gespielt.
 
@@ -753,6 +755,13 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 
 ```text
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test
+```
+
+Die Koop-Regressionen prüfen Landesequenz, sichtbare Spieler und den manuellen Rundenstart mit `--smoke-test --only=coop_controls,coop_hive`. Zwei getrennte Spielwelten lassen sich auch ohne Netzwerkfreigabe mit Godots echtem RPC-System verbinden:
+
+```text
+Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -s res://tools/coop_memory_check.gd -- --mission=1
+Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -s res://tools/coop_memory_check.gd -- --mission=2
 ```
 
 Ein Bot kann das echte Spiel im Zeitraffer durchspielen und meldet Infizierte, die irgendwo hängen bleiben. Ohne `--headless` und mit `--bot-speed=1` misst er außerdem die Bildrate:

@@ -89,8 +89,9 @@ func read(parsed: Dictionary) -> void:
 		difficulty = str(parsed.difficulty)
 	if str(parsed.get("mode", "")) in ["story", "endless"]:
 		mode = str(parsed.mode)
-	if int(parsed.get("mission", 1)) in [1, 2]:
-		mission = int(parsed.mission)
+	var saved_mission := int(parsed.get("mission", 1))
+	if saved_mission in [1, 2]:
+		mission = saved_mission
 	modifiers = bool(parsed.get("modifiers", false))
 	if parsed.get("runs") is Dictionary:
 		# (Also the lists of the levels that are gone: they stay in the file.)

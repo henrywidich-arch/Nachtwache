@@ -354,7 +354,7 @@ func _say(said: String) -> void:
 func update(delta: float) -> void:
 	var stage := director.stage
 	var piece: Dictionary = piece_of.get(stage, {})
-	var here: Vector3 = game.player.global_position
+	var here: Vector3 = director.coop.position_near(director.marker)
 	var inside := map.piece_at(here)
 	if not ride.is_empty() and _run_ride(delta):
 		return
@@ -472,6 +472,7 @@ func _run_ride(delta: float) -> bool:
 	var shift: Vector3 = ride.shift
 	player.global_position += shift
 	player.velocity = Vector3.ZERO
+	game.net.place_partner(player.global_position + Vector3(0.8, 0, 0.4))
 	for mate: Teammate in game.team:
 		if mate.down:
 			mate.revive(true)
@@ -563,7 +564,7 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 	if task.is_empty():
 		return
 	var event: Dictionary = task.event
-	var here: Vector3 = game.player.global_position
+	var here: Vector3 = director.coop.position_near(director.marker)
 	var origin: Vector3 = piece.origin
 	var spots: Dictionary = HiveLayout.info(str(piece.def)).get("spots", {})
 	var goal: Vector3 = free_spot(map, origin + (spots.get("goal", Vector3.ZERO) as Vector3))
@@ -842,7 +843,9 @@ func _lock_in(piece: Dictionary) -> void:
 			mate.velocity = Vector3.ZERO
 
 ## [E] was used for something of the random part.
-func use(key: String) -> bool:
+func use(key: String, who: Node3D = null) -> bool:
+	if who == null:
+		who = game.player
 	match key:
 		"g_control":
 			var piece: Dictionary = piece_of.get("g_arrive", {})
@@ -852,7 +855,7 @@ func use(key: String) -> bool:
 			return true
 		"g_item":
 			for item: Dictionary in task.get("items", []):
-				if not bool(item.taken) and (item.pos as Vector3).distance_to(game.player.global_position) < PICK_REACH + 0.3:
+				if not bool(item.taken) and (item.pos as Vector3).distance_to(who.global_position) < PICK_REACH + 0.3:
 					item.taken = true
 					if is_instance_valid(item.node):
 						(item.node as Node).queue_free()
@@ -873,7 +876,7 @@ func use(key: String) -> bool:
 			return true
 		"g_switch":
 			for place: Dictionary in task.get("places", []):
-				if not bool(place.done) and (place.pos as Vector3).distance_to(game.player.global_position) < 3.0:
+				if not bool(place.done) and (place.pos as Vector3).distance_to(who.global_position) < 3.0:
 					place.done = true
 					place.known = true
 					props.place_done(place.node)
@@ -939,6 +942,7 @@ func _run_lock(delta: float, piece: Dictionary, inside: Dictionary) -> void:
 			game.alive_count = maxi(0, game.alive_count - 1)
 	game.player.global_position += shift
 	game.player.velocity = Vector3.ZERO
+	game.net.place_partner(game.player.global_position + Vector3(0.8, 0, 0.4))
 	for mate: Teammate in game.team:
 		if mate.down:
 			mate.revive(true)

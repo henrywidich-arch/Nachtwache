@@ -63,6 +63,8 @@ func run(game: Node3D) -> void:
 			print("INTEGRATION_RESULT: %d checks, %d failures (only %s)" % [checks, failures, arg.trim_prefix("--only=")])
 			get_tree().call_deferred("quit", 0 if failures == 0 else 1)
 			return
+	await _coop_controls(game)
+	await _coop_hive(game)
 	var cabin: CabinMap = game.cabin
 	expect(game.state == "menu", "Project opens on the menu")
 	var spots: Dictionary = cabin.points
@@ -5561,6 +5563,140 @@ func _newer(game: Node3D) -> void:
 	profile.squad = ["viper", "scorpion"]
 	game.start_run()
 
+## Manual preparation and the guest's landing cutscene. No network or player saves are
+## needed for this regression block; the separate session check exercises real peers.
+func _coop_controls(game: Node3D) -> void:
+	game.profile.mission = 1
+	game.profile.mode = "story"
+	game.team_enabled = false
+	game.start_run()
+	game._process(90.0)
+	expect(game.phase == "preparing" and game.wave == 0 and game.cabin.shop_open, "Mission one waits indefinitely before the first wave with the shop open")
+	Input.action_press("flashlight")
+	game._update_wave_hold(game.WAVE_HOLD_SECONDS * 0.4)
+	var started: bool = game.wave == 0 and game.wave_hold_share() > 0.0
+	Input.action_release("flashlight")
+	game._update_wave_hold(0.01)
+	expect(started and game.wave_hold == 0.0 and game.wave == 0, "Releasing F before the hold finishes cancels the wave start")
+	Input.action_press("flashlight")
+	game._update_wave_hold(game.WAVE_HOLD_SECONDS * 0.5)
+	game.pause_run()
+	var cancelled: bool = game.wave_hold == 0.0
+	Input.action_release("flashlight")
+	game.resume_run()
+	game._update_wave_hold(0.01)
+	expect(cancelled and game.wave == 0, "Pausing cancels a partially held wave start")
+	var lamp: bool = game.player.flashlight.visible
+	var tap := InputEventAction.new()
+	tap.action = "flashlight"
+	tap.pressed = true
+	game._input(tap)
+	game.player._unhandled_input(tap)
+	tap.pressed = false
+	game._input(tap)
+	expect(game.player.flashlight.visible != lamp and game.wave == 0, "A short F press still toggles the flashlight during preparation")
+	Input.action_press("flashlight")
+	game._update_wave_hold(game.WAVE_HOLD_SECONDS)
+	game._update_wave_hold(game.WAVE_HOLD_SECONDS)
+	expect(game.wave == 1 and game.phase == "wave", "Holding F starts exactly one wave")
+	Input.action_release("flashlight")
+	game._update_wave_hold(0.01)
+	game.complete_wave()
+	game._process(90.0)
+	expect(game.wave == 1 and game.phase == "preparing" and game.cabin.shop_open, "The next wave also waits indefinitely after a round is survived")
+	# Reproduce the production ordering: the guest starts its intro, then receives the
+	# first authoritative story snapshot. That snapshot must not clear a running intro.
+	game.return_to_menu()
+	game.net.set_physics_process(false)
+	game.net.joined = true
+	game.net.partner = 1
+	game.story_in_checks = true
+	game.intro_skipped = false
+	game.start_run()
+	var filmed: bool = game.story.enabled and game.story.intro_left > 0.0 and is_instance_valid(game.net.remote) and not game.net.remote.visible
+	var state: Array = game.story.export_state()
+	game.story.adopt(state)
+	var kept: bool = game.story.intro_left > 0.0
+	game.story._end_intro(true)
+	expect(filmed and kept and game.net.remote.is_visible_in_tree() and game.net.remote.visual.mesh_instance.is_visible_in_tree() and game.player.controlled and game.hud.play_ui.visible, "The first story snapshot preserves the guest's cutscene; ending it reveals the host and restores controls")
+	game.return_to_menu()
+	game.net.set_physics_process(true)
+	game.story_in_checks = false
+	game.intro_skipped = false
+	game.team_enabled = false
+
+## Exercise the host-to-guest mission-two state transfer in the real map, including a
+## random area's interactive props. This also runs when local networking is unavailable.
+func _coop_hive(game: Node3D) -> void:
+	game.net.set_physics_process(false)
+	game.team_enabled = false
+	game.intro_skipped = true
+	game.profile.mission = 2
+	game.hive.seed_wanted = 6
+	game.start_run()
+	game.hive.set_process(false)
+	game.hive.prowl.set_process(false)
+	var night: Dictionary = game.hive.night.duplicate(true)
+	var layout: String = game.hive_map.layout_key
+	expect(game.hive.on and game.mode == "villa" and layout == str(night.key), "Mission two builds the selected random layout for a co-op session")
+	var area := ""
+	for id: String in game.hive.run.piece_of:
+		if id.begins_with("a") and not id.ends_with("_out") and str(game.hive.run.piece_of[id].get("event", {}).get("kind", "")) in ["collect", "restore"]:
+			area = id
+			break
+	expect(area != "", "The regression night has an interactive random objective")
+	var used := false
+	if area != "":
+		game.hive._enter(area)
+		var piece: Dictionary = game.hive.run.piece_of[area]
+		game.hive.run._begin_task(piece, piece.event, {}, Vector3.ZERO)
+		game.hive.run.task.state = "work"
+		var kind: String = game.hive.run.task.kind
+		var key := "items" if kind == "collect" else "places"
+		var item: Dictionary = game.hive.run.task[key][0]
+		var other := RemoteSurvivor.new()
+		other.game = game
+		game.mates.add_child(other)
+		other.global_position = item.pos + Vector3(0, 0.05, 0)
+		used = game.hive.use(other, "g_item" if kind == "collect" else "g_switch", item.pos)
+		used = used and bool(item.get("taken", item.get("done", false)))
+		other.queue_free()
+	expect(used, "A remote human can complete an area interaction without moving the host")
+	game.hive.map.unlock("descent", true)
+	game.hive.map.set_door("car_a", true, true)
+	game.hive.checkpoint = "descent"
+	var snapshot: Dictionary = game.hive.coop.export_state().duplicate(true)
+	# The guest has another mission selected locally; only the received match settings
+	# decide which map it loads, and no menu preference is overwritten.
+	game.return_to_menu()
+	game.profile.mission = 1
+	game.net.joined = true
+	game.net.partner = 1
+	game.net.match_mission = 2
+	game.net.match_night = night
+	game.hive.night = night
+	game.hive.night_fresh = true
+	game.start_run()
+	game.hive.coop.adopt(snapshot)
+	expect(game.hive.on and game.mode == "villa" and game.profile.mission == 1 and game.hive_map.layout_key == layout, "A guest loads the host's mission and exact random layout while keeping its menu selection")
+	expect(game.hive.stage == str(snapshot.stage) and game.hive.checkpoint == "descent" and not game.hive.map.is_locked("descent") and game.hive.map.door_open("car_a"), "Mission stage, checkpoint and scripted doors survive the host-to-guest snapshot")
+	var completed := 0
+	for key in ["items", "places"]:
+		for item: Dictionary in game.hive.run.task.get(key, []):
+			completed += int(bool(item.get("taken", item.get("done", false))))
+	expect(completed > 0 and not game.hive.coop.friends.is_empty() and game.team.is_empty(), "The guest sees completed objective props and friendly characters without duplicating AI")
+	# Another snapshot updates the same replicas instead of adding another NPC each time.
+	var friends: int = game.hive.coop.friends.size()
+	game.hive.coop.adopt(snapshot)
+	expect(game.hive.coop.friends.size() == friends and game.hive.summary() == game.hive.coop.summary, "Repeated snapshots reuse friendly bodies and show the authoritative objective summary")
+	game.return_to_menu()
+	game.net.set_physics_process(true)
+	game.hive.set_process(true)
+	game.hive.prowl.set_process(true)
+	game.hive.seed_wanted = -2
+	game.profile.mission = 1
+	game.intro_skipped = false
+
 ## Below this much health the bot of --bot-check is healed at once.
 const BOT_FLOOR := 70.0
 
@@ -5751,7 +5887,8 @@ func bot(game: Node3D) -> void:
 						newest = "%s/%s" % [last_one.kind, last_one.visual_kind]
 					print("BOT_HITCH %.0f ms at t=%.1f round=%d alive=%d spawned=%d growths=%d clouds=%d decals=%d flash=%.2f brownout=%.2f newest=%s process=%.1f ms physics=%.1f ms" % [spent, game.elapsed, game.wave, game.alive_count, game.spawned_this_wave, game.fx.growths.size(), game.fx.clouds.size(), game.fx.decals.size(), game.cabin.flash_left, game.cabin.brownout_left, newest, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
 		if game.phase == "preparing" and duel == "":
-			game.preparation_left = minf(game.preparation_left, 1.0)
+			# A bot deliberately starts the next wave; the live game has no countdown.
+			game.begin_wave()
 		if game.phase != last_phase:
 			if game.phase == "wave":
 				wave_began = game.elapsed

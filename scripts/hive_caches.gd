@@ -738,6 +738,8 @@ func _opened(index: int) -> void:
 ## While a sealed cache is being opened: a pack through one of the ways in nearest to it,
 ## again and again - in a stage in which nobody comes by himself as well.
 func _answer(index: int, delta: float) -> void:
+	if game.net.joined:
+		return
 	var site := sites[index]
 	site.answer = float(site.answer) - delta
 	if float(site.answer) > 0.0:

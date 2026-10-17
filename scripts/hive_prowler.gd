@@ -158,6 +158,8 @@ func end() -> void:
 	call_left = -1.0
 
 func _process(delta: float) -> void:
+	if game != null and game.net.joined:
+		return
 	if director == null or not director.on or game == null or not game.is_playing() or director.intro_left > 0.0:
 		return
 	var stage := director.stage

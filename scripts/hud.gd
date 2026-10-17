@@ -35,13 +35,13 @@ const KEY_HELP := [
 	[["move_forward", "move_left", "move_back", "move_right"], "Bewegen"], [["#Maus"], "Umsehen"],
 	[["#Linke Maustaste"], "Schießen · wirft, was in der Hand liegt"], [["#Rechte Maustaste"], "Zielen"],
 	[["reload"], "Nachladen"], [["sprint"], "Sprinten"], [["jump"], "Springen"], [["crouch"], "Ducken (an / aus)"],
-	[["interact"], "Benutzen, aufhelfen, Shop"], [["flashlight"], "Taschenlampe"], [["syringe"], "Heilspritze"], [["melee"], "Nahkampf"],
+	[["interact"], "Benutzen, aufhelfen, Shop"], [["flashlight"], "Taschenlampe · halten: nächste Runde"], [["syringe"], "Heilspritze"], [["melee"], "Nahkampf"],
 	[["weapon_1"], "Primärwaffen durchwechseln"], [["weapon_2"], "Schwere Waffen durchwechseln"],
 	[["weapon_3"], "Sekundärwaffen (ohne: Wurfzeug)"], [["weapon_4"], "Wurfzeug in die Hand nehmen"], [["#Mausrad"], "Nächste / vorige Waffe"],
 	[["throw_grenade"], "Splittergranate (halten, loslassen)"], [["throw_flash"], "Blendgranate"], [["throw_molotov"], "Molotow"],
 	[["throw_heal"], "Heilgranate"], [["place_claymore"], "Mine legen"],
 	[["squad_follow"], "Team: folgen"], [["squad_hold"], "Team: halten"], [["squad_free"], "Team: frei"],
-	[["next_wave"], "Nächste Runde sofort"], [["pause"], "Pause"], [["fullscreen"], "Vollbild (auch Alt+Enter)"],
+	[["next_wave"], "Nächste Runde (halten; auch F)"], [["pause"], "Pause"], [["fullscreen"], "Vollbild (auch Alt+Enter)"],
 	[["test_menu"], "Testmenü (nur im Testraum)"], [["skip_round"], "Runde überspringen (nur allein)"]
 ]
 ## What a throwable is called in the line of its group.
@@ -734,7 +734,7 @@ func _process(delta: float) -> void:
 	elif game.sandbox.on and game.phase == "preparing":
 		enemy_label.text = "F1 Testmenü  ·  %d Gegner auf dem Feld" % game.sandbox.alive()
 	elif game.phase == "preparing":
-		enemy_label.text = "Nächste Runde in %02d s  ·  Waffenshop geöffnet" % ceili(game.preparation_left)
+		enemy_label.text = "F halten · Runde %02d starten%s  ·  Waffenshop geöffnet" % [game.wave + 1, " · %d %%" % int(game.wave_hold_share() * 100.0) if game.wave_hold_share() > 0.0 else ""]
 	else:
 		enemy_label.text = "%02d Infizierte verbleiben" % (game.remote_remaining if game.net.joined else game.remaining_to_spawn + game.alive_count)
 	score_label.text = "%06d" % game.score
@@ -750,7 +750,7 @@ func _process(delta: float) -> void:
 	reserve_label.text = "/ %03d" % player.reserve
 	rifle_label.text = "NACHLADEN …" if player.reload_left > 0 else ("%s  ·  STUFE %d" % [player.weapon_label(), player.weapon_level] if player.weapon_level > 0 else player.weapon_label())
 	interaction_label.text = game.interaction_prompt()
-	var held: float = game.help_share()
+	var held: float = maxf(game.help_share(), game.wave_hold_share())
 	hold_bar.visible = held > 0.0
 	hold_bar.value = held
 	armor_label.text = ("" if player.armor <= 0.0 else "RÜSTUNG %d" % ceili(player.armor)) + ("" if player.plate_level <= 0 else "     WESTE %s" % "I".repeat(player.plate_level)) + ("" if player.buff_left <= 0.0 else "     GESTÄRKT %d s" % ceili(player.buff_left))
@@ -1180,7 +1180,7 @@ func _menu_main(column: VBoxContainer) -> Control:
 	var squad: Array = game.profile.squad
 	var start := _button("EINSATZ STARTEN", _start_night, true)
 	column.add_child(start)
-	var note := "   ·   Koop spielt vorerst Mission 1" if second else ("   ·   mit Modifikationen" if game.profile.modifiers else "")
+	var note := "   ·   auch im Koop" if second else ("   ·   mit Modifikationen" if game.profile.modifiers else "")
 	column.add_child(label("     mit %s und %s   ·   Stufe %s%s" % [Profile.SKINS[squad[0]].label, Profile.SKINS[squad[1]].label, game.profile.rules().label, note], 15, MUTED))
 	column.add_child(_pair(_button("KOOP HOSTEN", game.host_match), _button("KOOP BEITRETEN", show_menu.bind("join"))))
 	column.add_child(_pair(_button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty), _button("TRUPP & SKINS", show_menu.bind("skins"))))
@@ -1503,7 +1503,11 @@ func _menu_end_villa(column: VBoxContainer, mode: String) -> Control:
 		column.add_child(label(earned, 16, MINT, true))
 	_gap(column, 10)
 	var again: Button
-	if mode == "lose" and game.hive.checkpoint != "landing":
+	if game.net.joined:
+		again = _button("WARTE AUF DEN HOST …", game.start_run, true)
+		again.disabled = true
+		column.add_child(again)
+	elif mode == "lose" and game.hive.checkpoint != "landing":
 		again = _button("AB KONTROLLPUNKT  ·  %s" % game.hive.stages[game.hive.checkpoint][0], game.retry_checkpoint, true)
 		column.add_child(again)
 		column.add_child(_button("VON VORN", game.start_run))
@@ -1608,7 +1612,7 @@ const CLASH_HELP := "Für den Koop brauchen beide denselben Stand: Wer die älte
 func _menu_host(column: VBoxContainer) -> Control:
 	var net: NetLink = game.net
 	_title(column, "KOOP\nHOSTEN")
-	var description := "Dein Mitspieler wählt „Koop beitreten“ und trägt deine Adresse ein.\n"
+	var description := "MISSION %d  ·  %s\nDein Mitspieler wählt „Koop beitreten“ und trägt deine Adresse ein.\n" % [game.profile.mission, "DIE VILLA" if game.profile.mission == 2 else "HOF 19"]
 	# What the router said when it was asked to pass the port on (NetLink.forward).
 	match net.forward:
 		"open":

@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.66"
+const VERSION := "0.67"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
@@ -42,6 +42,11 @@ var router: UPNP
 var remote: RemoteSurvivor
 ## The look the partner chose.
 var partner_skin := "main"
+## Match settings belong to the host, independently of the guest's saved selection.
+var match_mission := 1
+var match_night: Dictionary = {}
+var match_company := "fireteam"
+var match_checkpoint := ""
 ## This side's version (VERSION; a check can start as another one with --mp-version=).
 var version := VERSION
 var hello: NetHello
@@ -180,6 +185,9 @@ func close() -> void:
 	hosting = false
 	joined = false
 	partner = 0
+	match_mission = 1
+	match_night = {}
+	match_checkpoint = ""
 	partner_version = ""
 	hello_left = 0.0
 	clash = ""
@@ -284,6 +292,7 @@ func spawn_remote() -> void:
 	if partner == 0:
 		return
 	remote = RemoteSurvivor.new()
+	remote.name = "CoopPartner"
 	remote.game = game
 	# The host sees Viper at their side, the guest sees Scorpion.
 	remote.look = partner_skin
@@ -302,17 +311,21 @@ func _physics_process(delta: float) -> void:
 	if state_left <= 0.0:
 		state_left = STATE_INTERVAL
 		var player: Survivor = game.player
-		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0) | (8 if player.crouched else 0)
+		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0) | (8 if player.crouched else 0) | (16 if Input.is_action_pressed("interact") and player.controlled and not player.menu_open else 0)
 		_state.rpc_id(partner, player.global_position, player.rotation.y, player.camera.rotation.x, player.velocity, flags, player.health)
 	if not hosting:
 		_prune(delta)
 		return
+	if game.hive.on and is_instance_valid(remote) and remote.interacting and not remote.down:
+		game.hive.coop.help_from_partner(delta)
 	snapshot_left -= delta
 	if snapshot_left <= 0.0:
 		snapshot_left = SNAPSHOT_INTERVAL
 		var data := PackedFloat32Array()
 		for node in get_tree().get_nodes_in_group("infected"):
 			var enemy := node as Infected
+			if enemy.game != game:
+				continue
 			data.append_array([enemy.net_id, enemy.global_position.x, enemy.global_position.y, enemy.global_position.z, enemy.model.rotation.y, (1.0 if enemy.alert else 0.0)])
 		_snapshot.rpc_id(partner, data)
 	status_left -= delta
@@ -328,6 +341,8 @@ func _physics_process(delta: float) -> void:
 			if is_instance_valid(who) and not who.dead:
 				bars.append_array([who.net_id, who.health])
 		_status.rpc_id(partner, game.wave, game.phase, game.preparation_left, game.credits, game.score, game.remaining_to_spawn + game.alive_count, boss_id, boss_health, game.elapsed, bars)
+		if game.hive.on:
+			_hive_state.rpc_id(partner, game.hive.coop.export_state())
 
 ## Guest: infected the host no longer mentions are gone.
 func _prune(_delta: float) -> void:
@@ -345,17 +360,41 @@ func _prune(_delta: float) -> void:
 
 func start_match() -> void:
 	if hosting and partner != 0:
-		_begin.rpc_id(partner, game.profile.difficulty, game.profile.mode, game.profile.modifiers)
+		match_mission = game.profile.mission
+		match_night = game.hive.prepare_night() if match_mission == 2 else {}
+		match_company = game.profile.company
+		match_checkpoint = game.hive.resume_at
+		_begin.rpc_id(partner, game.profile.difficulty, game.profile.mode, game.profile.modifiers, match_mission, match_night, match_company, match_checkpoint)
 
 @rpc("authority", "call_remote", "reliable")
-func _begin(level: String, mode: String = "story", modifiers: bool = false) -> void:
+func _begin(level: String, mode: String = "story", modifiers: bool = false, mission: int = 1, night: Dictionary = {}, company: String = "fireteam", checkpoint: String = "") -> void:
 	# Not with a host of another version, whatever it thinks it can start.
 	if clash != "":
 		return
 	game.level = level
 	game.mode = mode
 	game.modifiers_on = modifiers
+	match_mission = mission
+	match_night = night
+	match_company = company
+	match_checkpoint = checkpoint
+	if mission == 2:
+		game.hive.night = night
+		game.hive.night_fresh = true
+		game.hive.resume_at = checkpoint
 	game.start_run()
+	_match_ready.rpc_id(1)
+
+## Resend enemies after loading so a slow guest cannot miss their spawn messages.
+@rpc("any_peer", "call_remote", "reliable")
+func _match_ready() -> void:
+	if not hosting or multiplayer.get_remote_sender_id() != partner:
+		return
+	if game.hive.on:
+		_hive_state.rpc_id(partner, game.hive.coop.export_state())
+	for node in game.enemies.get_children():
+		if node is Infected and not node.dead:
+			send_spawn(node)
 
 func send_spawn(enemy: Infected) -> void:
 	if hosting and partner != 0:
@@ -363,6 +402,8 @@ func send_spawn(enemy: Infected) -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _spawned(id: int, kind: String, look: String, at: Vector3, wave: int) -> void:
+	if is_instance_valid(puppets.get(id)):
+		return
 	var puppet: Infected = game.body_for(kind)
 	puppet.game = game
 	puppet.kind = kind
@@ -421,6 +462,8 @@ func _status(wave: int, phase_now: String, break_left: float, credits: int, scor
 	game.credits = credits
 	game.score = score
 	game.remote_remaining = remaining
+	if game.hive.on:
+		game.alive_count = remaining
 	game.elapsed = elapsed
 	var boss: Variant = puppets.get(boss_id)
 	if boss_id != 0 and is_instance_valid(boss):
@@ -548,7 +591,10 @@ func send_radio(cue: String, seconds: float, speaker: String = "") -> void:
 
 @rpc("authority", "call_remote", "reliable")
 func _radio(cue: String, seconds: float, speaker: String = "") -> void:
-	game._say(cue, seconds, speaker)
+	if game.hive.on:
+		game.speak_radio(cue, seconds, speaker)
+	else:
+		game._say(cue, seconds, speaker)
 
 ## A flashbang thrown at the survivors has gone off: the guest is blinded on its own machine.
 func send_blind(center: Vector3) -> void:
@@ -689,20 +735,78 @@ func request_next_wave() -> void:
 
 @rpc("any_peer", "call_remote", "reliable")
 func _next_wave() -> void:
-	if hosting and game.state == "playing" and game.phase == "preparing":
+	# The guest can ready the shared round while the host is in the shop;
+	# present_wave_begin closes the shop on both machines.
+	if hosting and multiplayer.get_remote_sender_id() == partner and game.state == "playing" and game.phase == "preparing" and not game.hive.on and not game.sandbox.on and is_instance_valid(remote) and not remote.down:
 		game.begin_wave()
+
+@rpc("authority", "call_remote", "reliable")
+func _hive_state(state: Dictionary) -> void:
+	game.hive.coop.adopt(state)
+
+func request_hive_use(key: String, at: Vector3) -> void:
+	if joined:
+		_hive_use.rpc_id(1, key, at)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _hive_use(key: String, at: Vector3) -> void:
+	if hosting and game.hive.on and multiplayer.get_remote_sender_id() == partner and is_instance_valid(remote) and not remote.down:
+		game.hive.use(remote, key, at)
+
+## Train, lift and decontamination transfers move both humans together.
+func place_partner(at: Vector3) -> void:
+	if hosting and partner != 0 and game.hive.on:
+		if is_instance_valid(remote):
+			remote.global_position = at
+			remote.net_position = at
+		_relocate.rpc_id(partner, at)
+
+@rpc("authority", "call_remote", "reliable")
+func _relocate(at: Vector3) -> void:
+	if not game.hive.on:
+		return
+	game.hive._end_intro()
+	game.player.global_position = at
+	game.player.velocity = Vector3.ZERO
+	game.hud.flash(Color.BLACK, 0.6)
+
+func supply_partner() -> void:
+	if hosting and partner != 0 and game.hive.on:
+		_hive_supply.rpc_id(partner)
+
+@rpc("authority", "call_remote", "reliable")
+func _hive_supply() -> void:
+	if game.hive.on:
+		if game.player.down:
+			game.player.get_up()
+		game.player.health = minf(100.0, game.player.health + game.healing(50.0))
+		game.player.resupply(Survivor.ROUND_AMMO)
+
+func hive_voice(said: Dictionary, at: Vector3) -> void:
+	if hosting and partner != 0:
+		_hive_voice.rpc_id(partner, said, at)
+
+@rpc("authority", "call_remote", "reliable")
+func _hive_voice(said: Dictionary, at: Vector3) -> void:
+	if game.hive.on:
+		game.hive._voice(said, null, at)
 
 # ---------------------------------------------------------------- both ways
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int, health: float) -> void:
-	if not is_instance_valid(remote):
+	if multiplayer.get_remote_sender_id() != partner:
 		return
+	if not is_instance_valid(remote):
+		if game.state != "playing":
+			return
+		spawn_remote()
 	remote.net_position = at
 	remote.net_yaw = yaw
 	remote.net_pitch = pitch
 	remote.net_velocity = velocity
 	remote.aiming = flags & 1 != 0
+	remote.interacting = flags & 16 != 0
 	remote.set_reloading(flags & 2 != 0)
 	remote.set_down(flags & 4 != 0)
 	remote.set_crouched(flags & 8 != 0)

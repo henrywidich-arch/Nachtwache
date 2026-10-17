@@ -15,6 +15,7 @@ var down := false
 var clung_by: Infected
 var aiming := false
 var reloading := false
+var interacting := false
 var firing_left := 0.0
 var rising_left := 0.0
 var net_position := Vector3.ZERO

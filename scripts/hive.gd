@@ -143,6 +143,8 @@ const SETTLED := {
 }
 
 var game: Node3D
+const COOP_SCRIPT := preload("res://scripts/hive_coop.gd")
+var coop: RefCounted
 var on := false
 var map: HiveMap
 var stage := ""
@@ -231,6 +233,7 @@ var checkpoints: Dictionary = CHECKPOINTS
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
+	coop = COOP_SCRIPT.new(self)
 	prowl = HiveProwler.new()
 	prowl.director = self
 	add_child(prowl)
@@ -306,13 +309,16 @@ func begin() -> void:
 	leavers.clear()
 	stayed.clear()
 	company = Profile.known_company(str(game.profile.company))
+	if game.net.joined:
+		company = Profile.known_company(game.net.match_company)
 	pair = Profile.pair_of(company)
 	night_fresh = false
 	run.setup()
 	var from := resume_at if checkpoints.has(resume_at) else "landing"
 	resume_at = ""
 	checkpoint = from
-	prowl.begin(from)
+	if not game.net.joined:
+		prowl.begin(from)
 	caches.begin(from)
 	var start: Dictionary = checkpoints[from]
 	map.lock_all()
@@ -324,6 +330,13 @@ func begin() -> void:
 	game.preparation_left = 99999.0
 	game.sounds.dry = true
 	var at: Vector3 = map.points.get(str(start.at), map.player_start)
+	if game.net.joined:
+		_place_squad(at + Vector3(1.4, 0, 0.6), float(map.facings.get(str(start.at), 0.0)))
+		stage = from
+		goal = str(stages[from][1])
+		if from == "landing":
+			_arrive()
+		return
 	# Taken up behind the station, the two operators are already at the survivor's side.
 	if not pair.is_empty() and order.find(from) > order.find("deal"):
 		_part(true)
@@ -346,6 +359,7 @@ func end() -> void:
 	if not on:
 		return
 	on = false
+	coop.clear()
 	prowl.end()
 	caches.end()
 	run.clear_things()
@@ -532,6 +546,7 @@ func _checkpoint(id: String, bonus: int) -> void:
 		player.get_up()
 	player.health = minf(100.0, player.health + game.healing(50.0))
 	player.resupply(Survivor.ROUND_AMMO)
+	game.net.supply_partner()
 	for mate in game.team:
 		mate.revive(true)
 	game.credits += bonus
@@ -685,7 +700,7 @@ func _enter(id: String) -> void:
 
 func _update(delta: float) -> void:
 	var player: Survivor = game.player
-	var here: Vector3 = player.global_position
+	var here: Vector3 = coop.position_near(marker)
 	var room: Dictionary = map.room_at(here)
 	var room_id := "" if room.is_empty() else str(room.id)
 	# From the tunnel they hold the operators report once, when nobody else is talking.
@@ -853,16 +868,34 @@ func _use_spot(at: Vector3, key: String, text: String) -> void:
 	use_text = text
 
 func prompt() -> String:
+	if game.net.joined:
+		var nearby: Dictionary = coop.nearby_use()
+		return str(nearby.text) if not nearby.is_empty() else caches.prompt()
 	if use_at != Vector3.INF and game.player.global_position.distance_to(use_at) < 2.6:
 		return use_text
 	# (What the stage wants used comes first; then a weapon cache one stands before.)
 	return caches.prompt()
 
 ## [E] was pressed. True if that was for the mission.
-func use() -> bool:
-	if use_at == Vector3.INF or game.player.global_position.distance_to(use_at) >= 2.6:
-		return caches.use()
-	var key := use_key
+func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) -> bool:
+	if game.net.joined:
+		var nearby: Dictionary = coop.nearby_use()
+		if nearby.is_empty():
+			return caches.use()
+		game.net.request_hive_use(str(nearby.key), nearby.at)
+		return true
+	if who == null:
+		who = game.player
+	var key := use_key if requested == "" else requested
+	if key in ["g_item", "g_switch"] and requested != "":
+		if who.global_position.distance_to(at) >= 2.9:
+			return false
+		var used: bool = run.use(key, who)
+		if used:
+			game.stats.objectives += 1
+		return used
+	if use_at == Vector3.INF or who.global_position.distance_to(use_at) >= 2.9 or (requested != "" and (key != use_key or at.distance_to(use_at) > 0.2)):
+		return caches.use() if who == game.player else false
 	use_at = Vector3.INF
 	use_key = ""
 	game.sounds.play_sound("beep")
@@ -877,7 +910,7 @@ func use() -> bool:
 		"generator":
 			_enter("decon")
 		_:
-			run.use(key)
+			run.use(key, who)
 	return true
 
 # ---------------------------------------------------------------- Nadja and the operators
@@ -1196,6 +1229,7 @@ func _run_ride(_delta: float) -> void:
 		var shift := HiveMap.RIDE if run.car() == Vector3.INF else run.car() - car
 		player.global_position = Vector3(clampf(player.global_position.x, car.x - 6.4, car.x + 6.4), car.y + 0.05, clampf(player.global_position.z, car.z - 1.4, car.z + 1.4))
 		player.global_position += shift
+		game.net.place_partner(car + shift + Vector3(1.4, 0.05, 0.0))
 		for mate in game.team:
 			if mate.down:
 				mate.revive(true)
@@ -1557,6 +1591,8 @@ func _speak(entry: Dictionary) -> float:
 func _voice(said: Dictionary, body: Node3D, from: Vector3 = Vector3.INF) -> float:
 	if said.is_empty():
 		return 0.0
+	if game.net.hosting:
+		game.net.hive_voice(said, body.global_position if is_instance_valid(body) else from)
 	var length := 0.0
 	var path := str(said.sound)
 	talker = body
@@ -1653,6 +1689,8 @@ func title() -> String:
 	return str(stages[stage][0]) if stages.has(stage) else ""
 
 func summary() -> Array[String]:
+	if game.net.joined:
+		return coop.summary
 	var out: Array[String] = []
 	if goal != "":
 		out.append("▸  " + goal)
@@ -1666,6 +1704,8 @@ func summary() -> Array[String]:
 	return out
 
 func markers() -> Array:
+	if game.net.joined:
+		return coop.markers
 	var at := use_at if use_at != Vector3.INF else marker
 	if at == Vector3.INF or intro_left > 0.0:
 		return []
@@ -1706,6 +1746,9 @@ func _process(delta: float) -> void:
 	clock += delta
 	stage_time += delta
 	_run_heli(delta)
+	if game.net.joined:
+		coop.move_friends(delta)
+		return
 	_run_lines(delta)
 	if intro_left > 0.0:
 		return
