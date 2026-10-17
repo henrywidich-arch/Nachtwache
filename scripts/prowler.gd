@@ -237,8 +237,10 @@ var aim_point := Vector3.INF
 ## free that its body does not get through - the gap between two scanner gates, a door
 ## half blocked by a cabinet. Its ways leave them out. (The shared path finder is only
 ## lent these cells as solid for the moment of its own question.)
+## (Each for BLOCK_KEEP seconds: a door that was slow to open is not shut to it for good.)
 static var blocked: Dictionary = {}
 static var blocked_map := 0
+const BLOCK_KEEP := 45.0
 var aim_left := 0.0
 var way_long := false
 var backup_left := 0.0
@@ -1148,12 +1150,13 @@ func way_between(from: Vector3, to: Vector3) -> PackedVector3Array:
 		blocked.clear()
 		blocked_map = map.get_instance_id()
 	var lent: Array = []
+	var now := Time.get_ticks_msec() / 1000.0
 	for level: int in blocked:
 		if level < 0 or level >= map.navigation.size():
 			continue
 		var grid: AStarGrid2D = map.navigation[level]
 		for cell: Vector2i in blocked[level]:
-			if grid.is_in_boundsv(cell) and not grid.is_point_solid(cell):
+			if now - float(blocked[level][cell]) < BLOCK_KEEP and grid.is_in_boundsv(cell) and not grid.is_point_solid(cell):
 				grid.set_point_solid(cell, true)
 				lent.append([grid, cell])
 	var way: PackedVector3Array = map.path_between(from, to)
@@ -1181,7 +1184,7 @@ func _learn_block() -> void:
 		for dz in range(-1, 2):
 			var cell := middle + Vector2i(dx, dz)
 			if cell != standing:
-				(blocked[level] as Dictionary)[cell] = true
+				(blocked[level] as Dictionary)[cell] = Time.get_ticks_msec() / 1000.0
 
 ## Whether its whole body gets straight to `point` from where it stands.
 func _fits(point: Vector3) -> bool:

@@ -2792,7 +2792,7 @@ func _later(game: Node3D) -> void:
 	var prowl_cells := {}
 	for prowl_dx in range(-2, 3):
 		for prowl_dz in range(-2, 3):
-			prowl_cells[Vector2i(roundi(prowl_mid.x / CabinMap.CELL) + prowl_dx, roundi(prowl_mid.z / CabinMap.CELL) + prowl_dz)] = true
+			prowl_cells[Vector2i(roundi(prowl_mid.x / CabinMap.CELL) + prowl_dx, roundi(prowl_mid.z / CabinMap.CELL) + prowl_dz)] = Time.get_ticks_msec() / 1000.0
 	Prowler.blocked.clear()
 	Prowler.blocked_map = game.cabin.get_instance_id()
 	Prowler.blocked[prowl_level] = prowl_cells

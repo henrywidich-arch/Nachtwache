@@ -527,7 +527,7 @@ func run_paths() -> void:
 	# second would carry it past the points of its way).
 	Engine.time_scale = 4.0
 	Engine.physics_ticks_per_second = 240
-	var totals := {"runs": 0, "reached": 0, "time": 0.0, "stuck": 0.0, "scrape": 0.0, "flips": 0, "levels": 0, "levels_reached": 0, "moved": 0}
+	var totals := {"open": 0, "open_reached": 0, "tight": 0, "tight_kept_out": 0, "open_time": 0.0, "runs": 0, "reached": 0, "time": 0.0, "stuck": 0.0, "scrape": 0.0, "flips": 0, "levels": 0, "levels_reached": 0, "moved": 0}
 	var batch := 6
 	for first in range(0, chosen.size(), batch):
 		var runs: Array[Dictionary] = []
@@ -548,12 +548,22 @@ func run_paths() -> void:
 			beast.nerve = 0.0
 			beast.roomy = hive.prowl.may_follow
 			beast.width = hive.prowl.width_of
-			runs.append({"beast": beast, "target": target, "from": p[0], "to": p[1], "t": -1.0, "stuck": 0.0, "scrape": 0.0, "flips": 0, "last": Vector3.ZERO, "modes": {}, "start": beast.position})
+			runs.append({"open": hive.prowl.open_ground(p[1].at) >= HiveProwler.ROOM_STAY, "near": 99.0, "beast": beast, "target": target, "from": p[0], "to": p[1], "t": -1.0, "stuck": 0.0, "scrape": 0.0, "flips": 0, "last": Vector3.ZERO, "modes": {}, "start": beast.position})
 		var clock := 0.0
+		var feel_left := 0.0
 		while clock < 30.0:
 			await get_tree().physics_frame
 			var step := get_physics_process_delta_time()
 			clock += step
+			# Doors open for whoever comes near them (the director does this; it is switched off here).
+			feel_left -= step
+			if feel_left <= 0.0:
+				feel_left = 0.12
+				var actors := PackedVector3Array()
+				for run in runs:
+					if is_instance_valid(run.beast):
+						actors.append((run.beast as Node3D).global_position)
+				map.feel(actors)
 			var open := 0
 			for run in runs:
 				var beast: Prowler = run.beast
@@ -565,6 +575,8 @@ func run_paths() -> void:
 				run.modes[beast.mode] = true
 				var at: Vector3 = beast.global_position
 				var to: Vector3 = run.to.at
+				if beast.collision_layer != 0:
+					run.near = minf(float(run.near), at.distance_to(to))
 				if Vector2(at.x - to.x, at.z - to.z).length() < 2.6 and absf(at.y - to.y) < 1.5:
 					run.t = clock
 					continue
@@ -591,8 +603,15 @@ func run_paths() -> void:
 			var beast: Prowler = run.beast
 			var levels := int(run.from.level) != int(run.to.level)
 			var moved := is_instance_valid(beast) and beast.global_position.distance_to(run.start) > 3.0
-			print("PROWLER_PATH %-10s %-14s -> %-14s %s gap=%4.1f %s t=%4.1f stuck=%4.1f scrape=%4.1f flips=%d end=%s shifts=%d modes=%s" % [str(run.from.area), str(run.from.room), str(run.to.room), "LEVELS" if levels else "same  ", Vector2(run.from.at.x - run.to.at.x, run.from.at.z - run.to.at.z).length(), "REACHED" if float(run.t) >= 0.0 else "missed ", maxf(0.0, float(run.t)), float(run.stuck), float(run.scrape), int(run.flips), beast.mode if is_instance_valid(beast) else "-", int(beast.get("shifts")) if is_instance_valid(beast) and "shifts" in beast else -1, ",".join(run.modes.keys())])
+			print("PROWLER_PATH %s %-10s %-14s -> %-14s %s gap=%4.1f %s t=%4.1f stuck=%4.1f scrape=%4.1f flips=%d end=%s shifts=%d modes=%s" % ["open " if bool(run.open) else "TIGHT", str(run.from.area), str(run.from.room), str(run.to.room), "LEVELS" if levels else "same  ", Vector2(run.from.at.x - run.to.at.x, run.from.at.z - run.to.at.z).length(), "REACHED" if float(run.t) >= 0.0 else "missed ", maxf(0.0, float(run.t)), float(run.stuck), float(run.scrape), int(run.flips), beast.mode if is_instance_valid(beast) else "-", int(beast.get("shifts")) if is_instance_valid(beast) and "shifts" in beast else -1, ",".join(run.modes.keys())])
 			totals.runs += 1
+			if bool(run.open):
+				totals.open += 1
+				totals.open_reached += 1 if float(run.t) >= 0.0 else 0
+				totals.open_time += maxf(0.0, float(run.t))
+			else:
+				totals.tight += 1
+				totals.tight_kept_out += 1 if float(run.t) < 0.0 and float(run.near) > 3.0 else 0
 			totals.reached += 1 if float(run.t) >= 0.0 else 0
 			totals.time += maxf(0.0, float(run.t))
 			totals.stuck += float(run.stuck)
@@ -608,6 +627,7 @@ func run_paths() -> void:
 		await get_tree().physics_frame
 	Engine.time_scale = 1.0
 	Engine.physics_ticks_per_second = 60
+	print("PROWLER_OPEN prey on open ground: reached %d of %d, mean %.1f s | prey somewhere tight: kept out %d of %d" % [totals.open_reached, totals.open, totals.open_time / maxf(1.0, totals.open_reached), totals.tight_kept_out, totals.tight])
 	print("PROWLER_PATHS runs=%d reached=%d (other level %d of %d) mean_time=%.1f stuck=%.1f scrape=%.1f flips=%d moved=%d" % [totals.runs, totals.reached, totals.levels_reached, totals.levels, totals.time / maxf(1.0, totals.reached), totals.stuck, totals.scrape, totals.flips, totals.moved])
 	print("PROWLER_CAPTURE_COMPLETE")
 	get_tree().quit()
@@ -669,14 +689,18 @@ func run_way() -> void:
 	beast.roomy = hive.prowl.may_follow
 	beast.width = hive.prowl.width_of
 	beast.ground = hive.prowl.open_ground
-	for shot in range(12):
+	for shot in range(18):
 		var clock := 0.0
 		while clock < 0.33:
 			await get_tree().physics_frame
 			clock += get_physics_process_delta_time()
+			map.feel(PackedVector3Array([beast.global_position, game.player.global_position]))
 			game.player.health = 100.0
 			beast.swap_left = 99.0
 		var at := beast.global_position
+		if beast.shift_phase == "away":
+			# Gone: the picture shows where its prey is, where it will come again.
+			at = game.player.global_position
 		await game._capture_from(folder, "%s_%02d.png" % [name, shot], at - beast.facing() * 5.5 + Vector3(0, 3.6, 0), at + Vector3(0, 0.6, 0), 60)
 	print("PROWLER_WAY %s from %s to %s: mode=%s shifts=%d at=%s" % [name, ends[0], ends[1], beast.mode, beast.shifts, str(beast.global_position.snapped(Vector3.ONE * 0.1))])
 	print("PROWLER_CAPTURE_COMPLETE")
