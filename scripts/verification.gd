@@ -9391,6 +9391,157 @@ static func _assign_kinds(fits: Array, at: int, chosen: Array, used: Dictionary)
 static func haifischlabor_bottom() -> float:
 	return float((load("res://scripts/areale/haifischlabor.gd") as GDScript).get_script_constant_map().get("BOTTOM", -1.6)) + 0.05
 
+## The dissection laboratory (scripts/areale/sezierlabor.gd), on the showcase map: from
+## each of its four ports - the two ways in and the two ways out, used or not in a night -
+## every other port, every place of its objectives, every post, every cache and the ground
+## every way in leads to can be walked to, on all three of its heights; the floors are
+## joined by at least three ways each (cellar - hall floor, hall floor - upper floor); the
+## crawl tunnel is low and no path leads through it.
+func _sezierlabor_walks(probe: HiveMap) -> void:
+	var piece := {}
+	for entry: Dictionary in probe.night.pieces:
+		if str(entry.def) == "sezierlabor" and int(entry.chain) == 0:
+			piece = entry
+	if piece.is_empty():
+		expect(false, "The dissection laboratory is part of the showcase night")
+		return
+	var p_info := HiveLayout.info("sezierlabor")
+	var origin: Vector3 = piece.origin
+	var size: Vector2 = p_info.size
+	var starts: Array = []
+	for port: Dictionary in p_info.ports:
+		starts.append(AreaKit.port_inside(origin, size, port))
+	var goals: Array = starts.duplicate()
+	var spots: Dictionary = p_info.spots
+	goals.append(origin + (spots.goal as Vector3))
+	for spot: Vector3 in (spots.switches as Array) + (spots.items as Array):
+		goals.append(origin + spot)
+	for post: Array in p_info.posts:
+		goals.append(origin + (post[1] as Vector3))
+	var prefix := "%s_" % str(piece.id)
+	var cache_count := 0
+	for site: Dictionary in probe.caches:
+		if str(site.id).begins_with(prefix):
+			cache_count += 1
+			goals.append(site.stand)
+	var ways := 0
+	var no_ground: Array[String] = []
+	for entry: Dictionary in probe.entries:
+		if not str(entry.room).begins_with(prefix):
+			continue
+		ways += 1
+		if (entry.land as Vector3) == Vector3.INF:
+			no_ground.append(str(entry.id))
+		else:
+			goals.append(entry.land)
+	var unwalked: Array[String] = []
+	for from: Vector3 in starts:
+		for goal: Vector3 in goals:
+			if from.distance_to(goal) < 0.5:
+				continue
+			var route: PackedVector3Array = probe.path_between(from, goal)
+			if route.is_empty() or route[route.size() - 1].distance_to(goal) > 2.0:
+				unwalked.append("%s > %s" % [str((from - origin).snapped(Vector3.ONE * 0.1)), str((goal - origin).snapped(Vector3.ONE * 0.1))])
+	# The ways between its floors, by the heights they join.
+	var rect := Rect2(origin.x, origin.z, size.x, size.y)
+	var low_mid := 0
+	var mid_high := 0
+	for stair: Dictionary in probe.stairs:
+		var foot: Vector3 = stair.foot
+		var head: Vector3 = stair.head
+		if not rect.has_point(Vector2(foot.x, foot.z)) or not rect.has_point(Vector2(head.x, head.z)):
+			continue
+		var a := roundi((probe.level_height(int(stair.low)) - origin.y) * 10.0)
+		var b := roundi((probe.level_height(int(stair.high)) - origin.y) * 10.0)
+		if a == 0 and b == 42:
+			low_mid += 1
+		elif a == 42 and b == 84:
+			mid_high += 1
+	var tunnel: Dictionary = probe.room_of.get(prefix + "kriechgang", {})
+	var tunnel_mid := origin + Vector3(32.0, 4.2, 41.0)
+	var tunnel_level := probe.level_of(tunnel_mid + Vector3(0, 0.3, 0))
+	var tunnel_cell := Vector2i(roundi(tunnel_mid.x / CabinMap.CELL), roundi(tunnel_mid.z / CabinMap.CELL))
+	var low_doors := true
+	for door: Dictionary in tunnel.get("doors", []):
+		low_doors = low_doors and float(door.height) <= 1.45 and not bool(door.get("nav", true))
+	var tunnel_ok: bool = not tunnel.is_empty() and float(tunnel.height) < 1.5 and float(tunnel.height) > CabinMap.CELL * 2.0 and (tunnel.doors as Array).size() == 2 and low_doors and probe.navigation[tunnel_level].is_point_solid(tunnel_cell)
+	var told := "%d places from 4 ports, %d ways in, %d caches, %d / %d ways between the floors" % [goals.size(), ways, cache_count, low_mid, mid_high]
+	if not unwalked.is_empty():
+		told += " - not walked: " + ", ".join(PackedStringArray(unwalked.slice(0, 6)))
+	if not no_ground.is_empty():
+		told += " - no ground: " + ", ".join(PackedStringArray(no_ground.slice(0, 4)))
+	expect(unwalked.is_empty() and no_ground.is_empty() and ways >= 30 and cache_count == 3 and low_mid >= 3 and mid_high >= 3 and tunnel_ok, "The dissection laboratory: from each of its ports every other port, every place of its objectives, every post, every cache and the ground of every way in can be walked to on all three heights - cellar and pit, hall floor, upper floor -, which are joined by three ways each; its crawl tunnel is 1.45 m high and only the survivor goes through it (%s)" % told)
+
+## The three objectives of the dissection laboratory, each done once in the night of the
+## checks (its stage entered again for each): the tissue samples collected from its rooms,
+## the cold chamber's lock bridged and held, the emergency power switched on for the
+## shutters - and each time its way out opens.
+func _sezierlabor_events(game: Node3D, map: HiveMap, areas: Array) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var index := -1
+	for k in range(areas.size()):
+		if str(areas[k].def) == "sezierlabor":
+			index = k
+	if index >= 0:
+		index = int(areas[index].area_index)
+	if index < 0:
+		expect(false, "The dissection laboratory is one of the areas of the night of the checks")
+		return
+	var piece: Dictionary = (areas.filter(func(entry: Dictionary) -> bool: return str(entry.def) == "sezierlabor"))[0]
+	var origin: Vector3 = piece.origin
+	var p_info := HiveLayout.info("sezierlabor")
+	var spots: Dictionary = p_info.spots
+	var put := func(at: Vector3) -> void:
+		player.global_position = at + Vector3(0, 0.08, 0)
+		player.velocity = Vector3.ZERO
+		for mate in game.team:
+			mate.global_position = at + Vector3(0.9, 0.08, 0.9)
+			mate.velocity = Vector3.ZERO
+	var done: Array[String] = []
+	var failed: Array[String] = []
+	for option: Dictionary in p_info.events:
+		var event := option.duplicate(true)
+		var kind := str(event.kind)
+		if kind == "collect":
+			event.items = range((spots.items as Array).size())
+		if kind == "restore":
+			event.switches = range((spots.switches as Array).size())
+		piece.event = event
+		map.set_port("%s_out" % piece.id, false, true)
+		hive._enter("a%d" % index)
+		_wipe_all(game)
+		put.call(map.points["%s_entry" % piece.id])
+		await _idle_frames()
+		var shut_before: bool = not map.door_open("%s_out" % piece.id)
+		match kind:
+			"collect":
+				for spot_index: int in event.items:
+					put.call(origin + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
+					await _idle_frames()
+					hive.use()
+					await _idle_frames()
+			"restore":
+				for spot_index: int in event.switches:
+					put.call(origin + (spots.switches[spot_index] as Vector3) + Vector3(0.9, 0, 0.0))
+					await _idle_frames()
+					hive.use()
+					await _idle_frames()
+				hive.progress = 0.99999
+				await _idle_frames()
+			"hack":
+				put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
+				await _idle_frames()
+				hive.use()
+				await _idle_frames()
+				hive.progress = 0.99999
+				await _idle_frames()
+		if hive.stage == "a%d_out" % index and shut_before and map.door_open("%s_out" % piece.id):
+			done.append(kind)
+		else:
+			failed.append("%s at %s (stage %s, task %s)" % [kind, str((player.global_position - origin).snapped(Vector3.ONE * 0.1)), hive.stage, str(hive.run.task.get("state", "-"))])
+	expect(failed.is_empty() and done.size() == 3, "The dissection laboratory's objectives can each be done, and each opens its way out: tissue samples from seven rooms on all three heights, the cold chamber's lock held, the emergency power switched on at four places (%s)%s" % [", ".join(PackedStringArray(done)), "" if failed.is_empty() else " - not: " + ", ".join(PackedStringArray(failed))])
+
 func _areas(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var hive: HiveDirector = game.hive
@@ -9497,6 +9648,7 @@ func _areas(game: Node3D) -> void:
 	if not broken.is_empty():
 		findings += " - " + ", ".join(PackedStringArray(broken.slice(0, 6)))
 	expect(pieces >= HiveLayout.POOL.size() + HiveLayout.TRANSITIONS.size() + 3 and in_doorways.is_empty() and small.is_empty() and broken.is_empty() and not probe.waters.is_empty() and climb != Vector3.INF and climb.y > deep_spot.y + 1.0, "Every area, transition and arrival can be built: nothing stands in a doorway, nothing small is solid, and from where each is entered every way out, every place of its objectives and every post can be walked to, and from each to the next (%s); out of deep water one climbs on to the walkway beside it" % findings)
+	_sezierlabor_walks(probe)
 	probe.free()
 	# --- a night with a chain of areas in every seam of the old route, from the crash in the
 	# tunnel to the research wing: every area of the pool, every kind of objective once
@@ -9694,6 +9846,7 @@ func _areas(game: Node3D) -> void:
 		kinds_done[entry.get_slice(":", 1)] = true
 	expect(failed.is_empty() and done_kinds.size() == areas.size() and kinds_done.size() == HiveLayout.OBJECTIVES.size(), "In every area the way out stays shut until its objective is done, and opens then: things found and picked up, places switched on, a door hacked open, a place held, a lockdown sat out, the guards felled (%s)%s" % [", ".join(PackedStringArray(done_kinds)), "" if failed.is_empty() else " - not: " + ", ".join(PackedStringArray(failed))])
 	expect(sharks >= 2 and map.shark_waters.size() >= 1, "In the shark laboratory two sharks swim in the open water between its walkways (%d)" % sharks)
+	await _sezierlabor_events(game, map, areas)
 	# --- a defeat taken up again keeps its night: the same map, not built anew, the chains
 	# before the checkpoint behind the squad
 	var built := map
