@@ -2657,6 +2657,32 @@ func _later(game: Node3D) -> void:
 	expect(prowl_dodged and prowl_d.orbit == -prowl_side and prowl_d.evade_cooldown > 0.0 and prowl_reloading > prowl_d.worth(player) + 1.0 and prowl_hurt > prowl_d.worth(player) + 0.5, "Hit hard on its way in it does not stand and take it: it breaks off, gets out of the line of fire and comes round the other way; and whoever reloads or is hurt is worth more to it as prey")
 	prowl_d._retire()
 	prowl_d.queue_free()
+	# It does not hang about in view: a short stalk, then it commits; shot at meanwhile, at once.
+	var prowl_h := game.spawn_enemy("prowler") as Prowler
+	prowl_h.set_physics_process(false)
+	prowl_h.global_position = Vector3(0.0, 0.08, 30.0)
+	prowl_h.prey = player
+	prowl_h.nerve = 5000.0
+	prowl_h._set_mode("circle")
+	prowl_h.attack_left = 9.0
+	prowl_h.stagger_cooldown = 9.0
+	prowl_h.evade_cooldown = 9.0
+	prowl_h.receive_hit(20.0, Vector3.BACK, false)
+	var prowl_shot_in: bool = prowl_h.attack_left <= 0.1
+	prowl_h._set_mode("circle")
+	prowl_h.attack_left = 9.0
+	for prowl_step in range(int(Prowler.CIRCLE_MOST * 60.0) + 6):
+		prowl_h._physics_process(1.0 / 60.0)
+		if prowl_h.mode != "circle":
+			break
+	var prowl_committed: bool = prowl_h.mode != "circle" or prowl_h.attack_left <= 0.0
+	prowl_h._set_mode("lurk")
+	prowl_h.lurk_left = 5.0
+	prowl_h.tight_for = 0.0
+	prowl_h.receive_hit(20.0, Vector3.BACK, false)
+	expect(prowl_shot_in and prowl_committed and prowl_h.lurk_left <= 0.3 and prowl_h.tight_for >= Prowler.SHIFT_AFTER.y and Prowler.WAIT.y <= 1.5 and Prowler.LURK_SECONDS.y <= 2.5, "The Prowler goes round its prey only briefly before it commits, at once when it is shot at meanwhile, and it does not wait long in front of a place it does not follow")
+	prowl_h._retire()
+	prowl_h.queue_free()
 	# --- its spit, and the pool it leaves
 	player.health = 100.0
 	player.velocity = Vector3.ZERO

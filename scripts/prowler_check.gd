@@ -705,3 +705,159 @@ func run_way() -> void:
 	print("PROWLER_WAY %s from %s to %s: mode=%s shifts=%d at=%s" % [name, ends[0], ends[1], beast.mode, beast.shifts, str(beast.global_position.snapped(Vector3.ONE * 0.1))])
 	print("PROWLER_CAPTURE_COMPLETE")
 	get_tree().quit()
+
+## A prey that walks to and fro and shoots (for run_duel).
+class Walker extends Node3D:
+	var a := Vector3.ZERO
+	var b := Vector3.ZERO
+	var clock := 0.0
+
+	func is_targetable() -> bool:
+		return true
+
+	func receive_damage(_amount: float, _from: Vector3 = Vector3.INF, _kind: String = "", _by: String = "") -> void:
+		pass
+
+	func _physics_process(delta: float) -> void:
+		clock += delta
+		# Six metres to and fro in four seconds.
+		global_position = a.lerp(b, 0.5 - 0.5 * cos(clock * PI / 2.0))
+
+## How long it hesitates (`--prowler-check --prowler-duel`, headless): in rooms of the facility
+## and the areas with room, a prey that walks to and fro and shoots it while it can see it
+## (12 every tenth of a second, as one rifle); 24 s each, on a visit that does not end. Every
+## run says how long it spent not closing in while it was in view - by way of hesitating -
+## when it first attacked, and what it took meanwhile. PROWLER_DUELS sums it up.
+func run_duel() -> void:
+	await get_tree().create_timer(1.0).timeout
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.team_enabled = false
+	game.hive.resume_at = "labs"
+	game.hive.seed_wanted = -4
+	game.start_run()
+	await get_tree().create_timer(1.0).timeout
+	var hive: HiveDirector = game.hive
+	var map: HiveMap = hive.map
+	game.set_process(false)
+	hive.set_process(false)
+	hive.set_physics_process(false)
+	hive.prowl.set_process(false)
+	if hive.entries != null:
+		hive.entries.set_process(false)
+		hive.entries.set_physics_process(false)
+	for id in map.areas:
+		map.unlock(id, true)
+	hive._clear_enemies()
+	game.player.global_position = Vector3(0, -400, 0)
+	game.player.set_physics_process(false)
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 2424
+	seed(2424)
+	# Prey on open ground with six metres to walk, the Prowler 10-20 m off on the same level.
+	var spots: Array[Dictionary] = []
+	for room: Dictionary in map.rooms:
+		var outer: Rect2 = room.outer
+		var middle := Vector3(outer.get_center().x, float(room.y) + 0.1, outer.get_center().y)
+		var level: int = int(room.level)
+		var cell: Vector2i = map.nearest_cell(middle, level)
+		var at := Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL)
+		if at.distance_to(middle) > 4.0:
+			continue
+		var group: String = map.area_of(at) if map.area_of(at) != "" else "~" + str(room.zone)
+		if group in ["~house", "~terminal", "descent", "station", "~park"]:
+			continue
+		spots.append({"at": at, "room": str(room.id), "area": group, "level": level})
+	var pairs: Array = []
+	for p in spots:
+		if hive.prowl.open_ground(p.at) < HiveProwler.ROOM_MIN or not map.path_between(p.at, p.at + Vector3(6, 0, 0)).size() >= 2 or hive.prowl.width_of(p.at + Vector3(6, 0, 0)) < 2.0:
+			continue
+		for q in spots:
+			var gap := Vector2(p.at.x - q.at.x, p.at.z - q.at.z).length()
+			if q != p and q.area == p.area and q.level == p.level and gap >= 10.0 and gap <= 20.0 and map.path_between(q.at, p.at).size() >= 2:
+				pairs.append([q, p])
+				break
+	for i in range(pairs.size() - 1, 0, -1):
+		var j := dice.randi_range(0, i)
+		var keep: Variant = pairs[i]
+		pairs[i] = pairs[j]
+		pairs[j] = keep
+	pairs = pairs.slice(0, 24)
+	Engine.time_scale = 4.0
+	Engine.physics_ticks_per_second = 240
+	var sums := {"runs": 0, "idle": 0.0, "hurt": 0.0, "first": 0.0, "attacked": 0, "states": {}}
+	for first in range(0, pairs.size(), 4):
+		var runs: Array[Dictionary] = []
+		for k in range(first, mini(first + 4, pairs.size())):
+			var p: Array = pairs[k]
+			var walker := Walker.new()
+			walker.a = p[1].at
+			walker.b = p[1].at + Vector3(6, 0, 0)
+			game.add_child(walker)
+			walker.global_position = walker.a
+			var beast := Prowler.new()
+			beast.game = game
+			beast.kind = "prowler"
+			beast.uncounted = true
+			beast.position = p[0].at + Vector3(0, 0.08, 0)
+			game.enemies.add_child(beast)
+			beast.prey = walker
+			beast.nerve = 999999.0
+			beast.roomy = hive.prowl.may_follow
+			beast.width = hive.prowl.width_of
+			beast.set("ground", hive.prowl.open_ground)
+			runs.append({"beast": beast, "walker": walker, "from": p[0], "to": p[1]})
+		var clock := 0.0
+		var fire := 0.0
+		var feel := 0.0
+		while clock < 24.0:
+			await get_tree().physics_frame
+			var step := get_physics_process_delta_time()
+			clock += step
+			fire -= step
+			feel -= step
+			var actors := PackedVector3Array()
+			for run in runs:
+				var beast = run.beast if is_instance_valid(run.beast) else null
+				if beast == null:
+					continue
+				beast.swap_left = 99.0
+				beast.prey = run.walker
+				actors.append(beast.global_position)
+				run.last = {"idle": beast.idle_in_view.duplicate(), "hurt": beast.idle_hurt, "first": beast.first_attack, "text": beast.idle_report()}
+				# The prey shoots while it can see it (its body, not in hiding).
+				if fire <= 0.0 and beast.collision_layer != 0 and beast._line((run.walker as Node3D).global_position + Vector3(0, 1.5, 0), beast.global_position + Vector3(0, 0.9, 0)):
+					beast.receive_hit(12.0, ((beast.global_position - (run.walker as Node3D).global_position) * Vector3(1, 0, 1)).normalized(), false, null)
+			if fire <= 0.0:
+				fire = 0.1
+			if feel <= 0.0:
+				feel = 0.12
+				map.feel(actors)
+		for run in runs:
+			var beast = run.beast if is_instance_valid(run.beast) else null
+			if beast != null and beast.clung_to != null:
+				beast.release(false)
+			if run.has("last"):
+				var last: Dictionary = run.last
+				print("PROWLER_DUEL %-10s %-14s -> %-14s %s%s" % [str(run.from.area), str(run.from.room), str(run.to.room), str(last.text), "" if beast != null else " (gone)"])
+				sums.runs += 1
+				for key: String in last.idle:
+					sums.idle += float(last.idle[key])
+					sums.states[key] = float(sums.states.get(key, 0.0)) + float(last.idle[key])
+				sums.hurt += float(last.hurt)
+				if float(last.first) >= 0.0:
+					sums.attacked += 1
+					sums.first += float(last.first)
+			if beast != null:
+				beast._retire()
+				beast.queue_free()
+			(run.walker as Node).queue_free()
+		await get_tree().physics_frame
+	Engine.time_scale = 1.0
+	Engine.physics_ticks_per_second = 60
+	var states: Array[String] = []
+	for key: String in sums.states:
+		states.append("%s %.1f" % [key, float(sums.states[key]) / maxf(1.0, sums.runs)])
+	print("PROWLER_DUELS runs=%d idle_in_view=%.1f s a run (%s) first_attack=%.1f s (in %d runs) idle_hurt=%d a run" % [sums.runs, sums.idle / maxf(1.0, sums.runs), ", ".join(states), sums.first / maxf(1.0, sums.attacked), sums.attacked, int(sums.hurt / maxf(1.0, sums.runs))])
+	print("PROWLER_CAPTURE_COMPLETE")
+	get_tree().quit()

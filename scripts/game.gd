@@ -437,7 +437,7 @@ func _ready() -> void:
 		var prowler_check := ProwlerCheck.new()
 		prowler_check.game = self
 		add_child(prowler_check)
-		prowler_check.call_deferred("run_way" if " ".join(OS.get_cmdline_user_args()).contains("--prowler-way=") else "run_paths" if "--prowler-paths" in args else "run_map" if "--prowler-map" in args else ("run_spit" if "--prowler-spit" in args else "run_attacks" if "--prowler-attacks" in args else "run_moves" if "--prowler-moves" in args else ("run_hive" if "--prowler-hive" in args else "run")))
+		prowler_check.call_deferred("run_duel" if "--prowler-duel" in args else "run_way" if " ".join(OS.get_cmdline_user_args()).contains("--prowler-way=") else "run_paths" if "--prowler-paths" in args else "run_map" if "--prowler-map" in args else ("run_spit" if "--prowler-spit" in args else "run_attacks" if "--prowler-attacks" in args else "run_moves" if "--prowler-moves" in args else ("run_hive" if "--prowler-hive" in args else "run")))
 	elif "--ripper-check" in args:
 		check_mode = true
 		team_enabled = false

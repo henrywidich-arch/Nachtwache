@@ -49,7 +49,7 @@ const HASTE_LEAST := 0.6
 const RUN_HEARD := 4.5
 ## Its prey has gone where it has no room: so long it prowls in front of that (on a visit;
 ## then it goes), at this pace, and only where the passage is at least this wide.
-const LURK_SECONDS := Vector2(6.0, 9.0)
+const LURK_SECONDS := Vector2(1.2, 2.0)
 const LURK_PACE := 1.5
 const LURK_WIDE := 2.5
 ## From how far it shows itself (and roars) on its first visit.
@@ -132,7 +132,7 @@ const STUCK_WINDOW := 10.0
 ## SHIFT_REACH metres off him where none of them can see, growls (SHIFT_WARN seconds) and
 ## attacks. Not again for SHIFT_REST seconds; if it finds no such place within SHIFT_GIVE_UP
 ## seconds it gives the way round up.
-const SHIFT_AFTER := Vector2(1.0, 2.5)
+const SHIFT_AFTER := Vector2(1.0, 1.0)
 ## A level change on a way that is good (not too long, not too tight): it takes the stairs,
 ## and only goes another way round if it has not got up (or down) in STAIR_TRY seconds.
 const STAIR_TRY := 9.0
@@ -148,7 +148,7 @@ const SHIFT_GIVE_UP := 4.0
 ## moment - whoever keeps moving is not there any more. Where it comes down a pool
 ## lies that one must not stand in (ProwlerPool: how wide, how long, what it does).
 ## Only at somebody who has stayed put: within SPIT_STILL.x metres for SPIT_STILL.y seconds.
-const SPIT_STILL := Vector2(2.5, 3.5)
+const SPIT_STILL := Vector2(2.5, 2.0)
 ## Only from this far (never in biting range), and with sight of him.
 const SPIT_RANGE := Vector2(7.0, 20.0)
 const SPIT_WIND := 0.8
@@ -163,7 +163,10 @@ const SPIT_REST := 24.0
 const SPIT_FIRST := 7.0
 const SPIT_MOST := 2
 ## Seconds it goes round its prey between two attacks (shorter the bolder it is).
-const WAIT := Vector2(1.8, 3.4)
+## (A short stalk is its tell; after that it commits. It used to go round for up to 3.4 s.)
+const WAIT := Vector2(0.5, 1.2)
+## Round its prey this long at most, whatever else - then it goes in.
+const CIRCLE_MOST := 1.6
 
 ## close: on its way to its prey. circle: round it. rush: in for a blow. strike: the blow.
 ## back: out of reach again. leap, reel (knocked off balance or roaring), flee.
@@ -255,6 +258,20 @@ var shift_cover := Vector3.INF
 var shifts := 0
 var other_for := 0.0
 var tight_for := 0.0
+## How long it has been going round its prey this time.
+var circled := 0.0
+## Its first roar is on.
+var herald_roaring := false
+## What it did with its time (for the logs of automatic runs): seconds since it came,
+## when it first went for somebody, the seconds it spent in each way of not closing in
+## while one of the squad could see it, and what it took meanwhile.
+const IDLE_MODES := ["circle", "lurk", "warn", "roar"]
+var lived := 0.0
+var first_attack := -1.0
+var idle_in_view := {}
+var idle_hurt := 0.0
+var view_left := 0.0
+var in_view := false
 ## How well it fights on this level (the level's "tactics"; who sends it says so).
 var level := 1.0
 var pin_hurt := 0.0
@@ -393,11 +410,13 @@ func _haste() -> float:
 	return maxf(HASTE_LEAST, (RAGE_HASTE if enraged else 1.0) * (1.0 - BOLD_HASTE * bold) / maxf(0.5, level))
 
 func _set_mode(next: String) -> void:
+	herald_roaring = false
 	mode = next
 	stuck_for = 0.0
 	match next:
 		"circle":
 			blind_for = 0.0
+			circled = 0.0
 			# Round to where its prey is not looking.
 			if is_instance_valid(prey):
 				var to_prey := Vector3(prey.global_position.x - global_position.x, 0, prey.global_position.z - global_position.z).normalized()
@@ -503,7 +522,8 @@ func _start_pin() -> void:
 	pin_tick = PIN_TICK
 	# It stands over him where he looks: whoever lies under it sees what has him.
 	pin_dir = _facing_of(prey)
-	add_collision_exception_with(prey)
+	if prey is CollisionObject3D:
+		add_collision_exception_with(prey)
 	velocity = Vector3.ZERO
 	gait_pace = 0.0
 	(model as ProwlerVisual).pinning = true
@@ -522,13 +542,14 @@ func shake() -> void:
 
 ## It lets go. thrown: shaken off or shot off - it reels back.
 func release(thrown: bool) -> void:
-	var victim := clung_to
+	var victim: Node3D = clung_to if is_instance_valid(clung_to) else null
 	clung_to = null
 	(model as ProwlerVisual).pinning = false
 	if is_instance_valid(victim):
 		if "clung_by" in victim and victim.get("clung_by") == self:
 			victim.set("clung_by", null)
-		remove_collision_exception_with(victim)
+		if victim is CollisionObject3D:
+			remove_collision_exception_with(victim)
 	pin_cooldown = PIN_REST
 	if dead or mode != "pin":
 		return
@@ -546,6 +567,7 @@ func _may_spit(target: Vector3, distance: float) -> bool:
 	return spit_cooldown <= 0.0 and spits < spit_most and still_for >= SPIT_STILL.y and distance >= SPIT_RANGE.x and distance <= SPIT_RANGE.y and clung_to == null and is_on_floor() and _clear_line(target)
 
 func _start_spit() -> void:
+	_attacked()
 	mode = "spit"
 	mode_left = SPIT_WIND
 	spat = false
@@ -566,6 +588,7 @@ func _may_charge(target: Vector3, distance: float) -> bool:
 
 ## It sinks back, rakes the ground and bellows: then straight through them.
 func _start_charge(target: Vector3) -> void:
+	_attacked()
 	var centre := Vector3.ZERO
 	var count := 0
 	for survivor in _squad():
@@ -608,9 +631,9 @@ func _evade() -> void:
 			best = spot
 	orbit = -orbit
 	if best == Vector3.INF or best_worth < 3.0:
-		# Nothing to get behind: then across their front at a gallop, and round the other way.
-		dash_left = 1.6
-		_set_mode("circle")
+		# Nothing to get behind: then it does not stand and take it, it goes in.
+		attack_left = 0.0
+		_set_mode("rush")
 		return
 	evade_to = best
 	mode = "evade"
@@ -760,7 +783,41 @@ func _land_blow(distance: float, same_floor: bool, target: Vector3) -> void:
 			if survivor == game.player:
 				game.player.shake_from(global_position, 0.6, 6.0)
 
+func _attacked() -> void:
+	if first_attack < 0.0:
+		first_attack = lived
+
+## The way of not closing in it is in now ("" when it is about something else).
+func idle_state() -> String:
+	if shift_phase == "warn":
+		return "warn"
+	if mode == "reel" and herald_roaring:
+		return "roar"
+	return mode if mode in ["circle", "lurk"] else ""
+
+func idle_report() -> String:
+	var parts: Array[String] = []
+	var total := 0.0
+	for key: String in idle_in_view:
+		parts.append("%s %.1f" % [key, float(idle_in_view[key])])
+		total += float(idle_in_view[key])
+	return "idle_in_view=%.1f (%s) first_attack=%.1f idle_hurt=%d lived=%.1f" % [total, ", ".join(parts), first_attack, int(idle_hurt), lived]
+
+## (The bookkeeping of idle_report, once a frame.)
+func _keep_count(delta: float) -> void:
+	if shift_phase == "away" or dead:
+		return
+	lived += delta
+	view_left -= delta
+	if view_left <= 0.0:
+		view_left = 0.25
+		in_view = _seen_by_any(global_position) or (is_instance_valid(prey) and _line(prey.global_position + Vector3(0, 1.5, 0), global_position + Vector3(0, 0.9, 0)))
+	var state := idle_state()
+	if state != "" and in_view:
+		idle_in_view[state] = float(idle_in_view.get(state, 0.0)) + delta
+
 func _physics_process(delta: float) -> void:
+	_keep_count(delta)
 	if dead:
 		model.animate(delta, 0.0)
 		return
@@ -887,6 +944,11 @@ func _physics_process(delta: float) -> void:
 			elif _may_spit(target, distance):
 				# They sit where it does not follow: then that place is made no place to sit.
 				_start_spit()
+			elif lurk_left <= 0.0 and nerve <= 0.0 and shift_rest <= 0.0:
+				# The last fight: not at the door in plain view - out of sight, and again.
+				lurk_left = 0.0
+				_start_shift()
+				return
 			elif lurk_left <= 0.0 and nerve > 0.0:
 				# They do not come out: then another time. (Nobody drove it off.)
 				break_off(false)
@@ -929,6 +991,7 @@ func _physics_process(delta: float) -> void:
 			if herald and clear and distance < HERALD_RANGE:
 				# Its first visit: it stands in the open and lets them hear who has come.
 				herald = false
+				herald_roaring = true
 				roar()
 			elif clear and distance < RING.y:
 				_set_mode("circle")
@@ -947,6 +1010,9 @@ func _physics_process(delta: float) -> void:
 			# Behind its prey's back it does not wait as long.
 			if _facing_of(prey).dot(toward) > 0.2:
 				attack_left -= delta
+			circled += delta
+			if circled > CIRCLE_MOST:
+				attack_left = 0.0
 			if flat_speed < pace * 0.3:
 				# A wall: the other way round.
 				stuck_for += delta
@@ -1342,6 +1408,7 @@ func _look(look: Vector3, delta: float, rate: float, going: float) -> void:
 		flank.position = ahead * flank.along + Vector3(0, flank.height, 0)
 
 func _strike() -> void:
+	_attacked()
 	var clip := model.pick_attack()
 	var haste := _haste()
 	var swift := RAGE_SWIFT if enraged else 1.0
@@ -1357,6 +1424,7 @@ func _strike() -> void:
 	attack_left = randf_range(WAIT.x, WAIT.y) * haste
 
 func _start_leap() -> void:
+	_attacked()
 	mode = "leap"
 	leap = "crouch"
 	leap_left = LEAP_CROUCH
@@ -1423,6 +1491,8 @@ func _leap(delta: float, target: Vector3, toward: Vector3, distance: float) -> v
 func receive_hit(amount: float, direction: Vector3, headshot: bool = false, source: Node = null) -> void:
 	if dead or leaving:
 		return
+	if idle_state() != "":
+		idle_hurt += amount
 	shooter = source as Node3D if source is Node3D else game.player
 	if mode == "pin":
 		# Shot off its prey.
@@ -1451,7 +1521,14 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		cue("pain")
 	if stagger_cooldown <= 0.0 and leap != "air" and (shock >= SHOCK or burst >= SHOCK_BURST):
 		_reel(shock >= HEAVY_SHOCK, direction)
-	elif mode in ["close", "circle", "rush"] and evade_cooldown <= 0.0 and burst >= EVADE_BURST / maxf(0.5, level):
+	elif mode in ["circle", "lurk"] and burst < EVADE_BURST / maxf(0.5, level):
+		# Shot at while it hesitates: it commits - in now, or (where it does not follow) another way round.
+		if mode == "circle":
+			attack_left = minf(attack_left, 0.1)
+		else:
+			tight_for = maxf(tight_for, SHIFT_AFTER.y)
+			lurk_left = minf(lurk_left, 0.3)
+	elif mode in ["close", "circle", "rush", "lurk"] and evade_cooldown <= 0.0 and burst >= EVADE_BURST / maxf(0.5, level):
 		# It does not stand and take a magazine in the face.
 		_evade()
 
