@@ -57,7 +57,7 @@ const MOODS := {
 	# sodium through dust -, the isolation ward - sterile and cold. None of them is darker
 	# than "deep", the darkest of the facility.
 	"water": {"ambient": Color(0.3, 0.48, 0.52), "energy": 0.36, "fog": 0.005, "haze": 0.02, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.04, 0.13, 0.14)},
-	"bio": {"ambient": Color(0.44, 0.38, 0.54), "energy": 0.36, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.11, 0.07, 0.15)},
+	"bio": {"ambient": Color(0.44, 0.42, 0.52), "energy": 0.38, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.11, 0.07, 0.15)},
 	"cryo": {"ambient": Color(0.4, 0.52, 0.7), "energy": 0.42, "fog": 0.006, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.13, 0.2)},
 	"reactor": {"ambient": Color(0.58, 0.4, 0.26), "energy": 0.34, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.09, 0.03)},
 	"store": {"ambient": Color(0.52, 0.48, 0.42), "energy": 0.36, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.17, 0.12, 0.07)},
