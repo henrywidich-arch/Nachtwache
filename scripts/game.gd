@@ -2878,6 +2878,9 @@ func _run_areas_check() -> void:
 	hud.play_ui.hide()
 	hud.banner_left = 0
 	var map := cabin as HiveMap
+	# --areas-flat: as with the test room's SCHATTEN & NEBEL AUS.
+	if "--areas-flat" in OS.get_cmdline_user_args():
+		sandbox.set_flat(true)
 	print("AREAS rooms=%d doors=%d floors=%d times=%s" % [map.rooms.size(), map.doors.size(), map.floors.size(), str(map.build_times)])
 	var seen := {}
 	for piece: Dictionary in map.night.pieces:
@@ -2896,6 +2899,39 @@ func _run_areas_check() -> void:
 				views.append(["gang", from + Vector3(0, 1.62, 0), to + Vector3(0, 1.4, 0)])
 		var count := int(seen.get(def, 0))
 		seen[def] = count + 1
+		# --areas-fps: no pictures, only how long a frame of each view takes at eye level
+		# (the screen's rhythm off; mean and the slowest tenth over two seconds).
+		if "--areas-fps" in OS.get_cmdline_user_args():
+			DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+			for view: Array in views:
+				player.position = (view[1] as Vector3) - Vector3(0, 1.5, 0)
+				player.velocity = Vector3.ZERO
+				var observer := Camera3D.new()
+				observer.cull_mask = 1
+				observer.fov = 72.0
+				add_child(observer)
+				observer.global_position = view[1]
+				observer.look_at(view[2])
+				observer.current = true
+				await tick.call(1.5)
+				var times: Array[float] = []
+				var last := Time.get_ticks_usec()
+				var began := last
+				while Time.get_ticks_usec() - began < 2000000:
+					await get_tree().process_frame
+					var now := Time.get_ticks_usec()
+					times.append((now - last) / 1000.0)
+					last = now
+				var mean := 0.0
+				for value in times:
+					mean += value
+				mean /= maxf(1.0, times.size())
+				times.sort()
+				var slow := times[int(times.size() * 0.9)] if not times.is_empty() else 0.0
+				print("AREAS_FPS %s %s ms=%.2f p90=%.2f fps=%d draws=%d" % [def, view[0], mean, slow, roundi(1000.0 / maxf(0.01, mean)), int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
+				player.camera.current = true
+				observer.queue_free()
+			continue
 		for view: Array in views:
 			# (The survivor stands there first: the zones drawn are those of where he is.)
 			player.position = (view[1] as Vector3) - Vector3(0, 1.5, 0)

@@ -14,9 +14,9 @@ const RING := 6.0
 func info() -> Dictionary:
 	return {
 		"id": "isolationstrakt", "kind": "area", "label": "ISOLATIONSTRAKT", "name": "Isolationstrakt (Zellen, Turm)", "class": "mittel",
-		"size": Vector2(40.0, 40.0), "levels": [0.0, 4.2], "mood": "cold",
+		"size": Vector2(40.0, 40.0), "levels": [0.0, 4.2], "mood": "ward",
 		"staff": ["hive_nurse", "hive_security", "zombie_soldier"],
-		"views": [["ring", Vector3(7, 7, 9), Vector3(33, 0, 9)], ["auge_turm", Vector3(20, 1.62, 33), Vector3(20, 2, 12)], ["kanzel", Vector3(20, 5.82, 26), Vector3(20, 4, 2)], ["zelle", Vector3(8.8, 1.62, 1.5), Vector3(8.8, 1.2, 9)]],
+		"views": [["flur", Vector3(8.5, 1.7, 32.0), Vector3(33, 2.2, 30.5)], ["turm", Vector3(31.5, 1.7, 31.5), Vector3(20, 6, 20)], ["ring", Vector3(7, 7, 9), Vector3(33, 0, 9)], ["auge_turm", Vector3(20, 1.62, 33), Vector3(20, 2, 12)], ["kanzel", Vector3(20, 5.82, 26), Vector3(20, 4, 2)], ["zelle", Vector3(8.8, 1.62, 1.5), Vector3(8.8, 1.2, 9)]],
 		"ports": [
 			{"side": SOUTH, "at": 20.0, "y": 0.0, "room": "zugang_s", "role": "in"},
 			{"side": WEST, "at": 20.0, "y": 0.0, "room": "zugang_w", "role": "in"},
@@ -39,10 +39,12 @@ func info() -> Dictionary:
 	}
 
 func lay() -> void:
-	var look := {"look": {"stripe": Color("b8452f"), "light": Color("e6eef2"), "lamp_every": 2}}
+	# Sterile cold light that fails in places: dark tubes, and the west side flickers.
+	var look := {"look": {"stripe": Color("b8452f"), "light": Color("e2f0ff"), "energy": 1.0, "lamp_every": 2, "dead": 0.25}}
+	var failing := {"look": {"stripe": Color("b8452f"), "light": Color("e2f0ff"), "energy": 1.0, "lamp_every": 1, "dead": 0.35, "flicker": 0.7}}
 	room("ring_n", 0.0, 6, 6, 28, 6, 8.0, "lab", look)
 	room("ring_s", 0.0, 6, 28, 28, 6, 8.0, "lab", look)
-	room("ring_w", 0.0, 6, 12, 6, 16, 8.0, "lab", look)
+	room("ring_w", 0.0, 6, 12, 6, 16, 8.0, "lab", failing)
 	room("ring_o", 0.0, 28, 12, 6, 16, 8.0, "lab", look)
 	door("ring_n", "ring_w", 9.0, RING - 0.4, {"kind": "join"})
 	door("ring_n", "ring_o", 31.0, RING - 0.4, {"kind": "join"})
@@ -53,7 +55,7 @@ func lay() -> void:
 	room("turm", 0.0, 12, 12, 16, 16, 3.9, "panel", {"ceiling": false, "look": {"stripe": Color("b8452f")}})
 	door("ring_n", "turm", 20.0, 2.4, {"kind": "slide"})
 	door("ring_s", "turm", 20.0, 2.4, {"kind": "slide"})
-	room("kanzel", 4.2, 12, 12, 16, 16, 3.8, "lab", {"look": {"light": Color("d6e8ff"), "energy": 1.6}})
+	room("kanzel", 4.2, 12, 12, 16, 16, 3.8, "lab", {"look": {"light": Color("cfeaff"), "energy": 2.8}})
 	for entry in [["ring_n", NORTH, SOUTH], ["ring_s", SOUTH, NORTH], ["ring_w", WEST, EAST], ["ring_o", EAST, WEST]]:
 		for at in [16.0, 24.0]:
 			if str(entry[0]) == "ring_o" and at == 16.0:
@@ -79,7 +81,7 @@ func lay() -> void:
 					rect = Rect2(40.0 - BAND, a, BAND, CELL_LONG)
 			var tag: String = ["n", "o", "s", "w"][side]
 			var name := "zugang_%s" % tag if i == 2 else "zelle_%s%d" % [tag, i if i < 2 else i - 1]
-			room(name, 0.0, rect.position.x, rect.position.y, rect.size.x, rect.size.y, 3.4, "canteen", {"look": {"trim": Color("8f2a22"), "energy": 1.4 if i != 2 else 2.2, "dead": 0.3, "lamp_every": 1}})
+			room(name, 0.0, rect.position.x, rect.position.y, rect.size.x, rect.size.y, 3.4, "canteen", {"look": {"trim": Color("8f2a22"), "energy": 0.7 if i != 2 else 1.6, "dead": 0.4, "flicker": 0.3 if (i + side) % 3 == 0 else 0.0, "lamp_every": 1}})
 			var ring := _ring_of(rect)
 			if i == 2:
 				door(name, ring, a + CELL_LONG * 0.5, AreaKit.PORT_WIDE, {"kind": "slide"})
@@ -107,6 +109,7 @@ func lay() -> void:
 	hole("zelle_o0", EAST, 9.0, "breach")
 	point("goal", Vector3(20.0, 4.2, 14.4))
 	point("middle", Vector3(20.0, 0, 9.0))
+	_mood()
 
 ## The room of the ring a cell or passage opens on.
 func _ring_of(rect: Rect2) -> String:
@@ -120,3 +123,57 @@ func _ring_of(rect: Rect2) -> String:
 	if middle.y > 40.0 - RING * 2.0:
 		return "ring_s"
 	return "ring_w" if middle.x < 20.0 else "ring_o"
+
+## The light of the ward (no picture of his; made to fit the others): sterile cold light
+## that fails in places, a red alarm that sweeps round the ring from two beacons, and the
+## glass of the observation room on the tower lit from inside, the brightest thing here.
+func _mood() -> void:
+	m._chunk("Kit", false)
+	# The tower: a cold line of light round it under the glass, light inside the glass.
+	var cold := Color("bfe6ff")
+	for entry in [["ring_w", EAST], ["ring_o", WEST], ["ring_n", SOUTH], ["ring_s", NORTH]]:
+		var room: Dictionary = m.room_of[n(str(entry[0]))]
+		var side := int(entry[1])
+		m._face_glow(room, side, along(side, 12.4), along(side, 27.6), 3.92, 4.02, -0.05, -0.02, cold, 6.0)
+		m._face_glow(room, side, along(side, 12.4), along(side, 27.6), 4.2 + 3.1, 4.2 + 3.2, -0.05, -0.02, cold, 4.5)
+	# Inside the glass, under its ceiling: bands of light one sees from the ring below.
+	var kanzel: Dictionary = m.room_of[n("kanzel")]
+	for side in [NORTH, SOUTH, WEST, EAST]:
+		m._face_glow(kanzel, side, along(side, 12.6), along(side, 27.4), 3.3, 3.42, -0.45, -0.3, Color("dff2ff"), 7.0)
+	light(Vector3(20.0, 6.8, 20.0), Color("cfeaff"), 2.4, 14.0, 0.0, 0.6)
+	# The alarm: two beacons on the ring's corners, each with two red cones back to back.
+	var red := Color("ff2418")
+	for corner in [Vector3(9.0, 7.5, 9.0), Vector3(31.0, 7.5, 31.0)]:
+		m.batch.cylinder(m.mats["steel"], p(corner.x, 7.7, corner.z), 0.2, 0.2, 0.3, Color("1a1a1a"), 10)
+		m._glow_ball(p(corner.x, 7.55, corner.z), 0.16, red, 5.0)
+		var pivot := sweep(corner, 2.6)
+		for turn in [0.0, PI]:
+			var lamp := SpotLight3D.new()
+			lamp.light_color = red
+			lamp.light_energy = 16.0
+			lamp.spot_range = 16.0
+			lamp.spot_angle = 22.0
+			lamp.spot_attenuation = 0.8
+			lamp.light_volumetric_fog_energy = 1.6
+			lamp.distance_fade_enabled = true
+			lamp.distance_fade_begin = HiveCore.LAMP_FADE
+			lamp.distance_fade_length = 14.0
+			lamp.basis = Basis(Vector3.UP, turn) * Basis(Vector3.RIGHT, deg_to_rad(-22.0))
+			pivot.add_child(lamp)
+		var glass := MeshInstance3D.new()
+		var shape := BoxMesh.new()
+		shape.size = Vector3(0.1, 0.14, 0.36)
+		var lit := StandardMaterial3D.new()
+		lit.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		lit.albedo_color = Color(2.4, 0.3, 0.2)
+		shape.material = lit
+		glass.mesh = shape
+		glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		glass.position = Vector3(0, 0.0, 0)
+		pivot.add_child(glass)
+		light(corner - Vector3(0, 0.6, 0), red, 0.9, 7.0, 0.0, 0.6)
+	# A thin cold haze in the ring, and cables hanging from its ceiling.
+	mist(Vector3(20.0, 1.2, 20.0), Vector3(28.0, 2.4, 28.0), 0.03, Color(0.85, 0.9, 1.0), false, 0.4)
+	cables(Vector3(7.0, 7.9, 9.0), Vector3(17.0, 7.9, 9.5), 3, 0.9)
+	cables(Vector3(31.0, 7.9, 18.0), Vector3(30.5, 7.9, 27.0), 2, 1.1)
+	cables(Vector3(23.0, 7.9, 31.0), Vector3(33.0, 7.9, 30.5), 3, 1.0)
