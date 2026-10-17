@@ -11,6 +11,19 @@ const ROWS := [9.5, 12.5, 23.5, 26.5]
 const POD_FROM := 8.0
 const POD_TO := 34.0
 const POD_STEP := 2.2
+## Who sleeps in the pods: his sleeper (assets/hive/user/cryo_sleeper.glb, 6,000 triangles),
+## all of them drawn at once (one MultiMesh); this share of the pods is empty. How tall he
+## stands in the glass, and how far he may be turned off upright (radians) or float.
+const SLEEPER := "res://assets/hive/user/cryo_sleeper.glb"
+const EMPTY := 0.3
+const SLEEPER_TALL := 1.5
+const SLEEPER_LEAN := 0.03
+const SLEEPER_FLOAT := 0.08
+## Seen through the frost he is a cold shape: his colours darkened and turned blue.
+const SLEEPER_TINT := Color(0.16, 0.22, 0.28)
+
+## Where the sleepers stand (filled by _pod, drawn by _sleepers).
+var sleepers: Array[Transform3D] = []
 
 func info() -> Dictionary:
 	return {
@@ -55,11 +68,14 @@ func lay() -> void:
 	flight(Vector3(24.8, 0, 38.0), Vector3(32.0, 4.2, 38.0), Vector3(23.4, 0, 38.0), Vector3(34.0, 4.2, 38.0))
 	# --- the pods
 	m._chunk("Kit", false)
+	var own := ResourceLoader.exists(SLEEPER)
 	for x in ROWS:
 		var z := POD_FROM
 		while z <= POD_TO + 0.01:
-			_pod(Vector3(float(x), 0.0, z))
+			_pod(Vector3(float(x), 0.0, z), own)
 			z += POD_STEP
+	if own:
+		_sleepers()
 	for x in [11.0, 25.0]:
 		block("plate", Vector3(x, 0.02, (POD_FROM + POD_TO) * 0.5), Vector3(4.2, 0.04, POD_TO - POD_FROM + 1.6), Color(0.2, 0.22, 0.25), false)
 		m._pipe(p(x, 3.6, POD_FROM - 0.8), p(x, 3.6, POD_TO + 0.8), 0.16, Color("6d8ea8"), 8, "steel")
@@ -79,23 +95,68 @@ func lay() -> void:
 
 ## A cryo pod: a frosted capsule on its base that glows pale cyan from inside, with the
 ## dark shape of somebody in it, and a ring of light at its foot.
-func _pod(at: Vector3) -> void:
+func _pod(at: Vector3, own: bool = false) -> void:
 	var base := p(at.x, at.y + 0.3, at.z)
 	m.batch.cylinder(m.mats["steel"], base - Vector3(0, 0.3, 0), 0.66, 0.62, 0.3, Color("2a3036"), 12)
 	m.batch.cylinder(m.mats["steel"], base, 0.62, 0.62, 0.3, Color("39424a"), 12)
 	m._glow_box(base + Vector3(0, 0.31, 0), Vector3(0.9, 0.025, 0.9), Color("8fe6ff"), 5.0)
-	# Who sleeps in it: a shape against the frost.
-	var dark := Color("0b1418")
-	var lean := m.random.randf_range(-0.12, 0.12)
-	var turn := Basis(Vector3.UP, m.random.randf() * TAU)
-	m.batch.box(m.mats["plain"], base + Vector3(0, 1.32, 0), Vector3(0.36, 0.62, 0.2), dark, turn * Basis(Vector3.FORWARD, lean))
-	m.batch.ellipsoid(m.mats["plain"], base + Vector3(lean * -0.6, 1.8, 0), Vector3(0.11, 0.14, 0.12), dark, Basis.IDENTITY, 8, 5)
-	m.batch.box(m.mats["plain"], base + Vector3(0, 0.72, 0), Vector3(0.3, 0.62, 0.16), dark, turn)
+	# Who sleeps in it: his sleeper, turned any way, a little off upright and afloat - or
+	# nobody (EMPTY). Without his model: a shape against the frost.
+	if own:
+		if m.random.randf() >= EMPTY:
+			var turn := Basis(Vector3.UP, m.random.randf() * TAU)
+			var tilt := Basis(Vector3(m.random.randf_range(-1.0, 1.0), 0, m.random.randf_range(-1.0, 1.0)).normalized(), m.random.randf_range(0.0, SLEEPER_LEAN))
+			var lift := m.random.randf_range(0.02, SLEEPER_FLOAT)
+			sleepers.append(Transform3D(tilt * turn, base + Vector3(0, 0.3 + lift, 0)))
+	else:
+		var dark := Color("0b1418")
+		var lean := m.random.randf_range(-0.12, 0.12)
+		var turn := Basis(Vector3.UP, m.random.randf() * TAU)
+		m.batch.box(m.mats["plain"], base + Vector3(0, 1.32, 0), Vector3(0.36, 0.62, 0.2), dark, turn * Basis(Vector3.FORWARD, lean))
+		m.batch.ellipsoid(m.mats["plain"], base + Vector3(lean * -0.6, 1.8, 0), Vector3(0.11, 0.14, 0.12), dark, Basis.IDENTITY, 8, 5)
+		m.batch.box(m.mats["plain"], base + Vector3(0, 0.72, 0), Vector3(0.3, 0.62, 0.16), dark, turn)
 	m.batch.cylinder(frost(Color(0.5, 0.85, 1.0), 0.4, 1.7), base + Vector3(0, 0.3, 0), 0.5, 0.5, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
 	m.batch.cylinder(m.mats["pane"], base + Vector3(0, 0.3, 0), 0.53, 0.53, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
 	m.batch.cylinder(m.mats["steel"], base + Vector3(0, 2.2, 0), 0.62, 0.55, 0.3, Color("39424a"), 12)
 	m.batch.cylinder(m.mats["steel"], base + Vector3(0, 2.5, 0), 0.3, 0.22, 0.25, Color("2a3036"), 8)
 	m._round_solid(base - Vector3(0, 0.3, 0), 0.62, 2.8)
+
+## All the sleepers at once: one MultiMesh of his model, its colours cold and dark behind
+## the frost. (No shadows: the pods glow from inside, and the glass would catch them.)
+func _sleepers() -> void:
+	if sleepers.is_empty():
+		return
+	var scene := load(SLEEPER) as PackedScene
+	var probe := scene.instantiate()
+	var found := probe.find_children("*", "MeshInstance3D", true, false)
+	if found.is_empty():
+		probe.free()
+		return
+	var body := found[0] as MeshInstance3D
+	var mesh := body.mesh
+	var skin := mesh.surface_get_material(0) as BaseMaterial3D
+	probe.free()
+	var bounds := mesh.get_aabb()
+	var fit := SLEEPER_TALL / maxf(0.01, bounds.size.y)
+	var foot := Vector3(-bounds.get_center().x, -bounds.position.y, -bounds.get_center().z) * fit
+	var many := MultiMesh.new()
+	many.transform_format = MultiMesh.TRANSFORM_3D
+	many.mesh = mesh
+	many.instance_count = sleepers.size()
+	for i in range(sleepers.size()):
+		var place: Transform3D = sleepers[i]
+		many.set_instance_transform(i, Transform3D(place.basis.scaled(Vector3.ONE * fit), place.origin + place.basis * foot))
+	var all := MultiMeshInstance3D.new()
+	all.name = "Sleepers"
+	all.multimesh = many
+	all.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	all.visibility_range_end = 60.0
+	if skin != null:
+		var cold := skin.duplicate() as BaseMaterial3D
+		cold.albedo_color = SLEEPER_TINT
+		cold.roughness = 0.9
+		all.material_override = cold
+	m.add_child(all)
 
 ## The light and the air of the archive (after the user's picture kryo.jpeg): rows of cold
 ## strip lights under trusses, pods glowing from inside, cold mist creeping from their
