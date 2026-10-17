@@ -2871,6 +2871,9 @@ func _run_areas_check() -> void:
 	hud.play_ui.hide()
 	hud.banner_left = 0
 	var map := cabin as HiveMap
+	# --areas-flat: as with the test room's SCHATTEN & NEBEL AUS.
+	if "--areas-flat" in OS.get_cmdline_user_args():
+		sandbox.set_flat(true)
 	print("AREAS rooms=%d doors=%d floors=%d times=%s" % [map.rooms.size(), map.doors.size(), map.floors.size(), str(map.build_times)])
 	var seen := {}
 	for piece: Dictionary in map.night.pieces:

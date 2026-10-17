@@ -50,14 +50,21 @@ const MOODS := {
 	# The containment hall, the tower hall: darker and colder than anywhere else in the
 	# facility, with what glows in it and a haze the lamps stand in.
 	"deep": {"ambient": Color(0.28, 0.36, 0.5), "energy": 0.3, "fog": 0.006, "haze": 0.022, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.07, 0.1, 0.14)},
-	# The areas of the random part (HiveLayout): flooded halls - cold teal over dark water -,
-	# the biotope - a damp green -, the cold store - icy blue in its mist.
-	"water": {"ambient": Color(0.36, 0.52, 0.54), "energy": 0.4, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.06, 0.16, 0.17)},
-	"bio": {"ambient": Color(0.42, 0.56, 0.38), "energy": 0.46, "fog": 0.005, "haze": 0.02, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.18, 0.08)},
-	"cryo": {"ambient": Color(0.48, 0.58, 0.7), "energy": 0.42, "fog": 0.006, "haze": 0.024, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.12, 0.17, 0.24)}
+	# The areas of the random part (HiveLayout), each after the user's picture of it (the
+	# lamps, mist and glow are the area's own, see AreaKit): the shark lab - teal over dark
+	# water -, the biotope - violet grow light, damp green -, the cryo archive - icy blue in
+	# its mist -, the reactor shaft - deep warm dark around the core -, the storage hall -
+	# sodium through dust -, the isolation ward - sterile and cold. None of them is darker
+	# than "deep", the darkest of the facility.
+	"water": {"ambient": Color(0.3, 0.48, 0.52), "energy": 0.36, "fog": 0.005, "haze": 0.02, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.04, 0.13, 0.14)},
+	"bio": {"ambient": Color(0.44, 0.38, 0.54), "energy": 0.36, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.11, 0.07, 0.15)},
+	"cryo": {"ambient": Color(0.4, 0.52, 0.7), "energy": 0.42, "fog": 0.006, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.13, 0.2)},
+	"reactor": {"ambient": Color(0.58, 0.4, 0.26), "energy": 0.34, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.09, 0.03)},
+	"store": {"ambient": Color(0.56, 0.47, 0.36), "energy": 0.36, "fog": 0.004, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.17, 0.12, 0.07)},
+	"ward": {"ambient": Color(0.44, 0.52, 0.62), "energy": 0.4, "fog": 0.003, "haze": 0.012, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.13, 0.18)}
 }
 ## The moods of places under the ground (no moon, no shadows of it).
-const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo"]
+const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo", "reactor", "store", "ward"]
 ## Water that stands in a room: dark, smooth, with a slow swell that bends what is
 ## mirrored in it. It is drawn where it stands deeper than a few millimetres over the
 ## floor `floor_y`, so that a sheet of it may rise out of the floor like a shore.
