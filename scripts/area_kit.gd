@@ -251,7 +251,6 @@ func shark_water(surface: float, bottom: float, open: Array) -> void:
 ## What drifts in the air (see drift()) and what moves (pulse(), sweep()), started and
 ## watched by one timer of the piece.
 var airs: Array = []
-var motions: Array[Callable] = []
 var watcher: Timer
 
 ## A lamp that shines in a cone and casts no shadow (aimed down it cannot leak through a
@@ -435,11 +434,9 @@ func drift(centre: Vector3, box: Vector3, amount: int, color: Color, options: Di
 	_watch()
 	return cloud
 
-## A soft round speck, shared by everything that drifts.
-static var soft_dot: Texture2D
-
+## A soft round speck, shared by everything that drifts (kept with the map's materials).
 func _soft_dot() -> Texture2D:
-	if soft_dot == null:
+	if not m.mats.has("areal_dot"):
 		var shade := Gradient.new()
 		shade.set_color(0, Color(1, 1, 1, 1))
 		shade.set_color(1, Color(1, 1, 1, 0))
@@ -450,8 +447,8 @@ func _soft_dot() -> Texture2D:
 		dot.fill_to = Vector2(0.5, 0.0)
 		dot.width = 64
 		dot.height = 64
-		soft_dot = dot
-	return soft_dot
+		m.mats["areal_dot"] = dot
+	return m.mats["areal_dot"]
 
 ## A light whose energy breathes between `low` and `high` every `seconds`, with an
 ## unsteady flutter on top (`flutter`: its share) - a core that burns.
@@ -460,7 +457,7 @@ func pulse(lamp: Light3D, low: float, high: float, seconds: float, flutter: floa
 	noise.seed = m.random.randi()
 	noise.frequency = 0.9
 	var clock := [m.random.randf() * 50.0]
-	motions.append(func() -> void:
+	_motion(func() -> void:
 		var breathe := func(phase: float) -> void:
 			clock[0] += 0.016
 			var energy := lerpf(low, high, 0.5 + 0.5 * sin(phase))
@@ -479,7 +476,7 @@ func pulse_glow(material: StandardMaterial3D, low: float, high: float, seconds: 
 ## Anything that goes round and round: `step` is called with a phase from 0 to TAU every
 ## `seconds` (the density of a mist that breathes, ...).
 func wave(step: Callable, seconds: float) -> void:
-	motions.append(func() -> void:
+	_motion(func() -> void:
 		watcher.create_tween().set_loops().tween_method(step, 0.0, TAU, seconds))
 	_watch()
 
@@ -511,7 +508,7 @@ func sweep(at: Vector3, seconds: float) -> Node3D:
 	pivot.name = "Sweep"
 	pivot.position = o + at
 	m.add_child(pivot)
-	motions.append(func() -> void:
+	_motion(func() -> void:
 		pivot.create_tween().set_loops().tween_property(pivot, "rotation:y", TAU, seconds).from(0.0))
 	_watch()
 	return pivot
@@ -575,17 +572,26 @@ func _watch() -> void:
 	watcher.name = "AirWatch"
 	watcher.wait_time = 0.5
 	watcher.autostart = true
+	# (What is to move waits on the timer, not on the piece: the piece holding it would
+	# be held by it in turn, and stay with all it reaches when the map is gone.)
+	watcher.set_meta("motions", [])
 	var started := [false]
 	watcher.timeout.connect(func() -> void:
 		if not started[0]:
 			started[0] = true
-			for start in motions:
+			for start: Callable in watcher.get_meta("motions"):
 				start.call()
+			watcher.set_meta("motions", [])
 		var on: bool = m.environment == null or m.environment.volumetric_fog_enabled
 		for cloud in airs:
 			if is_instance_valid(cloud):
 				(cloud as Node3D).visible = on)
 	m.add_child(watcher)
+
+## Something that moves, started by the timer once the map stands.
+func _motion(start: Callable) -> void:
+	_watch()
+	(watcher.get_meta("motions") as Array).append(start)
 
 # ---------------------------------------------------------------- ways in
 
