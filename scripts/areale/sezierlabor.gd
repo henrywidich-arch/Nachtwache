@@ -47,7 +47,7 @@ func info() -> Dictionary:
 		"size": Vector2(56.0, 48.0), "levels": [KELLER, SAAL, OBEN], "mood": "cold",
 		"staff": ["hive_lab", "hive_lab2", "hive_scientist", "hive_scientist2"],
 		"views": [
-			["saal_oben", Vector3(19.5, 11.6, 15.5), Vector3(31, 2.0, 28)],
+			["saal_oben", Vector3(36.5, 11.4, 15.2), Vector3(24, 2.0, 28)],
 			["saal_auge", Vector3(20.0, 5.82, 31.0), Vector3(31, 4.8, 16)],
 			["grube", Vector3(30.0, 1.62, 28.0), Vector3(25, 3.0, 19.5)],
 			["westgang", Vector3(15.0, 5.82, 46.0), Vector3(15, 5.4, 2)],
@@ -114,7 +114,7 @@ func _rooms() -> void:
 	var lab := {"look": {"light": WHITE, "energy": 2.2, "stripe": Color("2f8f6a"), "lamp_every": 2, "dead": 0.15}}
 	var dim := {"look": {"light": WHITE, "energy": 1.8, "stripe": Color("2f8f6a"), "lamp_every": 2, "dead": 0.3}}
 	var tiled := {"look": {"light": Color("d8f2ea"), "energy": 2.0, "lamp_every": 2, "dead": 0.25}}
-	var cellar := {"look": {"lamp": "cage", "lamp_gap": 5.5, "light": Color("cfe8dc"), "energy": 1.7, "reach": 9.0, "dead": 0.3}}
+	var cellar := {"look": {"lamp": "cage", "lamp_gap": 5.5, "light": Color("cfe8dc"), "energy": 2.2, "reach": 10.0, "dead": 0.2}}
 	# --- Saalebene (4.2): under an upper room a room has no ceiling of its own (the
 	# upper room's floor is it); where nothing lies above, it has one.
 	room("halle", SAAL, 18, 14, 20, 20, 8.2, "lab", _with(hall, {"pits": [r(GRUBE.position.x, GRUBE.position.y, GRUBE.size.x, GRUBE.size.y)], "walk": walks([
@@ -129,7 +129,7 @@ func _rooms() -> void:
 	room("vorbereitung", SAAL, 18, 0, 10, 14, 3.9, "canteen", _with(tiled, {"ceiling": false}))
 	room("roentgen", SAAL, 28, 0, 10, 14, 3.9, "lab", _with(dim, {"ceiling": false}))
 	room("lager", SAAL, 18, 34, 12, 14, 3.9, "concrete", {"look": {"lamp": "cage", "lamp_gap": 5.5, "light": Color("d9efe4"), "energy": 1.8, "dead": 0.25}})
-	room("kriechgang", SAAL, 30, 40, 4, 2, 1.45, "tech", {"nav": false, "lamps": "none"})
+	room("kriechgang", SAAL, 30, 39.8, 4, 2.4, 1.45, "tech", {"nav": false, "lamps": "none"})
 	room("labor_a", SAAL, 34, 34, 11, 14, 3.9, "lab", lab)
 	room("labor_b", SAAL, 45, 34, 11, 14, 3.9, "lab", dim)
 	room("buero", SAAL, 44, 0, 12, 12, 3.9, "office", {"ceiling": false, "look": {"energy": 1.8, "dead": 0.3}})
@@ -172,7 +172,7 @@ func _doors() -> void:
 	door("halle", "labor_a", 35.6, 2.4, {"kind": "slide"})
 	door("gang_o", "labor_a", 41.0, 3.0, {"kind": "frame"})
 	door("labor_a", "labor_b", 41.0, 3.0, {"kind": "frame"})
-	door("treppe_o", "labor_b", 46.2, 2.0, {"kind": "slide"})
+	door("treppe_o", "labor_b", 47.0, 2.0, {"kind": "slide"})
 	door("gang_o", "treppe_o", 27.0, 2.4, {"kind": "frame"})
 	door("gang_o", "praeparate", 18.0, 2.0, {"kind": "slide"})
 	door("gang_o", "buero", 6.0, 1.8, {"kind": "slide"})
@@ -218,7 +218,7 @@ func _levels() -> void:
 	railing(Vector3(22.9, SAAL, 19.0), Vector3(22.9, SAAL, 29.0))
 	railing(Vector3(33.1, SAAL, 19.0), Vector3(33.1, SAAL, 29.0))
 	# --- the hall's gallery along its south wall, and the flight up to it at the east wall
-	gallery("steg_s", OBEN, Rect2(18, 31, 20, 3), [], [[NORTH, 18.0, 35.5], [NORTH, 37.7, 38.0]], [], Rect2(18.2, 31.0, 19.6, 2.8))
+	gallery("steg_s", OBEN, Rect2(18, 31, 20, 3), [], [[NORTH, 18.0, 35.5]], [], Rect2(18.2, 31.0, 19.6, 2.8))
 	for x in [21.0, 31.0]:
 		_post_on(Vector2(x, 31.3), SAAL, OBEN)
 	flight(Vector3(36.6, SAAL, 23.6), Vector3(36.6, OBEN, 30.8), Vector3(36.6, SAAL, 22.2), Vector3(36.6, OBEN, 32.6))
@@ -297,13 +297,13 @@ func _dress() -> void:
 		_tank(Vector3(x, SAAL, 32.7), 2.4, x == 25.5)
 	for x in [26.0, 30.0]:
 		_tank(Vector3(x, KELLER, 20.0), 2.2, x == 30.0)
-	stencil("halle", NORTH, 28.0, 7.4, "SEKTION  S-3", 200, Color(0.2, 0.42, 0.32))
+	stencil("halle", NORTH, 28.0, 3.9, "SEKTION  S-3", 160, Color(0.2, 0.42, 0.32))
 	stencil("halle", SOUTH, 22.0, 2.6, "PATHOLOGIE", 90, Color(0.2, 0.42, 0.32))
 	stencil("grube", SOUTH, 30.4, 2.9, "GRUBE  ·  EBENE -1", 70, Color(0.2, 0.42, 0.32))
 	# --- the morgue: walls of cold drawers
 	_drawers(0.4, 11.6, 13.6, 1.0)
 	_drawers(0.4, 11.6, 25.4, -1.0)
-	block("plate", Vector3(6.0, SAAL + 0.45, 19.5), Vector3(2.0, 0.9, 0.8), Color(0.62, 0.66, 0.68), false)
+	_table(Vector3(6.0, SAAL, 19.5), PI / 2)
 	stencil("gang_w", WEST, 19.5, 3.0, "KÜHLKAMMER", 70, Color(0.2, 0.42, 0.55))
 	# --- the scrub room: sinks along its north wall; the prep room: sinks and trolleys
 	for x in [2.0, 4.6, 7.2, 9.8]:
@@ -316,7 +316,8 @@ func _dress() -> void:
 	block("plate", Vector3(32.0, SAAL + 1.2, 8.0), Vector3(1.4, 2.4, 1.4), Color(0.78, 0.8, 0.8))
 	block("plate", Vector3(32.0, SAAL + 2.2, 9.7), Vector3(0.8, 0.5, 2.2), Color(0.7, 0.72, 0.72), false)
 	block("plate", Vector3(32.0, SAAL + 0.45, 10.6), Vector3(0.9, 0.9, 2.2), STEEL, false)
-	for x in [30.0, 32.0, 34.0]:
+	# (Its light boxes beside the door to the hall, not in it.)
+	for x in [29.4, 31.0]:
 		glow(Vector3(x, SAAL + 1.8, 13.75), Vector3(1.4, 1.0, 0.03), Color("cfe8ff"), 1.4)
 	# --- the specimen store: racks of jars
 	_rack(Vector3(49.5, SAAL, 23.4), 9.0, true)
@@ -394,7 +395,7 @@ func _drawers(x0: float, x1: float, z: float, face: float) -> void:
 		var x := x0 + (c + 0.5) * (x1 - x0) / columns
 		for row in range(3):
 			var y0 := SAAL + 0.42 + row * 0.75
-			m._part("plate", p(x, y0, z + face * 0.405), Vector3(0.82, 0.66, 0.02), Color(0.78, 0.82, 0.84))
+			m._part("steel", p(x, y0, z + face * 0.405), Vector3(0.82, 0.66, 0.02), Color(0.86, 0.9, 0.92))
 			m._part("plain", p(x, y0 + 0.18, z + face * 0.43), Vector3(0.3, 0.04, 0.03), Color("1d2124"))
 			if (c * 3 + row) % 7 == 2:
 				m._part("plain", p(x - 0.25, y0 - 0.18, z + face * 0.42), Vector3(0.12, 0.08, 0.01), GREEN.darkened(0.4))
