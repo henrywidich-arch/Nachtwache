@@ -305,6 +305,7 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 			var left := 0
 			var best := Vector3.INF
 			var best_gap := INF
+			var nearest := {}
 			for item: Dictionary in task.items:
 				if bool(item.taken):
 					continue
@@ -317,10 +318,18 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 				if bool(item.known) and gap < best_gap:
 					best_gap = gap
 					best = at
+					nearest = item
 			if left == 0:
 				_done(piece)
 				return
-			director.marker = best if best != Vector3.INF else map.points.get("%s_middle" % piece.id, goal)
+			# The marker stays on the thing it points at until that is taken: the nearest as the
+			# crow flies changes on the way to it where the way leads up or down a floor, and
+			# a marker that jumps between two of them leads nowhere.
+			var aim: Dictionary = task.get("aim", {})
+			if aim.is_empty() or bool(aim.taken):
+				aim = nearest
+				task.aim = aim
+			director.marker = (aim.pos as Vector3) if not aim.is_empty() else map.points.get("%s_middle" % piece.id, goal)
 			if best != Vector3.INF and best_gap < PICK_REACH:
 				director._use_spot(best, "g_item", str(event.get("use", "[E] Aufheben")))
 			elif director.use_key == "g_item":
@@ -335,6 +344,7 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 				return
 			var best := Vector3.INF
 			var best_gap := INF
+			var nearest := {}
 			for place: Dictionary in task.places:
 				if bool(place.done):
 					continue
@@ -342,13 +352,19 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 				if gap < best_gap:
 					best_gap = gap
 					best = place.pos
+					nearest = place
 			if best == Vector3.INF:
 				task.state = "rising"
 				director.progress = 0.0
 				director.progress_text = str(event.get("progress", "ES LÄUFT AN"))
 				game.sounds.play_sound("wave")
 				return
-			director.marker = best
+			# (As with the things to find: the marker stays on its place until it is switched.)
+			var aim: Dictionary = task.get("aim", {})
+			if aim.is_empty() or bool(aim.done):
+				aim = nearest
+				task.aim = aim
+			director.marker = aim.pos
 			if best_gap < 2.6:
 				director._use_spot(best, "g_switch", str(event.get("use", "[E] Einschalten")))
 		"hack":
