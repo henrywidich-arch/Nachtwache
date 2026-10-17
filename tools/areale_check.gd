@@ -41,6 +41,7 @@ func _plans(count: int) -> int:
 	var kinds := {}
 	var defs := {}
 	var objectives := {}
+	var seams := {}
 	var tries := 0
 	var most_tries := 0
 	var fallback := 0
@@ -54,6 +55,8 @@ func _plans(count: int) -> int:
 		if not faults.is_empty():
 			bad += 1
 			print("SEED %d %s: %s" % [seed_value, HiveLayout.describe(night), "; ".join(PackedStringArray(faults))])
+		for chain: Dictionary in night.get("chains", []):
+			seams[chain.seam] = int(seams.get(chain.seam, 0)) + 1
 		var n: int = (night.areas as Array).size()
 		areas[n] = int(areas.get(n, 0)) + 1
 		arrivals[night.arrival] = int(arrivals.get(night.arrival, 0)) + 1
@@ -68,7 +71,7 @@ func _plans(count: int) -> int:
 				defs[piece.def] = int(defs.get(piece.def, 0)) + 1
 				var kind := str(piece.get("event", {}).get("kind", "-"))
 				objectives[kind] = int(objectives.get(kind, 0)) + 1
-	print("AREALE seeds=%d bad=%d areas=%s arrivals=%s transitions=%s pool=%s objectives=%s tries_avg=%.2f tries_most=%d fallback=%d ms=%d" % [count, bad, str(areas), str(arrivals), str(kinds), str(defs), str(objectives), float(tries) / count, most_tries, fallback, Time.get_ticks_msec() - started])
+	print("AREALE seeds=%d bad=%d areas=%s arrivals=%s seams=%s transitions=%s pool=%s objectives=%s tries_avg=%.2f tries_most=%d fallback=%d ms=%d" % [count, bad, str(areas), str(arrivals), str(seams), str(kinds), str(defs), str(objectives), float(tries) / count, most_tries, fallback, Time.get_ticks_msec() - started])
 	return bad
 
 func _origins(night: Dictionary) -> Array:
@@ -78,7 +81,7 @@ func _origins(night: Dictionary) -> Array:
 	return out
 
 func _build(what: String) -> int:
-	var night := HiveLayout.showcase() if what == "showcase" else HiveLayout.plan(int(what))
+	var night := HiveLayout.showcase() if what == "showcase" else (HiveLayout.every_seam() if what == "all" else HiveLayout.plan(int(what)))
 	var map := HiveMap.new()
 	map.night = night
 	root.add_child(map)
@@ -130,7 +133,10 @@ func _build(what: String) -> int:
 	# through the transition to where one comes into the next (the path finder does not
 	# go down a level and up again to come back to its own, so the way is walked as the
 	# squad walks it, one stretch after the other).
-	for chain in [0, 1]:
+	var most := 0
+	for piece: Dictionary in night.pieces:
+		most = maxi(most, int(piece.get("chain", 0)))
+	for chain in range(most + 1):
 		var members: Array = (night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == chain and str(piece.kind) != "transition")
 		var total := 0.0
 		for k in range(members.size() - 1):
@@ -164,5 +170,17 @@ func _build(what: String) -> int:
 					var cell := Vector2i(roundi((o.x + x) / 0.5), roundi((o.z + z) / 0.5))
 					row += "?" if not grid.is_in_boundsv(cell) else ("#" if grid.is_point_solid(cell) else ".")
 				print("ROW %02d %s" % [z, row])
+	# The real lifts: from the room of the old route into the cabin.
+	for id: String in night.get("lifts", []):
+		var spec: Dictionary = HiveLayout.LIFTS[id]
+		var cabin: Vector3 = map.points.get("lift_%s_mid" % id, Vector3.INF)
+		var old: Dictionary = map.room_of[str(spec.room)]
+		var door := Vector3(spec.rect.get_center().x, HiveMap.UNDER, spec.rect.get_center().y) - Vector3(HiveCore.OUT[int(spec.door)].x, 0, HiveCore.OUT[int(spec.door)].y) * 4.5
+		var route: PackedVector3Array = map.path_between(door, cabin)
+		if route.is_empty() or route[route.size() - 1].distance_to(cabin) > 1.5:
+			bad += 1
+			print("WAY lift %s: no way from %s into its cabin" % [id, str(old.id)])
+		else:
+			print("LIFT %s walkable from %s" % [id, str(old.id)])
 	print("BUILT_RESULT faults=%d" % bad)
 	return bad

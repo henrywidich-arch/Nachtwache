@@ -75,7 +75,7 @@ func lay() -> void:
 		m._part("lawn", p(middle.x, 0.82, middle.y), Vector3(bed.size.x - 0.3, 0.06, bed.size.y - 0.3), Color(0.24, 0.3, 0.16))
 		for k in range(3):
 			_bulb(Vector3(bed.position.x + bed.size.x * (k + 0.5) / 3.0, 0.85, middle.y), m.random.randf_range(0.25, 0.55))
-	for spot in [Vector2(6, 18), Vector2(20, 36), Vector2(34, 18), Vector2(40, 36), Vector2(28, 26), Vector2(10, 40), Vector2(38, 6)]:
+	for spot in [Vector2(6, 18), Vector2(16, 37), Vector2(34, 18), Vector2(40, 36), Vector2(28, 26), Vector2(10, 40), Vector2(38, 6)]:
 		m._tree(p(spot.x, 0, spot.y), m.random.randf_range(6.0, 8.5))
 	for spot in [Vector3(0.3, 0, 16), Vector3(0.3, 0, 38), Vector3(47.7, 0, 30), Vector3(30, 0, 43.7)]:
 		for k in range(4):
@@ -87,7 +87,7 @@ func lay() -> void:
 	stencil("halle", NORTH, 12.0, 6.5, "BIOTOP  G-3", 200, Color(0.3, 0.45, 0.25))
 	# --- ways in: out of the soil, out of the walls, from the roof on to the paths
 	trench("halle", 24.0, 34.0, 1)
-	trench("halle", 40.0, 16.0, 0)
+	trench("halle", 42.0, 24.0, 0)
 	hole("halle", WEST, 20.0, "pipes")
 	hole("halle", SOUTH, 16.0, "breach")
 	hole("halle", EAST, 34.0, "vent")
