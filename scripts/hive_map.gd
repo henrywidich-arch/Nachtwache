@@ -5988,6 +5988,18 @@ func ride_areal(id: String, on: bool) -> void:
 func uses_lift(id: String) -> bool:
 	return (night.get("lifts", []) as Array).has(id)
 
+## Where the freight lifts of the night stand (for the map in the corner): the real ones in
+## the rooms of the old route and their twins at the chains' ends.
+func lift_marks() -> Array:
+	var out: Array = []
+	for id: String in night.get("lifts", []):
+		if points.has("lift_%s_mid" % id):
+			out.append(points["lift_%s_mid" % id])
+	for piece: Dictionary in night.get("pieces", []):
+		if str(piece.get("kind", "")) == "lift" and points.has("%s_mid" % piece.id):
+			out.append(points["%s_mid" % piece.id])
+	return out
+
 ## The freight lifts of the old map that the night's seams use (HiveLayout.SEAMS): each a
 ## cabin off a room of the old route, its door a gate that the night opens (door "lift_<id>").
 func _lay_seam_lifts() -> void:

@@ -9536,6 +9536,8 @@ func _areas(game: Node3D) -> void:
 	var seams_failed: Array[String] = []
 	var sharks := 0
 	var kinds_of := _area_kinds(areas)
+	var shown: Array[String] = []
+	var unshown: Array[String] = []
 	for index in range(chains.size()):
 		var chain: Dictionary = chains[index]
 		var members: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.chain) == index)
@@ -9575,6 +9577,8 @@ func _areas(game: Node3D) -> void:
 			put.call(map.points["lift_%s_mid" % chain.out])
 			await _idle_frames()
 			var riding: bool = str(run.ride.get("phase", "")) == "ride" and not map.door_open("lift_%s" % chain.out)
+			# (The cabin shows the floors on its way, and the map in the corner shows the lift.)
+			riding = riding and is_instance_valid(run.ride_fx) and (run.ride.fx.sign as Label3D).text.begins_with("UG ") and game.hud.minimap.marks().any(func(mark: Dictionary) -> bool: return str(mark.shape) == "lift")
 			run.ride.left = 0.01
 			await _idle_frames()
 			var twin: Rect2 = map.room_of["%s_kabine" % head.id].outer
@@ -9612,10 +9616,22 @@ func _areas(game: Node3D) -> void:
 			put.call(map.points["%s_entry" % piece.id])
 			await _idle_frames()
 			var shut_before: bool = not map.door_open("%s_out" % piece.id)
+			# (Its card: the area's name and sector, then what is to be done.)
+			var carded: bool = game.hud.banner_label.text.contains("SEKTOR %s" % HiveAreaRun.sector(piece)) and game.hud.detail_label.text != ""
+			var looks := false
 			match kind:
 				"collect":
+					var things: Array = run.task.get("items", [])
+					looks = not things.is_empty() and things.all(func(entry: Dictionary) -> bool: return is_instance_valid(entry.node) and is_instance_valid(entry.base))
 					for spot_index: int in event.items:
 						put.call(origin + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
+						await _idle_frames()
+						hive.use()
+						await _idle_frames()
+					# (What was picked up is gone; the desk, the locker or the shelf stays.)
+					looks = looks and things.all(func(entry: Dictionary) -> bool: return not is_instance_valid(entry.node) and is_instance_valid(entry.base))
+					if bool(run.task.get("slot", false)):
+						put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 						await _idle_frames()
 						hive.use()
 						await _idle_frames()
@@ -9625,13 +9641,18 @@ func _areas(game: Node3D) -> void:
 						await _idle_frames()
 						hive.use()
 						await _idle_frames()
+						# (Its wheel turns or its lever goes up, its lamp goes green.)
+						looks = not run.props.turning.is_empty()
 					hive.progress = 0.99999
 					await _idle_frames()
 				"hack":
 					put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 					await _idle_frames()
+					var locked_screen: bool = not run.props.screen.is_empty() and (run.props.screen.line as Label3D).text == "GESPERRT"
 					hive.use()
+					hive.progress = 0.5
 					await _idle_frames()
+					looks = locked_screen and (run.props.screen.line as Label3D).text.begins_with("ÜBERBRÜCKUNG") and (run.props.screen.fill as Node3D).scale.x > 0.4
 					hive.progress = 0.99999
 					await _idle_frames()
 				"hold", "lockdown":
@@ -9639,9 +9660,16 @@ func _areas(game: Node3D) -> void:
 					await _idle_frames()
 					if kind == "lockdown" and map.door_open("%s_in" % piece.id):
 						failed.append("%s: the lockdown left the way in open" % piece.def)
+					hive.progress = 0.5
+					await _idle_frames()
+					# (Half the ring is lit; in a lockdown the red lights turn and the shutter is down.)
+					looks = run.props.lit_cells() >= AreaProps.CELLS / 2 - 1 and run.props.lit_cells() <= AreaProps.CELLS / 2 + 1
+					if kind == "lockdown":
+						looks = looks and run.props.beacons.size() >= 2 and bool(run.props.beacons[0].on) and not run.props.shutters.is_empty() and bool(run.props.shutters[0].down)
 					hive.progress = 0.99999
 					await _idle_frames()
 				"clear":
+					looks = true
 					await _idle_frames()
 					for guard in hive.guards:
 						if is_instance_valid(guard) and not (guard as Infected).dead:
@@ -9649,6 +9677,10 @@ func _areas(game: Node3D) -> void:
 					if not run.task.is_empty():
 						run.task.time = 5.0
 					await _idle_frames()
+			if carded and looks:
+				shown.append(kind)
+			else:
+				unshown.append("%s:%s (card %s, things %s)" % [piece.def, kind, str(carded), str(looks)])
 			if hive.stage == "a%d_out" % area and shut_before and map.door_open("%s_out" % piece.id):
 				done_kinds.append("%s:%s" % [piece.def, kind])
 			else:
@@ -9694,6 +9726,43 @@ func _areas(game: Node3D) -> void:
 		kinds_done[entry.get_slice(":", 1)] = true
 	expect(failed.is_empty() and done_kinds.size() == areas.size() and kinds_done.size() == HiveLayout.OBJECTIVES.size(), "In every area the way out stays shut until its objective is done, and opens then: things found and picked up, places switched on, a door hacked open, a place held, a lockdown sat out, the guards felled (%s)%s" % [", ".join(PackedStringArray(done_kinds)), "" if failed.is_empty() else " - not: " + ", ".join(PackedStringArray(failed))])
 	expect(sharks >= 2 and map.shark_waters.size() >= 1, "In the shark laboratory two sharks swim in the open water between its walkways (%d)" % sharks)
+	var kinds_shown := {}
+	for entry: String in shown:
+		kinds_shown[entry] = true
+	expect(unshown.is_empty() and kinds_shown.size() == HiveLayout.OBJECTIVES.size(), "Entering an area shows its card - its name, its sector, what is to be done - and its objective has things of its own: what is to be found lies on a desk, in a locker, a crate, on a shelf or in a fridge and is gone once picked up; a valve's wheel turns or a lever goes up; a terminal's screen goes from GESPERRT to the progress of the hack; the ring of a hold point lights up with the progress; a lockdown turns red lights and lets a shutter down (%s)%s" % [", ".join(PackedStringArray(kinds_shown.keys())), "" if unshown.is_empty() else " - not: " + ", ".join(PackedStringArray(unshown))])
+	# --- fuses: found, then slotted into the fuse box at the area's goal
+	var fused := false
+	for piece: Dictionary in areas:
+		var p_info := HiveLayout.info(str(piece.def))
+		var spots: Dictionary = p_info.get("spots", {})
+		var fuse_event := {}
+		for option: Dictionary in p_info.get("events", []):
+			if str(option.kind) == "collect" and AreaProps.look_of(option) == "fuse":
+				fuse_event = option.duplicate(true)
+		if fuse_event.is_empty() or not spots.has("goal") or (spots.get("items", []) as Array).size() < 2:
+			continue
+		fuse_event.items = range(mini(3, (spots.items as Array).size()))
+		piece.event = fuse_event
+		var area := int(piece.area_index)
+		hive._enter("a%d" % area)
+		_wipe_all(game)
+		map.set_port("%s_out" % piece.id, false, true)
+		put.call(map.points["%s_entry" % piece.id])
+		await _idle_frames()
+		for spot_index: int in fuse_event.items:
+			put.call((piece.origin as Vector3) + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
+			await _idle_frames()
+			hive.use()
+			await _idle_frames()
+		var waiting: bool = bool(run.task.get("slot", false)) and hive.stage == "a%d" % area and not map.door_open("%s_out" % piece.id) and hive.marker.distance_to((piece.origin as Vector3) + (spots.goal as Vector3)) < 0.5
+		put.call((piece.origin as Vector3) + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
+		await _idle_frames()
+		var asked: bool = hive.use_key == "g_slot" and hive.use_text.contains("Sicherungen")
+		hive.use()
+		await _idle_frames()
+		fused = waiting and asked and hive.stage == "a%d_out" % area and map.door_open("%s_out" % piece.id) and (run.props.fuse_box.slots as Array).all(func(fuse: Node3D) -> bool: return fuse.visible)
+		break
+	expect(fused, "Fuses that are found are not enough: the way out opens when they are slotted into the fuse box at the area's goal ([E] Sicherungen einsetzen), and they glow in it then")
 	# --- a defeat taken up again keeps its night: the same map, not built anew, the chains
 	# before the checkpoint behind the squad
 	var built := map

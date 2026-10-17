@@ -69,6 +69,12 @@ func now_and_then(kind: String, at: Vector3, volume: float, low: float, high: fl
 	var voice := _voice(kind, at, volume, reach, false, false)
 	chances.append({"voice": voice, "low": low, "high": high, "wait": dice.randf_range(0.4, high), "spread": spread})
 
+## The hum of a freight lift on its way (from its cabin, for `seconds`).
+func ride(at: Vector3, seconds: float) -> void:
+	var voice := _voice("deep", at, 2.0, 16.0, true, true)
+	voice.pitch_scale = 1.45
+	get_tree().create_timer(seconds).timeout.connect(voice.queue_free)
+
 ## A horn of the lockdown: it sounds while the alarm is on.
 func horn(at: Vector3, volume: float, reach: float = 44.0) -> void:
 	horns.append(_voice("klaxon", at, volume, reach, true, false))

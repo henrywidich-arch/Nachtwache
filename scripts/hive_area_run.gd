@@ -67,6 +67,11 @@ var passed: Dictionary = {}
 ## everybody in the cabin is moved), then (the stage that follows), chain, passes, phase,
 ## left}.
 var ride: Dictionary = {}
+## What is seen of a ride while it runs: the floor indicator in the cabin and the light
+## of the shaft that passes the gap of its door.
+var ride_fx: Node3D
+## The things the objective of the area that runs is done with (AreaProps).
+var props: AreaProps
 
 func _ready() -> void:
 	name = "Areale"
@@ -89,7 +94,12 @@ func setup() -> void:
 	redirects.clear()
 	passed.clear()
 	ride = {}
+	_end_ride_fx()
 	task = {}
+	if is_instance_valid(props):
+		props.queue_free()
+	props = AreaProps.new(director)
+	map.add_child(props)
 	on = HiveAreale.random_part(map)
 	var order: Array = HiveDirector.ORDER.duplicate()
 	var stages: Dictionary = HiveDirector.STAGES.duplicate()
@@ -416,12 +426,20 @@ func _run_ride(delta: float) -> bool:
 		ride.left = LIFT_RIDE
 		director.progress = 0.0
 		director.progress_text = "AUFZUG FÄHRT"
+		# A jolt as the brakes let go, the hum of the shaft, the floor indicator.
+		player.trauma = maxf(player.trauma, 0.32)
+		_begin_ride_fx(map.room_of[str(ride.room)])
 		return true
 	ride.left = float(ride.left) - delta
-	director.progress = clampf(1.0 - float(ride.left) / LIFT_RIDE, 0.0, 1.0)
-	player.trauma = maxf(player.trauma, 0.12)
+	var share := clampf(1.0 - float(ride.left) / LIFT_RIDE, 0.0, 1.0)
+	director.progress = share
+	player.trauma = maxf(player.trauma, 0.12 + 0.05 * absf(sin(share * 23.0)))
+	_run_ride_fx(share)
 	if float(ride.left) > 0.0:
 		return true
+	_end_ride_fx()
+	player.trauma = maxf(player.trauma, 0.38)
+	game.sounds.play_sound("beep")
 	var cabin: Rect2 = map.room_of[str(ride.room)].outer
 	for node in game.enemies.get_children():
 		var enemy := node as Infected
@@ -446,6 +464,66 @@ func _run_ride(delta: float) -> bool:
 	ride = {}
 	director._enter(then)
 	return true
+
+## The floors a height lies under the ground, as the indicator of a lift shows them.
+static func storey(y: float) -> int:
+	return maxi(1, int(round(-y / 4.2)))
+
+## In the cabin while it rides: the indicator over the door counts the floors from where
+## it starts to where it arrives, and a band of light from the shaft runs past the gap of
+## the door again and again (down when it goes down).
+func _begin_ride_fx(room: Dictionary) -> void:
+	_end_ride_fx()
+	var cabin: Rect2 = room.outer
+	var floor_y := float(room.y)
+	ride_fx = Node3D.new()
+	ride_fx.name = "Fahrt"
+	map.add_child(ride_fx)
+	ride_fx.global_position = Vector3(cabin.get_center().x, floor_y, cabin.get_center().y)
+	var sign_line := Label3D.new()
+	sign_line.font_size = 72
+	sign_line.pixel_size = 0.0035
+	sign_line.outline_size = 10
+	sign_line.outline_modulate = Color(0.1, 0.02, 0.0, 0.95)
+	sign_line.modulate = Color("ffb02e")
+	sign_line.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	sign_line.position = Vector3(0, 2.55, 0)
+	ride_fx.add_child(sign_line)
+	var band := OmniLight3D.new()
+	band.light_color = Color("ffe2b0")
+	band.light_energy = 1.4
+	band.omni_range = 2.6
+	band.shadow_enabled = false
+	ride_fx.add_child(band)
+	var from_y := floor_y
+	var to_y := floor_y + float((ride.shift as Vector3).y)
+	ride.fx = {"sign": sign_line, "band": band, "from": storey(from_y), "to": storey(to_y), "down": to_y <= from_y}
+	_run_ride_fx(0.0)
+	var hum: Node = map.get("sound")
+	if hum != null and hum.has_method("ride"):
+		hum.call("ride", ride_fx.global_position + Vector3(0, 1.5, 0), LIFT_RIDE + 0.3)
+
+func _run_ride_fx(share: float) -> void:
+	if not is_instance_valid(ride_fx) or not ride.has("fx"):
+		return
+	var fx: Dictionary = ride.fx
+	var from := int(fx.from)
+	var to := int(fx.to)
+	# (The same floor at both ends still passes one on the way: the shaft is no shorter.)
+	var steps := maxi(1, absi(to - from))
+	var at := from + int(floor(share * steps + 0.001)) * (1 if to >= from else -1)
+	if to == from:
+		at = from + (1 if share > 0.3 and share < 0.75 else 0)
+	(fx.sign as Label3D).text = "UG %d" % at
+	var passing := fmod(share * LIFT_RIDE / 0.55, 1.0)
+	var band: OmniLight3D = fx.band
+	band.position = Vector3(0, lerpf(3.6, -0.6, passing) if bool(fx.down) else lerpf(-0.6, 3.6, passing), 0)
+	band.light_energy = 1.4 * sin(passing * PI)
+
+func _end_ride_fx() -> void:
+	if is_instance_valid(ride_fx):
+		ride_fx.queue_free()
+	ride_fx = null
 
 ## The objective of an area.
 func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
@@ -482,6 +560,16 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 					best_gap = gap
 					best = at
 			if left == 0:
+				# Fuses are found to be slotted into the fuse box at the goal.
+				if bool(task.get("slot", false)):
+					director.marker = goal
+					if here.distance_to(goal) < 2.6:
+						if director.use_key != "g_slot":
+							director._use_spot(goal, "g_slot", str(event.get("slot_use", "[E] Sicherungen einsetzen")))
+					elif director.use_key == "g_slot":
+						director.use_at = Vector3.INF
+						director.use_key = ""
+					return
 				_done(piece)
 				return
 			director.marker = best if best != Vector3.INF else map.points.get("%s_middle" % piece.id, goal)
@@ -502,6 +590,9 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 			for place: Dictionary in task.places:
 				if bool(place.done):
 					continue
+				if not bool(place.known) and (float(task.time) > ALL_KNOWN_AFTER or (here.distance_to(place.pos) < SEEN_REACH and director._sees(here + Vector3(0, 1.6, 0), (place.pos as Vector3) + Vector3(0, 1.0, 0)))):
+					place.known = true
+					game.sounds.play_sound("beep", -8.0)
 				var gap := here.distance_to(place.pos)
 				if gap < best_gap:
 					best_gap = gap
@@ -563,73 +654,132 @@ func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
 			if left == 0 and float(task.time) > 3.0:
 				_done(piece)
 
-## The squad is in the area: its objective begins.
-func _begin_task(piece: Dictionary, event: Dictionary, spots: Dictionary, goal: Vector3) -> void:
-	var origin: Vector3 = piece.origin
+## The squad is in the area: its card on the screen (its name, its sector, what is to be
+## done), and what the objective is done with stands where it is done (AreaProps).
+func _begin_task(piece: Dictionary, event: Dictionary, _spots: Dictionary, _goal: Vector3) -> void:
+	var p_info := HiveLayout.info(str(piece.def))
+	props.clear()
+	var laid := lay_props(props, map, piece, event)
 	match str(task.kind):
 		"collect":
-			task.items = []
-			for index: int in event.get("items", []):
-				var at: Vector3 = origin + (spots.items[index] as Vector3)
-				task.items.append({"pos": at, "known": false, "taken": false, "node": _thing(at, Color("ffcf4a"))})
-			game.hud.announce(str(HiveLayout.info(str(piece.def)).label), "%s: %d Stück im Bereich verteilt." % [str(event.get("word", "Fundstück")), (task.items as Array).size()], 5)
+			task.items = laid.items
+			task.slot = bool(laid.slot)
 		"restore":
-			task.places = []
-			for index: int in event.get("switches", []):
-				var at: Vector3 = origin + (spots.switches[index] as Vector3)
-				task.places.append({"pos": at, "done": false, "node": _thing(at, Color("ff5a3a"), true)})
-		"hack":
-			pass
-		"clear":
-			pass
+			task.places = laid.places
+	game.hud.announce("%s  ·  SEKTOR %s" % [str(p_info.label), sector(piece)], str(laid.detail), 6)
+	game.sounds.play_sound("radio")
 	if str(task.kind) in ["restore", "collect", "clear"]:
 		for said: String in KIND_LINES.get(str(task.kind), []):
 			_say(said)
-	for said: String in (HiveLayout.info(str(piece.def)).get("lines", {}) as Dictionary).get("event", []):
+	for said: String in (p_info.get("lines", {}) as Dictionary).get("event", []):
 		_say(said)
+
+## Puts up what the objective `event` of an area is done with (AreaProps) and says what is
+## to be done: {items (the things to find, each {pos, known, taken, node, base}), places
+## (to switch on, each {pos, done, known, node}), slot (fuses go into a fuse box), detail
+## (the line under the area's card)}. The picture run of the areas uses it as well.
+static func lay_props(props: AreaProps, map: HiveMap, piece: Dictionary, event: Dictionary) -> Dictionary:
+	var origin: Vector3 = piece.origin
+	var spots: Dictionary = HiveLayout.info(str(piece.def)).get("spots", {})
+	var goal: Vector3 = origin + (spots.get("goal", Vector3.ZERO) as Vector3)
+	var middle := _middle_of(map, piece)
+	var look := AreaProps.look_of(event)
+	var laid := {"items": [], "places": [], "slot": false, "detail": str(event.get("goal", "Den Bereich durchqueren"))}
+	match str(event.get("kind", "")):
+		"collect":
+			var indices: Array = event.get("items", [])
+			for k in range(indices.size()):
+				var at: Vector3 = origin + (spots.items[int(indices[k])] as Vector3)
+				var made := props.item(look, at, _open_way(map, at, middle), k)
+				(laid.items as Array).append({"pos": at, "known": false, "taken": false, "node": made.item, "base": made.base})
+			laid.detail += "  ·  %d %s im Bereich verteilt" % [indices.size(), _plural(str(event.get("word", "Fundstück")), indices.size())]
+			# (Fuses go into the fuse box at the goal.)
+			if look == "fuse" and spots.has("goal"):
+				laid.slot = true
+				props.fuses_box(goal, _open_way(map, goal, middle), indices.size())
+				laid.detail += ", dann in den Sicherungskasten"
+		"restore":
+			for index: int in event.get("switches", []):
+				var at: Vector3 = origin + (spots.switches[index] as Vector3)
+				(laid.places as Array).append({"pos": at, "done": false, "known": false, "node": props.place(look, at, _open_way(map, at, middle))})
+		"hack":
+			props.terminal(goal, _open_way(map, goal, middle))
+			laid.detail += "  ·  am Terminal [E], dann in der Nähe bleiben"
+		"hold":
+			props.hold_point(goal)
+			laid.detail += "  ·  am Haltepunkt bleiben"
+		"lockdown":
+			props.hold_point(goal, true)
+			props.beacon(goal, 2.3)
+			var way_in: Dictionary = map.door_of.get("%s_in" % piece.id, {})
+			if not way_in.is_empty():
+				var pos: Vector3 = way_in.pos
+				var inward := Vector3(0, 0, signf(middle.z - pos.z)) if bool(way_in.along_x) else Vector3(signf(middle.x - pos.x), 0, 0)
+				props.shutter(way_in, inward)
+				props.beacon(pos + inward * 0.7 + Vector3(0, minf(float(way_in.height), 3.2) + 0.3, 0), 0.0)
+	return laid
+
+## The sector a piece lies in, as its card and the map name it: one letter for each chain
+## of the night, after the facility's own C.
+static func sector(piece: Dictionary) -> String:
+	return char(68 + int(piece.get("chain", 0)))
+
+## The middle of a piece, where its things face.
+static func _middle_of(map: HiveMap, piece: Dictionary) -> Vector3:
+	if map.points.has("%s_middle" % piece.id):
+		return map.points["%s_middle" % piece.id]
+	var size: Vector2 = piece.size
+	return (piece.origin as Vector3) + Vector3(size.x * 0.5, 0, size.y * 0.5)
+
+## Where a thing at `at` faces: the way from it that stays open longest on the floor (so
+## that a terminal or a valve is not turned to a wall), among equals the one nearest to
+## `middle` (the middle of its area).
+static func _open_way(map: HiveMap, at: Vector3, middle: Vector3) -> Vector3:
+	var level := map.level_of(at + Vector3(0, 0.3, 0))
+	if level < 0 or level >= map.navigation.size():
+		return middle
+	var grid: AStarGrid2D = map.navigation[level]
+	var to_middle := Vector2(middle.x - at.x, middle.z - at.z).normalized()
+	var best := to_middle
+	var best_score := -INF
+	for k in range(16):
+		var way := Vector2.from_angle(TAU * k / 16.0)
+		var reach := 0
+		for step in range(1, 9):
+			var spot := Vector2(at.x, at.z) + way * (step * 0.5)
+			var cell := Vector2i(roundi(spot.x / CabinMap.CELL), roundi(spot.y / CabinMap.CELL))
+			if not grid.is_in_boundsv(cell) or grid.is_point_solid(cell):
+				break
+			reach = step
+		var score := reach + way.dot(to_middle) * 0.9
+		if score > best_score:
+			best_score = score
+			best = way
+	return at + Vector3(best.x, 0, best.y) * 3.0
+
+## "3 Sicherungen", "1 Probe": the German plural of the things' word.
+static func _plural(word: String, count: int) -> String:
+	if count == 1:
+		return word
+	if word.ends_with("e"):
+		return word + "n"
+	if word.ends_with("ung") or word.ends_with("karte"):
+		return word + "en"
+	if word.ends_with("er"):
+		return word
+	return word + "e"
 
 ## The doors shut behind the squad: its way in, in red light - whoever of it is still
 ## outside is brought in.
 func _lock_in(piece: Dictionary) -> void:
 	map.set_port("%s_in" % piece.id, false)
 	map.set_zone_mood(str(piece.id), "alarm")
+	props.lockdown(true)
 	game.sounds.play_at("shutter_close", map.points.get("%s_in" % piece.id, Vector3.ZERO))
 	for mate: Teammate in game.team:
 		if str(map.piece_at(mate.global_position).get("id", "")) != str(piece.id):
 			mate.global_position = game.player.global_position + Vector3(randf_range(-1.5, 1.5), 0.05, randf_range(-1.5, 1.5))
 			mate.velocity = Vector3.ZERO
-
-## Something to find or to switch, where it stands: a glowing marker that the eye finds.
-func _thing(at: Vector3, color: Color, tall: bool = false) -> Node3D:
-	var node := Node3D.new()
-	node.name = "Objective"
-	map.add_child(node)
-	node.global_position = at
-	var box := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.36, 0.5, 0.36) if tall else Vector3(0.3, 0.16, 0.22)
-	box.mesh = mesh
-	box.material_override = map._glow_material(color, 3.0)
-	box.position = Vector3(0, 1.2 if tall else 0.95, 0)
-	box.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	node.add_child(box)
-	var stand := MeshInstance3D.new()
-	var foot := BoxMesh.new()
-	foot.size = Vector3(0.5, 0.95 if tall else 0.87, 0.5)
-	stand.mesh = foot
-	var steel := StandardMaterial3D.new()
-	steel.albedo_color = Color("2c3236")
-	steel.roughness = 0.6
-	stand.material_override = steel
-	stand.position = Vector3(0, (0.95 if tall else 0.87) * 0.5, 0)
-	node.add_child(stand)
-	var shine := OmniLight3D.new()
-	shine.light_color = color
-	shine.light_energy = 1.2
-	shine.omni_range = 3.0
-	shine.position = Vector3(0, 1.4, 0)
-	node.add_child(shine)
-	return node
 
 ## [E] was used for something of the random part.
 func use(key: String) -> bool:
@@ -646,36 +796,50 @@ func use(key: String) -> bool:
 					item.taken = true
 					if is_instance_valid(item.node):
 						(item.node as Node).queue_free()
+					game.sounds.play_sound("pickup")
 					var left := (task.items as Array).filter(func(entry: Dictionary) -> bool: return not bool(entry.taken)).size()
-					game.hud.announce(str(task.event.get("word", "Fundstück")).to_upper(), "Noch %d." % left if left > 0 else "Alle gefunden. Der Weg ist frei.", 3)
+					var word := str(task.event.get("word", "Fundstück"))
+					var after := "Alle gefunden. Der Weg ist frei."
+					if bool(task.get("slot", false)):
+						after = "Alle gefunden. Jetzt in den Sicherungskasten einsetzen."
+					game.hud.announce(word.to_upper(), ("Noch %d %s." % [left, _plural(word, left)]) if left > 0 else after, 3)
 					return true
+		"g_slot":
+			props.fuses_in()
+			game.sounds.play_sound("bolt")
+			director.use_at = Vector3.INF
+			director.use_key = ""
+			_done(piece_of.get(director.stage, {}))
+			return true
 		"g_switch":
 			for place: Dictionary in task.get("places", []):
 				if not bool(place.done) and (place.pos as Vector3).distance_to(game.player.global_position) < 3.0:
 					place.done = true
-					if is_instance_valid(place.node):
-						var box: MeshInstance3D = (place.node as Node).get_child(0)
-						box.material_override = map._glow_material(Color("5ee07a"), 3.0)
-						((place.node as Node).get_child(2) as OmniLight3D).light_color = Color("5ee07a")
+					place.known = true
+					props.place_done(place.node)
+					game.sounds.play_sound("bolt" if (place.node as Node3D).has_meta("wheel") else "click")
+					var left := (task.places as Array).filter(func(entry: Dictionary) -> bool: return not bool(entry.done)).size()
+					if left > 0:
+						game.hud.announce("EINGESCHALTET", "Noch %d." % left, 2)
 					return true
 		"g_hack":
 			task.state = "hacking"
 			director.progress = 0.0
 			director.progress_text = str(task.event.get("progress", "TÜR WIRD GEKNACKT"))
 			game.round_called = false
+			game.sounds.play_sound("glitch")
 			game.sounds.play_sound("wave")
 			for said: String in KIND_LINES.hack:
 				_say(said)
 			return true
 	return false
 
-## The objective is done: the way out opens.
+## The objective is done: what it was done with shows it, a sound says so, and the way out
+## opens.
 func _done(piece: Dictionary) -> void:
 	director.progress = -1.0
-	for list in [task.get("items", []), task.get("places", [])]:
-		for entry: Dictionary in list:
-			if is_instance_valid(entry.get("node")):
-				(entry.node as Node).queue_free()
+	props.done()
+	game.sounds.play_sound("clear")
 	task = {}
 	director._enter("%s_out" % director.stage)
 
@@ -754,10 +918,10 @@ func markers() -> Array:
 	var out: Array = []
 	for item: Dictionary in task.get("items", []):
 		if bool(item.known) and not bool(item.taken) and (item.pos as Vector3) != director.marker:
-			out.append({"pos": (item.pos as Vector3) + Vector3(0, 1.4, 0), "text": str(task.event.get("word", "")).to_upper(), "side": true})
+			out.append({"pos": (item.pos as Vector3) + Vector3(0, 1.4, 0), "text": str(task.event.get("word", "")).to_upper(), "side": true, "objective": true})
 	for place: Dictionary in task.get("places", []):
-		if not bool(place.done) and (place.pos as Vector3) != director.marker:
-			out.append({"pos": (place.pos as Vector3) + Vector3(0, 1.4, 0), "text": "SCHALTER", "side": true})
+		if bool(place.known) and not bool(place.done) and (place.pos as Vector3) != director.marker:
+			out.append({"pos": (place.pos as Vector3) + Vector3(0, 1.4, 0), "text": "SCHALTER", "side": true, "objective": true})
 	return out
 
 ## How much sooner they come, and how many more may be alive, while an objective runs.
@@ -776,3 +940,7 @@ func clear_things() -> void:
 			if is_instance_valid(entry.get("node")):
 				(entry.node as Node).queue_free()
 	task = {}
+	ride = {}
+	_end_ride_fx()
+	if is_instance_valid(props):
+		props.clear()
