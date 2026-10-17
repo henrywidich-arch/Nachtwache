@@ -418,6 +418,9 @@ func _ready() -> void:
 	elif "--bot-check" in args:
 		check_mode = true
 		call_deferred("_run_bot_check")
+	elif "--squad-check" in args:
+		check_mode = true
+		call_deferred("_run_squad_check")
 	elif "--team-check" in args:
 		check_mode = true
 		call_deferred("_run_team_check")
@@ -2451,6 +2454,12 @@ func _run_crusher_ttk() -> void:
 	var runner = load("res://scripts/verification.gd").new()
 	add_child(runner)
 	await runner.crusher_ttk(self)
+
+## How the squad keeps up across levels (scripts/squad_check.gd).
+func _run_squad_check() -> void:
+	var runner = load("res://scripts/squad_check.gd").new()
+	add_child(runner)
+	await runner.run(self)
 
 func _run_bot_check() -> void:
 	# A scripted survivor plays the real match loop at high speed and reports problems.
