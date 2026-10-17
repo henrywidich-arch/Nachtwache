@@ -36,6 +36,8 @@ const LOCK_SECONDS := 5.0
 const CRASH_AT := 9.5
 ## Seconds a ride of a freight lift of the seams lasts.
 const LIFT_RIDE := 3.0
+## Seconds a freight lift waits with the survivor in it for the rest of the squad.
+const BOARD_SECONDS := 6.0
 ## Lines for each kind of objective, said when it begins (cues that exist in Radio).
 const KIND_LINES := {
 	"lockdown": ["line:m2_n_lock", "line:m2_lockdown", "talk:m2_locked"],
@@ -413,7 +415,27 @@ func _run_ride(delta: float) -> bool:
 	if str(ride.phase) == "wait":
 		var room := map.room_at(here)
 		if room.is_empty() or str(room.id) != str(ride.room):
+			ride.board_left = BOARD_SECONDS
+			ride.boarding = false
+			if director.progress_text == "WARTE AUF DAS TEAM":
+				director.progress = -1.0
 			return false
+		# He stands in the cabin: it waits for the squad to come in too (BOARD_SECONDS at most;
+		# whoever is not in by then is brought along).
+		var cabin: Rect2 = map.room_of[str(ride.room)].outer
+		var outside := 0
+		for mate: Teammate in game.team:
+			if not mate.down and not cabin.grow(-0.15).has_point(Vector2(mate.global_position.x, mate.global_position.z)):
+				outside += 1
+		ride.board_left = float(ride.get("board_left", BOARD_SECONDS)) - delta
+		if outside > 0 and float(ride.board_left) > 0.0:
+			if not bool(ride.get("boarding", false)):
+				ride.boarding = true
+				game.hud.announce("LASTENAUFZUG", "Wartet auf das Team …", 2)
+			director.progress_text = "WARTE AUF DAS TEAM"
+			director.progress = clampf(1.0 - float(ride.board_left) / BOARD_SECONDS, 0.0, 1.0)
+			return true
+		ride.boarding = false
 		map.set_door(str(ride.door), false)
 		game.sounds.play_at("shutter_close", here)
 		game.hud.announce("LASTENAUFZUG", "Der Aufzug fährt …", 3)
@@ -982,3 +1004,10 @@ func clear_things() -> void:
 	_end_ride_fx()
 	if is_instance_valid(props):
 		props.clear()
+
+## The cabin of a freight lift that waits with the survivor in it for the squad to come in
+## (Teammate makes for it then); Rect2() when there is none.
+func boarding() -> Rect2:
+	if ride.is_empty() or not bool(ride.get("boarding", false)) or not map.room_of.has(str(ride.room)):
+		return Rect2()
+	return map.room_of[str(ride.room)].outer

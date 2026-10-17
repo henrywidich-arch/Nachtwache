@@ -1176,6 +1176,7 @@ func run(game: Node3D) -> void:
 	await _sandbox(game)
 	await _hive(game)
 	await _areas(game)
+	await _squad_levels(game)
 	await _voices(game)
 	game.sounds.stop_all()
 	await wait(0.2)
@@ -10737,3 +10738,228 @@ func _skull_skin(body: ProwlerVisual) -> Array[Vector3]:
 				far = point
 		out.append(middle.lerp(far, 0.5))
 	return out
+
+# ---------------------------------------------------------------- the squad across levels
+
+## The squad across levels (after v0.63: "vor allem mit dem Folgen haben die dann
+## Probleme ... im Sezierlabor"). In the dissection laboratory the survivor goes from its
+## pit up to the hall and the gallery and down again, and every time he stops both
+## companions are with him on his floor; over the lip at the head of the pit's flight a
+## companion's body steps up by itself; a freight lift waits until the squad is in; a
+## companion cut off from him turns up near him, but never where he sees it.
+## (The survivor is walked along the path finder's ways, as scripts/squad_check.gd walks
+## him, which measures the same in every place with several levels.)
+func _squad_levels(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var profile: Profile = game.profile
+	var kept_mode: String = profile.mode
+	var kept_mission: int = profile.mission
+	profile.mode = "story"
+	profile.mission = 2
+	game.team_enabled = true
+	hive.seed_wanted = -4
+	hive.night = {}
+	hive.night_fresh = false
+	hive.resume_at = "labs"
+	game.start_run()
+	await _idle_frames()
+	var map := game.cabin as HiveMap
+	var helper = load("res://scripts/squad_check.gd").new()
+	add_child(helper)
+	helper.game = game
+	helper.map = map
+	helper.player = player
+	helper.mates = game.team.duplicate()
+	for mate: Teammate in helper.mates:
+		helper.stats[mate.label] = helper._fresh()
+	hive.set_physics_process(false)
+	hive.prowl.end()
+	hive.prowl.set_process(false)
+	player.set_physics_process(false)
+	for id in map.areas:
+		map.unlock(str(id), true)
+	for door in map.doors:
+		if str(door.kind) == "script":
+			map.set_door(str(door.name), true, true)
+	for name in map.areal_signs:
+		map.set_port(str(name), true, true)
+	Engine.time_scale = 4.0
+	# --- the dissection laboratory, from the pit to the gallery and back
+	var lab: Dictionary = {}
+	for piece: Dictionary in map.night.pieces:
+		if str(piece.def) == "sezierlabor":
+			lab = piece
+	var spots: Array = helper._piece_spots(lab) if not lab.is_empty() else []
+	var heights := {}
+	for spot: Vector3 in spots:
+		heights[snappedf(spot.y, 0.1)] = true
+	var with_him := 0
+	var legs := 0
+	var lost: Array[String] = []
+	if spots.size() >= 4:
+		helper._put_all(spots[0])
+		for mate: Teammate in helper.mates:
+			mate.order = "follow"
+		await helper._wait_for(2.0)
+		for k in range(1, spots.size()):
+			await helper._walk_to(spots[k])
+			legs += 1
+			var spent := 0.0
+			var near_all := false
+			while spent < 15.0 and not near_all:
+				await get_tree().physics_frame
+				spent += get_physics_process_delta_time()
+				helper._watch(get_physics_process_delta_time())
+				near_all = helper.mates.all(func(mate: Teammate) -> bool: return helper._near(mate))
+			if near_all:
+				with_him += 1
+			else:
+				var away: Array[String] = []
+				for mate: Teammate in helper.mates:
+					if not helper._near(mate):
+						away.append("%s at %s" % [mate.label, str(mate.global_position.snapped(Vector3.ONE * 0.1))])
+				lost.append("%s (%s)" % [str((spots[k] as Vector3).snapped(Vector3.ONE * 0.1)), ", ".join(PackedStringArray(away))])
+	var seen_jumps := 0
+	for mate: Teammate in helper.mates:
+		seen_jumps += int(helper.stats[mate.label].seen)
+	expect(legs >= 8 and heights.size() >= 3 and with_him == legs and seen_jumps == 0, "In the dissection laboratory the companions follow the survivor over all its heights - the pit, the hall, the gallery - and are with him on his floor every time he stops (%d of %d stops, %d heights)%s" % [with_him, legs, heights.size(), "" if lost.is_empty() else " - not at: " + ", ".join(PackedStringArray(lost.slice(0, 4)))])
+	# --- the lip at the head of the pit's flight: a companion's body gets over it by itself
+	var climbed := [false, false]
+	if not lab.is_empty():
+		var nearest := -1
+		var best := INF
+		var pit_foot: Vector3 = (lab.origin as Vector3) + Vector3(24.2, -8.4, 26.2)
+		for index in range(map.stairs.size()):
+			var gap: float = (map.stairs[index].foot as Vector3).distance_to(pit_foot)
+			if gap < best:
+				best = gap
+				nearest = index
+		for k in range(2):
+			var body := CharacterBody3D.new()
+			body.collision_layer = 0
+			body.collision_mask = 1 | 4 | 16
+			body.floor_snap_length = 0.3
+			var capsule := CapsuleShape3D.new()
+			capsule.radius = 0.3
+			capsule.height = 1.75
+			var shape := CollisionShape3D.new()
+			shape.shape = capsule
+			shape.position.y = 0.88
+			body.add_child(shape)
+			map.add_child(body)
+			var route: PackedVector3Array = map.stairs[nearest].points
+			body.global_position = route[0] + Vector3(0, 0.05, 0)
+			var at := 1
+			var frames := 0
+			while at < route.size() and frames < 900:
+				await get_tree().physics_frame
+				frames += 1
+				var to := route[at] - body.global_position
+				if Vector2(to.x, to.z).length() < 0.35:
+					at += 1
+					continue
+				var dir := Vector3(to.x, 0, to.z).normalized()
+				body.velocity = Vector3(dir.x * 4.6, 0.0 if body.is_on_floor() else body.velocity.y - 0.37, dir.z * 4.6)
+				body.move_and_slide()
+				if k == 1:
+					Teammate.step_up(body, dir)
+			climbed[k] = at >= route.size()
+			body.queue_free()
+	expect(not climbed[0] and climbed[1], "At the head of the pit's flight in the dissection laboratory the floor's edge stands over the steps: a body of a companion's size does not get over it by its round foot alone, and steps up onto it by itself (without: %s, with: %s)" % ["over" if climbed[0] else "stuck", "over" if climbed[1] else "stuck"])
+	# --- a freight lift waits for the squad: both walk in before its door shuts
+	var boarded := ""
+	var lift_note := ""
+	var chain_index := -1
+	for k in range((map.night.chains as Array).size()):
+		if str(map.night.chains[k].out) != "":
+			chain_index = k
+			break
+	if chain_index >= 0:
+		var id := str(map.night.chains[chain_index].out)
+		var mid: Vector3 = map.points["lift_%s_mid" % id]
+		var out: Vector2 = HiveCore.OUT[int(HiveLayout.LIFTS[id].door)]
+		var cell := map.nearest_cell(mid + Vector3(out.x, 0, out.y) * 9.0, map.level_of(mid + Vector3(0, 0.3, 0)))
+		helper._put_all(Vector3(cell.x * CabinMap.CELL, mid.y, cell.y * CabinMap.CELL))
+		await helper._wait_for(1.5)
+		var run: HiveAreaRun = hive.run
+		hive.stage = "c%d_lift" % chain_index
+		run.enter("c%d_lift" % chain_index)
+		await helper._walk_to(mid)
+		var cabin: Rect2 = map.room_of["lift_%s" % id].outer
+		var spent := 0.0
+		var inside := 0
+		var waited := false
+		while not run.ride.is_empty() and str(run.ride.get("phase", "")) == "wait" and spent < 20.0:
+			inside = 0
+			for mate: Teammate in helper.mates:
+				if cabin.grow(0.3).has_point(Vector2(mate.global_position.x, mate.global_position.z)):
+					inside += 1
+			waited = waited or bool(run.ride.get("boarding", false))
+			run.update(get_physics_process_delta_time())
+			await get_tree().physics_frame
+			spent += get_physics_process_delta_time()
+			helper._watch(get_physics_process_delta_time())
+		# (Whether it had to wait: they may have come in with him.)
+		if str(run.ride.get("phase", "")) == "ride" and inside == helper.mates.size():
+			boarded = "%s, %.1f s%s" % [id, spent, ", it waited for them" if waited else ", they came in with him"]
+		else:
+			lift_note = "phase %s, %d of %d in, waited %s, %.1f s, down %s" % [str(run.ride.get("phase", "-")), inside, helper.mates.size(), str(waited), spent, str(helper.mates.map(func(mate: Teammate) -> bool: return mate.down))]
+		if not run.ride.is_empty():
+			run.ride.left = 0.01
+			run.update(0.02)
+	expect(boarded != "", "A freight lift with the survivor in it waits for the squad (Wartet auf das Team): both companions walk into the cabin before its door shuts (%s)" % (boarded if boarded != "" else lift_note))
+	# --- far behind: it is not put next to him while he looks its way; when he turns away
+	# it turns up near him, behind him, where he does not see it. (It is held where it is
+	# meanwhile - only its way of coming back, Teammate._rejoin, runs.)
+	var hidden_return := false
+	var stayed_while_seen := false
+	var mate0: Teammate = helper.mates[0]
+	helper._put_all(map.points.terminal)
+	await helper._wait_for(1.0)
+	var here := player.global_position
+	var far_spot := Vector3.INF
+	var level := map.level_of(here + Vector3(0, 0.3, 0))
+	for angle_step in range(36):
+		var dir := Vector3.FORWARD.rotated(Vector3.UP, TAU * angle_step / 36.0)
+		for reach: float in [46.0, 43.0, 40.0]:
+			var cell := map.nearest_cell(here + dir * reach, level)
+			var spot := Vector3(cell.x * CabinMap.CELL, here.y, cell.y * CabinMap.CELL)
+			var query := PhysicsRayQueryParameters3D.create(here + Vector3(0, 1.6, 0), spot + Vector3(0, 1.0, 0), 1)
+			if spot.distance_to(here) > Teammate.LOST_REACH + 1.0 and spot.distance_to(here + dir * reach) < 1.5 and get_viewport().world_3d.direct_space_state.intersect_ray(query).is_empty():
+				far_spot = spot
+				break
+		if far_spot != Vector3.INF:
+			break
+	if far_spot != Vector3.INF:
+		var look := far_spot - here
+		player.rotation.y = atan2(-look.x, -look.z)
+		mate0.set_physics_process(false)
+		mate0.global_position = far_spot + Vector3(0, 0.05, 0)
+		var spent := 0.0
+		while spent < 2.0:
+			await get_tree().physics_frame
+			spent += get_physics_process_delta_time()
+			mate0._rejoin(get_physics_process_delta_time(), player, true)
+		stayed_while_seen = mate0.global_position.distance_to(far_spot) < 0.5
+		player.rotation.y += PI
+		spent = 0.0
+		while spent < 2.0 and mate0.global_position.distance_to(far_spot) < 4.0:
+			await get_tree().physics_frame
+			spent += get_physics_process_delta_time()
+			mate0._rejoin(get_physics_process_delta_time(), player, true)
+		hidden_return = mate0.global_position.distance_to(player.global_position) < 10.0 and not mate0._seen_by(player, mate0.global_position)
+		mate0.set_physics_process(true)
+	expect(far_spot != Vector3.INF and stayed_while_seen and hidden_return, "A companion left far behind (%.0f m) is not put next to the survivor while he looks its way; when he turns away it turns up near him, behind him, where he does not see it (in sight: %s, after he turned: %s)" % [far_spot.distance_to(here) if far_spot != Vector3.INF else 0.0, "it stayed" if stayed_while_seen else "it jumped", "behind him" if hidden_return else "not back"])
+	Engine.time_scale = 1.0
+	helper.queue_free()
+	hive.prowl.set_process(true)
+	hive.set_physics_process(true)
+	player.set_physics_process(true)
+	hive.seed_wanted = -2
+	hive.resume_at = ""
+	game.return_to_menu()
+	await _idle_frames()
+	game.team_enabled = false
+	profile.mode = kept_mode
+	profile.mission = kept_mission

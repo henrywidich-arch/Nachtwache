@@ -150,6 +150,48 @@ var tending: Teammate
 ## Seconds it is still strengthened (a heal field has put it back on its feet): it takes
 ## less and its shots do more, see HealField.
 var buff_left := 0.0
+## Where it stands while it follows (see _post_near), worked out now and then.
+var post := Vector3.INF
+var post_left := 0.0
+## Since how long it has had no way to where it wants to go or has not got on along it (see
+## _rejoin), and where it stood when that was last measured.
+var lost_for := 0.0
+var lost_check := 0.0
+var lost_from := Vector3.INF
+## Waiting on a flight for the one ahead of it to get on.
+var queued_for := 0.0
+
+## Seconds it may be cut off from the survivor (no way, or no getting on) before it turns
+## up near him by itself - where he does not see it (see _rejoin).
+const RECOVER_AFTER := 4.0
+## A companion that is farther than this from him is put near him at once, out of his sight.
+const LOST_REACH := 38.0
+
+## The highest lip a companion steps up onto by itself (see step_up).
+const STEP := 0.32
+
+## A lip the round foot of a body's capsule does not get over by itself - the edge of a
+## floor over the head of a flight, a sill in a doorway - while it moves along `dir`: it is
+## blocked going straight on, but would not be STEP higher, and there is floor to stand on
+## over there (never a step out over an edge). Then it is lifted onto it. Called after
+## move_and_slide; true if it stepped.
+static func step_up(body: CharacterBody3D, dir: Vector3) -> bool:
+	if dir.length() < 0.1 or not body.is_on_wall():
+		return false
+	var ahead := Vector3(dir.x, 0, dir.z).normalized() * 0.3
+	if not body.test_move(body.global_transform, ahead):
+		return false
+	var raised := body.global_transform.translated(Vector3.UP * STEP)
+	if body.test_move(raised, ahead):
+		return false
+	var from := body.global_position + ahead * 1.5 + Vector3.UP * (STEP + 0.4)
+	var query := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * (STEP + 0.6), body.collision_mask)
+	var ground := body.get_world_3d().direct_space_state.intersect_ray(query)
+	if ground.is_empty() or (ground.position as Vector3).y < body.global_position.y - 0.05 or (ground.position as Vector3).y > body.global_position.y + STEP + 0.02:
+		return false
+	body.global_position = Vector3(body.global_position.x + ahead.x * 0.5, (ground.position as Vector3).y + 0.02, body.global_position.z + ahead.z * 0.5)
+	body.velocity.y = 0.0
+	return true
 
 func _ready() -> void:
 	# The player's layer: bullets of the squad pass through, the infected bump into it.
@@ -422,6 +464,77 @@ func _awake() -> void:
 			game.bark(self, look, "molotov" if bottle else "frag")
 			game.hud.kill_feed("%s  ·  %s" % [label, "Molotow" if bottle else "Granate"], 0, false, true)
 
+## Where it stands while it follows: its place in the squad beside the survivor (slot) -
+## unless that place lies where nobody stands on his floor (over a pit, beyond a railing or
+## a wall, off the edge of a gallery): then just behind him, or he himself. On a map with
+## several floors the place at his side is often no place at all, and a companion that
+## made for it went to the wrong level or stood at a railing.
+func _post_near(player: Survivor) -> Vector3:
+	var turn := Basis(Vector3.UP, player.rotation.y)
+	var here := player.global_position
+	var map: CabinMap = game.cabin
+	var level := map.level_of(here + Vector3(0, 0.3, 0))
+	for wanted: Vector3 in [here + turn * slot, here + turn * Vector3(signf(slot.x) * 0.7, 0, 1.9)]:
+		var cell := map.nearest_cell(wanted, level)
+		var spot := Vector3(cell.x * CabinMap.CELL, here.y, cell.y * CabinMap.CELL)
+		if Vector2(spot.x - wanted.x, spot.z - wanted.z).length() < 0.9 and _clear_between(here, spot):
+			return spot
+	return here
+
+## Nothing solid (a wall, a railing) between two places on one floor, at knee height.
+func _clear_between(a: Vector3, b: Vector3) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(a + Vector3(0, 0.5, 0), b + Vector3(0, 0.5, 0), 1 | 16)
+	query.exclude = [get_rid()]
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+## Whether the survivor could see a place now: ahead of him (within his field of view) and
+## nothing in between.
+func _seen_by(player: Survivor, at: Vector3) -> bool:
+	var eye_at := player.global_position + Vector3(0, 1.6, 0)
+	var to := at + Vector3(0, 1.0, 0) - eye_at
+	var ahead := Vector3(-sin(player.rotation.y), 0, -cos(player.rotation.y))
+	if to.length() > 60.0 or Vector3(to.x, 0, to.z).normalized().dot(ahead) < 0.25:
+		return false
+	var query := PhysicsRayQueryParameters3D.create(eye_at, at + Vector3(0, 1.0, 0), 1)
+	return get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+
+## A place near the survivor on his floor, behind him or round a corner, that he does not
+## see and that he could walk to from where he is: where a companion that has lost him
+## turns up. INF if there is none.
+func _behind_unseen(player: Survivor) -> Vector3:
+	var map: CabinMap = game.cabin
+	var here := player.global_position
+	var level := map.level_of(here + Vector3(0, 0.3, 0))
+	var turn := Basis(Vector3.UP, player.rotation.y)
+	for reach in [3.0, 4.5, 6.0, 8.0]:
+		for side in [0.0, signf(slot.x), -signf(slot.x)]:
+			var wanted := here + turn * Vector3(side * reach * 0.6, 0, reach)
+			var cell := map.nearest_cell(wanted, level)
+			var spot := Vector3(cell.x * CabinMap.CELL, here.y, cell.y * CabinMap.CELL)
+			if Vector2(spot.x - wanted.x, spot.z - wanted.z).length() > 1.2 or _seen_by(player, spot):
+				continue
+			var way := map.path_between(here, spot)
+			if way.is_empty() or way.size() * CabinMap.CELL > reach * 2.5:
+				continue
+			for other in game.team:
+				if other != self and other.global_position.distance_to(spot) < 0.8:
+					spot = Vector3.INF
+					break
+			if spot != Vector3.INF:
+				return spot + Vector3(0, 0.05, 0)
+	return Vector3.INF
+
+## Whether it stands on a flight of stairs (where it neither steps aside nor overtakes).
+func _on_stairs() -> bool:
+	return game.cabin.has_method("_on_flight") and int(game.cabin.call("_on_flight", global_position)[0]) >= 0
+
+## The cabin of a freight lift that the survivor is waiting in for the squad (mission
+## two, HiveAreaRun.boarding): Rect2() when there is none.
+func _boarding() -> Rect2:
+	if game.hive == null or not game.hive.on or game.hive.run == null:
+		return Rect2()
+	return game.hive.run.boarding()
+
 ## Free roaming: where the fight is. Vector3.INF means "stay where you are".
 func _hunting_ground(player: Survivor, anchor: Vector3, threat: float) -> Vector3:
 	if target != null:
@@ -500,7 +613,11 @@ func _physics_process(delta: float) -> void:
 			game.squad_says(self, "horde", HORDE_PAUSE)
 		_awake()
 	var player: Survivor = game.player
-	var anchor: Vector3 = player.global_position + Basis(Vector3.UP, player.rotation.y) * slot
+	post_left -= delta
+	if post_left <= 0.0 or post == Vector3.INF:
+		post_left = 0.25
+		post = _post_near(player)
+	var anchor: Vector3 = post
 	var to_player := player.global_position - global_position
 	var player_gap := Vector2(to_player.x, to_player.z).length()
 	var other_floor := absf(to_player.y) > 1.2
@@ -566,6 +683,13 @@ func _physics_process(delta: float) -> void:
 		goal = _hunting_ground(player, anchor, threat)
 		travelling = goal != Vector3.INF
 		pace = RUN_SPEED if target == null else WALK_SPEED * 1.5
+	elif order != "hold" and _boarding() != Rect2():
+		# He waits in a freight lift for the squad: in with him, into its own corner.
+		var cabin := _boarding()
+		var corner := Vector3(cabin.get_center().x + signf(slot.x) * cabin.size.x * 0.25, player.global_position.y, cabin.get_center().y + cabin.size.y * 0.15 * signf(slot.z))
+		goal = corner
+		travelling = not cabin.grow(-0.45).has_point(Vector2(global_position.x, global_position.z)) or Vector2(corner.x - global_position.x, corner.z - global_position.z).length() > 0.8
+		pace = RUN_SPEED
 	elif player_gap < KEEP_AWAY and not other_floor:
 		# Never crowd the player: make room, towards its own side of the squad.
 		following = false
@@ -585,6 +709,9 @@ func _physics_process(delta: float) -> void:
 	if travelling:
 		if repath_left <= 0.0:
 			path = game.cabin.path_between(global_position, goal)
+			# (No way to its place beside him: then to him.)
+			if path.is_empty() and goal.distance_to(player.global_position) > 0.5 and (following or order == "free"):
+				path = game.cabin.path_between(global_position, player.global_position)
 			path_index = 1 if path.size() > 1 else 0
 			repath_left = 0.5
 		while path_index < path.size():
@@ -597,6 +724,23 @@ func _physics_process(delta: float) -> void:
 		var last := goal - global_position
 		if move == Vector3.ZERO and absf(last.y) < 1.2 and Vector2(last.x, last.z).length() > 0.4:
 			move = Vector3(last.x, 0, last.z).normalized()
+		# One behind the other: whoever of the squad is farther from where they are going waits
+		# while the other is right ahead of it (on a flight, in a doorway), instead of pushing
+		# into it - for a moment; then it goes round.
+		var waiting := false
+		if move != Vector3.ZERO and queued_for < 1.6:
+			for mate in game.team:
+				if mate == self or mate.down:
+					continue
+				var ahead: Vector3 = mate.global_position - global_position
+				if absf(ahead.y) > 1.5 or Vector2(ahead.x, ahead.z).length() > 1.2:
+					continue
+				var flat := Vector3(ahead.x, 0, ahead.z)
+				if flat.normalized().dot(move) > 0.5 and mate.global_position.distance_to(goal) < global_position.distance_to(goal):
+					waiting = true
+		queued_for = queued_for + delta if waiting else 0.0
+		if waiting:
+			move = Vector3.ZERO
 	elif move == Vector3.ZERO:
 		# Two squad members do not stand in each other's pocket either.
 		for mate in game.team:
@@ -620,8 +764,9 @@ func _physics_process(delta: float) -> void:
 		dodge_left = 0.6
 		dodge_side = -dodge_side
 		repath_left = 0.0
+	# (On a flight only a little: there a big step aside is a step into its railing.)
 	if dodge_left > 0.0 and pace > 0.5:
-		move = (move + Vector3(-move.z, 0, move.x) * dodge_side * 1.4).normalized()
+		move = (move + Vector3(-move.z, 0, move.x) * dodge_side * (0.5 if _on_stairs() else 1.4)).normalized()
 	# --- where to look, and whether to fire
 	# With nothing to shoot at and nowhere to go it keeps looking the way it looks. It
 	# does not turn with the player, who may want to walk around it and see it from the front.
@@ -656,12 +801,43 @@ func _physics_process(delta: float) -> void:
 	velocity.z = move.z * pace
 	velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
 	move_and_slide()
+	# Over a lip its round foot does not take (the edge of a floor at the head of a flight).
+	if pace > 0.5:
+		step_up(self, move)
 	visual.animate(delta, get_real_velocity(), target != null, firing)
-	# Lost or left far behind: catch up with the player in one go. Somebody who was sent
-	# off to see to something is neither.
-	if (job.is_empty() and global_position.distance_to(player.global_position) > 38.0) or global_position.y < game.cabin.abyss() + 2.0:
-		global_position = player.global_position + Basis(Vector3.UP, player.rotation.y) * (slot * 0.6)
-		velocity = Vector3.ZERO
+	_rejoin(delta, player, travelling and pace > 0.5)
+
+## Cut off from the survivor: no way to where it wants to go, or no getting on along it,
+## for RECOVER_AFTER seconds - or far behind him (LOST_REACH), or fallen into the deep. Then
+## it turns up near him by itself, but only where he does not see it arrive and does not
+## see it go (_behind_unseen). Somebody who was sent off to see to something is not lost.
+func _rejoin(delta: float, player: Survivor, wants: bool) -> void:
+	var fallen: bool = global_position.y < game.cabin.abyss() + 2.0
+	var far: bool = job.is_empty() and order != "hold" and global_position.distance_to(player.global_position) > LOST_REACH
+	lost_check -= delta
+	if lost_check <= 0.0:
+		lost_check = 1.0
+		var got_on := lost_from == Vector3.INF or global_position.distance_to(lost_from) > 0.6
+		lost_from = global_position
+		if wants and job.is_empty() and order != "hold" and (path.is_empty() or not got_on):
+			lost_for += 1.0
+		else:
+			lost_for = 0.0
+	if not fallen and not far and lost_for < RECOVER_AFTER:
+		return
+	if not fallen and _seen_by(player, global_position):
+		return
+	var spot := _behind_unseen(player)
+	if spot == Vector3.INF:
+		if not fallen:
+			return
+		spot = player.global_position + Basis(Vector3.UP, player.rotation.y) * (slot * 0.6)
+	global_position = spot
+	velocity = Vector3.ZERO
+	path = PackedVector3Array()
+	repath_left = 0.0
+	lost_for = 0.0
+	lost_from = Vector3.INF
 
 func _shoot(aim_point: Vector3, moving: bool) -> void:
 	ammo -= 1
