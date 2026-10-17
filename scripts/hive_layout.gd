@@ -39,8 +39,45 @@ const START := Vector3(320.0, -9.6, 0.0)
 const WEST := 150.0
 ## Pieces that are not joined keep this far apart (metres, in the plan).
 const APART := 6.0
-## How many areas a night has: count -> weight.
-const COUNTS := {2: 3, 3: 5, 4: 3}
+## The old route of the facility after the ride is the night's spine; its SEAMS are the
+## places between two of its parts where a chain of areas can be put in. A chain leaves
+## part A through a freight lift (LIFTS: a cabin off a room of A; the squad rides it and
+## steps out of its twin at the head of the chain), goes through its areas and comes back
+## through the twin of a lift (or of the decontamination lock) into part B - the twin
+## stands at the end of the chain, the real one in B, and whoever is in the one when its
+## ride ends stands in the other. On a night with a crash the first chain begins in the
+## tunnel and comes out by lift in the terminal, where the train would have come in.
+##   from  the stage after which the chain begins ("" for the crash), to: the stage the
+##         squad goes on with in part B
+##   out   the lift it leaves A by ("" for the crash), in: the lift (or "decon") into B
+const SEAMS := {
+	"s0": {"from": "", "to": "terminal", "out": "", "in": "terminal_a"},
+	"s1": {"from": "terminal", "to": "admin", "out": "terminal_b", "in": "admin_w"},
+	"s2": {"from": "security", "to": "cafe", "out": "admin_o", "in": "cafe_s"},
+	"s3": {"from": "lockdown", "to": "atrium", "out": "cafe_n", "in": "atrium"},
+	"s4": {"from": "generator", "to": "labs", "out": "pump", "in": "decon"}
+}
+const SEAM_ORDER := ["s0", "s1", "s2", "s3", "s4"]
+## The freight lifts of the old map that the seams use (built only on a night that uses
+## them): the room of the old map it opens on, the cabin (a rectangle of the plan on the
+## facility's floor, CABIN square) and the side of the cabin its door is on. Each is where
+## a fake lift door or a sealed door of the old map was, or where nothing stood.
+const CABIN := 4.4
+const LIFTS := {
+	"terminal_a": {"room": "terminal", "rect": Rect2(40.0, -326.4, 4.4, 4.4), "door": HiveCore.WEST, "title": "LASTENAUFZUG  T-1"},
+	"terminal_b": {"room": "terminal", "rect": Rect2(40.0, -340.2, 4.4, 4.4), "door": HiveCore.WEST, "title": "LASTENAUFZUG  T-2"},
+	"admin_w": {"room": "ring_s", "rect": Rect2(-48.4, -367.2, 4.4, 4.4), "door": HiveCore.EAST, "title": "LASTENAUFZUG  V-1"},
+	"admin_o": {"room": "ring_s", "rect": Rect2(44.0, -367.2, 4.4, 4.4), "door": HiveCore.WEST, "title": "LASTENAUFZUG  V-2"},
+	"cafe_s": {"room": "cafeteria", "rect": Rect2(9.8, -405.0, 4.4, 4.4), "door": HiveCore.NORTH, "title": "LASTENAUFZUG  K-1"},
+	"cafe_n": {"room": "cafeteria", "rect": Rect2(13.8, -439.4, 4.4, 4.4), "door": HiveCore.SOUTH, "title": "LASTENAUFZUG  K-2"},
+	"atrium": {"room": "atrium", "rect": Rect2(11.8, -493.4, 4.4, 4.4), "door": HiveCore.SOUTH, "title": "AUFZUG  B3"},
+	"pump": {"room": "pump", "rect": Rect2(55.6, -495.4, 4.4, 4.4), "door": HiveCore.SOUTH, "title": "LASTENAUFZUG  P-1"}
+}
+const LIFT_DEF := "aufzug"
+## How many areas a night has in all its seams together: count -> weight.
+const AREA_COUNTS := {1: 2, 2: 5, 3: 4, 4: 2}
+## The chains of a night lie this far apart (each has floors of its own).
+const CHAIN_SPACING := 700.0
 ## How often a night tries to lay itself out before it falls back to a straight way.
 const ATTEMPTS := 60
 const STEP_TRIES := 24
@@ -63,7 +100,8 @@ const SCRIPTS := {
 	"treppenhaus": "res://scripts/areale/treppenhaus.gd",
 	"ankunft": "res://scripts/areale/ankunft.gd",
 	"absturz": "res://scripts/areale/absturz.gd",
-	"schleuse_ende": "res://scripts/areale/schleuse_ende.gd"
+	"schleuse_ende": "res://scripts/areale/schleuse_ende.gd",
+	"aufzug": "res://scripts/areale/aufzug.gd"
 }
 
 static var infos: Dictionary = {}
@@ -103,30 +141,138 @@ static func opposite(side: int) -> int:
 static func heading(side: int) -> Vector2:
 	return HiveCore.OUT[side]
 
-## The night of a seed.
+## The night of a seed: the old route as its spine, and chains of areas in some of its
+## seams (see SEAMS). On a night with a crash the first chain begins in the tunnel.
 static func plan(seed_value: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("hive-areale-%d" % seed_value)
-	var want := {}
-	var arrival: String = ARRIVALS[rng.randi() % ARRIVALS.size()]
-	var count := _weighted(rng, COUNTS)
+	var crash := rng.randf() < 0.5
 	var order := pool()
 	_shuffle(rng, order)
-	want = {"arrival": arrival, "count": mini(count, order.size()), "order": order}
+	var count := mini(_weighted(rng, AREA_COUNTS), order.size())
+	var per := seams_for(rng, crash, count)
 	for attempt in range(ATTEMPTS):
-		var night := _attempt(rng, want, seed_value)
+		var night := _night(rng, seed_value, crash, per, order, false)
 		if not night.is_empty():
 			night.tries = attempt + 1
 			return night
-	# What can always be laid: a straight way north, each area entered from the south.
-	var straight := _attempt(rng, want, seed_value, true)
-	straight.tries = ATTEMPTS + 1
-	return straight
+	# What can always be laid: corridors as straight as they can be.
+	for attempt in range(ATTEMPTS):
+		var night := _night(rng, seed_value, crash, per, order, true)
+		if not night.is_empty():
+			night.tries = ATTEMPTS + attempt + 1
+			return night
+	# (Never seen: the night without areas but the crash's.)
+	var least := {"s0": 1} if crash else {}
+	var bare := _night(rng, seed_value, crash, least, order, false)
+	bare.tries = ATTEMPTS * 2 + 1
+	return bare
+
+## How many areas each seam gets: the crash's always one, the others diced among the
+## seams of the old route, one each (two only where there are more areas than seams).
+static func seams_for(rng: RandomNumberGenerator, crash: bool, count: int) -> Dictionary:
+	var per := {}
+	var left := count
+	if crash:
+		per["s0"] = 1
+		left -= 1
+	var seams: Array = ["s1", "s2", "s3", "s4"]
+	_shuffle(rng, seams)
+	var k := 0
+	while left > 0:
+		var seam: String = seams[k % seams.size()]
+		per[seam] = int(per.get(seam, 0)) + 1
+		left -= 1
+		k += 1
+	return per
+
+## A night with a given share of areas per seam (`per`: seam -> count), for the checks and
+## the test room: nothing of it is diced but the corridors and the objectives.
+static func plan_with(seed_value: int, crash: bool, per: Dictionary) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("hive-areale-with-%d" % seed_value)
+	var order := pool()
+	for attempt in range(ATTEMPTS * 2):
+		var night := _night(rng, seed_value, crash, per, order, attempt >= ATTEMPTS)
+		if not night.is_empty():
+			night.tries = attempt + 1
+			night.key = "w%d_%s_%s" % [seed_value, "c" if crash else "t", str(per.keys())]
+			return night
+	return {}
+
+## A night with a chain in every seam, the crash first, and every area of the pool in it
+## (for the checks and the tools: --hive-layout=all, HiveDirector.seed_wanted -4).
+static func every_seam() -> Dictionary:
+	var per := {}
+	var seams: Array = ["s4", "s1", "s2", "s3", "s0"]
+	for k in range(maxi(pool().size(), seams.size())):
+		var seam: String = seams[k % seams.size()]
+		per[seam] = int(per.get(seam, 0)) + 1
+	var night := plan_with(1, true, per)
+	if not night.is_empty():
+		night.key = "all"
+	return night
+
+## One try at a night. {} if a chain got stuck.
+static func _night(rng: RandomNumberGenerator, seed_value: int, crash: bool, per: Dictionary, order: Array, straight: bool) -> Dictionary:
+	var pieces: Array = []
+	var links: Array = []
+	var chains: Array = []
+	var areas: Array[String] = []
+	var lifts: Array[String] = []
+	var avail: Array = order.duplicate()
+	for seam: String in SEAM_ORDER:
+		var count := int(per.get(seam, 0))
+		if count <= 0 or (seam == "s0" and not crash):
+			continue
+		var spec: Dictionary = SEAMS[seam]
+		var index := chains.size()
+		var at := Vector3(START.x + index * CHAIN_SPACING, BASE, START.z)
+		var want := {"chain": index, "count": count, "order": avail, "start_at": at}
+		if seam == "s0":
+			want.start_def = "absturz"
+		else:
+			want.start_def = LIFT_DEF
+			want.start_port = {"side": int(LIFTS[spec.out].door), "at": CABIN * 0.5, "y": 0.0, "room": "kabine", "role": "out"}
+			want.start_at = Vector3(at.x, BASE - LIFT, at.z)
+			lifts.append(str(spec.out))
+		if str(spec.in) == "decon":
+			want.end_def = END
+		else:
+			want.end_def = LIFT_DEF
+			want.end_side = int(LIFTS[spec.in].door)
+			lifts.append(str(spec.in))
+		var made := _chain(rng, want, pieces, straight)
+		if made.is_empty():
+			return {}
+		# (Which lift each twin stands for: its lettering is that one's.)
+		if str(spec.out) != "":
+			made.pieces[0].lift = str(spec.out)
+		if str(spec.in) != "decon":
+			made.pieces[made.pieces.size() - 1].lift = str(spec.in)
+		pieces.append_array(made.pieces)
+		links.append_array(made.links)
+		for def: String in made.areas:
+			areas.append(def)
+			avail.erase(def)
+		chains.append({
+			"seam": seam, "from": str(spec.from), "to": str(spec.to), "out": str(spec.out), "in": str(spec.in),
+			"first": str(made.pieces[0].id), "last": str(made.pieces[made.pieces.size() - 1].id), "areas": made.areas
+		})
+	var index := 0
+	for piece: Dictionary in pieces:
+		if str(piece.kind) == "area":
+			piece.area_index = index
+			index += 1
+	return {
+		"classic": false, "seed": seed_value, "key": "s%d" % seed_value, "crash": crash, "arrival": "absturz" if crash else "terminal",
+		"chains": chains, "areas": areas, "lifts": lifts, "pieces": pieces, "links": links, "checkpoint": -1, "tries": 0
+	}
 
 ## Every area and every transition in one night, for the test room and the checks: the
 ## crash and its emergency stair, all areas in the order of the pool, and between them
-## every kind of transition; beside it a second, short way from the arrival platform to
-## a lock of its own.
+## every kind of transition, to a lock like the decontamination lock; beside it a second,
+## short way from the arrival platform to the twin of a freight lift.
 static func showcase() -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4242
@@ -134,29 +280,25 @@ static func showcase() -> Dictionary:
 	var all := transitions()
 	for i in range(pool().size() + 1):
 		kinds.append(all[i % all.size()])
-	var want := {"arrival": "absturz", "count": pool().size(), "order": pool(), "kinds": kinds, "keep_order": true}
-	var night := {}
+	var want := {"chain": 0, "start_def": "absturz", "start_at": START, "count": pool().size(), "order": pool(), "kinds": kinds, "keep_order": true, "end_def": END}
+	var first := {}
 	for attempt in range(ATTEMPTS):
-		night = _attempt(rng, want, -1)
-		if not night.is_empty():
+		first = _chain(rng, want, [], attempt >= ATTEMPTS - 10)
+		if not first.is_empty():
 			break
-	if night.is_empty():
-		night = _attempt(rng, want, -1, true)
-	# The second way: the platform, a corridor, a lock.
-	var second := {"arrival": "ankunft", "count": 0, "order": [], "kinds": ["buerogang"], "keep_order": true, "start": START + Vector3(0, 0, 230.0), "first": night.pieces.size()}
-	var more := {}
+	var pieces: Array = first.pieces
+	var links: Array = first.links
+	var second := {"chain": 1, "start_def": "ankunft", "start_at": START + Vector3(0, 0, 230.0), "count": 0, "order": [], "kinds": ["buerogang"], "keep_order": true, "end_def": LIFT_DEF, "end_side": HiveCore.SOUTH}
 	for attempt in range(ATTEMPTS):
-		more = _attempt(rng, second, -1, attempt == ATTEMPTS - 1)
+		var more := _chain(rng, second, pieces, attempt >= ATTEMPTS - 10)
 		if not more.is_empty():
+			pieces.append_array(more.pieces)
+			links.append_array(more.links)
 			break
-	for piece: Dictionary in more.pieces:
-		piece.chain = 1
-		night.pieces.append(piece)
-	night.links.append_array(more.links)
-	night.key = "showcase"
-	night.showcase = true
-	night.checkpoint = -1
-	return night
+	return {
+		"classic": false, "seed": -1, "key": "showcase", "showcase": true, "crash": true, "arrival": "absturz", "chains": [],
+		"areas": first.areas, "lifts": [], "pieces": pieces, "links": links, "checkpoint": -1, "tries": 0
+	}
 
 static func _weighted(rng: RandomNumberGenerator, weights: Dictionary) -> int:
 	var total := 0
@@ -176,23 +318,28 @@ static func _shuffle(rng: RandomNumberGenerator, list: Array) -> void:
 		list[k] = list[other]
 		list[other] = swap
 
-# ---------------------------------------------------------------- laying a night out
+# ---------------------------------------------------------------- laying a chain out
 
-## One try at a night. Returns {} if it got stuck. `straight`: only the way that always
-## fits (every corridor straight on, every area entered from the south and left to the
-## north, no stairs).
-static func _attempt(rng: RandomNumberGenerator, want: Dictionary, seed_value: int, straight: bool = false) -> Dictionary:
-	var first := int(want.get("first", 0))
+## One try at a chain: its head (the crash, an arrival or the twin of a lift) with its way
+## out on `start_at`, `count` areas of `order`, each joined to the last by a transition,
+## and its end (the lock or the twin of a lift whose door is on `end_side`). `placed`: the
+## pieces of the night so far (nothing may lie on them). Returns {pieces, links, areas} or
+## {} if it got stuck. `straight`: corridors as straight as they can be (every area entered
+## from the south and left to the north, no stairs).
+static func _chain(rng: RandomNumberGenerator, want: Dictionary, placed: Array, straight: bool) -> Dictionary:
+	var all: Array = placed.duplicate()
 	var pieces: Array = []
 	var links: Array = []
-	var start: Vector3 = want.get("start", START)
-	# --- the arrival: its way out lies on START
-	var arrival := str(want.arrival)
-	var a_info := info(arrival)
-	var a_port: Dictionary = _ports(a_info, "out")[0]
-	var a_origin := start - Vector3(_port_xz(a_info, a_port).x, float(a_port.y), _port_xz(a_info, a_port).y)
-	var head := _piece(first + pieces.size(), arrival, a_info, a_origin, {}, a_port)
+	var start: Vector3 = want.start_at
+	var head_def := str(want.start_def)
+	var h_info := info(head_def)
+	var h_port: Dictionary = want.get("start_port", _ports(h_info, "out")[0])
+	var h_xz := _port_xz(h_info, h_port)
+	var h_origin := start - Vector3(h_xz.x, float(h_port.y), h_xz.y)
+	var head := _piece(all.size(), head_def, h_info, h_origin, {}, h_port)
+	head.chain = int(want.chain)
 	pieces.append(head)
+	all.append(head)
 	var order: Array = (want.order as Array).duplicate()
 	var count := int(want.count)
 	var kinds: Array = want.get("kinds", [])
@@ -205,18 +352,20 @@ static func _attempt(rng: RandomNumberGenerator, want: Dictionary, seed_value: i
 	var step := 0
 	while true:
 		var final := placed_areas >= count
-		var choices: Array = [END] if final else (order.slice(0, 1) if keep_order else order.duplicate())
+		var choices: Array = [str(want.end_def)] if final else (order.slice(0, 1) if keep_order else order.duplicate())
 		var done := false
 		for tries in range(STEP_TRIES):
 			if choices.is_empty():
 				break
 			var def: String = str(choices[0]) if keep_order or final else str(choices[rng.randi() % choices.size()])
 			var kind: String = str(kinds[step]) if step < kinds.size() else _pick_kind(rng, last_kind, stairs_used, straight)
-			var made := _join(rng, pieces, cursor, kind, def, first, straight)
+			var made := _join(rng, all, cursor, kind, def, 0, straight, int(want.get("end_side", -1)) if final else -1)
 			if made.is_empty():
 				continue
-			pieces.append(made.transition)
-			pieces.append(made.piece)
+			for entry: Dictionary in [made.transition, made.piece]:
+				entry.chain = int(want.chain)
+				pieces.append(entry)
+				all.append(entry)
 			links.append_array(made.links)
 			last_kind = kind
 			if kind == "treppenhaus":
@@ -226,7 +375,6 @@ static func _attempt(rng: RandomNumberGenerator, want: Dictionary, seed_value: i
 			if not final:
 				order.erase(def)
 				areas.append(def)
-				made.piece.area_index = placed_areas
 				placed_areas += 1
 			break
 		if not done:
@@ -234,11 +382,7 @@ static func _attempt(rng: RandomNumberGenerator, want: Dictionary, seed_value: i
 		step += 1
 		if final:
 			break
-	var key := "s%d" % seed_value if seed_value >= 0 else "showcase"
-	return {
-		"classic": false, "seed": seed_value, "key": key, "arrival": arrival, "areas": areas, "pieces": pieces, "links": links,
-		"checkpoint": int(areas.size() / 2) if areas.size() >= 3 else -1, "tries": 0
-	}
+	return {"pieces": pieces, "links": links, "areas": areas}
 
 static func _pick_kind(rng: RandomNumberGenerator, last: String, stairs_used: int, straight: bool) -> String:
 	var options: Array[String] = []
@@ -281,7 +425,9 @@ static func _piece(index: int, def: String, piece_info: Dictionary, origin: Vect
 ## Joins the next piece (`def`) to `cursor` through a transition of `kind`: the
 ## transition and the piece in their places and the doorways between them, or {} where
 ## nothing fits.
-static func _join(rng: RandomNumberGenerator, pieces: Array, cursor: Dictionary, kind: String, def: String, first: int, straight: bool) -> Dictionary:
+## (`in_side`: the side the next piece must be entered on - the twin of a lift, whose door
+## is where the real one's is - or -1.)
+static func _join(rng: RandomNumberGenerator, pieces: Array, cursor: Dictionary, kind: String, def: String, first: int, straight: bool, in_side: int = -1) -> Dictionary:
 	var cursor_info := info(str(cursor.def))
 	var next_info := info(def)
 	var t_info := info(kind)
@@ -297,18 +443,20 @@ static func _join(rng: RandomNumberGenerator, pieces: Array, cursor: Dictionary,
 	var out_port: Dictionary = outs[rng.randi() % outs.size()]
 	var from := AreaKit.port_spot(cursor.origin, cursor.size, out_port)
 	var s1 := int(out_port.side)
-	# Never back south: the way goes on north, east or west.
-	if s1 == HiveCore.SOUTH and not straight:
+	# Never back south out of an area: the way goes on north, east or west.
+	if s1 == HiveCore.SOUTH and not straight and str(cursor.kind) == "area":
 		return {}
 	var ins: Array = _ports(next_info, "in")
-	if straight:
+	if in_side >= 0:
+		ins = ins.filter(func(port: Dictionary) -> bool: return int(port.side) == in_side)
+	elif straight:
 		ins = ins.filter(func(port: Dictionary) -> bool: return int(port.side) == HiveCore.SOUTH)
 	if ins.is_empty():
 		return {}
 	var in_port: Dictionary = ins[rng.randi() % ins.size()]
 	var end_side := opposite(int(in_port.side))
 	var bend := end_side != s1
-	if bend and (straight or not bool(t_info.get("bends", true)) or end_side == opposite(s1)):
+	if bend and ((straight and in_side < 0 and str(cursor.kind) == "area") or not bool(t_info.get("bends", true)) or end_side == opposite(s1)):
 		return {}
 	# The height on the far side of the transition.
 	var rise := 0.0
@@ -575,11 +723,14 @@ static func describe(night: Dictionary) -> String:
 	if bool(night.get("classic", false)):
 		return "classic"
 	var parts: Array[String] = []
-	for piece: Dictionary in night.pieces:
-		if int(piece.get("chain", 0)) != 0:
-			continue
-		parts.append("%s@%d" % [str(piece.def), int(round(float((piece.origin as Vector3).y)))] if str(piece.kind) != "transition" else "(%s)" % str(piece.def))
-	return "seed=%d %s" % [int(night.seed), " ".join(PackedStringArray(parts))]
+	for index in range((night.get("chains", []) as Array).size()):
+		var chain: Dictionary = night.chains[index]
+		var names: Array[String] = []
+		for piece: Dictionary in night.pieces:
+			if int(piece.get("chain", 0)) == index:
+				names.append("%s@%d" % [str(piece.def), int(round(float((piece.origin as Vector3).y)))] if str(piece.kind) != "transition" else "(%s)" % str(piece.def))
+		parts.append("%s[%s > %s: %s]" % [str(chain.seam), str(chain.from) if str(chain.from) != "" else "crash", str(chain.to), " ".join(PackedStringArray(names))])
+	return "seed=%d %s %s" % [int(night.seed), "crash" if bool(night.get("crash", false)) else "train", " ".join(PackedStringArray(parts))]
 
 ## The problems of a night, as words (an empty list: it is a good one). Checks the plan
 ## only, not a map: pieces that lie on each other, a part too far west, heights out of
@@ -617,14 +768,34 @@ static func faults(night: Dictionary) -> Array[String]:
 					out.append("%s and %s lie on each other" % [str(first.id), str(second.id)])
 					break
 	# One way from the first piece of each chain to its last: every piece once, in order.
-	for chain in [0, 1]:
+	var most := 0
+	for piece: Dictionary in pieces:
+		most = maxi(most, int(piece.get("chain", 0)))
+	var chains: Array = night.get("chains", [])
+	for chain in range(most + 1):
 		var members: Array = pieces.filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == chain)
 		if members.is_empty():
 			continue
-		if str(members[0].kind) != "arrival":
-			out.append("chain %d does not begin with an arrival" % chain)
-		if str(members[members.size() - 1].def) != END:
-			out.append("chain %d does not end in the lock" % chain)
+		var head: Dictionary = members[0]
+		var tail: Dictionary = members[members.size() - 1]
+		if not str(head.kind) in ["arrival", "lift"]:
+			out.append("chain %d does not begin with an arrival or a lift" % chain)
+		if str(tail.def) != END and str(tail.kind) != "lift":
+			out.append("chain %d does not end in the lock or a lift" % chain)
+		# A seam's chain: its twins' doors are where the real lifts' doors are, and it has
+		# an area at least.
+		if chain < chains.size():
+			var spec: Dictionary = chains[chain]
+			if str(spec.out) != "" and (str(head.def) != LIFT_DEF or int(head.out.side) != int(LIFTS[spec.out].door)):
+				out.append("chain %d does not begin in the twin of lift %s" % [chain, str(spec.out)])
+			if str(spec.out) == "" and str(head.def) != "absturz":
+				out.append("chain %d of the crash does not begin in the tunnel" % chain)
+			if str(spec.in) != "decon" and (str(tail.def) != LIFT_DEF or int(tail["in"].side) != int(LIFTS[spec.in].door)):
+				out.append("chain %d does not end in the twin of lift %s" % [chain, str(spec.in)])
+			if str(spec.in) == "decon" and str(tail.def) != END:
+				out.append("chain %d does not end in the twin of the lock" % chain)
+			if members.filter(func(piece: Dictionary) -> bool: return str(piece.kind) == "area").is_empty():
+				out.append("chain %d has no area" % chain)
 		for k in range(members.size() - 1):
 			if not joined.has("%s|%s" % [members[k].id, members[k + 1].id]):
 				out.append("%s and %s are not joined" % [str(members[k].id), str(members[k + 1].id)])

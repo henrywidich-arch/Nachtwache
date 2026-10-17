@@ -23,7 +23,7 @@ extends Node
 ## Stages in which it never comes: everything before the facility, the hold in the
 ## canteen (hard enough as it is), the lock, the way out.
 ## (In a night with a random part also its arrival and the lock at its end.)
-const AWAY := ["landing", "villa", "mirror", "descent", "station", "nadja", "deal", "power", "hold", "board", "ride", "terminal", "lockdown", "decon", "exit", "g_arrive", "g_crash", "g_escape", "g_lock"]
+const AWAY := ["landing", "villa", "mirror", "descent", "station", "nadja", "deal", "power", "hold", "board", "ride", "terminal", "lockdown", "decon", "exit", "g_arrive", "g_crash", "g_escape", "g_lock", "c0_lift", "c1_lift", "c2_lift", "c3_lift", "c4_lift"]
 ## The first stage it may come in.
 const FIRST_STAGE := "admin"
 ## Free ground in square metres, within ROOM_REACH metres of walking around the survivor,

@@ -38,7 +38,7 @@ func info() -> Dictionary:
 	}
 
 ## The trees (local x, z).
-const TREES := [Vector2(6, 18), Vector2(20, 36), Vector2(34, 18), Vector2(40, 36), Vector2(28, 26), Vector2(10, 40), Vector2(38, 6)]
+const TREES := [Vector2(6, 18), Vector2(16, 37), Vector2(34, 18), Vector2(40, 36), Vector2(28, 26), Vector2(10, 40), Vector2(38, 6)]
 ## The raised beds (local x, z, w, d).
 const BEDS := [Rect2(6, 26, 7, 3), Rect2(6, 33, 7, 3), Rect2(30, 34, 9, 3), Rect2(29, 8, 6, 4), Rect2(10, 8, 5, 6), Rect2(36, 24, 3, 7)]
 
@@ -92,7 +92,7 @@ func lay() -> void:
 	stencil("halle", NORTH, 12.0, 6.5, "BIOTOP  G-3", 200, Color(0.3, 0.45, 0.25))
 	# --- ways in: out of the soil, out of the walls, from the roof on to the paths
 	trench("halle", 24.0, 34.0, 1)
-	trench("halle", 40.0, 16.0, 0)
+	trench("halle", 42.0, 24.0, 0)
 	hole("halle", WEST, 20.0, "pipes")
 	hole("halle", SOUTH, 16.0, "breach")
 	hole("halle", EAST, 34.0, "vent")

@@ -105,6 +105,7 @@ func _ready() -> void:
 		build_times[str((part as Callable).get_method())] = Time.get_ticks_msec() - from
 	# The random part of the night, after everything else (its dice are its own).
 	var laid := Time.get_ticks_msec()
+	_lay_seam_lifts()
 	HiveAreale.lay(self)
 	build_times["areale"] = Time.get_ticks_msec() - laid
 	# The furniture of the weapon caches, in the rooms off the way (see HiveCaches).
@@ -2490,12 +2491,16 @@ func _lay_terminal() -> void:
 	_own_dice(71005)
 	_begin_zone("train_b", "cold")
 	area = ""
-	_room("car_b", deep, Rect2(-7, -319, 14, 4), 2.6, "car", {"walls": false, "floor": false, "ceiling": false, "lamps": "none"})
-	_train_car(Vector3(0, UNDER, -317), NORTH)
+	# (On a night with a crash the train never comes in here: no car at the platform.)
+	var train_in := not bool(night.get("crash", false))
+	if train_in:
+		_room("car_b", deep, Rect2(-7, -319, 14, 4), 2.6, "car", {"walls": false, "floor": false, "ceiling": false, "lamps": "none"})
+		_train_car(Vector3(0, UNDER, -317), NORTH)
 	_end_zone()
 	_begin_zone("terminal", "cold", ["train_b"])
 	_room("terminal", deep, Rect2(-40, -345, 80, 26), 9.5, "bighall", {"bare": [SOUTH]})
-	_door("car_b", "terminal", 0.0, 2.4, {"kind": "script", "name": "car_b", "height": 2.2})
+	if train_in:
+		_door("car_b", "terminal", 0.0, 2.4, {"kind": "script", "name": "car_b", "height": 2.2})
 	_room("track_b", deep, Rect2(-40, -319, 80, 7), 9.5, "bighall", {"bare": [NORTH], "nav": false, "floor": false, "lamps": "none"})
 	for side in [WEST, EAST]:
 		_opening("track_b", side, -317.0, 5.4, {"kind": "join", "height": 4.6, "nav": false})
@@ -2505,7 +2510,8 @@ func _lay_terminal() -> void:
 	_pane("control", SOUTH, 31.0, 15.0, 0.9, 2.5, "glass")
 	_chunk("Kit", false)
 	_track("track_b", -319.0, -1.0)
-	_train_ends(Vector3(0, UNDER, -317))
+	if train_in:
+		_train_ends(Vector3(0, UNDER, -317))
 	for piece in [[-40.0, -1.4], [1.4, 40.0]]:
 		_add_shape(rails, Vector3((float(piece[0]) + float(piece[1])) * 0.5, UNDER + 0.6, -319.1), Vector3(float(piece[1]) - float(piece[0]), 1.2, 0.1))
 	_deck_floor(Rect2(-39.8, -344.8, 61.8, 3.8), DECK, UNDER, [[SOUTH, -39.8, -27.1], [SOUTH, -24.9, 22.0]])
@@ -2659,8 +2665,11 @@ func _lay_admin() -> void:
 	_stencil("ring_s", SOUTH, 11.7, 3.25, "VERWALTUNG", 104)
 	_floor_arrow(Vector3(-20.0, UNDER, -365.2), PI / 2, blue)
 	_floor_arrow(Vector3(20.0, UNDER, -365.2), -PI / 2, red)
-	_sealed_door("ring_s", WEST, -365.0)
-	_sealed_door("ring_s", EAST, -365.0)
+	# (Where a freight lift of the night stands instead, see _lay_seam_lifts.)
+	if not uses_lift("admin_w"):
+		_sealed_door("ring_s", WEST, -365.0)
+	if not uses_lift("admin_o"):
+		_sealed_door("ring_s", EAST, -365.0)
 	_model("wheelchair_01", Vector3(-28.0, UNDER, -363.4), 2.2, {"far": 40.0})
 	_model("metal_trash_can", Vector3(27.0, UNDER, -361.9), 0.0, {"height": 0.9, "far": 40.0})
 	_plant(Vector3(-3.3, UNDER, -361.75), 1.3)
@@ -3173,7 +3182,7 @@ func _lay_research() -> void:
 	_room("decon", deep, Rect2(-4, -501, 8, 12), 4.2, "lab", {"look": {"light": Color("bfe8ff"), "strip_color": Color("7fe0ff")}})
 	# (In a night with a random part the squad comes into the lock from its twin at the end
 	# of that part, and the gate to the central hall stays shut: it belongs to the hall.)
-	_door("atrium", "decon", 0.0, 3.0, {"kind": "gate", "area": "atrium" if HiveAreale.random_part(self) else "decon", "name": "gate_decon"})
+	_door("atrium", "decon", 0.0, 3.0, {"kind": "gate", "area": "decon", "name": "gate_decon"})
 	area = "research"
 	_room("lab_corridor", deep, Rect2(-4, -569, 8, 68), 5.0, "lab", {"lamps": "none", "look": {"tide": 1.6, "tide_sides": [EAST, WEST], "tide_span": [-569.0, -539.5]}})
 	_door("decon", "lab_corridor", 0.0, 3.0, {"kind": "gate", "area": "research", "name": "gate_research"})
@@ -5718,7 +5727,8 @@ func _lay_entries() -> void:
 	_way_duct("cafeteria", NORTH, 8.0)
 	_way_hole("cafeteria", EAST, -428.0, "vent")
 	_way_duct("cafeteria", WEST, -432.9)
-	_way_gate("cafeteria", SOUTH, 12.0, "LASTENAUFZUG")
+	if not uses_lift("cafe_s"):
+		_way_gate("cafeteria", SOUTH, 12.0, "LASTENAUFZUG")
 	_way_duct("cafeteria", SOUTH, 18.0)
 	_way_drop("cafeteria", -12.0, -420.5, 0)
 	_way_drop("cafeteria", 10.0, -415.5, 2)
@@ -5739,7 +5749,8 @@ func _lay_entries() -> void:
 	_way_hole("atrium", SOUTH, -20.0, "pipes")
 	_way_duct("atrium", SOUTH, 12.0, {"sill": 2.6, "trunk": 4.0})
 	_way_hole("atrium", NORTH, -14.0, "vent")
-	_way_gate("atrium", NORTH, 14.0, "AUFZUG  B3")
+	if not uses_lift("atrium"):
+		_way_gate("atrium", NORTH, 14.0, "AUFZUG  B3")
 	_way_breach("atrium", EAST, -485.5, -1.0)
 	_way_duct("atrium", EAST, -452.0, {"sill": 2.6, "trunk": 4.0})
 	_way_hole("atrium", WEST, -484.0, "vent")
@@ -5972,6 +5983,27 @@ func ride_areal(id: String, on: bool) -> void:
 	ride_speed = 26.0 if on else 0.0
 	force_zone(str(areal_rides[id].zone), "show" if on else "hide")
 	force_zone(id, "hide" if on else "")
+
+## Whether the night uses a freight lift of the old map (HiveLayout.LIFTS).
+func uses_lift(id: String) -> bool:
+	return (night.get("lifts", []) as Array).has(id)
+
+## The freight lifts of the old map that the night's seams use (HiveLayout.SEAMS): each a
+## cabin off a room of the old route, its door a gate that the night opens (door "lift_<id>").
+func _lay_seam_lifts() -> void:
+	for id: String in night.get("lifts", []):
+		if not HiveLayout.LIFTS.has(id):
+			continue
+		var spec: Dictionary = HiveLayout.LIFTS[id]
+		var old: Dictionary = room_of[str(spec.room)]
+		_begin_zone(str(old.zone))
+		# (Of the area of its room: a way leads into it from there while that area is closed off,
+		# as the canteen is during and after its lockdown.)
+		area = str(old.area)
+		HiveAreale.lift_cabin(self, "lift_" + id, spec.rect, int(spec.door), deep, str(spec.title))
+		_door("lift_" + id, str(spec.room), HiveAreale.lift_door_at(spec.rect, int(spec.door)), AreaKit.PORT_WIDE, {"kind": "script", "name": "lift_" + id})
+		_end_zone()
+		areal_points["lift_%s_mid" % id] = Vector3(spec.rect.get_center().x, UNDER, spec.rect.get_center().y)
 
 ## The piece of the random part a position lies in ({} for none; see HiveAreale).
 func piece_at(pos: Vector3) -> Dictionary:

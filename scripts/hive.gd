@@ -252,8 +252,14 @@ func prepare_night() -> Dictionary:
 		return night
 	if resume_at == "" or night.is_empty():
 		var wanted := _seed_for_night()
-		# (-3: every piece in one night, the showcase of the test room - for the checks.)
-		night = HiveLayout.showcase() if wanted == -3 else (HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted))
+		# (For the checks: -4 a chain in every seam with every area, -3 the showcase of the
+		# test room, below that the classic night.)
+		if wanted == -4:
+			night = HiveLayout.every_seam()
+		elif wanted == -3:
+			night = HiveLayout.showcase()
+		else:
+			night = HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted)
 	night_fresh = true
 	return night
 
@@ -535,6 +541,8 @@ func _checkpoint(id: String, bonus: int) -> void:
 	caches.keep(id)
 
 func _enter(id: String) -> void:
+	# (On a night with areas in the seams of the old route, a chain of them may come first.)
+	id = run.redirect(id)
 	stage = id
 	stage_time = 0.0
 	progress = -1.0
@@ -651,7 +659,7 @@ func _enter(id: String) -> void:
 			game.sounds.play_sound("beep")
 			line("m2_power_on")
 		"labs":
-			map.unlock("decon", run.on)
+			map.unlock("decon", run.on and run.passed.size() > 0)
 			map.unlock("research")
 			_checkpoint("labs", 350)
 			line("m2_labs")
@@ -1194,14 +1202,14 @@ func _run_ride(_delta: float) -> void:
 				mate.global_position = player.global_position - shift + Vector3(randf_range(-1.5, 1.5), 0, randf_range(-0.6, 0.6))
 			mate.global_position += shift
 			mate.velocity = Vector3.ZERO
-		if run.on:
-			map.ride_areal(str(map.night.pieces[0].id), true)
+		if run.crashes():
+			map.ride_areal(run.crash_id(), true)
 		else:
 			map.ride(true)
 		game.hud.flash(Color.BLACK, 1.0)
 	# Derailed: a blow, darkness, and the car stands in the tunnel.
 	if run.crashes() and stage_time > HiveAreaRun.CRASH_AT and done.has("ride_jump"):
-		map.ride_areal(str(map.night.pieces[0].id), false)
+		map.ride_areal(run.crash_id(), false)
 		game.hud.flash(Color.WHITE, 0.4)
 		game.hud.flash(Color.BLACK, 1.6)
 		game.player.trauma = 1.0
@@ -1209,12 +1217,8 @@ func _run_ride(_delta: float) -> void:
 		_enter("g_crash")
 		return
 	if stage_time > RIDE_SECONDS:
-		if run.on:
-			map.ride_areal(str(map.night.pieces[0].id), false)
-			_enter("g_arrive")
-		else:
-			map.ride(false)
-			_enter("terminal")
+		map.ride(false)
+		_enter("terminal")
 
 func _clear_enemies() -> void:
 	for node in game.enemies.get_children():
