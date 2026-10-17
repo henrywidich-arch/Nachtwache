@@ -53,6 +53,29 @@ func _init() -> void:
 			var file := FileAccess.open(argument.get_slice("=", 1), FileAccess.WRITE)
 			file.store_string(JSON.stringify(missing, " "))
 			print("ORDER: %d lines, %d characters -> %s" % [missing.size(), characters, argument.get_slice("=", 1)])
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--stock="):
+			# speaker -> cue -> takes written: the stock list (see tools/voice_takes.md)
+			var stock := {}
+			for key in wanted:
+				var parts: PackedStringArray = str(key).split("/")
+				var cue_name: String = parts[1].get_slice(".", 0)
+				cue_name = cue_name.substr(0, cue_name.rfind("_"))
+				if not stock.has(parts[0]):
+					stock[parts[0]] = {}
+				stock[parts[0]][cue_name] = int(stock[parts[0]].get(cue_name, 0)) + 1
+			var stock_file := FileAccess.open(argument.get_slice("=", 1), FileAccess.WRITE)
+			stock_file.store_string(JSON.stringify(stock, " "))
+			print("STOCK written -> ", argument.get_slice("=", 1))
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--dump="):
+			# Everything that is written: {"lines": {cue: {speaker, takes}}, "barks": {cue: {speaker: takes}}}
+			var dump_lines := {}
+			for cue in lines:
+				dump_lines[cue] = {"speaker": lines[cue][0], "takes": lines[cue][1]}
+			var dump_file := FileAccess.open(argument.get_slice("=", 1), FileAccess.WRITE)
+			dump_file.store_string(JSON.stringify({"lines": dump_lines, "barks": barks}, " "))
+			print("DUMP written -> ", argument.get_slice("=", 1))
 	print("VOICE_CHECK: %d lines, %d recorded, %d without a recording, %d recordings without a line" % [total, recorded, missing.size(), stray.size()])
 	quit(0 if stray.is_empty() else 1)
 
