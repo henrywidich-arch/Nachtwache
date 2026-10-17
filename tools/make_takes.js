@@ -69,7 +69,7 @@ function add(speaker, cue, start, texts) {
     let tone = TONES[(k + cue.length + speaker.length) % TONES.length];
     const bangs = (text.match(/!/g) || []).length;
     if (tone === 'calm' && bangs > 0) tone = 'lively';
-    if (tone === 'urgent' && bangs === 0) tone = 'lively';
+    if (tone === 'urgent' && bangs === 0) tone = 'natural';
     if (tone === 'natural' && bangs > 1) tone = 'urgent';
     entries.push({ speaker, cue, n: start + k + 1, text, tone });
   });
