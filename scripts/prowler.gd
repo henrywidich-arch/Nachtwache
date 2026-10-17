@@ -255,6 +255,18 @@ var shift_cover := Vector3.INF
 var shifts := 0
 var other_for := 0.0
 var tight_for := 0.0
+## Its first roar is on.
+var herald_roaring := false
+## What it did with its time (for the logs of automatic runs): seconds since it came,
+## when it first went for somebody, the seconds it spent in each way of not closing in
+## while one of the squad could see it, and what it took meanwhile.
+const IDLE_MODES := ["circle", "lurk", "warn", "roar"]
+var lived := 0.0
+var first_attack := -1.0
+var idle_in_view := {}
+var idle_hurt := 0.0
+var view_left := 0.0
+var in_view := false
 ## How well it fights on this level (the level's "tactics"; who sends it says so).
 var level := 1.0
 var pin_hurt := 0.0
@@ -393,6 +405,7 @@ func _haste() -> float:
 	return maxf(HASTE_LEAST, (RAGE_HASTE if enraged else 1.0) * (1.0 - BOLD_HASTE * bold) / maxf(0.5, level))
 
 func _set_mode(next: String) -> void:
+	herald_roaring = false
 	mode = next
 	stuck_for = 0.0
 	match next:
@@ -546,6 +559,7 @@ func _may_spit(target: Vector3, distance: float) -> bool:
 	return spit_cooldown <= 0.0 and spits < spit_most and still_for >= SPIT_STILL.y and distance >= SPIT_RANGE.x and distance <= SPIT_RANGE.y and clung_to == null and is_on_floor() and _clear_line(target)
 
 func _start_spit() -> void:
+	_attacked()
 	mode = "spit"
 	mode_left = SPIT_WIND
 	spat = false
@@ -566,6 +580,7 @@ func _may_charge(target: Vector3, distance: float) -> bool:
 
 ## It sinks back, rakes the ground and bellows: then straight through them.
 func _start_charge(target: Vector3) -> void:
+	_attacked()
 	var centre := Vector3.ZERO
 	var count := 0
 	for survivor in _squad():
@@ -760,7 +775,41 @@ func _land_blow(distance: float, same_floor: bool, target: Vector3) -> void:
 			if survivor == game.player:
 				game.player.shake_from(global_position, 0.6, 6.0)
 
+func _attacked() -> void:
+	if first_attack < 0.0:
+		first_attack = lived
+
+## The way of not closing in it is in now ("" when it is about something else).
+func idle_state() -> String:
+	if shift_phase == "warn":
+		return "warn"
+	if mode == "reel" and herald_roaring:
+		return "roar"
+	return mode if mode in ["circle", "lurk"] else ""
+
+func idle_report() -> String:
+	var parts: Array[String] = []
+	var total := 0.0
+	for key: String in idle_in_view:
+		parts.append("%s %.1f" % [key, float(idle_in_view[key])])
+		total += float(idle_in_view[key])
+	return "idle_in_view=%.1f (%s) first_attack=%.1f idle_hurt=%d lived=%.1f" % [total, ", ".join(parts), first_attack, int(idle_hurt), lived]
+
+## (The bookkeeping of idle_report, once a frame.)
+func _keep_count(delta: float) -> void:
+	if shift_phase == "away" or dead:
+		return
+	lived += delta
+	view_left -= delta
+	if view_left <= 0.0:
+		view_left = 0.25
+		in_view = _seen_by_any(global_position) or (is_instance_valid(prey) and _line(prey.global_position + Vector3(0, 1.5, 0), global_position + Vector3(0, 0.9, 0)))
+	var state := idle_state()
+	if state != "" and in_view:
+		idle_in_view[state] = float(idle_in_view.get(state, 0.0)) + delta
+
 func _physics_process(delta: float) -> void:
+	_keep_count(delta)
 	if dead:
 		model.animate(delta, 0.0)
 		return
@@ -929,6 +978,7 @@ func _physics_process(delta: float) -> void:
 			if herald and clear and distance < HERALD_RANGE:
 				# Its first visit: it stands in the open and lets them hear who has come.
 				herald = false
+				herald_roaring = true
 				roar()
 			elif clear and distance < RING.y:
 				_set_mode("circle")
@@ -1342,6 +1392,7 @@ func _look(look: Vector3, delta: float, rate: float, going: float) -> void:
 		flank.position = ahead * flank.along + Vector3(0, flank.height, 0)
 
 func _strike() -> void:
+	_attacked()
 	var clip := model.pick_attack()
 	var haste := _haste()
 	var swift := RAGE_SWIFT if enraged else 1.0
@@ -1357,6 +1408,7 @@ func _strike() -> void:
 	attack_left = randf_range(WAIT.x, WAIT.y) * haste
 
 func _start_leap() -> void:
+	_attacked()
 	mode = "leap"
 	leap = "crouch"
 	leap_left = LEAP_CROUCH
@@ -1423,6 +1475,8 @@ func _leap(delta: float, target: Vector3, toward: Vector3, distance: float) -> v
 func receive_hit(amount: float, direction: Vector3, headshot: bool = false, source: Node = null) -> void:
 	if dead or leaving:
 		return
+	if idle_state() != "":
+		idle_hurt += amount
 	shooter = source as Node3D if source is Node3D else game.player
 	if mode == "pin":
 		# Shot off its prey.

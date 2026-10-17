@@ -416,7 +416,7 @@ func _attend(delta: float, stage: String) -> void:
 func _close(hurt: bool, died: bool) -> void:
 	var lurked: bool = is_instance_valid(beast) and beast.lurked > 0.0
 	if game.check_mode:
-		print("PROWLER_GONE n=%d stage=%s after=%.1f hurt=%s died=%s landed=%d nearest=%.1f lurked=%.1f" % [visits, director.stage, present_for, str(hurt), str(died), beast.landed if is_instance_valid(beast) else -1, nearest, beast.lurked if is_instance_valid(beast) else -1.0])
+		print("PROWLER_GONE n=%d stage=%s after=%.1f hurt=%s died=%s landed=%d nearest=%.1f lurked=%.1f %s" % [visits, director.stage, present_for, str(hurt), str(died), beast.landed if is_instance_valid(beast) else -1, nearest, beast.lurked if is_instance_valid(beast) else -1.0, beast.idle_report() if is_instance_valid(beast) else ""])
 	beast = null
 	visiting = false
 	if not last:
