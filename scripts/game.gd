@@ -525,6 +525,9 @@ func _ready() -> void:
 	elif "--areas-check" in args:
 		check_mode = true
 		call_deferred("_run_areas_check")
+	elif "--areas-hud" in args:
+		check_mode = true
+		call_deferred("_run_areas_hud")
 	elif "--stations-check" in args:
 		check_mode = true
 		HiveStations.pictures.call_deferred(self)
@@ -2890,6 +2893,11 @@ func _run_areas_check() -> void:
 	if "--areas-flat" in OS.get_cmdline_user_args():
 		sandbox.set_flat(true)
 	print("AREAS rooms=%d doors=%d floors=%d times=%s" % [map.rooms.size(), map.doors.size(), map.floors.size(), str(map.build_times)])
+	# (--areas-props: what the objectives are done with, instead of the pieces.)
+	if "--areas-props" in OS.get_cmdline_user_args():
+		await _areas_props(folder, map, part)
+		get_tree().quit()
+		return
 	var seen := {}
 	for piece: Dictionary in map.night.pieces:
 		var def := str(piece.def)
@@ -2961,6 +2969,114 @@ func _run_areas_check() -> void:
 			await _capture_from(folder, "lift_%s_%s.png" % [id, view[0]], view[1], view[2], 72.0)
 			print("AREAS_VIEW lift_%s %s draws=%d" % [id, view[0], int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))])
 	get_tree().quit()
+
+## Pictures of what is seen of the areas while playing (hud_*.png): the card of an area as
+## the squad comes in, with the map in the corner, and a freight lift on its way and on
+## arrival. A night with a chain in every seam; nobody attacks.
+##   hid.sh "--areas-hud" <capture folder>
+func _run_areas_hud() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	await tick.call(1.0)
+	profile.mission = 2
+	profile.mode = "story"
+	intro_skipped = true
+	hive.seed_wanted = -4
+	hive.night = {}
+	hive.night_fresh = false
+	hive.resume_at = "g_crash"
+	start_run()
+	await tick.call(2.0)
+	var map := hive_map
+	var calm := func() -> void:
+		for node in enemies.get_children():
+			node.queue_free()
+		alive_count = 0
+	var areas: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return str(piece.kind) == "area")
+	for piece: Dictionary in areas.slice(0, 3):
+		calm.call()
+		hive._enter("a%d" % int(piece.area_index))
+		var entry: Vector3 = map.points["%s_entry" % piece.id]
+		var middle := HiveAreaRun._middle_of(map, piece)
+		player.global_position = entry + Vector3(0, 0.1, 0)
+		player.velocity = Vector3.ZERO
+		player.rotation.y = atan2(-(middle.x - entry.x), -(middle.z - entry.z))
+		player.camera.rotation.x = -0.05
+		await tick.call(1.2)
+		calm.call()
+		await _capture(folder, "hud_card_%s.png" % piece.def)
+	# A lift of the old route on its way down, from the back of its cabin.
+	var chain: Dictionary = map.night.chains[1]
+	calm.call()
+	hive._enter("c1_lift")
+	var mid: Vector3 = map.points["lift_%s_mid" % chain.out]
+	var out: Vector2 = HiveCore.OUT[int(HiveLayout.LIFTS[chain.out].door)]
+	player.global_position = mid - Vector3(out.x, 0, out.y) * 1.4 + Vector3(0, 0.1, 0)
+	player.velocity = Vector3.ZERO
+	player.rotation.y = atan2(-out.x, -out.y)
+	player.camera.rotation.x = 0.28
+	await tick.call(1.3)
+	await _capture(folder, "hud_lift_ride.png")
+	await tick.call(2.6)
+	calm.call()
+	await _capture(folder, "hud_lift_arrived.png")
+	get_tree().quit()
+
+## Pictures of what the objectives of the areas are done with (HiveAreaRun.lay_props):
+## every objective an area offers, put up where it stands in a night, seen from the side
+## the things face (props_<area>_<kind>_<n>.png).
+func _areas_props(folder: String, map: HiveMap, part: String) -> void:
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	var props := AreaProps.new(hive)
+	map.add_child(props)
+	for piece: Dictionary in map.night.pieces:
+		if str(piece.kind) != "area" or (part != "" and not str(piece.def).begins_with(part)):
+			continue
+		var p_info := HiveLayout.info(str(piece.def))
+		var spots: Dictionary = p_info.get("spots", {})
+		var middle := HiveAreaRun._middle_of(map, piece)
+		for option: Dictionary in p_info.get("events", []):
+			var event := option.duplicate(true)
+			var kind := str(event.kind)
+			if kind == "collect":
+				event.items = range(mini(3, (spots.get("items", []) as Array).size()))
+			if kind == "restore":
+				event.switches = range(mini(3, (spots.get("switches", []) as Array).size()))
+			if kind in ["hack", "hold", "lockdown"] and not spots.has("goal"):
+				continue
+			props.clear()
+			await tick.call(0.1)
+			var laid := HiveAreaRun.lay_props(props, map, piece, event)
+			if kind == "lockdown":
+				props.lockdown(true)
+			var targets: Array = []
+			for item: Dictionary in (laid.items as Array).slice(0, 2):
+				targets.append([item.pos, 2.2])
+			for place: Dictionary in (laid.places as Array).slice(0, 1):
+				targets.append([place.pos, 2.4])
+			var goal: Vector3 = (piece.origin as Vector3) + (spots.get("goal", Vector3.ZERO) as Vector3)
+			if bool(laid.slot) or kind == "hack":
+				targets.append([goal, 2.4])
+			if kind in ["hold", "lockdown"]:
+				targets.append([goal, 6.0])
+			if kind == "lockdown" and map.points.has("%s_in" % piece.id):
+				# (The way in, seen from just inside the area: its shutter and its light over it.)
+				var way_in: Vector3 = map.points["%s_in" % piece.id]
+				var inside: Vector3 = map.points.get("%s_entry" % piece.id, middle)
+				targets.append([way_in, 0.0, way_in + Vector3(inside.x - way_in.x, 0, inside.z - way_in.z).normalized() * 5.0 + Vector3(0, 1.7, 0)])
+			for n in range(targets.size()):
+				var target: Vector3 = targets[n][0]
+				# (From the side the thing faces.)
+				var facing := HiveAreaRun._open_way(map, target, middle)
+				var away := Vector3(facing.x - target.x, 0, facing.z - target.z)
+				away = away.normalized() if away.length() > 0.5 else Vector3(0, 0, 1)
+				var eye: Vector3 = targets[n][2] if (targets[n] as Array).size() > 2 else target + away * float(targets[n][1]) + Vector3(0, 1.75 if float(targets[n][1]) < 4.0 else 3.2, 0)
+				player.position = eye - Vector3(0, 1.5, 0)
+				player.velocity = Vector3.ZERO
+				await tick.call(0.5)
+				await _capture_from(folder, "props_%s_%s_%d.png" % [piece.def, kind, n], eye, target + Vector3(0, 0.9, 0), 70.0)
+				print("AREAS_PROPS %s %s %d" % [piece.def, kind, n])
+	props.queue_free()
 
 const CRUSHER_SHOTS := ["plain", "tell", "shell", "guard", "both"]
 

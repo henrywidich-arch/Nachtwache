@@ -62,7 +62,8 @@ static func declare_floors(map: HiveMap) -> void:
 					by_chain[chain] = part if not by_chain.has(chain) else (by_chain[chain] as Rect2).merge(part)
 			for chain in by_chain:
 				shared_index += 1
-				var label := "SEKTOR C · %d" % (int(round((HiveLayout.BASE - float(h)) / HiveLayout.STOREY)) + 1)
+				# (Named by the sector of its chain, as the card of an area says it, and its storey.)
+				var label := "SEKTOR %s · UG %d" % [HiveAreaRun.sector({"chain": chain}), HiveAreaRun.storey(float(h))]
 				map.area_floors["%d|%.2f" % [int(chain), float(h)]] = map._floor("areal_%d" % shared_index, label, float(h), (by_chain[chain] as Rect2).grow(3.0))
 		else:
 			for piece: Dictionary in pieces:

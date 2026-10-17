@@ -24,6 +24,7 @@ const SIDE := Color("7ff2b8")
 ## The stations of the second mission: nobody's colour, so that nothing hostile is read
 ## into them.
 const STATION := Color("eef1f5")
+const LIFT := Color("b8c8d4")
 const WALL := Color(0.7, 0.78, 0.84, 0.62)
 ## How much of that colour closed ground has where no open ground is beside it.
 const FILL := 0.14
@@ -132,7 +133,7 @@ static func offset(place: Vector3, here: Vector3, yaw: float) -> Vector2:
 	return (Vector2(place.x - here.x, place.z - here.z) * (SIZE * 0.5 / REACH)).rotated(yaw)
 
 ## Everything that is marked on the map right now, each {"at" (from the middle of the map),
-## "color", "size", "shape" ("dot", "ring", "square", "diamond", "box", "plus"), "rim" (it lies further
+## "color", "size", "shape" ("dot", "ring", "square", "diamond", "box", "plus", "lift"), "rim" (it lies further
 ## off than the map reaches)}. The drawing and the checks both read this.
 func marks() -> Array:
 	var out: Array = []
@@ -153,7 +154,20 @@ func marks() -> Array:
 			var spot := _mark(station.pos, here, yaw, STATION, 1.4 if shape == "dot" else 3.0, shape, cabin.level_of((station.pos as Vector3) + Vector3(0, 0.3, 0)) == level)
 			if not spot.rim:
 				out.append(spot)
+	# The freight lifts of the night's seams (and their twins): a cabin with its doors.
+	if cabin.has_method("lift_marks"):
+		for spot: Vector3 in cabin.call("lift_marks"):
+			var lift := _mark(spot, here, yaw, LIFT, 3.4, "lift", cabin.level_of(spot + Vector3(0, 0.3, 0)) == level)
+			if not lift.rim:
+				out.append(lift)
 	for marker in game.markers():
+		# Something of an area's objective that has been seen (a thing to find, a place to
+		# switch on): a small mark in the colour of the tasks, and none at the rim.
+		if marker.get("objective", false):
+			var thing := _mark(marker.pos, here, yaw, TASK, 3.0, "lozenge", cabin.level_of(marker.pos) == level)
+			if not thing.rim:
+				out.append(thing)
+			continue
 		# A side goal (a weapon cache) is a small hollow mark, and none at the rim.
 		if marker.get("side", false):
 			var side := _mark(marker.pos, here, yaw, SIDE, 3.6, "lozenge", cabin.level_of(marker.pos) == level)
@@ -251,6 +265,10 @@ func _draw_face() -> void:
 				face.draw_arc(at, size, 0.0, TAU, 14, color, 1.6, true)
 			"box":
 				face.draw_rect(Rect2(at - Vector2(size, size), Vector2(size, size) * 2.0), color, false, 1.4)
+			"lift":
+				# (A cabin with the seam of its two doors.)
+				face.draw_rect(Rect2(at - Vector2(size, size), Vector2(size, size) * 2.0), color, false, 1.6)
+				face.draw_line(at - Vector2(0, size * 0.7), at + Vector2(0, size * 0.7), color, 1.2)
 			"plus":
 				face.draw_line(at - Vector2(size, 0), at + Vector2(size, 0), color, 1.8)
 				face.draw_line(at - Vector2(0, size), at + Vector2(0, size), color, 1.8)

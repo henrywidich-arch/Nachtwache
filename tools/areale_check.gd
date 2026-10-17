@@ -149,6 +149,31 @@ func _build(what: String) -> int:
 			else:
 				total += map._length(route)
 		print("CHAIN %d: %d stretches between pieces, %.0f m" % [chain, members.size() - 1, total])
+	# --long: the whole way of a chain in one ask of the path finder, from its first piece to
+	# its last and to every place of an objective - what a squad member or a hunter that
+	# follows from far behind asks for (LONG lines; not counted as faults).
+	if "--long" in OS.get_cmdline_user_args():
+		for chain in range(most + 1):
+			var members: Array = (night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == chain)
+			var start: Vector3 = map.points.get("%s_mid" % members[0].id, map.points.get("%s_car" % members[0].id, Vector3.INF))
+			var asked := 0
+			var found := 0
+			var missed: Array[String] = []
+			for piece: Dictionary in members:
+				var targets: Array = []
+				if map.points.has("%s_entry" % piece.id):
+					targets.append(map.points["%s_entry" % piece.id])
+				var spots: Dictionary = HiveLayout.info(str(piece.def)).get("spots", {})
+				if spots.has("goal"):
+					targets.append(HiveAreaRun.free_spot(map, piece.origin + (spots.goal as Vector3)))
+				for target: Vector3 in targets:
+					asked += 1
+					var route: PackedVector3Array = map.path_between(start, target)
+					if not route.is_empty() and route[route.size() - 1].distance_to(target) < 2.0:
+						found += 1
+					else:
+						missed.append("%s %s (%.0f m below the start)" % [piece.id, piece.def, start.y - target.y])
+			print("LONG chain %d: %d of %d found from its start%s" % [chain, found, asked, "" if missed.is_empty() else " - not: " + ", ".join(PackedStringArray(missed))])
 	if "--stairs" in OS.get_cmdline_user_args():
 		for stair in map.stairs:
 			var foot: Vector3 = stair.foot
