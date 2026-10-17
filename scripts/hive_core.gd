@@ -1635,6 +1635,9 @@ func _build_environment() -> void:
 	_apply_mood()
 
 func _apply_mood() -> void:
+	# (The test room's SCHATTEN & NEBEL AUS holds its own even light; see Sandbox.set_flat.)
+	if Sandbox.holding_flat:
+		return
 	environment.ambient_light_color = mood_now.ambient
 	environment.ambient_light_energy = float(mood_now.energy)
 	environment.fog_density = float(mood_now.fog)
