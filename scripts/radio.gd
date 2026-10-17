@@ -10,7 +10,7 @@ const VOICE_FOLDER := "res://assets/voice/"
 ## How a speaker is named in the subtitle.
 const NAMES := {"coleman": "COLEMAN", "nadja": "NADJA", "viper": "VIPER", "scorpion": "SCORPION", "raven": "RAVEN", "cru": "C.R.U.", "cru2": "C.R.U.", "cru3": "C.R.U.", "cru4": "C.R.U.", "shop": "HÄNDLERIN", "phantom": "PHANTOM", "havoc": "HAVOC", "ghost": "GHOST"}
 ## cue -> [speaker, [variants]]
-const LINES := {
+const BASE_LINES := {
 	"intro_drop": ["coleman", ["Fireteam, you are over the drop point. Ropes out. Good hunting."]],
 	"mission_start": ["coleman", [
 		"Fireteam, this is Colonel Coleman. You are on the ground at Farm 19. Helix ran something out of this place, and I want to know what. Secure the house and stay alive.",
@@ -221,7 +221,7 @@ const LINES := {
 	"m2_c_phantom": ["phantom", ["Somebody with a brain has to hold this tunnel. That would be me. Go on, you two. Do not embarrass me."]]
 }
 ## cue -> {speaker -> [variants]}
-const BARKS := {
+const BASE_BARKS := {
 	"intro": {"scorpion": ["I hate this part."], "viper": ["You hate every part."], "raven": ["Quiet, both of you."]},
 	"rope": {"viper": ["Ropes are good. Going down."], "scorpion": ["Going down."], "raven": ["On the rope."]},
 	"order_follow": {"viper": ["On you.", "Moving with you.", "Copy. On your lead."], "scorpion": ["Right behind you.", "On your six.", "Stuck to you like glue."], "raven": ["With you.", "Lead the way.", "Behind you."], "phantom": ["After you. I insist.", "Lead on, then.", "Right behind you. Try to be worth following."], "havoc": ["Right behind you, boss!", "Lead on! I will break whatever you point at!", "Coming! Do not start without me!"], "ghost": ["With you.", "Moving.", "Behind you. You will not hear me."]},
@@ -319,6 +319,34 @@ const BARKS := {
 	"bye": {"shop": ["Try not to die with my stock."]}
 }
 
+## The tables the game reads: what was written first (BASE_*), and after it the takes that
+## came later (RadioTakes), so that every recording keeps its number.
+static var LINES: Dictionary = _merge_lines()
+static var BARKS: Dictionary = _merge_barks()
+
+static func _merge_lines() -> Dictionary:
+	var out: Dictionary = BASE_LINES.duplicate(true)
+	for cue: String in RadioTakes.LINES:
+		var more: Array = RadioTakes.LINES[cue][1]
+		if out.has(cue):
+			(out[cue][1] as Array).append_array(more)
+		else:
+			out[cue] = [RadioTakes.LINES[cue][0], more.duplicate()]
+	return out
+
+static func _merge_barks() -> Dictionary:
+	var out: Dictionary = BASE_BARKS.duplicate(true)
+	for cue: String in RadioTakes.BARKS:
+		if not out.has(cue):
+			out[cue] = {}
+		for speaker: String in RadioTakes.BARKS[cue]:
+			var more: Array = RadioTakes.BARKS[cue][speaker]
+			if (out[cue] as Dictionary).has(speaker):
+				(out[cue][speaker] as Array).append_array(more)
+			else:
+				out[cue][speaker] = more.duplicate()
+	return out
+
 static var last: Dictionary = {}
 ## From the moment Nadja is out of her cell, the voice that answers as Coleman is not his
 ## (the story's second part will say whose). The game plays his lines a little lower then,
@@ -348,6 +376,47 @@ static func _variant(key: String, speaker: String, cue: String, count: int) -> i
 		index = pool[(pool.find(index) + 1) % pool.size()]
 	last[key] = index
 	return index
+
+## The talk of several voices (RadioTakes.PAIRED): the exchange that is under way - its
+## variant, and who has said his part of it. A speaker who is asked a second time, or a
+## pause, begins the next exchange.
+static var pair_state: Dictionary = {}
+const PAIR_WINDOW := 9000
+
+## The variant all speakers of a talk take now: one that is recorded for each of them (if
+## any is), not the one of the last exchange.
+static func _pair_pick(cue: String) -> int:
+	var speakers: Dictionary = BARKS[cue]
+	var count := 1000
+	for speaker: String in speakers:
+		count = mini(count, (speakers[speaker] as Array).size())
+	var pool: Array = []
+	for i in range(count):
+		var heard := true
+		for speaker: String in speakers:
+			heard = heard and _sound(speaker, cue, i) != ""
+		if heard:
+			pool.append(i)
+	if pool.is_empty():
+		pool = range(count)
+	var key := "pair/" + cue
+	var index: int = pool[randi() % pool.size()]
+	if pool.size() > 1 and index == int(last.get(key, -1)):
+		index = pool[(pool.find(index) + 1) % pool.size()]
+	last[key] = index
+	return index
+
+static func _pair_variant(cue: String, speaker: String, count: int) -> int:
+	var now := Time.get_ticks_msec()
+	var state: Dictionary = pair_state.get(cue, {})
+	if state.is_empty() or (state.seen as Array).has(speaker) or now - int(state.at) > PAIR_WINDOW:
+		state = {"index": _pair_pick(cue), "seen": [], "at": now}
+	(state.seen as Array).append(speaker)
+	state.at = now
+	pair_state[cue] = state
+	if int(state.index) >= count:
+		return _variant(speaker + "/" + cue, speaker, cue, count)
+	return int(state.index)
 
 ## Picks a variant of a radio cue, never the same one twice in a row. Returns
 ## {"speaker", "name", "text", "sound"}; `sound` is empty while there is no recording.
@@ -379,5 +448,5 @@ static func bark(speaker: String, cue: String) -> Dictionary:
 	if not BARKS.has(cue) or not (BARKS[cue] as Dictionary).has(speaker):
 		return {}
 	var variants: Array = BARKS[cue][speaker]
-	var index := _variant(speaker + "/" + cue, speaker, cue, variants.size())
+	var index := _pair_variant(cue, speaker, variants.size()) if RadioTakes.PAIRED.has(cue) else _variant(speaker + "/" + cue, speaker, cue, variants.size())
 	return {"speaker": speaker, "name": str(NAMES[speaker]), "text": str(variants[index]), "sound": _sound(speaker, cue, index)}

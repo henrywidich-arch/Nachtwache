@@ -69,12 +69,13 @@ func _init() -> void:
 			print("STOCK written -> ", argument.get_slice("=", 1))
 	for argument in OS.get_cmdline_user_args():
 		if argument.begins_with("--dump="):
-			# Everything that is written: {"lines": {cue: {speaker, takes}}, "barks": {cue: {speaker: takes}}}
+			# What was written first (radio.gd, without the takes of RadioTakes):
+			# {"lines": {cue: {speaker, takes}}, "barks": {cue: {speaker: takes}}}
 			var dump_lines := {}
-			for cue in lines:
-				dump_lines[cue] = {"speaker": lines[cue][0], "takes": lines[cue][1]}
+			for cue in radio.BASE_LINES:
+				dump_lines[cue] = {"speaker": radio.BASE_LINES[cue][0], "takes": radio.BASE_LINES[cue][1]}
 			var dump_file := FileAccess.open(argument.get_slice("=", 1), FileAccess.WRITE)
-			dump_file.store_string(JSON.stringify({"lines": dump_lines, "barks": barks}, " "))
+			dump_file.store_string(JSON.stringify({"lines": dump_lines, "barks": radio.BASE_BARKS}, " "))
 			print("DUMP written -> ", argument.get_slice("=", 1))
 	print("VOICE_CHECK: %d lines, %d recorded, %d without a recording, %d recordings without a line" % [total, recorded, missing.size(), stray.size()])
 	quit(0 if stray.is_empty() else 1)
