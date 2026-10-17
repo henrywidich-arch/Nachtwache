@@ -41,7 +41,7 @@ extends Node
 
 ## What the weapon lockers of this mission sell. (The three weapons of the trees stay
 ## what they were: only for somebody with points in that tree, and that tree in force.)
-const STANDARD := ["rifle", "ak", "ump", "pistol", "flamer", "nitro", "fifty"]
+const STANDARD := ["rifle", "ak", "ump", "pistol", "usp", "g18", "deagle", "flamer", "nitro", "fifty"]
 ## The share of the places of each part of the map that holds a cache in a night.
 const SHARE := 0.45
 ## How deep in at the most the cache lies that holds the weapon wished for (0 the villa,
@@ -437,7 +437,7 @@ func begin(from: String) -> void:
 	var saved: Dictionary = kept.get(from, {}) if from != "landing" else {}
 	if saved.is_empty():
 		kept.clear()
-		night = randi()
+		night = str(director.night.get("key", "classic")).hash() ^ 0x5CA7 if game.net.active else randi()
 		wish = game.skills.wish()
 	else:
 		night = int(saved.night)
@@ -452,6 +452,13 @@ func begin(from: String) -> void:
 	look_left = 0.0
 	_quiet()
 	var dealt := deal(night, sites, wish)
+	if game.net.active:
+		# Every co-op cache holds a personal reward, including sites left empty in solo.
+		# Opening or taking it changes this player's world only.
+		var pool := found_only()
+		for index in range(sites.size()):
+			if not dealt.has(index):
+				dealt[index] = pool[posmod(night + index * 17, pool.size())]
 	var rares := deal_rare(night, sites, dealt)
 	for index in range(sites.size()):
 		var site := sites[index]
@@ -602,7 +609,7 @@ func _reachable(site: Dictionary, here: Vector3) -> bool:
 # ---------------------------------------------------------------- using one
 
 ## The cache the survivor stands before, or -1.
-func _at_hand() -> int:
+func _at_hand(aimed: bool = false) -> int:
 	if not on or director.intro_left > 0.0:
 		return -1
 	var here: Vector3 = game.player.global_position
@@ -616,12 +623,18 @@ func _at_hand() -> int:
 		var stand: Vector3 = site.stand
 		var gap := Vector2(here.x - stand.x, here.z - stand.z).length()
 		if absf(here.y - stand.y) < 1.6 and gap < best_gap:
+			if aimed and not game.aims_at_object(site.node):
+				continue
 			best_gap = gap
 			best = index
 	return best
 
+func focused_object() -> Node3D:
+	var index := _at_hand(true)
+	return null if index < 0 else sites[index].node
+
 func prompt() -> String:
-	var index := _at_hand()
+	var index := _at_hand(true)
 	if index < 0:
 		return ""
 	var site := sites[index]
@@ -642,8 +655,8 @@ func prompt() -> String:
 	return "[E] %s nehmen" % label if old == "" else "[E] %s nehmen  ·  %s bleibt hier" % [label, Survivor.WEAPONS[old].label]
 
 ## [E] was pressed. True if that was for a cache.
-func use() -> bool:
-	var index := _at_hand()
+func use(aimed: bool = false) -> bool:
+	var index := _at_hand(aimed)
 	if index < 0:
 		return false
 	var site := sites[index]

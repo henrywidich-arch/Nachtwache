@@ -456,5 +456,5 @@ func _reward() -> void:
 	for mate in game.team:
 		mate.revive(true)
 	game.sounds.play_sound("clear")
-	game.hud.announce("DER PROWLER IST TOT", "+%d Vorrat  ·  Trupp versorgt  ·  Westen geflickt" % int(Infected.TYPES.prowler.reward), 5)
+	game.hud.announce("DER PROWLER IST TOT", "+%d ◈  ·  Trupp versorgt  ·  Westen geflickt" % int(Infected.TYPES.prowler.reward), 5)
 	director.line("stalker_dead")

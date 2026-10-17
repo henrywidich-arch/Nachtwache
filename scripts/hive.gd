@@ -549,10 +549,10 @@ func _checkpoint(id: String, bonus: int) -> void:
 	game.net.supply_partner()
 	for mate in game.team:
 		mate.revive(true)
-	game.credits += bonus
+	game.earn_tokens(bonus)
 	game.score += int(round(400 * float(game.rules.score)))
 	game.sounds.play_sound("clear")
-	game.hud.announce("KONTROLLPUNKT", "+%d Vorrat  ·  Trupp versorgt  ·  halbe Munition zurück" % bonus, 5)
+	game.hud.announce("KONTROLLPUNKT", "+%d ◈  ·  Trupp versorgt  ·  halbe Munition zurück" % bonus, 5)
 	# (What was found in the caches by now is kept for a defeat taken up again from here.)
 	caches.keep(id)
 
@@ -646,6 +646,7 @@ func _enter(id: String) -> void:
 			line("m2_p_alive")
 			_post(["mauler", "mauler", "striker", "leech"], [_point("cafeteria") + Vector3(-10, 0, -6), _point("cafeteria") + Vector3(9, 0, -8), _point("cafeteria") + Vector3(0, 0, -11), _point("cafeteria") + Vector3(-15, 0, 4)], false)
 		"lockdown":
+			coop.gather("cafeteria")
 			map.lock("cafe")
 			progress = 0.0
 			progress_text = "ABRIEGELUNG"
@@ -868,11 +869,9 @@ func _use_spot(at: Vector3, key: String, text: String) -> void:
 	use_text = text
 
 func prompt() -> String:
-	if game.net.joined:
-		var nearby: Dictionary = coop.nearby_use()
-		return str(nearby.text) if not nearby.is_empty() else caches.prompt()
-	if use_at != Vector3.INF and game.player.global_position.distance_to(use_at) < 2.6:
-		return use_text
+	var nearby: Dictionary = coop.nearby_use()
+	if not nearby.is_empty():
+		return str(nearby.text)
 	# (What the stage wants used comes first; then a weapon cache one stands before.)
 	return caches.prompt()
 
@@ -881,21 +880,32 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 	if game.net.joined:
 		var nearby: Dictionary = coop.nearby_use()
 		if nearby.is_empty():
-			return caches.use()
+			return caches.use(true)
 		game.net.request_hive_use(str(nearby.key), nearby.at)
 		return true
 	if who == null:
 		who = game.player
 	var key := use_key if requested == "" else requested
+	if who == game.player and requested == "":
+		var focused: Dictionary = run.focused_use()
+		if not focused.is_empty():
+			key = str(focused.key)
+			at = focused.at
+			requested = key
+		elif key in ["g_item", "g_switch", "g_slot", "g_hack"]:
+			return caches.use(true)
+		var device: Node3D = map.interaction_devices.get(key)
+		if device != null and not game.aims_at_object(device):
+			return caches.use(true)
 	if key in ["g_item", "g_switch"] and requested != "":
 		if who.global_position.distance_to(at) >= 2.9:
 			return false
-		var used: bool = run.use(key, who)
+		var used: bool = run.use(key, who, at)
 		if used:
 			game.stats.objectives += 1
 		return used
 	if use_at == Vector3.INF or who.global_position.distance_to(use_at) >= 2.9 or (requested != "" and (key != use_key or at.distance_to(use_at) > 0.2)):
-		return caches.use() if who == game.player else false
+		return caches.use(true) if who == game.player else false
 	use_at = Vector3.INF
 	use_key = ""
 	game.sounds.play_sound("beep")
@@ -1070,7 +1080,7 @@ func _part(instant: bool) -> void:
 		for entry: Dictionary in puppets:
 			if str(entry.look) == look and is_instance_valid(entry.node):
 				puppet = entry
-		var goes := pair.has(look)
+		var goes: bool = game.team_enabled and pair.has(look)
 		if not goes and (instant or puppet.is_empty()):
 			continue
 		if not goes and look != "ghost":
@@ -1212,6 +1222,7 @@ func _win() -> void:
 # ---------------------------------------------------------------- the train
 
 func _start_ride() -> void:
+	coop.gather("car_a")
 	map.set_door("car_a", false)
 	game.sounds.play_at("shutter_close", _point("car_a"))
 	line("m2_ride")
@@ -1695,7 +1706,7 @@ func summary() -> Array[String]:
 	if goal != "":
 		out.append("▸  " + goal)
 	if progress >= 0.0:
-		out.append("%s   %d %%" % [progress_text, int(progress * 100.0)])
+		out.append(progress_text)
 	if stage == "station" and _guards_left() > 0:
 		out.append("Wachen auf dem Bahnsteig:  %d" % _guards_left())
 	out.append_array(run.summary())

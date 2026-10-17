@@ -8,9 +8,11 @@ Ein verlassener Hof bei Nacht, Regen und Nebel – und darunter ein geheimes Lab
 - Das Spiel läuft standardmäßig mit **Direct3D 12** (damit OBS es als Spiel aufnehmen kann). Zeigt das Bild Fehler oder friert es ein, nimm **SPIELEN_VULKAN.cmd**.
 - Oder: im Godot-Projektmanager **Importieren** → `project.godot` → **F5**.
 - **Mac:** `SPIELEN.command` – siehe den Abschnitt „Auf dem Mac“.
-- **EINSTELLUNGEN** (im Hauptmenü und in der Pause): Lautstärke für alles, für Musik, Effekte und Stimmen, die **3D-Auflösung** (mit wie vielen Bildpunkten das 3D-Bild gerechnet wird: 100, 85, 70, 60, 50 oder 40 % – kleiner läuft schneller, die Anzeigen bleiben scharf), **Vollbild**, die Mausempfindlichkeit und eine Übersicht aller Tasten. Was du dort einstellst, gilt auch beim nächsten Start.
+- **EINSTELLUNGEN** (im Hauptmenü und in der Pause): Lautstärke für alles, für Musik, Effekte und Stimmen, die **3D-Auflösung** (mit wie vielen Bildpunkten das 3D-Bild gerechnet wird: 100, 85, 70, 60, 50 oder 40 % – kleiner läuft schneller, die Anzeigen bleiben scharf), **Vollbild**, eine optionale **FPS-Anzeige** (anfangs aus), die Mausempfindlichkeit, Ducken per Halten oder Umschalten und eine Übersicht aller Tasten. Was du dort einstellst, gilt auch beim nächsten Start.
 
 Die Hauptszene ist `scenes/main.tscn`. Die Karte wird von `scripts/cabin.gd` erzeugt und erscheint auch im 3D-Editor; Änderungen am Skript siehst du nach erneutem Öffnen der Szene.
+
+Im Hauptmenü führt **SPIELEN** zur Auswahl der beiden Karten. Links wählst du Karte, Schwierigkeit, Modus, Modifikatoren und Bots; rechts stehen die Spieler, Raum öffnen/beitreten und der Missionsstart. **KARRIERE** bündelt **KLASSE** (Fähigkeiten) und **SKINS** (mit Charaktervorschau). **TESTRAUM** hat einen eigenen Menüpunkt zwischen Karriere und Einstellungen. **PATCHNOTES** zwischen Bestenliste und Beenden zeigt die Änderungen je Version.
 
 ## Steuerung
 
@@ -22,16 +24,17 @@ Die Hauptszene ist `scenes/main.tscn`. Die Karte wird von `scripts/cabin.gd` erz
 | Rechte Maustaste halten | Zielen über Kimme und Korn |
 | R | Nachladen (die Schrotflinte lädt Patrone für Patrone; ein Schuss bricht das Laden ab) |
 | Shift (beim Vorwärtslaufen) | Sprinten |
-| Leertaste | Springen (geduckt: aufstehen) |
-| C | **Ducken**, an und aus: Du bist niedriger und langsamer, die Waffe streut und tritt 30 % weniger. Hinter hüfthoher Deckung sehen dich Soldaten nicht, und was sie trotzdem schießen, geht in die Deckung. Sprinten oder die Leertaste richten dich auf |
-| E | Station / Waffenshop benutzen, Teammitglied, Mitspieler oder Nadja aufhelfen |
+| Leertaste | Höher springen (geduckt: aufstehen). Vorwärts + Leertaste vor einem niedrigen Hindernis: auf Kisten klettern oder über Zäune steigen; nur bei freiem Weg |
+| C | **Ducken halten** (in den Einstellungen auf Umschalten umstellbar): Du bist niedriger und langsamer, die Waffe streut 30 % weniger und tritt halb so stark. Hinter hüfthoher Deckung sehen dich Soldaten nicht. Sprinten oder die Leertaste richten dich auf |
+| E | Station / Waffenshop benutzen oder anvisiertes Fundstück direkt aufnehmen; zum Aufhelfen halten |
 | F | Kurz drücken: Taschenlampe · 1,5 Sekunden halten: nächste Runde starten |
-| 1 / 2 / 3 / Mausrad | **Primärwaffe / Sekundärwaffe / schwere Waffe** – mehr trägst du ohne Waffengurt nicht (siehe „Waffen-Plätze“). Mit Gurten wechselt die Taste zwischen den Waffen ihrer Art; das Mausrad geht alle durch. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
+| 1 / 2 / 3 / Mausrad | **Primärwaffen / schwere Waffe / Sekundärwaffen** – zwei Primärplätze, mit dem einmaligen Waffengurt drei (siehe „Waffen-Plätze“). Die Taste wechselt zwischen den Waffen ihrer Art; das Mausrad geht alle durch. Beim Wechsel blendet das Spiel kurz ein, was du trägst |
 | Q | **Heilspritze:** gibt sofort 30 Lebenspunkte zurück (nie über 100) und braucht dann 8 Sekunden, bis sie wieder bereit ist. Immer dabei, kostet nichts; die Kachel unten rechts zählt die Sekunden herunter |
-| V | **Nahkampf:** ein Schlag mit der Waffe. Wer direkt vor dir steht, wird einen Schritt zurückgeworfen und taumelt knapp zwei Sekunden. Kleiner Schaden, alle 0,85 Sekunden möglich. Schwere Soldaten werden nur kurz aufgehalten, den Crusher bewegt nichts |
+| V | **Nahkampf:** standardmäßig ein Stoß mit der gehaltenen Waffe. Messer, Baseballschläger, Machete, Brecheisen, Brechaxt und Vorschlaghammer gibt es im Shop. Schaden, Reichweite, Ausholzeit, Schlagabstand und Rückstoß unterscheiden sich spürbar. Den Crusher wirft keine davon zurück |
+| Tab halten | Persönliches Scoreboard mit Namen und Abschüssen; erscheint auch nach Sieg oder Niederlage |
 | 4 / 5 / 6 | Befehl an das Team: Position halten / bei mir bleiben / frei bewegen (**X** hält ebenfalls) |
 | G / T / H / B | Splittergranate / Blendgranate / **Molotowcocktail** / Claymore (aus dem Shop). Wurfkörper: **Taste halten** zeigt die Flugbahn und wo sie aufschlägt, **loslassen** wirft. Kurz antippen wirft sofort. Mit einem Wurfkörper in der Hand kannst du nicht schießen |
-| E halten | Auftragsgegenstand benutzen (Code bergen, Generator starten, Sicherung, Kiste, Hack-Modul anbringen oder neu starten) |
+| E halten | Anvisiertes Gerät aktivieren (Generator, Sicherung, Funkmast, Hack-Modul): ein Balken zeigt den Fortschritt |
 | Leertaste / Enter / Mausklick | Die Ankunft per Helikopter am Anfang überspringen |
 | N | Nächste Runde starten (halten, alternativ zu F) |
 | Esc | Pausieren / fortsetzen (im Koop läuft das Spiel weiter) |
@@ -50,7 +53,7 @@ Unter dem Hof liegt ein geheimes Labor der **Helix Corporation** – des Konzern
 | **Ankunft** | Der Helikopter schwebt über dem Landeplatz, der Trupp seilt sich ab (Zwischensequenz, mit der Leertaste zu überspringen). Vom Landeplatz geht es zum Haus |
 | **Runde 1 – 3** | Am Anfang ist nur ein Teil des Hauses offen. Nach Runde 1 öffnen sich weitere Räume im Erdgeschoss, nach Runde 3 die Treppen ins Obergeschoss |
 | **Hinweise** | Jeder erfüllte Auftrag ist ein Hinweis. Nach dem dritten ist klar: Die Forscherin **Nadja** sitzt im Labor unter dem Haus, und der Zugang ist versiegelt. (Spätestens vor Runde 6 finden Colemans Leute das auch ohne euch heraus.) |
-| **Das Hack-Modul** | In der nächsten Runde wirft der Helikopter eine Kiste mit dem Hack-Modul in den Hof. Kiste öffnen (**E halten**), zur Kellertür im Haus, Modul anbringen (**E halten**) und verteidigen, bis der Hack durch ist. Das Modul **fällt zwischendurch aus** – von selbst oder weil die Infizierten es zerschlagen – und muss dann mit **E** neu gestartet werden |
+| **Das Hack-Modul** | In der nächsten Runde wirft der Helikopter eine Kiste mit dem Hack-Modul in den Hof. Kiste anvisieren und mit **E** aufnehmen, zur Kellertür im Haus, Modul anbringen (**E halten**) und verteidigen, bis der Hack durch ist. Das Modul **fällt zwischendurch aus** – von selbst oder weil die Infizierten es zerschlagen – und muss dann mit **E halten** neu gestartet werden |
 | **Das Labor** | Der Keller ist offen. Unten steht Nadja hinter Panzerglas und gibt euch einen eigenen Auftrag (Festplatten sichern). In dieser Runde kommt oben der erste, noch nicht ausgewachsene Crusher |
 | **Nadjas Tür** | Zwei Runden nach dem Keller kommt das Modul an ihre Tür. Jetzt greifen Infizierte **und C.R.U.** gleichzeitig an, die C.R.U. sprengt den Versorgungstunnel als zweiten Weg ins Labor, und das Modul fällt zweimal aus. Währenddessen erzählt Nadja über die Lautsprecher, was Helix getan hat |
 | **Evakuierung** | Nadja ist frei – der Hauptauftrag ist erfüllt. Die nächste Runde ist die letzte: Bringt sie zum Landeplatz und haltet ihn, bis der Helikopter unten ist. Der Crusher kommt dazu; die Infizierten sind in dieser Runde 30 % weniger als sonst in Runde 10, und während ihr auf den Helikopter wartet, drängt weniger nach. Nadja hält deutlich mehr aus als ein Bot (260 statt 100 Lebenspunkte), und die Angreifer gehen zuerst auf die los, die schießen – auf sie nur, wenn sie viel näher steht. Geht sie doch zu Boden, hilf ihr mit **E** auf; liegt sie 30 Sekunden, ist die Nacht verloren. Stehen alle am Helikopter, ist sie gewonnen |
@@ -72,11 +75,11 @@ Nicht jede Runde ist gleich. Ab Runde 3 würfelt das Spiel für jede Nacht neu a
 | **Infizierte + C.R.U.** (ab Runde 4) | beides zugleich |
 | **Hinterhalt** (ab Runde 5) | mitten in einer Runde kommt ein kleiner C.R.U.-Trupp aus dem Wald |
 
-Dazu kommen **Aufträge** an zufälligen Orten (Marker mit Entfernung auf dem Bildschirm, Liste oben links). Sie bringen Vorrat, Score und einen Hinweis; solange einer offen ist, kommen weiter Infizierte nach.
+Dazu kommen **Aufträge** an zufälligen Orten (Marker mit Entfernung auf dem Bildschirm, Liste unter der Karte). Sie bringen Tokens, Score und einen Hinweis; solange einer offen ist, kommen weiter Infizierte nach.
 
 | Auftrag | Was zu tun ist |
 |---|---|
-| **Zugangscodes bergen** | Die toten Helix-Forscher liegen von Beginn der Nacht an auf dem Hof, einer im Obergeschoss des Farmhauses. Beim Auftrag blinkt bei zwei oder drei von ihnen die Marke auf dem Rücken: hingehen und **E halten**. Zeitlimit |
+| **Zugangscodes bergen** | Die toten Helix-Forscher liegen von Beginn der Nacht an auf dem Hof, einer im Obergeschoss des Farmhauses. Beim Auftrag blinkt bei zwei oder drei von ihnen die Marke auf dem Rücken: hingehen, anvisieren und einmal **E** drücken. Zeitlimit |
 | **Generator verteidigen** | Generator mit **E** starten und 80 Sekunden am Laufen halten. Die Infizierten greifen ihn an; fällt er aus, muss ihn jemand neu starten |
 | **Strom wiederherstellen** | Stromausfall: alle Lampen aus, bis drei Sicherungskästen wieder eingeschaltet sind. Einer davon kann im Obergeschoss hängen |
 | **Versorgungskiste holen** | Abgeworfene Kiste (rote Fackel) erreichen und öffnen: Munition und Verbandszeug |
@@ -108,11 +111,11 @@ Alle Funksprüche und Rufe sind **auf Englisch vertont** (ElevenLabs), mit Unter
 
 ### Schwierigkeit und Bestenliste
 
-Im Hauptmenü stellst du mit **STUFE** die Schwierigkeit ein: Leicht, Normal, Schwer, Albtraum. Höhere Stufen machen die Gegner nicht zäher, sondern bringen mehr und schnellere Infizierte, mehr Spezialgegner, härtere Treffer, weniger Fundstücke, höhere Preise, schwächere Heilung, giftigeres Gas, mehr Aufträge und Ereignisse, eine C.R.U., die schneller reagiert, besser trifft und öfter flankiert, ausweicht und wirft, und längere Hacks mit einem Ausfall mehr – und vervielfachen den Score. Die **BESTENLISTE** merkt sich pro Modus und Stufe die zehn besten Einsätze (`user://nachtwache_profile.json`).
+Unter **SPIELEN → SCHWIERIGKEIT** wählst du Leicht, Normal, Schwer oder Albtraum. Höhere Stufen machen die Gegner nicht zäher, sondern bringen mehr und schnellere Infizierte, mehr Spezialgegner, härtere Treffer, weniger Fundstücke, höhere Preise, schwächere Heilung, giftigeres Gas, mehr Aufträge und Ereignisse, eine C.R.U., die schneller reagiert, besser trifft und öfter flankiert, ausweicht und wirft, und längere Hacks mit einem Ausfall mehr – und vervielfachen den Score. Die **BESTENLISTE** merkt sich pro Modus und Stufe die zehn besten Einsätze (`user://nachtwache_profile.json`).
 
 ### Endlosmodus
 
-Im Hauptmenü schaltet **MODUS** zwischen **GESCHICHTE** und **ENDLOS** um (auch in den Einstellungen unter „Einsatz“). Der Endlosmodus ist von Anfang an spielbar:
+Unter **SPIELEN → MODUS** schaltest du für den Hof zwischen **GESCHICHTE** und **ENDLOS** um. Der Endlosmodus ist von Anfang an spielbar:
 
 - Keine Geschichte, keine Sperren, kein Helikopter: Das ganze Haus und das Labor stehen offen, du startest im Haus.
 - **Es gibt keine letzte Runde.** Bis Runde 10 kommen dieselben Angreifer wie sonst; danach wächst jede Runde um 8 % der zehnten, jede zweite bringt einen Crusher, ab Runde 20 jede fünfte einen zweiten. Die Gegner werden mit jeder Runde zäher; schneller werden sie nur bis Runde 20, damit man ihnen noch davonlaufen kann.
@@ -238,12 +241,12 @@ Die Werte stehen in `TYPES` (`scripts/infected.gd`: Leben), `ROLES` (`scripts/cr
 
 #### Waffen-Plätze
 
-Du trägst **eine Primärwaffe, eine Sekundärwaffe und eine schwere Waffe** – Tasten **1**, **2** und **3**.
+Du hast **zwei Primärwaffenplätze**, **einen schweren Waffenplatz** und **einen Platz für eine gekaufte Sekundärwaffe** – Tasten **1**, **2** und **3**. Die ausgegebene M9 bleibt zusätzlich dabei.
 
-- Kaufst du eine Waffe, für deren Art kein Platz mehr frei ist, **ersetzt sie eine andere**: Die geht für die **Hälfte ihres Kaufpreises** in Zahlung. **Welche geht, bestimmst du** – unter „DAFÜR GEHT“ stehen alle, die Platz machen können (jede Waffe derselben Art, und mit Gurt auch die zusätzlichen der anderen Arten), jeweils mit dem, was sie einbringt. Vorgeschlagen ist die Waffe dieser Art, die du in der Hand hältst. Munition, Aufsätze und Werkbank-Stufen der alten Waffe sind dann weg.
-- **Verkaufen** geht auch ohne Neukauf: Waffe in der Liste oder oben unter „DU TRÄGST“ anklicken, dann **VERKAUFEN** – für die Hälfte des Kaufpreises. Die letzte Waffe gibt der Shop nicht heraus.
+- Kaufst du eine Waffe, für deren Art kein Platz mehr frei ist, **ersetzt sie eine andere**: Die geht für die **Hälfte ihres Kaufpreises** in Zahlung. **Welche geht, bestimmst du** – unter „DAFÜR GEHT“ stehen alle, die Platz machen können (Waffen derselben Art), jeweils mit dem, was sie einbringt. Vorgeschlagen ist die Waffe dieser Art, die du in der Hand hältst. Munition, Aufsätze und Werkbank-Stufen der alten Waffe sind dann weg.
+- **Verkaufen** geht auch ohne Neukauf: Waffe in der Liste anklicken, dann **VERKAUFEN** – für die Hälfte des Kaufpreises. Die ausgegebene M9 bleibt immer dabei und ist unverkäuflich.
 - Das M4A4, mit dem jeder anfängt, bringt beim Tausch nichts ein – dafür gibt es das Gewehr im Shop jederzeit kostenlos zurück.
-- Der **Waffengurt** (Reiter Ausrüstung, 250 / 400 / 600) schafft Platz für **je eine Waffe mehr, egal welcher Art** – bis zu drei Gurte, also höchstens sechs Waffen. Gurte gelten für die Nacht.
+- Der **Waffengurt** (Reiter Ausrüstung, 250 Tokens) ist **einmal pro Einsatz** kaufbar und schaltet **den dritten Primärwaffenplatz** frei. Weitere Stufen gibt es nicht.
 
 | Waffe | Art | Preis | Magazin | Besonderheit |
 |---|---|---|---|---|
@@ -257,7 +260,7 @@ Du trägst **eine Primärwaffe, eine Sekundärwaffe und eine schwere Waffe** –
 | Honey Badger | Primär | 350 | 30 | Schallgedämpft, präzise, hoher Einzelschaden |
 | M14 | Primär | 320 | 20 | **Einzelschuss:** ein Schuss pro Klick, **100 Schaden** – mehr als dreimal so hart wie eine M4A4-Kugel –, sehr genau, und die Kugel **geht durch einen Körper** und trifft den dahinter. Kimme und Korn. |
 | Auto-Schrotflinte | Schwer | 500 | 8 | Halbautomatisch mit Kastenmagazin: kein Repetieren, drei Ladungen in der Sekunde, schnelles Nachladen. Jede Ladung schwächer als die der Pump-Flinte und mit weniger Stoß, dafür steht nichts lange, was davor steht. Eigener Schuss-Sound |
-| M9 Pistole | Sekundär | 60 | 15 | Leicht und schnell, billige Zweitwaffe |
+| M9 Pistole | Sekundär | Startwaffe | 15 | Immer dabei, unbegrenzte Reservemunition; Magazine werden weiterhin nachgeladen. Am Boden wird automatisch eine Sekundärwaffe gezogen, die dann ebenfalls unbegrenzte Reserve hat |
 | .44 Magnum | Sekundär | 220 | 6 | Sechs Schuss, jeder ein Hammer |
 | Scharfschützengewehr | Schwer | 450 | 5 | Zielfernrohr (rechte Maustaste), Repetierer; die Kugel geht durch bis zu vier Körper |
 | SVD Dragunow | Schwer | 650 | 10 | Das zweite Scharfschützengewehr: **halbautomatisch**, ein Schuss pro Klick ohne Repetieren, zehn Schuss. Pro Treffer schwächer als der Repetierer, dafür rund dreimal so schnell; die Kugel geht durch zwei Körper. **Erst nach Runde 2** im Shop |
@@ -288,15 +291,15 @@ In der Shop-Liste **Aufsätze**, für jede dieser Waffen eigens zu kaufen. Die L
 
 ### Ausrüstung aus dem Shop
 
-Der Shop hat acht Reiter: **Waffen**, **Pistolen**, **Schwer**, **Klasse**, **Aufsätze**, **Ausrüstung**, **Verbrauch** und **Team**. Hinter dem Tresen steht die Händlerin.
+Der Shop hat acht Reiter mit Symbolen: **Waffen**, **Pistolen**, **Schwer**, **Nahkampf**, **Klasse**, **Ausrüstung**, **Verbrauch** und **Team**. Hinter dem Tresen steht die Händlerin. Preise und Geldbeutel verwenden überall **◈**. Im Nahkampf-Reiter stehen der kostenlose Waffenstoß und sechs kaufbare Waffen: Messer (180 ◈), Baseballschläger (250 ◈), Machete (350 ◈), Brecheisen (400 ◈), Brechaxt (650 ◈) und Vorschlaghammer (800 ◈), vor dem Schwierigkeitsfaktor.
 
 So ist er aufgebaut (seit v0.18):
 
 - **Links die Liste** des Reiters mit Preis oder Zustand (DABEI ✓, GESPERRT, AB RUNDE 4), **rechts das, was du darin anklickst**. Mit den Pfeiltasten gehst du durch die Liste; das Bild rechts folgt.
 - **Waffen siehst du als Modell**, das sich langsam hin und her dreht, mit fünf Werten daneben – Schaden, Feuerrate, Magazin und Reserve, Nachladen, Präzision – und dem **Vergleich mit der Waffe, die sie ersetzen würde** (▲ besser, ▼ schlechter).
-- **Aufsätze** siehst du schon vor dem Kauf **an der Waffe**.
+- **Aufsätze** öffnest du direkt unter den Werten einer gekauften Waffe: **Visier**, **Mündung** und bei Pistolen **Handhabung / Akimbo**. Erst den Slot, dann den Aufsatz auswählen: Die Vorschau ändert das echte Modell, ohne schon etwas zu kaufen. Der Aktionsknopf kauft und montiert; vorhandene Aufsätze lassen sich kostenlos wechseln. Bei Akimbo feuert die linke Maustaste die linke Pistole, die rechte die rechte. Beide haben eigene Magazine, Schussfolgen und Mündungsfeuer; im HUD stehen die beiden Munitionsstände nebeneinander. Nur Hüftfeuer, gemeinsames Nachladen dauert länger.
 - **Ausrüstung und Verbrauch** kaufst du direkt in der Zeile (der Preis ist der Knopf); die Zeile zeigt, wie viel du schon hast (●●○○).
-- Oben steht, **was du trägst**, nach Tasten sortiert; jede Waffe dort ist ein Knopf, der sie zeigt (zum Verkaufen).
+- **Werkbank:** dieselben großen Waffenzeilen und aktuelle Werte. Ein gekauftes Upgrade lässt die zugehörigen Balken auf ihren neuen Wert wachsen; die Upgrade-Zeilen nennen weiterhin die nächste Verbesserung.
 - Nach einem Kauf bleibt alles, wo es war: die Liste springt nicht zurück.
 
 | Gegenstand | Preis | Wirkung |
@@ -308,7 +311,7 @@ So ist er aufgebaut (seit v0.18):
 | Adrenalinspritze | 300 | Rettet dich einmal, wenn dein Leben auf null fällt |
 | Schutzweste / Schwere Rüstung | 150 / 300 | 50 bzw. 100 Rüstung; Rüstung fängt 60 % jedes Treffers ab |
 | Ballistische Weste | 160 / 260 / 400 | Drei Stufen gegen die C.R.U.: 25, 40 und 55 % weniger Schaden durch ihre Kugeln und Granaten. Verbraucht sich nicht und wirkt zusätzlich zur Rüstung; gegen Infizierte hilft sie nicht. Die Stufe steht neben der Lebensanzeige |
-| Waffengurt | 250 / 400 / 600 | Drei Stufen: Platz für je eine Waffe mehr, egal welcher Art (siehe „Waffen-Plätze“) |
+| Waffengurt | 250 | Einmaliger Kauf: dritter Primärwaffenplatz; zwei sind von Anfang an frei |
 | Gasmaske | 150 / 250 / 400 / 600 | Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas; erholt sich an frischer Luft. Wofür sie gut ist, steht unter „Gas und Gasmaske“ |
 | Team: Schutzplatten | 180 / 300 / 450 | Drei Stufen: **+30 % Leben je Stufe** für deine beiden Bots (bis 190). Gilt für diese Nacht; nur im Einsatz mit Bots |
 | Team: Scharfe Munition | 180 / 300 / 450 | Drei Stufen: **+20 % Schaden je Stufe** für deine beiden Bots (bis +60 %) |
@@ -426,8 +429,8 @@ Technisch: Die Karte steht in `scripts/hive_map.gd` (Räume, Türen und Einricht
 ## Koop zu zweit
 
 1. **Dein Mitspieler braucht dasselbe Spiel.** `KOOP_PAKET_ERSTELLEN.cmd` packt das Projekt samt Godot in `Nachtwache-Koop-Paket.zip` (neben dem Projektordner). Er entpackt die ZIP und startet im Ordner `Nachtwache` die `SPIELEN.cmd`. Beim allerersten Start bereitet Godot die Spieldaten vor – das dauert etwa eine Minute (auf langsameren PCs länger). Hat dein Mitspieler einen **Mac**, baut `KOOP_PAKET_MAC_ERSTELLEN.cmd` stattdessen `Nachtwache-Koop-Paket-Mac.zip` – ohne Godot, das lädt er selbst (siehe „Auf dem Mac“). Bequemer für Updates ist **GitHub** (siehe „Über GitHub“).
-2. **Du:** Im Hauptmenü zuerst **MISSION 1** oder **MISSION 2** wählen, dann **KOOP HOSTEN**. Das Menü zeigt deine Adressen; dort stellst du auch die Stufe ein.
-3. **Er:** **KOOP BEITRETEN** → deine Adresse eintragen → **VERBINDEN**. Sobald er verbunden ist, startest du den Einsatz.
+2. **Du:** **SPIELEN** → Karte und Einsatzoptionen wählen → **RAUM ÖFFNEN**. Über **VERBINDUNG ANSEHEN** findest du die Adressen und den Status der Portfreigabe.
+3. **Er:** **SPIELEN → RAUM BEITRETEN** → deine Adresse eintragen → **VERBINDEN**. In der Lobby erscheinen eure Namen; sobald er verbunden ist, startest du den Einsatz.
 
 **Beide brauchen dieselbe Version** (sie steht unten rechts im Hauptmenü). Seit v0.19 prüft das Spiel das beim Verbinden: Passt es nicht, steht bei beiden in der Lobby **„VERSIONEN PASSEN NICHT ✗ – Du hast v0.19, dein Mitspieler v0.20“**, und der Einsatz lässt sich nicht starten. Wer die ältere hat, holt das Update (siehe „Über GitHub“) und startet neu. Gegenüber v0.18 und älter weiß nur die neuere Seite Bescheid („… eine ältere Version (vor v0.19)“, nach drei Sekunden) – die alte kann es noch nicht sagen; bis v0.18 scheiterte so ein Einsatz einfach stumm.
 
@@ -451,7 +454,7 @@ Die Box fragt bei solchen Änderungen oft nach einer Bestätigung (Taste an der 
 
 Ob dein Router mitmacht, lässt sich auch ohne Fenster prüfen: `Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --router-check` schreibt eine Zeile `ROUTER … forward=open` (geöffnet), `refused` (nicht von selbst), `walled` (keine eigene Adresse) oder `none`.
 
-Im Koop ersetzt dein Mitspieler die Bots. **Modus, Stufe und Modifikationen bestimmt der Host**; was eine Runde bringt, wird beiden angesagt. Wer sich duckt, wird auch vom Mitspieler geduckt gesehen. Schlag, Molotow und Flammenwerfer des Gasts rechnet der Host aus – sein Feuer brennt auf beiden Bildschirmen. Beide brauchen dieselbe Version. Die Geschichte läuft für beide: Der Gast sieht dieselben Sperren, Aufträge, Nadja und den Helikopter, und am Ende müssen **beide** mit Nadja am Landeplatz stehen. Vorrat und Score gehören dem Team, jeder hat eigene Waffen und Munition. Wer zu Boden geht, kann vom anderen mit **E** aufgehoben werden und steht nach der Runde wieder; liegen beide, ist die Nacht verloren. Der Host rechnet die Gegner, der Gast sieht sie mit kleiner Verzögerung.
+Im Koop sind Bots optional. **Karte, Modus, Stufe und Modifikationen bestimmt der Host**; seine Auswahl erscheint auch beim Gast in der Lobby. Wer sich duckt oder wirft, wird auch vom Mitspieler so gesehen. Nahkampf, Molotow und Flammenwerfer des Gasts rechnet der Host aus – sein Feuer brennt auf beiden Bildschirmen. Beide brauchen dieselbe Version. Die Geschichte läuft für beide: Der Gast sieht dieselben Sperren, Aufträge, Nadja und den Helikopter, und am Ende müssen **beide** mit Nadja am Landeplatz stehen. **Jeder erhält die volle Belohnung, hat aber seinen eigenen Geldbeutel**: Einkäufe und Verkäufe ändern nur das eigene Geld. In Mission 2 besitzt jeder außerdem seinen eigenen Loot in Kisten und Tresoren. Schließende Arenatüren holen einen zurückgelassenen Spieler hinein; **Esc → ZUM MITSPIELER TELEPORTIEREN** hilft dort, wenn ihr getrennt seid. Hinter Wänden ist der Partner als Umriss sichtbar. Wer zu Boden geht, kann weiter mit seiner Sekundärwaffe schießen und vom anderen mit **E** aufgehoben werden; liegen beide, ist die Nacht verloren. Der Host rechnet die Gegner, der Gast sieht sie mit kleiner Verzögerung.
 
 ## Über GitHub
 
@@ -567,6 +570,7 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 ## Sounds und Stimmen (ElevenLabs)
 
 - `assets/sounds` enthält 202 WAV-Dateien (sechs davon Ersatz-Sounds, siehe unten): Schüsse aller Waffen, Nachladen, Schritte, Treffer, Stimmen aller Infizierten in mehreren Varianten, Hund, Blut und Brocken, Explosionen, Shop-Rollladen, Runden-Stinger, Donner, Regen und Wind, Helikopter. 133 davon stammen aus dem ElevenLabs-Soundeffekt-Generator; elf (Pistole, Magnum, Scharfschützengewehr, Minigun samt Anlauf, Helikopter, Piepton, UMP und AK-47 jeweils mit und ohne Schalldämpfer) sind aus vorhandenen Aufnahmen abgeleitet. Der Schuss des **Granatwerfers** und die vier **Explosionen** sind seit v0.10 aus je zwei Aufnahmen gemischt: bei der Explosion ein tiefer Knall, von einem langen Grollen auf einen Schlag mit ausrollendem Nachhall gekürzt, und darüber der scharfe Knall eines Schusses. Damit so etwas zusammen mit Schüssen und Stimmen nicht übersteuert, sitzt auf dem Gesamtausgang ein Begrenzer.
+- Der klassische Hitmarker ist reine Synthese: `node tools/make_ding_sounds.js assets/sounds --only=classic` baut die kurzen Klicks für Körper, Kopf und Abschuss; `FieldAudio.DING` wählt die aktive Klangfamilie.
 - Die Originaldownloads liegen neben dem Projekt in `Nachtwache-ElevenLabs`. Daraus wurden die Sounds geschnitten, auf Mono gemischt und auf gleiche Lautheit gebracht.
 - **Neu erzeugen:** `node tools/make_sounds.js "../Nachtwache-ElevenLabs;../Nachtwache-ElevenLabs/sfx_v10" assets/sounds` (mit `--only=launcher,explosion` am Ende nur diese beiden). `node tools/wav_info.js ORDNER` zeigt Pegel und Länge jeder WAV-Datei.
 - **Aufnahmen vom 5. Oktober (v0.15):** Molotow-Aufschlag, Bodenfeuer, Flammenwerfer, Kolbenschlag (drei Varianten) und die Schüsse von M107 und M14 sind jetzt ElevenLabs-Aufnahmen (Rohdateien in `Nachtwache-ElevenLabs/sfx_v14`, je vier Varianten; `tools/make_sounds.js` nimmt die nach Messung beste oder mischt zwei bis drei). SVD und Doppelbüchse sind aus denselben Rohaufnahmen gemischt. Nachbauen: `node tools/make_sounds.js "../Nachtwache-ElevenLabs;../Nachtwache-ElevenLabs/sfx_v10;../Nachtwache-ElevenLabs/sfx_v14" assets/sounds --only=molotov,fire,flamer,melee,fifty,m14,svd,nitro`.
@@ -579,6 +583,16 @@ Im Ordner `assets/music` liegen die Soundtracks. Der Name einer Datei sagt, zu w
 - **Stimme ergänzen oder tauschen:** Text in `scripts/radio.gd` eintragen, bei ElevenLabs erzeugen, die MP3s in einen Ordner legen und `node tools/make_voices.js ORDNER order.json` laufen lassen (schneidet, pegelt und legt `assets/voice/<sprecher>/<stichwort>_<nummer>.ogg` an). Eine Pause von mehr als 0,9 Sekunden mitten in einer Zeile kürzt das Werkzeug. Die Rohdateien und die Zuordnung liegen in `Nachtwache-ElevenLabs/stimmen`, `stimmen2`, `stimmen3`, `stimmen4`, `stimmen5` und `stimmen6`. Ob jede Zeile ihre Aufnahme hat und keine Aufnahme übrig ist, zeigt `-s res://tools/voice_check.gd` (nach einem `--import`). Hat ein Stichwort mehrere Texte, aber nur für einige eine Aufnahme, benutzt das Spiel nur die vertonten.
 
 ## Stand und Grenzen
+
+**v0.68** – getrennte Koop-Geldbeutel bei voller Belohnung für beide, persönliche Kisten und Tresore, sichere Arenatüren und Partner-Teleport in Mission 2. Mitspieler-Umrisse reagieren auf Weltgeometrie statt auf Hände, Waffen oder Körper. Tab zeigt persönliche Abschüsse, auch nach Sieg und Niederlage. Beide Spieler brauchen diesen Stand.
+
+V schlägt standardmäßig mit der gehaltenen Waffe zurück; sechs kaufbare Nahkampfwaffen unterscheiden sich in Schaden, Reichweite und tatsächlicher Ausholzeit. M9 mit unbegrenzter Reserve und Schießen am Boden; USP, G18 und Desert Eagle ergänzen die Pistolen. Aufsätze und Akimbo sitzen im Slot-Editor direkt bei der gekauften Waffe, mit echter Modellvorschau. Akimbo schießt links/rechts mit der jeweiligen Maustaste und führt getrennte Magazine. Zwei Primärplätze sind immer frei, der einmalige Waffengurt ergänzt den dritten. Shop und Werkbank nutzen die verfügbare Höhe mit mehr Platz für Listen und Details, größeren Abständen bei den Tabs und einem X oben links statt des unteren Zurück-Buttons; Esc schließt ebenfalls. Größere Einträge haben passende Symbole; Waffenwerte bleiben beim Aufrüsten sichtbar. Beim Überfahren eines Upgrades zeigt ein grüner Balkenabschnitt genau den zusätzlichen Gewinn, beim Kauf wachsen die Werte animiert.
+
+Reduzierte Anzeigen mit Ereignisfeed oben links, nahen Team-Lebensbalken, blauem Rüstungsbalken unter HP und Westen-Symbolen. Waffenabhängige Fadenkreuze: Mittelpunkt nur für Pistolen, kompakter Shotgun-Kreis auch beim Sprinten, andere Fadenkreuze deutlich breiter und blasser beim Sprinten, ausgeblendet beim Zielen. Hitmarker sind weiß für Treffer, orange für Kopfschüsse und rot für Abschüsse, mit kurzen klassischen Klicks statt Glockennachklang. Hocken verringert den Rückstoß stärker und lässt sich als Halten oder Umschalten einstellen. Höhere Sprünge, tolerantere Eingaben und Vorwärts + Leertaste für niedrige Hindernisse machen die Bewegung direkter; Lauf- und Sprinttempo bleiben gleich. Unsichtbare Höhenaufsätze auf kleinen Hindernissen entfallen, Kisten und Fässer sind begehbar. Anvisierte Ziele leuchten im Nahbereich als Umriss; E nimmt Fundstücke sofort auf, längere Aktionen zeigen einen Fortschrittsbalken. Blut am Bildschirmrand und dezente Richtungsanzeigen; Wurfanimationen mit Hand, Ausholen und Loslassen. Soldaten schießen nur innerhalb ihrer Reichweite, Leeches bremsen nicht mehr.
+
+Hauptmenü mit Karte/Lobby und Karriere für Klasse und Skins, eigener Testraum-Menüpunkt zwischen Karriere und Einstellungen, eigene Steuerungsseite und Patchnotes im Spiel. Größere Überschriften und einheitliche Zurück-Buttons erleichtern die Navigation; die Händlerin steht vollständig sichtbar neben dem verkürzten Tresen. Uhrzeit links und Tokens rechts stehen gemeinsam unter der Karte, mit Abstand zu den Aufträgen. Die FPS-Anzeige ist in den Einstellungen zuschaltbar und anfangs aus. Detailliertes Holz auf Möbeln, Balken und Geländern; Wände, Holzböden und Erde mit ihrem vorherigen Finish. Beton mit Normal- und Rauheitskarten und getrennten Farbtönen für Wände, Böden und Treppen; überarbeitete Medipacks und Munitionskisten mit dezentem Licht am Boden. Gas ist durch Nebel, begrenzte Rauchschwaden und Bildschirmfeedback besser sichtbar. Der Hof ist etwas heller, die Taschenlampe stärker und reicht weiter; das gelieferte Bild hängt in der Villa.
+
+Die Versionsgeschichte im Spiel kommt aus `data/patch_notes.json`. Coding-Agents finden in `AGENTS.md` die verbindliche Anweisung, bei fertigen Änderungen die wichtigen Patchnotes zu ergänzen und für einen neuen veröffentlichten Stand die Version zu erhöhen. `python3 tools/check_patch_notes.py` und der GitHub-Check prüfen Daten und Versionsnummer; die Anzeige übernimmt neue Einträge automatisch.
 
 **v0.67** – Koop: Der erste Story-Abgleich beendet die Landesequenz des Gastes nicht mehr vorzeitig; danach ist die Figur des Hosts sichtbar. Mission 1 wartet vor und zwischen Runden auf **F halten (1,5 s)**, ohne automatischen Countdown. Kurzes F bleibt die Taschenlampe. Mission 2 kann der Host ebenfalls wählen: gemeinsame Karte, Missionsfortschritt, Türen, Begleiter und Transporte, dazu Neustart am gemeinsamen Kontrollpunkt. Beide Spieler brauchen diesen Stand.
 
@@ -757,12 +771,14 @@ Aus dem Konzept noch offen: Barrikaden reparieren, einen NPC an einem Ort besch�
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -- --smoke-test
 ```
 
-Die Koop-Regressionen prüfen Landesequenz, sichtbare Spieler und den manuellen Rundenstart mit `--smoke-test --only=coop_controls,coop_hive`. Zwei getrennte Spielwelten lassen sich auch ohne Netzwerkfreigabe mit Godots echtem RPC-System verbinden:
+Die neuen Prüfungen für HUD, Karriere, Patchnotes, Pistole am Boden, Nahkampf, Wurfbewegung, Waffeneditor, Werkbankwerte, Scoreboard und Umrisse laufen mit `--smoke-test --only=feedback`. Die klassische zweite Mission samt Stationen prüft `--fixed-fps 60 --path . -- --smoke-test --only=hive`; der feste Zeitschritt hält den künstlich beschleunigten Dialogtest und die Bewegung synchron. Die Koop-Regressionen für Landung, sichtbare Spieler und manuellen Rundenstart liegen unter `--only=coop_controls,coop_hive`. Zwei getrennte Spielwelten lassen sich auch ohne Netzwerkfreigabe mit Godots echtem RPC-System verbinden; sie prüfen außerdem Geldbeutel, persönliche Kisten, Türen, Teleport, Lobby, optionale Bots und persönliche Abschüsse einschließlich der Ergebnisanzeige:
 
 ```text
-Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -s res://tools/coop_memory_check.gd -- --mission=1
+Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -s res://tools/coop_memory_check.gd -- --mission=1 --bots
 Godot_v4.7.2-stable_win64.exe --headless --path "PFAD_ZU_NACHTWACHE" -s res://tools/coop_memory_check.gd -- --mission=2
 ```
+
+`python3 tools/check_patch_notes.py` prüft die Versionsgeschichte. `--ui-review-check --no-warm-up` erstellt mit Grafik die echten Map-Vorschaubilder und Screenshots der Menüs und Effekte in `tools/ui_review/` und beendet Godot danach. Dieser Grafik-Test darf nicht headless laufen.
 
 Ein Bot kann das echte Spiel im Zeitraffer durchspielen und meldet Infizierte, die irgendwo hängen bleiben. Ohne `--headless` und mit `--bot-speed=1` misst er außerdem die Bildrate:
 

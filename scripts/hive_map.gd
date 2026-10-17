@@ -201,12 +201,47 @@ func _against(room_id: String, side: int, a: float, id: String, options: Diction
 	var deep_half := bounds.size.z * factor * 0.5
 	return _model(id, _face_point(room, side, a, 0.0, -(deep_half + gap)), _model_yaw(side), options)
 
+var boys_photo: Texture2D
+var interaction_devices: Dictionary = {}
 ## A picture in its frame on a wall of a room: `wide` metres, its middle `high` above the floor.
 func _painting(room_id: String, side: int, a: float, wide: float = 1.3, high: float = 2.1, id: String = "fancy_picture_frame_01") -> void:
 	var room: Dictionary = room_of[room_id]
 	var size := _model_size(id)
 	var tall := wide * size.y / maxf(0.001, size.x)
 	_model(id, _face_point(room, side, a, high - tall * 0.5, -0.045), _model_yaw(side), {"width": wide, "solid": false, "far": 40.0})
+	# A personal photograph in the villa's existing frames, with a dark mount so its
+	# original proportions and the whole image are preserved in portrait frames too.
+	if not ResourceLoader.exists("res://assets/dieBoys.webp"):
+		return
+	if boys_photo == null:
+		boys_photo = load("res://assets/dieBoys.webp") as Texture2D
+		if boys_photo == null:
+			return
+	var inner := Vector2(wide * 0.78, tall * 0.78)
+	var matte := MeshInstance3D.new()
+	var panel := QuadMesh.new()
+	panel.size = inner
+	matte.mesh = panel
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color("10120f")
+	dark.roughness = 1.0
+	matte.material_override = dark
+	add_child(matte)
+	matte.position = _face_point(room, side, a, high, -0.155)
+	matte.rotation.y = _model_yaw(side)
+	var photo := MeshInstance3D.new()
+	var print_mesh := QuadMesh.new()
+	var ratio := float(boys_photo.get_width()) / float(boys_photo.get_height())
+	print_mesh.size = Vector2(minf(inner.x, inner.y * ratio), minf(inner.y, inner.x / ratio))
+	photo.mesh = print_mesh
+	var paper := StandardMaterial3D.new()
+	paper.albedo_texture = boys_photo
+	paper.roughness = 0.95
+	photo.material_override = paper
+	photo.name = "DieBoysPhoto"
+	add_child(photo)
+	photo.position = _face_point(room, side, a, high, -0.16)
+	photo.rotation.y = _model_yaw(side)
 
 ## A stone plinth with something on it (a bust, a vase, a statue).
 func _plinth(pos: Vector3, tall: float, id: String, model_tall: float, yaw: float = 0.0, wide: float = 0.5) -> void:
@@ -1330,6 +1365,10 @@ func _desk(pos: Vector3, yaw: float, picture: int = 1) -> void:
 ## lamps over a steel foot.
 func _console(room_id: String, side: int, a: float, b: float, pictures: Array = [1, 3, 5]) -> void:
 	var room: Dictionary = room_of[room_id]
+	var previous_batch := batch
+	var interactive := room_id in ["booth", "control", "security"]
+	if interactive:
+		batch = MeshBatch.new()
 	_face_box(room, side, "steel", a, b, 0.0, 0.8, -0.7, 0.0, Color("2f3539"))
 	_face_box(room, side, "plain", a, b, 0.0, 0.1, -0.74, 0.0, Color("0d0f10"))
 	_face_box(room, side, "steel", a, b, 0.8, 0.86, -0.76, 0.0, Color("454c51"))
@@ -1343,6 +1382,13 @@ func _console(room_id: String, side: int, a: float, b: float, pictures: Array = 
 		for k in range(4):
 			_led(_face_point(room, side, at - 0.24 + k * 0.16, 0.875, -0.5), Vector3(0.05, 0.012, 0.05), [Color("5ee07a"), Color("ffb347"), Color("5ee07a"), Color("ff3a2a")][k], 3.0, [1.0, 0.7, 1.0, 0.4][k])
 	_solid(_face_centre(room, side, a, b, 0.0, 1.36, -0.76, 0.0), _face_size(side, a, b, 0.0, 1.36, -0.76, 0.0))
+	if interactive:
+		var device := Node3D.new()
+		device.name = "Console_" + room_id
+		add_child(device)
+		batch.commit(device, "Control", true)
+		interaction_devices[room_id] = device
+		batch = previous_batch
 
 ## Steel lockers along a side of a room.
 func _lockers(room_id: String, side: int, a: float, b: float, color: Color = Color("4a5a66")) -> void:
@@ -3141,11 +3187,19 @@ func _lay_atrium() -> void:
 		_solid(set_at + Vector3(0, 1.2, 0), Vector3(3.4, 2.4, 7.0))
 		_light(set_at + Vector3(0, 3.6, 0), Color("ffb36b"), 1.2, 8.0, false, 0.2, 0.6, LAMP_FADE)
 	var generator: Dictionary = room_of["generator"]
+	var previous_batch := batch
+	batch = MeshBatch.new()
 	_face_box(generator, SOUTH, "steel", 46.5, 53.5, 0.0, 2.3, -0.5, 0.0, Color("2c3236"))
 	for k in range(6):
 		_face_box(generator, SOUTH, "plain", 46.9 + k * 1.1, 47.7 + k * 1.1, 0.5, 1.9, -0.51, -0.5, Color("1b1f22"))
 		_led(_face_point(generator, SOUTH, 47.3 + k * 1.1, 2.05, -0.51), Vector3(0.08, 0.08, 0.01), Color("ff3a2a") if k < 4 else Color("ffb347"), 3.0, 0.4)
 	_solid(_face_centre(generator, SOUTH, 46.5, 53.5, 0.0, 2.3, -0.5, 0.0), _face_size(SOUTH, 46.5, 53.5, 0.0, 2.3, -0.5, 0.0))
+	var device := Node3D.new()
+	device.name = "GeneratorControl"
+	add_child(device)
+	batch.commit(device, "Control", true)
+	interaction_devices["generator"] = device
+	batch = previous_batch
 	_wall_sign("NOTSTROM  ·  SCHLEUSE", _face_point(generator, SOUTH, 50.0, 2.75, -0.05), 24, Color("c9a227"), PI)
 	_stores(Vector3(43.0, UNDER, -448.5), 3)
 	# The pumps: tanks, pipes, water on the floor.

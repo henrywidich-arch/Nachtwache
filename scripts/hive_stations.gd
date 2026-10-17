@@ -26,10 +26,10 @@ const LOOKS := {
 	"bay": {"model": "hive/user/upgrade_bay.glb", "kind": "upgrade"},
 	"bench": {"model": "hive/user/upgrade_bench.glb", "kind": "upgrade"},
 	"cabinet": {"model": "hive/user/gear_cabinet.glb", "kind": "gear", "tab": "gear"},
-	"rack": {"model": "hive/user/gear_rack.glb", "kind": "gear", "tab": "mods"}
+	"rack": {"model": "hive/user/gear_rack.glb", "kind": "gear", "tab": "weapons"}
 }
 ## The lists of the shop an equipment station has (SurvivalHUD.SHOP_TABS).
-const TABS := ["mods", "gear", "use", "team"]
+const TABS := ["weapons", "sidearms", "heavy", "gear", "use", "team"]
 const BENCH_WORD := "WERKBANK"
 const GEAR_WORD := "AUSRÜSTUNG"
 const AMBER := Color("e8bd79")

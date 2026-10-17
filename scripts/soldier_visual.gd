@@ -159,6 +159,68 @@ var config: Dictionary
 var rig: Dictionary
 var skeleton: Skeleton3D
 var mesh_instance: MeshInstance3D
+var ally_material: ShaderMaterial
+var outline_left := 0.0
+
+## An occluded ally keeps a thin cyan silhouette; visible skin and clothing stay normal.
+func ally_outline(fallen: bool = false) -> void:
+	set_physics_process(true)
+	if ally_material == null:
+		var shader := Shader.new()
+		shader.code = """shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, depth_test_disabled, cull_back, shadows_disabled;
+uniform sampler2D scene_depth : hint_depth_texture, repeat_disable, filter_nearest;
+uniform vec4 outline_color : source_color = vec4(0.3, 0.85, 1.0, 0.95);
+uniform bool world_occluded = false;
+varying float body_depth;
+void vertex() { body_depth = -(MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).z; }
+void fragment() {
+    if (!world_occluded) { discard; }
+    float raw = textureLod(scene_depth, SCREEN_UV, 0.0).r;
+    vec3 ndc = vec3(SCREEN_UV * 2.0 - 1.0, raw);
+    #if CURRENT_RENDERER == RENDERER_COMPATIBILITY
+    ndc.z = raw * 2.0 - 1.0;
+    #endif
+    vec4 scene = INV_PROJECTION_MATRIX * vec4(ndc, 1.0);
+    float wall_depth = -scene.z / scene.w;
+    float rim = 1.0 - abs(dot(normalize(NORMAL), normalize(VIEW)));
+    // Viewmodels have a compressed, very near depth. A character's own torso is also
+    // too close to its arms to qualify as an environmental occluder.
+    if (wall_depth < 0.7 || body_depth <= wall_depth + 0.65 || rim < 0.52) { discard; }
+    ALBEDO = outline_color.rgb;
+    ALPHA = outline_color.a * smoothstep(0.52, 0.88, rim);
+}
+"""
+		ally_material = ShaderMaterial.new()
+		ally_material.shader = shader
+		mesh_instance.material_overlay = ally_material
+	ally_material.set_shader_parameter("outline_color", Color("ff7052") if fallen else Color("72dcf1"))
+## Only static world collision can enable the outline; weapons and all characters
+## use separate collision layers. Four rays, ten times a second, cover partial cover.
+func _physics_process(delta: float) -> void:
+	_update_outline(delta)
+
+func _update_outline(delta: float) -> void:
+	if ally_material == null or not is_inside_tree():
+		return
+	outline_left -= delta
+	if outline_left > 0.0:
+		return
+	outline_left = 0.1
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var blocked := false
+	var space := get_world_3d().direct_space_state
+	var height := 0.45 if mode in ["down", "fall"] else (1.0 if crouched else float(config.height))
+	for share: float in [0.2, 0.45, 0.7, 0.95]:
+		var target: Vector3 = global_position + Vector3.UP * height * share
+		var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(camera.global_position, target, 1))
+		if not hit.is_empty() and (hit.position as Vector3).distance_to(target) > 0.12:
+			blocked = true
+			break
+	ally_material.set_shader_parameter("world_occluded", blocked)
+
 var legs: AnimationPlayer
 var arms: AnimationPlayer
 var shift: Node3D
@@ -187,6 +249,7 @@ var flinch := 0.0
 var flinch_side := 1.0
 
 func _ready() -> void:
+	set_physics_process(false)
 	config = LOOKS[look]
 	model_scale = float(config.height) / float(config.source_height)
 	# Getting up starts where the body fell; `shift` carries that offset.

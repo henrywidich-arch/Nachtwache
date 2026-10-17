@@ -1,0 +1,822 @@
+[
+  {
+    "version": "0.68",
+    "title": "Zusammen durch die Nacht",
+    "sections": [
+      {
+        "title": "Koop",
+        "items": [
+          "Eigene Geldbeutel: Beide verdienen die volle Belohnung, Einkäufe bleiben persönlich. Kisten und Tresore halten für jeden eigenen Loot bereit.",
+          "Schließende Arenatüren sammeln zurückgelassene Mitspieler ein. In Mission 2 hilft ein Teleport zum Partner im Pausenmenü, wenn ihr getrennt seid.",
+          "Mitspieler bleiben hinter echter Deckung als Umriss sichtbar; Körper, Hände und eigene Waffen lösen keine Umrisse aus. Bots sind optional, die Lobby übernimmt die Einstellungen des Hosts.",
+          "Tab zeigt die persönlichen Abschüsse der Spieler im Scoreboard. Auch nach Sieg oder Niederlage könnt ihr eure Ergebnisse vergleichen."
+        ]
+      },
+      {
+        "title": "Im Gefecht",
+        "items": [
+          "Jeder startet mit einer M9 mit unbegrenzter Reservemunition. Am Boden kannst du weiter mit deiner Sekundärwaffe schießen.",
+          "Waffenabhängige Fadenkreuze reagieren auf Bewegung, Rückstoß und Verbesserungen. Nur Pistolen haben einen Mittelpunkt. Shotguns behalten auch beim Sprinten einen kompakten Kreis; andere Fadenkreuze werden beim Sprinten weiter und blasser. Beim Zielen verschwinden sie.",
+          "Kompakte Hitmarker bestätigen Treffer weiß, Kopfschüsse orange und Abschüsse rot, mit kurzen klassischen Treffer-Klicks und eigenen Kopf- und Abschussklängen. Blut am Bildschirmrand zeigt deinen Zustand; dezente Anzeigen verraten die Angriffsrichtung. In der Hocke fällt der Rückstoß geringer aus.",
+          "Wurfgegenstände werden mit sichtbarem Ausholen und Loslassen geworfen. Soldaten haben eine begrenzte Schussreichweite, Leeches bremsen dich nicht mehr.",
+          "Höhere Sprünge, direkteres Anlaufen und Abbremsen sowie tolerantere Sprungeingaben. Vorwärts und Leertaste überwinden niedrige Zäune oder ziehen dich auf Kisten; die Körperfreiheit wird geprüft. Fässer und Kisten haben passende Kollisionshöhen. Lauf- und Sprinttempo bleiben gleich.",
+          "Interaktive Ziele erhalten beim Anvisieren aus der Nähe einen Umriss. Fundstücke werden mit einmal E aufgenommen; längere Aktionen zeigen ihren Fortschritt als füllenden Balken."
+        ]
+      },
+      {
+        "title": "Arsenal und Werkbank",
+        "items": [
+          "V stößt Gegner standardmäßig mit der gehaltenen Waffe zurück. Messer, Baseballschläger, Machete, Brecheisen, Brechaxt und Vorschlaghammer sind kaufbar. Die angezeigten Werte bestimmen Schaden, Reichweite, Ausholzeit, Tempo und Rückstoß tatsächlich.",
+          "USP .45, G18 Automatik und Desert Eagle erweitern die Sekundärwaffen. Pistolen erhalten passende Aufsätze und Akimbo: Linke Maustaste feuert die linke, rechte die rechte Pistole. Beide führen eigene Magazine und Schussfolgen; das HUD zeigt beide Munitionsstände.",
+          "Zwei Primärwaffenplätze stehen von Anfang an bereit. Den Waffengurt gibt es einmal pro Einsatz: Er schaltet den dritten Primärwaffenplatz frei und hat keine weiteren Stufen.",
+          "Der Waffeneditor sitzt direkt bei der gekauften Waffe: Slots öffnen passende Aufsätze mit Vorschau, Kauf und kostenlosem Wechsel. Shop und Werkbank nutzen mehr Bildschirmhöhe, größere Einträge und passende Symbole; geschlossen wird oben per X oder mit Esc. Die Werkbank zeigt aktuelle Werte, hebt beim Überfahren eines Upgrades nur dessen zusätzlichen Balkenabschnitt hervor und animiert die Werte beim Kauf."
+        ]
+      },
+      {
+        "title": "Menüs und Atmosphäre",
+        "items": [
+          "Der Ereignisfeed oben links zeigt Kills, Kopfschüsse und gefallene Teammitglieder mit Symbolen. Uhrzeit und Tokens teilen sich eine Zeile unter der Karte, mit mehr Abstand zu den Aufträgen. Lebensbalken stehen direkt neben den Namen; Rüstung erscheint als blauer Balken unter HP, Westenstufen als Symbole neben der Lebensanzeige.",
+          "Neues Hauptmenü mit Map-Bildern und separater Lobby. Karriere bündelt Klasse und Skins; der Testraum hat einen eigenen Menüpunkt zwischen Karriere und Einstellungen. Größere Überschriften in Einstellungen und Patchnotes sowie einheitliche Zurück-Buttons erleichtern die Navigation. Einstellungen öffnen eine eigene Steuerungsseite. Ducken funktioniert standardmäßig per Halten, optional per Umschalten. Eine FPS-Anzeige lässt sich einschalten und ist anfangs aus. Patchnotes zeigen die Versionsgeschichte.",
+          "Holzdetails sitzen gezielt auf Möbeln, Balken und Geländern; Hauswände, Böden und Erde behalten ihren vorherigen Look. Beton bleibt detailliert, mit unterscheidbaren Tönen für Wände, Böden und Treppen. Medipacks und Munition liegen als detaillierte Ausrüstung mit dezentem Licht am Boden. Gas ist mit dichterem Nebel, nahen Rauchschwaden und Bildschirmfeedback klarer erkennbar.",
+          "Der Hof ist etwas heller, die Taschenlampe stärker und mit größerer Reichweite für draußen. Dein Bild hängt in den Rahmen der Villa. Der verkürzte Waffentresen lässt die Händlerin vollständig sichtbar stehen."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.67",
+    "title": "Koop und Rundenstart",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Der Koop-Gast sieht den Host nach der Landung zuverlässig.",
+          "Mission 1 startet Wellen erst nach 1,5 Sekunden F halten. Zwischen den Wellen bleibt unbegrenzt Zeit; kurzes F schaltet weiter die Taschenlampe.",
+          "Mission 2 ist im Koop spielbar, einschließlich gemeinsamer Missionsschritte, Transporte und Neustart am Kontrollpunkt."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.66",
+    "title": "Begleiter über mehrere Ebenen",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Die Begleiter folgen über Ebenen.",
+          "Ursache vor allem die Karte: Oben an vier Treppen stand der Boden bis zu 12 cm über der letzten Stufe – darüber kamen die Begleiter nicht."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.65",
+    "title": "Der Prowler greift entschlossener an",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Der Prowler steht nicht mehr herum.",
+          "Er schleicht höchstens eine gute Sekunde um sein Ziel und greift dann an."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.64",
+    "title": "Neue Wege für den Prowler",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Der Prowler findet seinen Weg.",
+          "Er folgt dem Weg jetzt mit Abstand zu den Wänden, geht durch Türen und Gänge unter 3,4 m Breite langsamer statt im Galopp hineinzurennen, und merkt sich Stellen, durch die sein Körper nicht passt."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.63",
+    "title": "Mehr Stimmen im Einsatz",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Viel mehr Stimmen.",
+          "Zu fast jeder Zeile gibt es drei bis vier neue Varianten: 2634 Aufnahmen statt 844."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.62",
+    "title": "Sichtbare Missionsaufgaben",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Aufgaben, die man sieht.",
+          "Sammeln: Schlüsselkarten auf einem Tisch oder in einem offenen Spind, Sicherungen in einer Kiste, Proben im Regal oder im Probenkühlschrank."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.61",
+    "title": "Licht und Atmosphäre",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Licht und Stimmung der sechs Areale nach deinen Bildern.",
+          "Kryoarchiv: kalte Lichtreihen unter Fachwerkträgern, Kapseln, die von innen hellblau leuchten, mit einem Schatten darin, Kältenebel am Boden, nasser dunkler Boden."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.60",
+    "title": "Das Sezierlabor",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Neues Areal Sezierlabor.",
+          "Saalebene: ein Sektionssaal mit abgesenkter Grube in der Mitte, Stahltischen und Präparatetanks, an beiden Seiten 6 m breite Gänge mit Leichenhalle, Waschraum, Vorbereitung, Röntgen, Büro und Präparatelager; vom Lager führt ein niedriger Kriechgang in den Laborteil."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.59",
+    "title": "Abwechslung in der Forschungsanlage",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Die alte Anlage ist wieder jede Nacht dabei, die Areale kommen dazwischen.",
+          "Das Rückgrat nach dem Bahnhof ist immer die alte Strecke: Terminal → Verwaltung und Sicherheitszentrale → Kantine mit Abriegelung → Atrium → Generator → Forschungstrakt → Turmhalle → Aufzug."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.58",
+    "title": "Update 0.58",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Zwei Schalter im Testraum : SCHATTEN & NEBEL AUS schaltet alle Schatten und den Nebel ab und gibt überall ein gleichmäßiges Licht, damit man einen Raum vollständig erkennt ; HUD & WAFFE AUSBLENDEN nimmt Anzeigen und Waffe aus dem Bild, solange das Menü zu ist – F1 bringt das Menü und alles andere zurück.",
+          "Beim Verlassen des Testraums ist alles wieder wie vorher."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.57",
+    "title": "Update 0.57",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Zufällige Areale in Mission 2.",
+          "Bis zum Bahnhof bleibt alles, danach ist jede Nacht anders : Ankunft am Bahnsteig von Sektor C oder Absturz – der Zug entgleist in einem 74-m-Tunnel, über den Notausstieg und eine Treppe geht es nach oben."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.56",
+    "title": "Update 0.56",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Neue Figuren.",
+          "Vier neue Zombie-Looks aus deinen Modellen : In Mission 2 tragen ab dem Terminal 75 % der normalen Infizierten Kleidung der Anlage, und jeder Abschnitt bringt seine Leute ; in Villa und Bahnhof sind es 30 %."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.55",
+    "title": "Update 0.55",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Kopfschüsse auf den Crusher.",
+          "Seine Kopf-Trefferzone saß am Kopfknochen, also am Hals, 22 cm hinter und unter den Augen – der Schädel des 2,65 m großen Modells reicht aber einen halben Meter über die Augen, und der Körper endet bei 2,0 m."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.54",
+    "title": "Update 0.54",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Der Crusher.",
+          "Gleich zäh gegen jede Waffe: Er wuchs bisher nicht mit dem Schwierigkeitsgrad, aufgerüstete Waffen zerlegten ihn in 1 bis 8 s, und.600 und.50 erledigten einen jungen, bevor er den Panzer zeigte."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.53",
+    "title": "Update 0.53",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Merkt sich das Vollbild: Wer es einschaltet, bei dem startet das Spiel beim nächsten Mal direkt im Vollbild; ausschalten gilt genauso."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.52",
+    "title": "Update 0.52",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Tasten nach Gruppen, stärkere Auto-Schrotflinte, Begleiter erholen sich.",
+          "Zifferntasten: [1] Primärwaffen, [2] schwere Waffen, [3] Sekundärwaffen, [4] Wurfzeug."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.51",
+    "title": "Update 0.51",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Die Wunschwaffe.",
+          "In jedem Fähigkeiten-Weg gibt es in Reihe 2 eine neue Fähigkeit mit zwei Rängen: LEIBWAFFE, HANDVERLESEN, SONDERBESTELLUNG."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.50",
+    "title": "Update 0.50",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Nimmt die Begleiter wieder zurück.",
+          "Weniger Schaden: Ihre Waffen gewinnen je Stufe 7 % statt 15 %, und von der Zähigkeit der höheren Schwierigkeitsgrade gleichen sie nur noch ein Viertel aus statt der Hälfte."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.49",
+    "title": "Update 0.49",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Der Trupp: zähere und klügere Begleiter, Aufhelfen mit Haltezeit, die Heilgranate.",
+          "Zäher: Begleiter halten rund ein Drittel mehr aus."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.48",
+    "title": "Update 0.48",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Weniger Stationen in Mission 2.",
+          "Vier der sieben Stellen aus v0.44 sind weg, weil jeweils ein Raum weiter schon ein Versorgungspunkt steht: im Depot, in der Terminalhalle, in der Sicherheitszentrale und im Technikgang."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.47",
+    "title": "Update 0.47",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Kleine Sachen am Boden halten niemanden mehr auf.",
+          "Bisher bekam jedes feste Teil unter 1,2 m Höhe eine unsichtbare Kappe bis 1,3 m, damit niemand darauf klettert – eine Topfpflanze oder ein umgefallener Stuhl stand deshalb im Weg wie eine Wand."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.46",
+    "title": "Update 0.46",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Der Prowler spuckt.",
+          "Selten spuckt er einen violett leuchtenden Klumpen auf jemanden, der länger an einer Stelle stehen bleibt."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.45",
+    "title": "Update 0.45",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Weniger Striker, etwas weniger Charger.",
+          "Die Striker kommen überall rund ein Drittel seltener, die Charger rund ein Zehntel seltener."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.44",
+    "title": "Update 0.44",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Stellt in Mission 2 mehr Werkbänke und Ausrüstungsstationen auf, gebaut aus deinen vier neuen Modellen.",
+          "Sieben neue Stellen mit zehn Stationen zwischen den vier Versorgungspunkten: im Depot am Bahnhof, in der Terminalhalle neben dem Tor, in der Sicherheitszentrale, im Rückgrat vor der Kantine, im Technikgang, am Anfang des Laborgangs und an der Querspange vor der Turmhalle."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.43",
+    "title": "Update 0.43",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht die Schrotflinten zu dem, wofür sie da sind.",
+          "Warum sie schwach waren: Ein Schuss der Schrotflinte machte 216 Schaden an einem Körper, der 95 bis 158 aushält, blieb in diesem einen Körper stecken und traf auf 3 m ein Quadrat von 30 cm – ein Gegner pro Schuss, alle 0,95 s."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.42",
+    "title": "Update 0.42",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Legt seltene Waffen in die Waffenlager von Mission 2.",
+          "Etwa jedes achte einfache und jedes vierte versiegelte Lager hält eine ; über 600 ausgewürfelte Nächte waren das im Schnitt 2,1 pro Nacht, in 53 Nächten keine."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.41",
+    "title": "Update 0.41",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Lockert den Skilltree und baut den Brecher neu.",
+          "Punkte in allen drei Bäumen: Jeder Baum hat die volle Punktzahl für sich; die Seite zeigt „n von 15“ je Weg."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.40",
+    "title": "Update 0.40",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Lässt einen in Mission 2 die meisten Waffen finden statt kaufen.",
+          "Die Waffenschränke an den Versorgungspunkten verkaufen nur noch die Standardwaffen: M4A4, AK-47, UMP45 und M9, dazu wie bisher die drei Waffen der Skill-Bäume."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.39",
+    "title": "Update 0.39",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht aus dem Prowler einen Jäger.",
+          "Er wählt seine Beute: wer abseits steht, verletzt ist, nachlädt oder wegschaut."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.38",
+    "title": "Update 0.38",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Schickt viel mehr Infizierte durch die Einstiege von Mission 2 und macht die Einstiege abwechslungsreicher.",
+          "Rudel statt Einzelner: Ein Einstieg liefert jetzt zwei bis vier hintereinander im Abstand von einer halben Sekunde, und 88 % des Nachschubs kommen durch Einstiege."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.37",
+    "title": "Update 0.37",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht den Crusher gefährlicher.",
+          "Gehärtete Phasen: Sobald er ein Zehntel seines Lebens verloren hat, verhärtet er sich immer wieder."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.36",
+    "title": "Update 0.36",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt ein eigenes „Ding“ als Treffer-Feedback und macht zähere Infizierte zum Standard.",
+          "Das Ding: Jeder eigene Treffer auf einen Infizierten antwortet mit einem hellen, glockigen Klang statt mit dem fleischigen Tick – reine Synthese, nichts aus einem anderen Spiel."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.35",
+    "title": "Update 0.35",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht die Eindämmungshalle zur Turmhalle und bringt Wandterminals.",
+          "Die Halle ist jetzt 60 × 60 m groß und 14 m hoch : ein 10 m breites Mittelschiff vom Tor zum Frachtaufzug, links und rechts je drei Reihen Türme aus deinen vier Modellen – 24 Türme und 9 Pumpen als Deckung, die Gassen über 4 m breit, damit auch der Prowler durchkommt."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.34",
+    "title": "Update 0.34",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Gibt den Infizierten in Mission 2 neue Wege zum Trupp, damit lange Gänge und Räume mit nur einer Tür kein sicherer Platz mehr sind. 125 Einstiege: 45 Deckenlöcher mit Schacht, 43 Löcher am Fuß von Wänden, 17 Lüftungsmündungen hoch in der Wand, 11 Fenster der Villa, eine Kellerluke in der Küche und 8 Bahnsteigkanten, an denen sie aus dem Gleisbett steigen.",
+          "Drei Viertel des Nachschubs kommen jetzt dort heraus, bevorzugt hinter und neben dem Trupp."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.33",
+    "title": "Update 0.33",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Dreht die Trommel des M21E richtig herum: Ihre Achse liegt jetzt längs zum Lauf, die Seite mit dem Aufzugsschlüssel zeigt zum Schützen, und sie hängt mittig unter der Waffe statt wie ein Rad links daneben.",
+          "Das Bau-Skript des Bausatzes hatte der Trommel dieselbe Drehung gegeben wie der Waffe, obwohl die beiden Ausgangsmodelle verschieden ausgerichtet sind."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.32",
+    "title": "Update 0.32",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Behebt die Wandstücke in den Türen der Villa.",
+          "Der Sockel des Hauses – ein 70 cm hohes Putzband entlang jeder Außenwand – lief quer durch die Türöffnungen: an der Haustür, den vier Gartentüren von Salon und Galerie, der Bibliotheks- und der Küchentür, und hinter der Spiegeltür hing er als Streifen frei über der Treppe."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.31",
+    "title": "Update 0.31",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt zwei neue Waffen aus deinen Bausätzen, beide zusätzlich zu den bisherigen.",
+          "MP7 : 30/240 Schuss, rund 950 Schuss pro Minute, 24 Schaden, Kopf ×2,9, lädt in 2 s."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.30",
+    "title": "Update 0.30",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Die Szene am Bahnhof und die Wahl der Begleiter.",
+          "Der Schalter bei Mission 2 wählt jetzt das Paar: FIRETEAM, PHANTOM + HAVOC, PHANTOM + GHOST oder HAVOC + GHOST – es gehen immer zwei mit."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.29",
+    "title": "Update 0.29",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Ändert den Prowler nach dem ersten Spielen.",
+          "Später: Er kommt erst ab der Verwaltung, also in der Mitte der Mission; beim ersten Mal bleibt er in Sichtweite stehen und brüllt, bevor er jagt."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.28",
+    "title": "Update 0.28",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Ist der zweite Karten-Durchgang – für das, was man in Mission 2 zuerst sieht.",
+          "Park und Hausfront: ein markierter, beleuchteter Landeplatz, das Rondell mit Hecken, Bänken, Büsten und Pollern, ein Wachposten mit Schranke am Tor, sechs Mauerbreschen mit Schutt und Leuchtfackeln; Giebel, Fries, Schornsteine, Fensterläden und ein Balkon über dem Portal."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.27",
+    "title": "Update 0.27",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt das Bossmonster: den Prowler.",
+          "Es ist dein vierbeiniges Modell, auf 30.000 Dreiecke gebracht und mit dreizehn eigenen Bewegungen versehen."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.26",
+    "title": "Update 0.26",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Ist die Karten-Version von Mission 2.",
+          "Breitere Gänge: Der Ring hinter der Kontrolle ist 8 statt 4 m breit und höher, die Querspange vor der Eindämmung 8 m, der Technikgang 6 m."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.25",
+    "title": "Update 0.25",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Ist die Sprach-Version.",
+          "Neue Stimmen: Viper, Scorpion, Raven, Nadja und Coleman sprechen mit deinen neuen ElevenLabs-Stimmen – alle alten Zeilen sind neu aufgenommen, dazu kommen 331 neue."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.24",
+    "title": "Update 0.24",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Ändert, wie sich das Schießen anfühlt, und bringt deine neuen Gegner-Modelle.",
+          "Treffer-Sound: Jede eigene Kugel, die einen Gegner trifft, antwortet mit einem kurzen, satten Schlag – heller beim Kopftreffer, voller beim tödlichen Treffer."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.23",
+    "title": "Update 0.23",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Ist die erste Runde Feinschliff an Mission 2 nach dem Probespiel.",
+          "Fehler: Die Treppe hinter dem Spiegel wird beim Hinuntergehen nicht mehr ausgeblendet."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.22",
+    "title": "Update 0.22",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht aus dem Granatwerfer den M32: dein neues Modell mit Trommel, die nach jedem Schuss weiterdreht, und einem Nachladen in Schritten – aufklappen, Hülsen raus, Granate für Granate, zuklappen.",
+          "Es gibt weiterhin einen Granatwerfer ; das alte Platzhalter-Modell ist weg."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.21",
+    "title": "Update 0.21",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt Mission 2 : eine zweite, große Karte – Villa im Park, versteckter Bahnhof, Zugfahrt, Forschungsanlage – und einen Einsatz ohne Runden, der in Etappen von der Landung bis zum Frachtaufzug der Eindämmungshalle führt, mit drei Haltepunkten, vier Versorgungspunkten und Kontrollpunkten.",
+          "Es ist die erste Stufe: Die Karte steht und der Einsatz läuft von vorn bis hinten; neue Gegner, aufgenommene Dialoge, die Operatoren als Begleiter und der Koop für diese Mission folgen."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.20",
+    "title": "Update 0.20",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt den Testraum : jeden Gegner per Klick rufen, unendlich Leben und Munition, alle Waffen, Shop und Werkbank von überall und gratis, jede der 498 Aufnahmen einzeln anhören – auch den gekaperten Coleman –, Tageslicht und Zeitlupe.",
+          "Nichts davon landet in deinem Profil."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.19",
+    "title": "Update 0.19",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt die drei Helix-Operatoren Phantom, Havoc und Ghost : zäh, mit Lebensbalken, mit Blendgranate und Ortswechsel, nie zu töten, nur zu vertreiben – und sie reden über euren Funk.",
+          "Ihre Ausrüstung gibt es als Skins, sobald du den jeweiligen einmal vertrieben hast."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.18",
+    "title": "Update 0.18",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht den Crusher gefährlich, verstärkt das M14 und lässt die Granate des Werfers langsamer fliegen.",
+          "Bei den Fähigkeiten verteilst du die Punkte frei auf alle drei Wege und aktivierst einen davon; neu ist Ausgebrannt."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.17",
+    "title": "Update 0.17",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Gibt dem Rotpunktvisier ein richtiges Gehäuse, lässt die Bots Aufträge übernehmen, lässt Schrotflinten durch Schilde schießen, macht die Ripper zu Mutanten statt Hunden, gibt Nadja eine neue Stimme, bringt in der letzten Runde wieder etwas mehr Gegner und hält die Bots in den ersten Runden zurück, damit die Abschüsse dir gehören."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.16",
+    "title": "Update 0.16",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt das G36 als bestes Sturmgewehr, stärkere Schrotflinten, sechs weitere Stürze für Zombies und Soldaten samt eigenem Sturz für den Kopfschuss von hinten und für Treffer mit viel zu viel Schaden, die drei härteren C.R.U.-Stimmen und echte Aufnahmen für Molotow, Feuer, Flammenwerfer und Kolbenschlag.",
+          "Behoben: In der Ankunft schwebte deine Waffe im Bild, und deine Taschenlampe leuchtete die leere Landezone an."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.15",
+    "title": "Update 0.15",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Begrenzt, was du trägst: eine Primär-, eine Sekundär- und eine schwere Waffe, mehr nur mit Waffengurten; eine weitere Waffe derselben Art wird gegen die alte getauscht.",
+          "Im Skilltree wählst du einen der drei Wege."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.14",
+    "title": "Update 0.14",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Schaltet die Fähigkeiten scharf und gibt jedem Weg eine Klassenwaffe: Flammenwerfer, Doppelbüchse.600, M107 Kaliber.50.",
+          "Dazu das M14 und die SVD als zweites Scharfschützengewehr, ein Nahkampfschlag, der Molotowcocktail mit brennendem Boden und brennenden Gegnern, Team-Upgrades im Shop, eine Nadja, die mehr aushält und seltener angegriffen wird, vier Stimmen und zwölf Stürze für die C.R.U., Soldaten, die nicht mehr in Wände rollen, der Endlosmodus und Modifikationen für jede Runde."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.13",
+    "title": "Update 0.13",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Stellt Kiefern und tote Bäume aus dem freien *Stylized Nature MegaKit* von Quaternius zwischen die einfachen Tannen am Rand des Hofs – zusammen mit deinen beiden Laubbäumen sind es sieben Arten, rund 115 Bäume.",
+          "Das Paket ist gemeinfrei ; die Lizenz liegt in, das ganze Paket entpackt in."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.12",
+    "title": "Update 0.12",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt das M4A4 als Startgewehr und ein Maschinengewehr mit 100-Schuss-Kasten, drei weitere tote Forscher und Wachleute, Laubbäume als Modelle zwischen den Tannen am Rand des Hofs – und der Zaun um den Hof ist weg, damit die Infizierten von überall kommen."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.11",
+    "title": "Update 0.11",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Macht das Gas zu einem dünnen Dunst, der sich in großen Bänken über den Hof ausbreitet statt als grelle Wolke an einer Stelle zu stehen, gibt dem Granatwerfer eine gebogene Flugbahn samt Anzeige, dem Rotpunktvisier eine feinere Marke, den Bots 129 neue Sprüche und neue Anlässe zu rufen, und zeigt im Menü die drei Wege der Fähigkeiten – noch in Wartung."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.10",
+    "title": "Update 0.10",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt den C.R.U."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.9",
+    "title": "Update 0.9",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt den Medic-Zombie mit seiner Wolke, den Schild-Soldaten der C.R.U., einen dritten C.R.U.-Körper, den Crusher schon vor der letzten Runde, Gasfelder im Hof und Gasalarm im Haus, eine Munitionsstation und Aufträge im Obergeschoss, tote Forscher als Modelle und eine Granatexplosion mit Feuerball, Druckring, Erdfontäne und Rauch.",
+          "Dazu kommt der Start auf dem Mac, die Einstellung 3D für schwächere Rechner und Vollbild per Alt + Enter."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.8",
+    "title": "Update 0.8",
+    "sections": [
+      {
+        "title": "",
+        "items": [
+          "Bringt die UMP45 mit sichtbarem Magazinwechsel und drei Aufsätzen, die ballistische Weste gegen die C.R.U. und Lampen, an denen man die C.R.U. im Dunkeln erkennt.",
+          "Darunter der Stand von v0.7."
+        ]
+      }
+    ]
+  }
+]

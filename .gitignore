@@ -1,2 +1,4 @@
 .godot/
 *.tmp
+tools/ui_review/
+__pycache__/

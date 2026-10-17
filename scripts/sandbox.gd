@@ -51,6 +51,7 @@ var flat := false
 ## Whether that even light is in force right now (the maps leave their moods alone then).
 static var holding_flat := false
 var bare := false
+var holding_bare := false
 var look_left := 0.0
 ## Coleman's lines as they sound once Nadja is out of her room.
 var hijack := false
@@ -495,7 +496,11 @@ func _keep_look(delta: float) -> void:
 	if game.hud != null:
 		game.hud.visible = not hidden
 	if game.player != null and is_instance_valid(game.player.weapon):
-		game.player.weapon.visible = not hidden
+		if hidden:
+			game.player.weapon.hide()
+		elif holding_bare:
+			game.player.weapon.show()
+	holding_bare = hidden
 
 func set_slow(scale: float) -> void:
 	slow = scale

@@ -436,6 +436,7 @@ func _run_ride(delta: float) -> bool:
 			director.progress = clampf(1.0 - float(ride.board_left) / BOARD_SECONDS, 0.0, 1.0)
 			return true
 		ride.boarding = false
+		director.coop.gather(str(ride.room))
 		map.set_door(str(ride.door), false)
 		game.sounds.play_at("shutter_close", here)
 		game.hud.announce("LASTENAUFZUG", "Der Aufzug fährt …", 3)
@@ -833,6 +834,7 @@ static func _plural(word: String, count: int) -> String:
 ## The doors shut behind the squad: its way in, in red light - whoever of it is still
 ## outside is brought in.
 func _lock_in(piece: Dictionary) -> void:
+	director.coop.gather("", str(piece.id))
 	map.set_port("%s_in" % piece.id, false)
 	map.set_zone_mood(str(piece.id), "alarm")
 	props.lockdown(true)
@@ -842,8 +844,28 @@ func _lock_in(piece: Dictionary) -> void:
 			mate.global_position = game.player.global_position + Vector3(randf_range(-1.5, 1.5), 0.05, randf_range(-1.5, 1.5))
 			mate.velocity = Vector3.ZERO
 
+## Select the actual prop beneath the local player's aim, rather than whichever nearby
+## objective happened to be first in the task's array.
+func focused_use() -> Dictionary:
+	if task.is_empty() or str(task.get("state", "")) != "work":
+		return {}
+	var here: Vector3 = game.player.global_position
+	for list: String in ["items", "places"]:
+		for item: Dictionary in task.get(list, []):
+			if bool(item.get("taken", item.get("done", false))) or here.distance_to(item.pos) >= PICK_REACH:
+				continue
+			if game.aims_at_object(item.node):
+				return {"key": "g_item" if list == "items" else "g_switch", "at": item.pos, "node": item.node,
+					"text": str(task.event.get("use", "[E] Benutzen"))}
+	if props != null:
+		var device: Dictionary = props.fuse_box if bool(task.get("slot", false)) and (task.get("items", []) as Array).all(func(item: Dictionary) -> bool: return bool(item.taken)) else (props.screen if str(task.kind) == "hack" else {})
+		if not device.is_empty() and here.distance_to((device.node as Node3D).global_position) < 2.6 and game.aims_at_object(device.node):
+			return {"key": "g_slot" if device == props.fuse_box else "g_hack", "at": (device.node as Node3D).global_position, "node": device.node,
+				"text": str(task.event.get("slot_use" if device == props.fuse_box else "use", "[E] Benutzen"))}
+	return {}
+
 ## [E] was used for something of the random part.
-func use(key: String, who: Node3D = null) -> bool:
+func use(key: String, who: Node3D = null, chosen: Vector3 = Vector3.INF) -> bool:
 	if who == null:
 		who = game.player
 	match key:
@@ -855,7 +877,7 @@ func use(key: String, who: Node3D = null) -> bool:
 			return true
 		"g_item":
 			for item: Dictionary in task.get("items", []):
-				if not bool(item.taken) and (item.pos as Vector3).distance_to(who.global_position) < PICK_REACH + 0.3:
+				if not bool(item.taken) and (item.pos as Vector3).distance_to(who.global_position) < PICK_REACH + 0.3 and (chosen == Vector3.INF or (item.pos as Vector3).distance_to(chosen) < 0.1):
 					item.taken = true
 					if is_instance_valid(item.node):
 						(item.node as Node).queue_free()
@@ -876,7 +898,7 @@ func use(key: String, who: Node3D = null) -> bool:
 			return true
 		"g_switch":
 			for place: Dictionary in task.get("places", []):
-				if not bool(place.done) and (place.pos as Vector3).distance_to(who.global_position) < 3.0:
+				if not bool(place.done) and (place.pos as Vector3).distance_to(who.global_position) < 3.0 and (chosen == Vector3.INF or (place.pos as Vector3).distance_to(chosen) < 0.1):
 					place.done = true
 					place.known = true
 					props.place_done(place.node)
@@ -915,6 +937,7 @@ func _run_lock(delta: float, piece: Dictionary, inside: Dictionary) -> void:
 		if room.is_empty() or str(room.id) != "%s_kammer" % piece.id:
 			return
 		lock_left = LOCK_SECONDS
+		director.coop.gather(str(room.id))
 		map.set_door("%s_in" % piece.id, false)
 		game.sounds.play_at("shutter_close", map.points.get("%s_in" % piece.id, Vector3.ZERO))
 		game.hud.announce("DEKONTAMINATION", "Bleibt in der Schleuse. Das Tor nach Norden öffnet gleich.", 4)

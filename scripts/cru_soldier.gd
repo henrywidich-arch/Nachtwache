@@ -394,7 +394,7 @@ func _physics_process(delta: float) -> void:
 		cue("reload", [reload_left])
 		if randf() < 0.5:
 			say("cover")
-	elif sees and ready and distance < float(role.range[1]) + 8.0 and seen_for > REACTION / _tactics() and (not role.get("shield", false) or facing().angle_to(Vector3(to.x, 0, to.z)) < 0.5):
+	elif sees and ready and distance < shot_reach() and seen_for > REACTION / _tactics() and (not role.get("shield", false) or facing().angle_to(Vector3(to.x, 0, to.z)) < 0.5):
 		if rounds_left <= 0 and pause_wait <= 0.0:
 			rounds_left = mini(ammo, randi_range(int(role.burst[0]), int(role.burst[1])))
 			shot_wait = 0.0
@@ -405,7 +405,12 @@ func _physics_process(delta: float) -> void:
 	else:
 		rounds_left = 0
 
+func shot_reach() -> float:
+	return minf(48.0, float(role.range[1]) + (3.0 if int(role.pellets) > 1 else 6.0))
+
 func _fire(target: Vector3, moving: bool) -> void:
+	if global_position.distance_to(target) > shot_reach():
+		return
 	rounds_left -= 1
 	ammo -= 1
 	shot_wait = float(role.interval)
@@ -420,7 +425,7 @@ func _fire(target: Vector3, moving: bool) -> void:
 	var harm: float = float(role.damage) * float(game.rules.harm)
 	for pellet in range(int(role.pellets)):
 		var line := ((aim - muzzle).normalized() + Vector3(randf_range(-spread, spread), randf_range(-spread, spread) * 0.7, randf_range(-spread, spread))).normalized()
-		var endpoint := muzzle + line * 70.0
+		var endpoint := muzzle + line * shot_reach()
 		var query := PhysicsRayQueryParameters3D.create(muzzle, endpoint, 1 | 2, [get_rid()])
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
 		if not hit.is_empty():

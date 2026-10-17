@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b64fulepnnnqi"
-path="res://.godot/imported/tower_tank_tower_tank_glow.jpg-7cd55e727d8dbb5d2a93e05518c6c76f.ctex"
+path.s3tc="res://.godot/imported/tower_tank_tower_tank_glow.jpg-7cd55e727d8dbb5d2a93e05518c6c76f.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "c08c08d57d737eea331c0435a41be1eb"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/hive/user/tower_tank_tower_tank_glow.jpg"
-dest_files=["res://.godot/imported/tower_tank_tower_tank_glow.jpg-7cd55e727d8dbb5d2a93e05518c6c76f.ctex"]
+dest_files=["res://.godot/imported/tower_tank_tower_tank_glow.jpg-7cd55e727d8dbb5d2a93e05518c6c76f.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

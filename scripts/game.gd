@@ -70,7 +70,7 @@ const MODIFIERS := {
 	"gas": {"label": "GIFTNACHT", "note": "Mehr Gas auf dem Hof, und es beißt schneller.", "rules": {"gas": 1.6}, "from": 2},
 	"cru": {"label": "HELIX GREIFT EIN", "note": "Ein C.R.U.-Trupp kommt mitten in der Runde.", "from": 4},
 	"boss": {"label": "SCHWERES KALIBER", "note": "Ein Crusher mischt sich unter die Horde.", "from": 5},
-	"loot": {"label": "FETTE BEUTE", "note": "Abschüsse bringen doppelten Vorrat, und es fällt mehr Nachschub.", "rules": {"loot": 2.0, "drops": 2.5}, "from": 2}
+	"loot": {"label": "FETTE BEUTE", "note": "Abschüsse bringen doppelte Tokens, und es fällt mehr Nachschub.", "rules": {"loot": 2.0, "drops": 2.5}, "from": 2}
 }
 ## The kinds a pack can be made of: what the note calls them, and the first round for each.
 const PACKS := {"charger": ["Charger", 3], "ripper": ["Ripper", 3], "leech": ["Leeches", 4], "striker": ["Striker", 5]}
@@ -101,6 +101,8 @@ var state := "menu"
 var phase := "preparing"
 var wave := 0
 var credits := 120
+## Shared income is replicated cumulatively; purchases and sales belong to each player.
+var income_total := 0
 var score := 0
 var kills := 0
 var elapsed := 0.0
@@ -213,6 +215,8 @@ var shell_gain := 1.0
 var piercing := 1.0
 ## The player's abilities (see Skills).
 var skills := Skills.new()
+var interaction_outline: Node3D
+var show_fps := false
 ## What the shop has done for the squad this night: the level of each upgrade
 ## (Survivor.GOODS), and what a level is worth.
 var squad_levels := {"squad_armor": 0, "squad_ammo": 0}
@@ -299,7 +303,7 @@ func _ready() -> void:
 	add_child(shopkeeper)
 	for station in cabin.stations:
 		if station.kind == "shop":
-			# Behind the counter, on the right; the stall's back wall is right behind her.
+			# In the open bay to the counter's right; the back panel stays behind her.
 			shopkeeper.position = (station.pos as Vector3) + Vector3(0.56, 0, -0.14)
 	story = StoryDirector.new()
 	story.name = "Story"
@@ -387,6 +391,8 @@ func _ready() -> void:
 		for bus in FieldAudio.VOLUMES:
 			sounds.set_volume(bus, float(settings.get_value("audio", bus, FieldAudio.VOLUMES[bus])))
 		player.sensitivity = float(settings.get_value("controls", "sensitivity", 1.0)) * 0.0022
+		player.set_crouch_mode(bool(settings.get_value("controls", "crouch_toggle", false)))
+		show_fps = bool(settings.get_value("video", "show_fps", false))
 		# (Whoever left the game filling the screen gets it that way again.)
 		if bool(settings.get_value("video", "fullscreen", false)) and DisplayServer.get_name() != "headless" and not check_mode:
 			get_window().mode = Window.MODE_FULLSCREEN
@@ -394,6 +400,9 @@ func _ready() -> void:
 	hud.name = "Interface"
 	hud.game = self
 	add_child(hud)
+	interaction_outline = preload("res://scripts/interaction_focus.gd").new()
+	interaction_outline.game = self
+	add_child(interaction_outline)
 	hud.show_menu("main")
 	if DisplayServer.get_name() != "headless" and not "--no-warm-up" in OS.get_cmdline_user_args():
 		_warm_up()
@@ -569,6 +578,9 @@ func _ready() -> void:
 	elif "--coop-session-check" in args:
 		check_mode = true
 		call_deferred("_run_coop_session_check")
+	elif "--ui-review-check" in args:
+		check_mode = true
+		call_deferred("_run_ui_review")
 	elif "--mp-host-test" in args or "--mp-join-test" in args:
 		check_mode = true
 		call_deferred("_run_mp_test", "--mp-host-test" in args)
@@ -622,7 +634,7 @@ const BINDINGS := {
 	"weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3], "weapon_4": [KEY_4],
 	"throw_grenade": [KEY_G], "throw_flash": [KEY_T], "throw_molotov": [KEY_H], "throw_heal": [KEY_J], "place_claymore": [KEY_B],
 	"squad_follow": [KEY_5], "squad_hold": [KEY_6, KEY_X], "squad_free": [KEY_7],
-	"next_wave": [KEY_N], "pause": [KEY_ESCAPE], "fullscreen": [KEY_F11], "test_menu": [KEY_F1], "skip_round": [KEY_F2]
+	"next_wave": [KEY_N], "scoreboard": [KEY_TAB], "pause": [KEY_ESCAPE], "fullscreen": [KEY_F11], "test_menu": [KEY_F1], "skip_round": [KEY_F2]
 }
 ## What a key is called where its name on the keyboard is not what OS.get_keycode_string says.
 const KEY_NAMES := {KEY_SPACE: "Leertaste", KEY_ESCAPE: "Esc", KEY_SHIFT: "Shift"}
@@ -780,6 +792,7 @@ func wave_hold_share() -> float:
 	return clampf(wave_hold / WAVE_HOLD_SECONDS, 0.0, 1.0) if can_start_wave() else 0.0
 
 func _clear_match_nodes() -> void:
+	hive.coop.clear()
 	for container in [enemies, pickups, mates, ordnance]:
 		for child in container.get_children():
 			container.remove_child(child)
@@ -875,9 +888,10 @@ func start_run(test: bool = false) -> void:
 			plan_operators()
 	for station in cabin.stations:
 		if station.has("label"):
-			(station.label as Label3D).text = "%s\n%d VORRAT" % [station.title, price(int(station.detail))]
+			(station.label as Label3D).text = "%s\n%d ◈" % [station.title, price(int(station.detail))]
 	wave = 0
 	credits = 120
+	income_total = 0
 	score = 0
 	kills = 0
 	elapsed = 0
@@ -906,10 +920,13 @@ func start_run(test: bool = false) -> void:
 			player.position += Basis(Vector3.UP, player.rotation.y) * Vector3(1.6, 0, 0)
 	if net.active and net.partner != 0:
 		net.spawn_remote()
-	elif team_enabled and not sandbox.on:
+	if team_enabled and not sandbox.on and not net.joined:
 		_spawn_team()
 	cabin.get_node("WeaponShopLabel").show()
 	cabin.set_shop_open(true, true)
+	hud.clear_feed()
+	hud.hurt_events.clear()
+	hud.hurt_left = 0.0
 	hud.hide_menu()
 	if sandbox.on:
 		sandbox.begin()
@@ -1183,7 +1200,7 @@ func operator_arrived(who: Operator) -> void:
 func operator_driven_off(who: Operator, source: Node = null) -> void:
 	enemy_defeated(who, true, false, source)
 	stats[who.kind] = int(stats.get(who.kind, 0)) + 1
-	notice("%s ZIEHT SICH ZURÜCK" % who.spec.label, "+%d Vorrat" % int(round(int(who.spec.reward) * float(rules.get("loot", 1.0)))), 4.0)
+	notice("%s ZIEHT SICH ZURÜCK" % who.spec.label, "+%d ◈" % int(round(int(who.spec.reward) * float(rules.get("loot", 1.0)))), 4.0)
 	op_radio(who.kind, "op_leave", 6.0, true)
 
 ## An operator says something on the Fireteam's own radio, for both players. Small talk
@@ -1329,14 +1346,19 @@ func nearest_survivor(from: Vector3, current: Node3D = null) -> Node3D:
 			best = candidate
 	return best
 
-## `killer` is the teammate who made the kill; empty means the player. Supplies and score
-## go to the whole team either way.
+## Everyone earns the full reward; their spending and sales remain independent.
+func earn_tokens(amount: int) -> void:
+	credits += maxi(0, amount)
+	if not net.joined:
+		income_total += maxi(0, amount)
+
+## `killer` is the teammate who made the kill; empty means the player.
 func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node = null) -> void:
 	if enemy.kind == "stalker":
 		# It was never part of the round. Killing it is rare and ends its visits.
 		if by_team:
 			mission.stalker_dead = true
-			notice("DER STALKER IST TOT", "+%d Vorrat" % int(enemy.spec.reward), 4.0)
+			notice("DER STALKER IST TOT", "+%d ◈" % int(enemy.spec.reward), 4.0)
 	else:
 		alive_count = maxi(0, alive_count - 1)
 	if enemy == boss:
@@ -1344,7 +1366,7 @@ func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node
 	if not by_team:
 		return
 	var points: int = int(round((int(enemy.spec.score) + (50 if headshot else 0)) * float(rules.score)))
-	credits += int(round(int(enemy.spec.reward) * float(rules.get("loot", 1.0))))
+	earn_tokens(int(round(int(enemy.spec.reward) * float(rules.get("loot", 1.0)))))
 	score += points
 	stats.kills += 1
 	var human: bool = enemy.spec.get("human", false)
@@ -1361,13 +1383,14 @@ func enemy_defeated(enemy: Infected, by_team: bool, headshot: bool, killer: Node
 	if killer == null:
 		kills += 1
 		hud.kill_feed(str(enemy.spec.label), points, headshot)
-		net.send_feed("PARTNER · %s" % enemy.spec.label, points, false, true, false)
+		net.send_feed("PARTNER · %s" % enemy.spec.label, points, headshot, true, false)
 		praise(enemy, headshot)
 	elif killer is RemoteSurvivor:
-		hud.kill_feed("PARTNER · %s" % enemy.spec.label, points, false, true)
+		(killer as RemoteSurvivor).kills += 1
+		hud.kill_feed("PARTNER · %s" % enemy.spec.label, points, headshot, true)
 		net.send_feed(str(enemy.spec.label), points, headshot, false, true)
 	else:
-		hud.kill_feed("%s · %s" % [killer.label, enemy.spec.label], points, false, true)
+		hud.kill_feed("%s · %s" % [killer.label, enemy.spec.label], points, headshot, true)
 	if enemy.kind != "crusher":
 		# Soldiers carry what a survivor needs; the infected rarely do.
 		var roll := randf() / float(rules.drops) * (0.45 if human else 1.0)
@@ -1424,7 +1447,7 @@ func complete_wave() -> void:
 	gas.end_round()
 	story.round_over(wave)
 	_set_modifier("")
-	credits += 100
+	earn_tokens(100)
 	score += int(round(500 * float(rules.score)))
 	if not endless and wave >= ROUNDS.size():
 		radio("victory", 8.0)
@@ -1447,7 +1470,7 @@ func present_wave_done() -> void:
 	player.health = minf(100, player.health + healing(ROUND_HEAL))
 	player.resupply(Survivor.ROUND_AMMO)
 	var mended := "volle Heilung" if healing(ROUND_HEAL) >= 100.0 else "+%d HP" % int(healing(ROUND_HEAL))
-	hud.announce("RUNDE %02d ÜBERSTANDEN" % wave, "+100 Vorrat · %s · halbe Munition zurück · Der Waffenshop ist geöffnet." % mended, 5)
+	hud.announce("RUNDE %02d ÜBERSTANDEN" % wave, "+100 ◈ · %s · halbe Munition zurück · Der Waffenshop ist geöffnet." % mended, 5)
 	var speaker := squad_voice()
 	if speaker != null and randf() < 0.6:
 		bark(speaker, speaker.look, "clear")
@@ -1674,44 +1697,21 @@ func drop_pickup(pos: Vector3, kind: String, id: int = 0) -> void:
 		id = next_pickup_id
 		next_pickup_id += 1
 		net.send_pickup(id, pos, kind)
-	var crate := Node3D.new()
+	var crate := preload("res://scripts/pickup_view.gd").build(kind)
 	crate.set_meta("id", id)
 	crate.set_meta("kind", kind)
 	crate.set_meta("age", 0.0)
-	var tint := Color("d9c79a") if kind == "ammo" else Color("56d47a")
-	var box := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.34, 0.2, 0.22)
-	box.mesh = mesh
-	var material := StandardMaterial3D.new()
-	material.albedo_color = tint.darkened(0.25)
-	material.emission_enabled = true
-	material.emission = tint
-	material.emission_energy_multiplier = 0.7
-	box.material_override = material
-	crate.add_child(box)
-	if kind == "health":
-		for size in [Vector3(0.16, 0.05, 0.225), Vector3(0.05, 0.16, 0.225)]:
-			var bar := MeshInstance3D.new()
-			var bar_mesh := BoxMesh.new()
-			bar_mesh.size = size
-			bar.mesh = bar_mesh
-			var white := StandardMaterial3D.new()
-			white.albedo_color = Color.WHITE
-			white.emission_enabled = true
-			white.emission = Color.WHITE
-			bar.material_override = white
-			crate.add_child(bar)
 	pickups.add_child(crate)
-	crate.set_meta("floor", pos.y)
-	crate.global_position = Vector3(pos.x, pos.y + 0.45, pos.z)
+	var ground := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(pos + Vector3.UP * 0.8, pos + Vector3.DOWN * 2.0, 1))
+	var floor_y := (ground.position as Vector3).y if not ground.is_empty() and (ground.normal as Vector3).y > 0.5 else pos.y
+	crate.set_meta("floor", floor_y)
+	crate.global_position = Vector3(pos.x, floor_y + 0.012, pos.z)
+	crate.rotation.y = fmod(float(id) * 2.4, TAU)
 
 func _update_pickups(delta: float) -> void:
 	for crate in pickups.get_children():
 		var age: float = crate.get_meta("age") + delta
 		crate.set_meta("age", age)
-		crate.rotation.y += delta * 1.6
-		crate.position.y = float(crate.get_meta("floor")) + 0.45 + sin(age * 3.0) * 0.06
 		if age > 30.0:
 			crate.queue_free()
 		elif Vector2(crate.position.x - player.position.x, crate.position.z - player.position.z).length() < 1.2 and absf(player.position.y - float(crate.get_meta("floor"))) < 1.5:
@@ -1856,6 +1856,24 @@ func _spawn_team() -> void:
 		team.append(mate)
 		survivors.append(mate)
 
+func aims_at_object(node: Node3D) -> bool:
+	return preload("res://scripts/interaction_focus.gd").aimed(self, node)
+
+func focused_object() -> Node3D:
+	if hive.on:
+		var objective: Dictionary = hive.coop.nearby_use()
+		if objective.has("node"):
+			return objective.node
+		return hive.caches.focused_object()
+	return mission.focused_object()
+
+func interaction_progress() -> float:
+	var progress := maxf(help_share(), wave_hold_share())
+	progress = maxf(progress, mission.use_share())
+	if hive.on and hive.progress >= 0.0:
+		progress = maxf(progress, hive.progress)
+	return clampf(progress, 0.0, 1.0)
+
 func interaction_prompt() -> String:
 	if player.clung_by != null:
 		return "[E] SCHNELL DRÜCKEN  ·  %s abschütteln  %d %%" % [str(player.clung_by.spec.label).capitalize(), int(clampf(player.clung_by.shaken, 0.0, 1.0) * 100.0)]
@@ -1870,12 +1888,12 @@ func interaction_prompt() -> String:
 		return "Am Boden · Dein Mitspieler kann dir mit [E] aufhelfen"
 	var fallen := fallen_mate()
 	if fallen != null:
-		return "%s aufhelfen  ·  %d %%" % [fallen.label, int(help_share() * 100.0)] if help_share() > 0.0 else "[E] halten  ·  %s aufhelfen" % fallen.label
+		return "[E] halten  ·  %s aufhelfen" % fallen.label
 	if partner_needs_help():
-		return "Mitspieler aufhelfen  ·  %d %%" % int(help_share() * 100.0) if help_share() > 0.0 else "[E] halten  ·  Mitspieler aufhelfen"
+		return "[E] halten  ·  Mitspieler aufhelfen"
+	if not hive.coop.fallen_nearby().is_empty():
+		return "[E] halten · Begleiter aufhelfen"
 	if hive.on:
-		if not hive.coop.fallen_nearby().is_empty():
-			return "[E] halten · Begleiter aufhelfen · %d %%" % int(help_share() * 100.0)
 		var hint := hive.prompt()
 		if hint != "":
 			return hint
@@ -1888,8 +1906,8 @@ func interaction_prompt() -> String:
 			return "Keine Munition · Nächster Versorgungspunkt [E]" if hive.on else "Keine Munition · Lagerraum im Haus oder Scheune [E]"
 		return ""
 	match station.kind:
-		"ammo": return "[E] %s-Munition auffüllen · %d Vorrat" % [player.weapon_label(), price(60)]
-		"health": return "[E] +%d Gesundheit · %d Vorrat" % [int(healing(50.0)), price(100)]
+		"ammo": return "[E] %s-Munition auffüllen · %d ◈" % [player.weapon_label(), price(60)]
+		"health": return "[E] +%d Gesundheit · %d ◈" % [int(healing(50.0)), price(100)]
 		"upgrade": return "[E] Werkbank: %s verbessern" % player.weapon_label()
 		"shop": return "[E] Waffenshop öffnen" if cabin.shop_open else "Waffenshop geschlossen · öffnet nach der Runde"
 		"gear": return "[E] Ausrüstung: Aufsätze, Schutz, Granaten  ·  Waffen gibt es am Waffenschrank"
@@ -1901,7 +1919,7 @@ func interaction_prompt() -> String:
 func help_up(delta: float) -> bool:
 	if player.down:
 		return false
-	if hive.on and not hive.coop.fallen_nearby().is_empty():
+	if not hive.coop.fallen_nearby().is_empty():
 		return true
 	var fallen := fallen_mate()
 	if fallen != null:
@@ -1921,10 +1939,9 @@ func help_up(delta: float) -> bool:
 
 ## How far along the help is that the player is giving (0 to 1; 0: he helps nobody).
 func help_share() -> float:
-	if hive.on:
-		var nearby: Dictionary = hive.coop.fallen_nearby()
-		if not nearby.is_empty():
-			return clampf(float(nearby.get("lifted", 0.0)) / REVIVE_SECONDS, 0.0, 1.0)
+	var nearby: Dictionary = hive.coop.fallen_nearby()
+	if not nearby.is_empty():
+		return clampf(float(nearby.get("lifted", 0.0)) / REVIVE_SECONDS, 0.0, 1.0)
 	var fallen := fallen_mate()
 	if fallen != null:
 		return clampf(fallen.lifted / REVIVE_SECONDS, 0.0, 1.0)
@@ -1951,9 +1968,11 @@ func interact() -> void:
 	if fallen_mate() != null or partner_needs_help():
 		# Helping somebody up takes holding the key (see help_up): a press is its beginning.
 		return
-	if hive.on and not hive.coop.fallen_nearby().is_empty():
+	if not hive.coop.fallen_nearby().is_empty():
 		return
 	if hive.on and hive.use():
+		return
+	if mission.interact():
 		return
 	var station := closest_station()
 	if station.is_empty(): return
@@ -1974,7 +1993,7 @@ func interact() -> void:
 	match station.kind:
 		"ammo":
 			if player.reserve == player.max_reserve():
-				hud.announce("VORRAT VOLL", "Deine Reservemunition ist bereits aufgefüllt.", 1.7)
+				hud.announce("MUNITION VOLL", "Deine Reservemunition ist bereits aufgefüllt.", 1.7)
 				return
 			cost = price(60)
 		"health":
@@ -1989,7 +2008,7 @@ func interact() -> void:
 			hud.announce("NOTRESERVE", "Ein Magazin kostenlos. Jeder Treffer zählt.", 2)
 			sounds.play_sound("buy")
 			return
-		hud.announce("ZU WENIG VORRAT", "Abschüsse und überlebte Runden bringen Nachschub.", 2)
+		hud.announce("ZU WENIG TOKENS", "Abschüsse und überlebte Runden bringen Nachschub.", 2)
 		return
 	credits -= cost
 	net.spend(cost)
@@ -2287,8 +2306,8 @@ func weapon_cost(id: String, instead_of: String = "") -> int:
 	var old := outgoing(id, instead_of)
 	return shelf(id) - (0 if old == "" else trade_in(old))
 
-## Buys a weapon at the open shop counter. A survivor carries one weapon of each kind, and
-## more with slings: without a place for it, the new one takes the place of another, which
+## Buys a weapon at the open shop counter. Two primary slots come issued, three with
+## the sling: without a place for it, the new one replaces a weapon of the same kind, which
 ## is traded in - `instead_of`, if the buyer named one that can make room.
 func buy_weapon(id: String, instead_of: String = "") -> bool:
 	if (state != "shop" and overlay != "shop") or not _at("shop"): return false
@@ -2311,10 +2330,24 @@ func buy_weapon(id: String, instead_of: String = "") -> bool:
 	hud.refresh_counter()
 	return true
 
-## Sells a weapon the survivor carries at the open shop counter, for what it is worth as a
-## trade-in; what was fitted to it and done to it at the workbench goes with it. The last
-## weapon stays: nobody leaves the counter unarmed.
+## Buys a melee weapon, or switches back to the free weapon bash.
+func buy_melee(id: String) -> bool:
+	if (state != "shop" and overlay != "shop") or not _at_counter() or not Survivor.MELEE_WEAPONS.has(id):
+		return false
+	if not player.melee_owned.has(id):
+		var cost := price(int(Survivor.MELEE_WEAPONS[id].price))
+		if credits < cost:
+			return false
+		credits -= cost
+		player.melee_owned.append(id)
+	player.melee_weapon = id
+	sounds.play_menu("equip")
+	hud.refresh_counter()
+	return true
+
+## Sells a carried weapon, with its upgrades. The issued fallback pistol always stays.
 func sell_weapon(id: String) -> bool:
+	if id == "pistol": return false
 	if (state != "shop" and overlay != "shop") or not _at("shop"): return false
 	if not player.inventory.has(id) or player.inventory.size() < 2: return false
 	var worth := trade_in(id)
@@ -2485,6 +2518,11 @@ func quit_game() -> void:
 func _run_smoke_test() -> void:
 	# Integration checks execute in the real Godot physics world.
 	var runner = load("res://scripts/verification.gd").new()
+	add_child(runner)
+	await runner.run(self)
+
+func _run_ui_review() -> void:
+	var runner = load("res://tools/ui_review.gd").new()
 	add_child(runner)
 	await runner.run(self)
 

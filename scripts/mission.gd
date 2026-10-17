@@ -66,6 +66,7 @@ const RUNNERS := {
 const START_CUES := {"module": "", "hack": "", "rescue": "", "evac": "evac_start"}
 const DONE_CUES := {"module": "hack_picked", "hack": "cellar_open", "rescue": "nadja_free", "evac": ""}
 const USE_RANGE := 2.4
+const PICKUPS := ["corpse", "case", "drive", "module"]
 ## What the squad takes over once the player has learnt to send it (an ability in each of
 ## the trees of Skills): the key of the ability -> the kinds of thing its members then see
 ## to by themselves. They work at SQUAD_PACE of a player's speed, from SQUAD_REACH metres.
@@ -904,7 +905,7 @@ func _helpers(task: Dictionary) -> Array:
 	return names
 
 ## The nearest thing the local player could work on: [task, item index] or [].
-func nearest_item() -> Array:
+func nearest_item(aimed: bool = false) -> Array:
 	var player: Survivor = game.player
 	var best: Array = []
 	var best_gap := USE_RANGE
@@ -913,17 +914,40 @@ func nearest_item() -> Array:
 			continue
 		for i in range(task.items.size()):
 			var item: Dictionary = task.items[i]
-			if item.done or str(item.state) in ["running", "falling"] or float(ITEMS[item.kind].need) <= 0.0:
+			if item.done or str(item.state) in ["running", "falling"] or (float(ITEMS[item.kind].need) <= 0.0 and not str(item.kind) in PICKUPS):
 				continue
 			var pos: Vector3 = item.pos
 			var gap := Vector2(pos.x - player.global_position.x, pos.z - player.global_position.z).length()
 			if gap < best_gap and absf(pos.y - player.global_position.y) < 1.5:
+				if aimed and not game.aims_at_object(props.get("%d:%d" % [int(task.id), i])):
+					continue
 				best_gap = gap
 				best = [task, i]
 	return best
 
+func focused_object() -> Node3D:
+	var near := nearest_item(true)
+	return null if near.is_empty() else props.get("%d:%d" % [int(near[0].id), int(near[1])])
+
+func use_share() -> float:
+	var near := nearest_item(true)
+	return 0.0 if near.is_empty() else float(near[0].items[near[1]].use)
+
+func interact() -> bool:
+	var near := nearest_item(true)
+	if near.is_empty():
+		return false
+	var task: Dictionary = near[0]
+	var item: Dictionary = task.items[near[1]]
+	if str(item.kind) in PICKUPS:
+		if game.net.joined:
+			game.net.send_task_use(int(task.id), int(near[1]), 0.001)
+		else:
+			apply_use(int(task.id), int(near[1]), 0.001)
+	return true
+
 func prompt() -> String:
-	var near := nearest_item()
+	var near := nearest_item(true)
 	if near.is_empty():
 		return ""
 	var task: Dictionary = near[0]
@@ -931,18 +955,20 @@ func prompt() -> String:
 	var verb := str(ITEMS[item.kind].verb)
 	if str(item.state) == "stalled":
 		verb = str(RUNNERS[task.kind].again)
-	if float(item.use) > 0.02:
-		return "%s  ·  %d %%" % [verb, int(float(item.use) * 100.0)]
+	if str(item.kind) in PICKUPS:
+		return "[E] %s" % verb
 	return "[E] halten  ·  %s" % verb
 
 func _local_use(delta: float) -> void:
 	var player: Survivor = game.player
 	if player.down or not player.controlled or player.menu_open or not Input.is_action_pressed("interact"):
 		return
-	var near := nearest_item()
+	var near := nearest_item(true)
 	if near.is_empty():
 		return
 	var task: Dictionary = near[0]
+	if str(task.items[near[1]].kind) in PICKUPS:
+		return
 	if game.net.joined:
 		# The host decides; show the progress at once all the same.
 		var item: Dictionary = task.items[near[1]]
@@ -956,11 +982,18 @@ func _local_use(delta: float) -> void:
 
 ## Somebody held [E] on an item for `seconds`.
 func apply_use(task_id: int, index: int, seconds: float) -> void:
+	if seconds <= 0.0:
+		return
 	for task in tasks:
 		if int(task.id) != task_id or task.state != "active" or index < 0 or index >= task.items.size():
 			continue
 		var item: Dictionary = task.items[index]
-		if item.done or str(item.state) in ["running", "falling"] or float(ITEMS[item.kind].need) <= 0.0:
+		if item.done or str(item.state) in ["running", "falling"]:
+			return
+		if str(item.kind) in PICKUPS:
+			_used(task, item)
+			return
+		if float(ITEMS[item.kind].need) <= 0.0:
 			return
 		# The progress only starts to drain half a second after the key was let go, which
 		# also covers the gaps between the reports of a co-op guest.
@@ -1031,10 +1064,10 @@ func _open_items(task: Dictionary) -> int:
 func _finish(task: Dictionary, success: bool) -> void:
 	task.state = "done" if success else "failed"
 	if success:
-		game.credits += int(TASKS[task.kind].reward)
+		game.earn_tokens(int(TASKS[task.kind].reward))
 		game.score += int(round(int(TASKS[task.kind].score) * float(game.rules.score)))
 		game.stats.objectives += 1
-		var gain := "" if int(TASKS[task.kind].reward) <= 0 else "  ·  +%d Vorrat" % int(TASKS[task.kind].reward)
+		var gain := "" if int(TASKS[task.kind].reward) <= 0 else "  ·  +%d ◈" % int(TASKS[task.kind].reward)
 		game.notice("AUFTRAG ERFÜLLT", str(task.title) + gain, 3.5)
 		var cue := str(DONE_CUES.get(task.kind, str(task.kind) + "_done"))
 		if cue != "":

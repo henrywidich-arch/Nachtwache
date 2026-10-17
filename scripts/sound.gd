@@ -60,6 +60,7 @@ const MIX := {
 	"ding_messing": [-6.0, 0.004, 1], "ding_messing_head": [-5.0, 0.004, 1], "ding_messing_kill": [-8.0, 0.003, 1],
 	"ding_tink": [-4.5, 0.004, 1], "ding_tink_head": [-4.0, 0.004, 1], "ding_tink_kill": [-6.0, 0.003, 1],
 	"ding_spiel": [-9.0, 0.004, 1], "ding_spiel_head": [-8.0, 0.004, 1], "ding_spiel_kill": [-9.0, 0.003, 1],
+	"ding_classic": [-7.0, 0.004, 1], "ding_classic_head": [-6.0, 0.004, 1], "ding_classic_kill": [-7.0, 0.003, 1],
 	# The second exploding infected going off: wet and low, in place of the Charger's bang.
 	"boomer_burst": [0.0, 0.07, 2],
 	# The Prowler: its call carries through walls and corridors, the rest is as loud as a Crusher.
@@ -120,13 +121,14 @@ const FAKE_PITCH := 0.955
 ## settings call "SFX"): the answers to a hit are the shooter's, not the yard's. (Every
 ## ding is one of them too, see _start.)
 const DRY := ["hit_body", "hit_head", "hit_kill", "hit_shell"]
-## The ding: what answers a hit on an infected. (Soldiers keep the fleshy answer, and the
-## player's own files come first, see OWN_HITS.) DING names the family that is played:
+## The hitmarker: a dry click for a hit, brighter for a head, a short double-click for a
+## kill. Soldiers have the same marker over a quiet physical impact. Custom files still
+## come first for infected (OWN_HITS). DING names the family that is played:
 ## "ding_glas" (crystal, the clearest), "ding_messing" (a small brass bell), "ding_tink"
 ## (dry steel, the shortest) or "ding_spiel" (a glockenspiel, the roundest). All four are
 ## in assets/sounds, each with takes for a head ("_head") and for a kill ("_kill"); to
 ## hear another one in the game, change this line and nothing else.
-const DING := "ding_glas"
+const DING := "ding_classic"
 ## The ladder: dings that follow each other quickly climb, hit by hit, by these semitones
 ## above the first, and stay on the last rung while the hits go on. LADDER_PAUSE: the
 ## seconds without a hit after which the next one starts at the bottom again. A kill ends
@@ -440,7 +442,8 @@ func confirm_hit(headshot: bool, killed: bool = false, infected: bool = false) -
 		var level := KILL_DUCK if killed else 0.0
 		dinged = false
 		if not infected:
-			play_sound(kind, level)
+			play_sound(kind, level - 8.0)
+			play_sound(DING + ("_head" if headshot else ""), level)
 		elif not _own_hit(level):
 			_ding(headshot, level, now)
 	if killed:
@@ -521,7 +524,8 @@ func confirm_kill() -> void:
 		play_sound(DING + "_kill", 0.0, rung())
 		ladder_at = -10.0
 	else:
-		play_sound("hit_kill")
+		play_sound("hit_kill", -8.0)
+		play_sound(DING + "_kill")
 
 ## Plays a sound at a place in the world so its direction and distance can be heard.
 func play_at(kind: String, where: Vector3, volume: float = 0.0, pitch: float = 1.0) -> void:

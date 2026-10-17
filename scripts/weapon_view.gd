@@ -127,6 +127,9 @@ const SLEEVE := Color("343b2c")
 
 ## Hip and aimed positions are in camera space; angles are degrees.
 const VIEWS := {
+	"usp": {"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.05, -0.47), "muzzle": Vector3(0, 0.015, -0.145)},
+	"g18": {"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.045, -0.47), "muzzle": Vector3(0, 0.01, -0.13)},
+	"deagle": {"hip": Vector3(0.11, -0.14, -0.48), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.06, -0.45), "muzzle": Vector3(0, 0.025, -0.185)},
 	# The M4A4 (build_gun): aimed, the eye is on the line through its aperture and its front
 	# post, 13 cm behind the aperture.
 	"rifle": {
@@ -374,6 +377,7 @@ static func _cradle_hand(batch: MeshBatch, grip: Vector3, reach: Vector3) -> voi
 static func _finish(view: Node3D, batch: MeshBatch) -> void:
 	for mesh in batch.commit(view, "Part", false):
 		mesh.layers = 2
+		mesh.set_meta("view_hand", true)
 	var muzzle := Marker3D.new()
 	muzzle.name = "Muzzle"
 	muzzle.position = VIEWS[String(view.name)].muzzle
@@ -516,12 +520,20 @@ static func build_model(id: String) -> Node3D:
 	var hold: Vector3 = mount + (info.support as Vector3)
 	match str(info.hands):
 		"cup":
-			_grip_hand(batch, mount + Vector3(-0.014, -0.012, 0.004), -1.0, false, Vector3(-0.16, -0.22, 0.2))
+			var support := Node3D.new()
+			support.name = "HandSupport"
+			view.add_child(support)
+			var hand := MeshBatch.new()
+			_grip_hand(hand, mount + Vector3(-0.014, -0.012, 0.004), -1.0, false, Vector3(-0.16, -0.22, 0.2))
+			for mesh in hand.commit(support, "Hand", false):
+				mesh.layers = 2
 		"cradle":
 			_cradle_hand(batch, hold, Vector3(-0.13, -0.27, 0.17))
 		_:
 			_grip_hand(batch, hold, -1.0, false, Vector3(-0.15, -0.24, 0.2))
 	_finish(view, batch)
+	if MOD_MOUNTS.has(id):
+		_sidearm_parts(view, id)
 	return view
 
 ## The M32: model, the right hand on the pistol grip and the left one on the foregrip. The
@@ -688,7 +700,59 @@ static func build_ump() -> Node3D:
 	return build_gun("ump")
 
 ## The first-person view of any weapon: the model and the hands that hold it.
+static func build_sidearm(id: String) -> Node3D:
+	var view := Node3D.new()
+	view.name = id
+	var batch := MeshBatch.new()
+	var steel := shared("steel")
+	var dark := Color("23282b")
+	var slide := Color("9da8ac") if id == "deagle" else Color("424a4f")
+	var length := 0.25 if id == "deagle" else (0.2 if id == "usp" else 0.18)
+	var width := 0.047 if id == "deagle" else 0.035
+	batch.box(steel, Vector3(0, 0.014, -length * 0.3), Vector3(width, 0.052, length), slide)
+	batch.box(steel, Vector3(0, -0.018, -0.035), Vector3(width * 0.92, 0.026, length * 0.7), dark)
+	batch.box(steel, Vector3(0, -0.067, 0.025), Vector3(0.033, 0.105, 0.047), Color("302e29"), Basis(Vector3.RIGHT, -0.15))
+	batch.box(steel, Vector3(0, -0.045, -0.04), Vector3(0.027, 0.008, 0.052), dark)
+	batch.box(steel, Vector3(0, -0.029, -0.065), Vector3(0.027, 0.035, 0.008), dark)
+	batch.box(steel, Vector3(0, 0.046 if id == "deagle" else 0.038, -length * 0.65), Vector3(0.008, 0.012, 0.009), dark)
+	for x in [-0.014, 0.014]:
+		batch.box(steel, Vector3(x, 0.043, length * 0.15), Vector3(0.008, 0.012, 0.012), dark)
+	for z in [0.0, 0.009, 0.018, 0.027]:
+		batch.box(steel, Vector3(width * 0.51, 0.014, z), Vector3(0.003, 0.034, 0.004), dark)
+	if id == "g18":
+		batch.box(steel, Vector3(0, -0.141, 0.02), Vector3(0.029, 0.072, 0.036), dark)
+		batch.box(steel, Vector3(-0.021, 0.008, 0.018), Vector3(0.007, 0.017, 0.012), slide)
+	for mesh in batch.commit(view, "Body", false):
+		mesh.layers = 2
+	batch = MeshBatch.new()
+	_grip_hand(batch, Vector3(0, -0.045, 0.035), 1.0, true, Vector3(0.12, -0.25, 0.24))
+	_finish(view, batch)
+	var support := Node3D.new()
+	support.name = "HandSupport"
+	view.add_child(support)
+	batch = MeshBatch.new()
+	_grip_hand(batch, Vector3(-0.015, -0.06, 0.04), -1.0, false, Vector3(-0.16, -0.23, 0.23))
+	for mesh in batch.commit(support, "Hand", false):
+		mesh.layers = 2
+	_sidearm_parts(view, id)
+	return view
+
+static func _sidearm_parts(view: Node3D, id: String) -> void:
+	_gun_mods(view, id)
+	var twin := view.duplicate() as Node3D
+	twin.name = "Mod_akimbo"
+	var support := twin.get_node_or_null("HandSupport")
+	if support != null:
+		twin.remove_child(support)
+		support.free()
+	twin.position.x = -0.28
+	twin.scale.x = -1.0
+	twin.hide()
+	view.add_child(twin)
+
 static func build(id: String) -> Node3D:
+	if id in ["usp", "g18", "deagle"]:
+		return build_sidearm(id)
 	match id:
 		"p90":
 			return build_p90()
@@ -711,7 +775,7 @@ static func display(id: String) -> Node3D:
 		var title := str(node.name)
 		# Hands and arms: what the builders commit as "Part" straight under the view, as
 		# "Hand" under the forend, and the hand that changes the magazine.
-		if title == "Support" or title.begins_with("Hand") or (title.begins_with("Part") and node.get_parent() == view and node is MeshInstance3D):
+		if title == "Support" or title.begins_with("Hand") or bool(node.get_meta("view_hand", false)) or (title.begins_with("Part") and node.get_parent() == view and node is MeshInstance3D):
 			node.get_parent().remove_child(node)
 			node.free()
 	var box := AABB()
@@ -827,8 +891,19 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 ## How high the middle of a sight's glass stands above the gun's origin. The reflex sight
 ## brings its height with it (its window stands well above any iron sights); the telescopic
 ## sight is set just clear of them, so that they do not stand in the picture.
+const MOD_MOUNTS := {
+	"pistol": {"mount": Vector3.ZERO, "rail": 0.035, "optic": -0.03, "irons": 0.035, "holo": 0.45, "muzzle": Vector3(0, 0.005, -0.1035)},
+	"revolver": {"mount": Vector3.ZERO, "rail": 0.05, "optic": -0.05, "irons": 0.05, "holo": 0.45, "muzzle": Vector3(0, 0.011, -0.161)},
+	"usp": {"mount": Vector3.ZERO, "rail": 0.05, "optic": -0.04, "irons": 0.05, "holo": 0.45, "muzzle": Vector3(0, 0.015, -0.145)},
+	"g18": {"mount": Vector3.ZERO, "rail": 0.045, "optic": -0.04, "irons": 0.045, "holo": 0.45, "muzzle": Vector3(0, 0.01, -0.13)},
+	"deagle": {"mount": Vector3.ZERO, "rail": 0.06, "optic": -0.05, "irons": 0.06, "holo": 0.5, "muzzle": Vector3(0, 0.025, -0.185)}
+}
+
+static func mod_mount(id: String) -> Dictionary:
+	return GUNS[id] if GUNS.has(id) else MOD_MOUNTS[id]
+
 static func sight_height(id: String, sight: String) -> float:
-	var gun: Dictionary = GUNS[id]
+	var gun: Dictionary = mod_mount(id)
 	if sight == "reddot":
 		return float(gun.rail) + HOLO_AXIS * holo_size(id)
 	# Iron sights that fold away leave nothing for a sight to clear.
@@ -837,11 +912,11 @@ static func sight_height(id: String, sight: String) -> float:
 
 ## How big the holographic sight is on a gun (1: as it was made).
 static func holo_size(id: String) -> float:
-	return float(GUNS[id].get("holo", 1.0))
+	return float(mod_mount(id).get("holo", 1.0))
 
 ## Where the weapon sits when the eye is behind a fitted sight.
 static func sight_aim(id: String, sight: String) -> Vector3:
-	var gun: Dictionary = GUNS[id]
+	var gun: Dictionary = mod_mount(id)
 	var mount: Vector3 = gun.mount
 	var along := mount.z + float(gun.optic)
 	if sight == "reddot":
@@ -851,7 +926,7 @@ static func sight_aim(id: String, sight: String) -> Vector3:
 
 ## The parts the shop sells for a gun, each under a node of its own.
 static func _gun_mods(view: Node3D, id: String) -> void:
-	var gun: Dictionary = GUNS[id]
+	var gun: Dictionary = mod_mount(id)
 	var mount: Vector3 = gun.mount
 	var rail := mount.y + float(gun.rail)
 	var z := mount.z + float(gun.optic)

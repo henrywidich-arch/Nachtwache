@@ -208,6 +208,7 @@ func _ready() -> void:
 	visual = SoldierVisual.new()
 	visual.look = look
 	add_child(visual)
+	visual.ally_outline()
 	label = str(visual.config.label)
 	gun = GUNS.get(visual.config.weapon, GUNS["rifle"])
 	unarmed = str(visual.config.weapon) == ""
@@ -975,7 +976,7 @@ func _go_down(from: Vector3) -> void:
 	name_tag.text = label + "  ·  AM BODEN"
 	game.bark(self, look, "down", 2.0)
 	lifted = 0.0
-	game.hud.announce("%s IST AM BODEN" % label, "Halte [E], um aufzuhelfen – oder halte durch, bis sie von selbst wieder steht.", 3.0)
+	game.hud.teammate_down(label)
 
 func _recover(delta: float) -> void:
 	if down and lifted > 0.0:

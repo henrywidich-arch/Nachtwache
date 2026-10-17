@@ -65,6 +65,7 @@ func run(game: Node3D) -> void:
 			return
 	await _coop_controls(game)
 	await _coop_hive(game)
+	await _feedback(game)
 	var cabin: CabinMap = game.cabin
 	expect(game.state == "menu", "Project opens on the menu")
 	var spots: Dictionary = cabin.points
@@ -821,7 +822,7 @@ func run(game: Node3D) -> void:
 	expect(game.rules.label == "NORMAL" and game.price(60) == 60 and not game.profile.stored, "Checks run on normal difficulty and leave the saved profile alone")
 	game.profile.difficulty = "hard"
 	game.start_run()
-	expect(game.rules.label == "SCHWER" and game.price(60) == 70 and game.price(250) == 300 and (cabin.stations[0].label as Label3D).text.ends_with("70 VORRAT"), "A harder night raises the prices, on the signs too")
+	expect(game.rules.label == "SCHWER" and game.price(60) == 70 and game.price(250) == 300 and (cabin.stations[0].label as Label3D).text.ends_with("70 ◈"), "A harder night raises the prices, on the signs too")
 	game.begin_wave()
 	expect(game.remaining_to_spawn == 9 + 2, "A harder night brings more infected, above all special ones")
 	game.spawn_queue.clear()
@@ -1573,7 +1574,7 @@ func _arsenal(game: Node3D) -> void:
 	var once: bool = player.melee_cooldown > 0.0 and is_equal_approx(near.health, sound - Survivor.MELEE_DAMAGE)
 	await frames(24)
 	var thrown: float = near.global_position.z - start
-	expect(struck and spared and once and thrown > 0.3 and near.held_left > 0.5 and InputMap.has_action("melee"), "A blow with the weapon throws back whoever stands in front and leaves him reeling; the next blow takes a moment (%.1f m)" % thrown)
+	expect(struck and spared and once and thrown > Survivor.MELEE_PUSH * 0.05 and near.held_left > 0.2 and InputMap.has_action("melee"), "A weapon bash damages and pushes the enemy in front, briefly staggers it and has a cooldown (%.1f m)" % thrown)
 	# The heavy ones are held up, and nothing moves the Crusher.
 	var giant: Infected = game.spawn_enemy("crusher")
 	giant.set_physics_process(false)
@@ -2045,7 +2046,7 @@ func _arsenal(game: Node3D) -> void:
 		twice = twice or game.modifier == before
 		before = game.modifier
 		game.hud._process(0.1)
-		fitting = fitting and game.modifier != "" and game.wave >= int(game.MODIFIERS[game.modifier].from) and game.hud.detail_label.text.begins_with("MODIFIKATION") and game.hud.task_label.text.contains(str(game.MODIFIERS[game.modifier].label)) and game.modifier_note() != "" and not game.modifier_note().contains("%s")
+		fitting = fitting and game.modifier != "" and game.wave >= int(game.MODIFIERS[game.modifier].from) and game.hud.detail_label.text.begins_with("MODIFIKATION") and game.hud.detail_label.text.contains(str(game.MODIFIERS[game.modifier].label)) and game.modifier_note() != "" and not game.modifier_note().contains("%s")
 		_wipe(game)
 		game.boss = null
 		game.complete_wave()
@@ -2072,7 +2073,7 @@ func _arsenal(game: Node3D) -> void:
 	game.team_enabled = true
 	game.start_run()
 
-## What came with v0.15: one weapon of each kind (more with slings) and trading in, keys
+## Carrying limits, the single primary sling, trading in, keys
 ## by kind, the syringe, ducking, a round's end that heals and resupplies, and one shield
 ## bearer at a time.
 func _loadout(game: Node3D) -> void:
@@ -2093,8 +2094,8 @@ func _loadout(game: Node3D) -> void:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int({"primary": 1, "secondary": 2, "heavy": 3}[kind]) and int(Survivor.KINDS.primary.key) == 1 and int(Survivor.KINDS.heavy.key) == 2 and int(Survivor.KINDS.secondary.key) == 3
-	expect(keyed and int(kinds.primary) == 9 and int(kinds.secondary) == 2 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, and its key is the key of its kind")
-	# --- one of each kind; a second one is traded for the first
+	expect(keyed and int(kinds.primary) == 9 and int(kinds.secondary) == 5 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, including the three new sidearms")
+	# --- two issued primary slots; a third trades in a chosen primary
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
 	# (The shop opens on the list it was left on.)
@@ -2106,19 +2107,21 @@ func _loadout(game: Node3D) -> void:
 	var shop_show: WeaponShow = game.hud.counter.stage
 	expect(shop_show.shown == "rifle" and shop_show.is_visible_in_tree() and shop_show.size.x > 200.0 and shop_show.camera.position.length() > 0.5 and shop_show.camera.position.length() < 5.0, "The shop shows the picture of the first weapon of its list as it opens (its camera stands %.1f m from it)" % shop_show.camera.position.length())
 	var first_cost: int = game.weapon_cost("ak")
-	var swapped: bool = game.buy_weapon("ak") and player.inventory.has("ak") and not player.inventory.has("rifle") and player.current_weapon == "ak" and game.credits == 700
-	var beside: bool = game.buy_weapon("pistol") and game.buy_weapon("sniper") and player.inventory.size() == 3 and game.credits == 700 - 60 - 450
-	var offer: int = game.weapon_cost("p90")
+	var swapped: bool = game.buy_weapon("ak") and player.inventory.has("ak") and player.inventory.has("rifle") and player.current_weapon == "ak" and game.credits == 700
+	var beside: bool = player.inventory.has("pistol") and game.buy_weapon("sniper") and player.inventory.size() == 4 and game.credits == 700 - 450
+	var offer: int = game.weapon_cost("p90", "ak")
 	var goes: String = player.to_replace("p90")
 	player.equip_weapon("sniper", true)
-	var traded: bool = game.buy_weapon("p90") and not player.inventory.has("ak") and player.inventory.has("sniper") and player.current_weapon == "p90" and game.credits == 190 + 50
+	var traded: bool = game.buy_weapon("p90", "ak") and not player.inventory.has("ak") and player.inventory.has("rifle") and player.inventory.has("sniper") and player.current_weapon == "p90" and game.credits == 250 + 50
+	player.drop_weapon("rifle")
 	# The carbine everybody starts with can be had back for nothing.
 	game.hud._open_tab("weapons")
 	var listed := false
 	for node in game.hud.counter.row_buttons:
-		listed = listed or ((node as Button).text == "M4A4" and str(game.hud.counter.weapon_state("rifle")[0]) == "KOSTENLOS")
-	var back: bool = game.buy_weapon("rifle") and player.inventory.has("rifle") and not player.inventory.has("p90") and game.credits == 240 + 50
-	expect(first_cost == 300 and swapped and beside and offer == 100 - 150 and goes == "ak" and traded and listed and back and game.trade_in("sniper") == 225 and game.trade_in("rifle") == 0, "A survivor carries one weapon of each kind: a second one takes the place of the first, which is traded in for half its price")
+		listed = listed or ((node as Button).text == "M4A4" and str(game.hud.counter.weapon_state("rifle")[0]) == "0 ◈")
+	var back: bool = game.buy_weapon("rifle") and player.inventory.has("rifle") and player.inventory.has("p90") and game.credits == 300
+	expect(first_cost == 300 and swapped and beside and offer == 100 - 150 and goes == "rifle" and traded and listed and back and game.trade_in("sniper") == 225 and game.trade_in("rifle") == 0, "Two primary weapons fit without a sling; the third trades in the chosen primary, while the heavy weapon and fallback pistol stay")
+	player.drop_weapon("p90")
 	# The keys.
 	player._select_slot(3)
 	var sidearm: String = player.current_weapon
@@ -2207,27 +2210,25 @@ func _loadout(game: Node3D) -> void:
 	player.extra_slots = key_slots
 	player.equip_weapon(wheel, true)
 	expect(sidearm == "pistol" and heavy == "sniper" and primary == "rifle" and wheel == "pistol" and player.current_weapon == "pistol", "Keys 1, 2 and 3 take the primary, the heavy and the secondary weapon in hand; the wheel goes through all of them")
-	# --- slings make room
+	# --- one sling adds exactly the third primary slot
+	player.unlock("ak")
 	game.credits = 2000
 	var sling_price: int = game.item_price("sling")
 	var roomy: bool = not player.room_for("ump") and game.buy_item("sling") and player.extra_slots == 1 and player.room_for("ump") and player.to_replace("ump") == ""
-	var both: bool = game.buy_weapon("ump") and player.carried("primary") == ["rifle", "ump"] and game.credits == 2000 - 250 - 220
-	# The one place more is taken: the next sidearm is traded again.
-	var again: bool = not player.room_for("revolver") and game.weapon_cost("revolver") == 220 - 30 and game.buy_weapon("revolver") and not player.inventory.has("pistol") and player.inventory.size() == 4
-	game.buy_item("sling")
-	game.buy_item("sling")
-	var full: bool = player.extra_slots == 3 and game.item_price("sling") == -1 and not game.buy_item("sling")
+	var both: bool = game.buy_weapon("ump") and player.carried("primary") == ["rifle", "ak", "ump"] and game.credits == 2000 - 250 - 220
+	var again: bool = player.room_for("revolver") and game.weapon_cost("revolver") == 220 and game.buy_weapon("revolver") and player.inventory.has("pistol") and not player.room_for("usp") and not player.room_for("mg") and not player.room_for("p90") and player.replaceable("usp") == ["revolver"]
+	var full: bool = player.extra_slots == 1 and (Survivor.GOODS.sling.prices as Array).size() == 1 and game.item_price("sling") == -1 and not game.buy_item("sling")
 	game.resume_run()
-	expect(sling_price == 250 and roomy and both and again and full, "A sling from the shop makes room for one more weapon of any kind, up to three of them")
+	expect(sling_price == 250 and roomy and both and again and full, "The sling can be bought once and adds only a third primary slot, with no extra sidearm or heavy slots")
 	# A new night starts with the carbine alone, also after it was traded in.
-	player.unlock("ak")
+	player.equip_weapon("ak", true)
 	player.drop_weapon("rifle")
-	var gone: bool = not player.inventory.has("rifle") and player.current_weapon == "ak" and player.extra_slots == 3
+	var gone: bool = not player.inventory.has("rifle") and player.current_weapon == "ak" and player.extra_slots == 1
 	game.start_run()
 	game.mission.plain()
 	game.preparation_left = 9999.0
 	await frames(3)
-	expect(gone and player.current_weapon == "rifle" and player.inventory.size() == 1 and player.inventory.has("rifle") and player.extra_slots == 0 and player.ammo == 30, "A new night starts with the carbine alone and without slings, also after the carbine was traded in")
+	expect(gone and player.current_weapon == "rifle" and player.inventory.size() == 2 and player.inventory.has("rifle") and player.inventory.has("pistol") and player.extra_slots == 0 and player.ammo == 30, "A new night starts with the carbine and issued sidearm, without slings, also after the carbine was traded in")
 	# --- the syringe
 	player.health = 40.0
 	var given: bool = player.inject() and is_equal_approx(player.health, 70.0) and player.syringe_wait > 7.0
@@ -2335,12 +2336,10 @@ func _loadout(game: Node3D) -> void:
 			var changed: Dictionary = Survivor.ATTACHMENTS[id][part].get("set", {})
 			if changed.get("quiet", false):
 				hushed = hushed and Survivor.QUIET_SOUNDS.has(str(changed.sound)) and game.sounds.clips.has(str(changed.sound))
-	# The list of parts: only for the two rifles that are carried.
+	# A carried rifle exposes its optic and muzzle slots directly under its statistics.
 	game.hud._open_tab("mods")
-	var dots := 0
-	for node in game.hud.counter.row_buttons:
-		if (node as Button).text.begins_with("ROTPUNKTVISIER"):
-			dots += 1
+	game.hud.counter.pick("weapon", "g36")
+	var dots: int = game.hud.counter.detail.find_child("AttachmentSlots", true, false).get_child_count()
 	game.resume_run()
 	# The reload: the magazine leaves the weapon and comes back, with sounds of its own.
 	player.ammo = 5
@@ -2354,7 +2353,7 @@ func _loadout(game: Node3D) -> void:
 	var cued := true
 	for cue in Survivor.WEAPONS.g36.cues:
 		cued = cued and str(cue[1]).begins_with("g36_")
-	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 5 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 is a primary weapon with its own shot and reload, a magazine that leaves the gun, a sight line through the middle of the picture and three parts; the list of parts shows only those for what is carried")
+	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 10 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 retains its shot, physical reload, aligned sights and working attachments in the new weapon editor")
 	_wipe(game)
 	# --- the MP7: its magazine comes out of the pistol grip, and it has no iron sights
 	game.preparation_left = 9999.0
@@ -2379,12 +2378,10 @@ func _loadout(game: Node3D) -> void:
 	var mp7_dot: bool = game.buy_part("mp7", "reddot") and (mp7.get_node("Mod_reddot") as Node3D).visible and player.fitted("sight") == "reddot"
 	var mp7_scoped: bool = game.buy_part("mp7", "scope") and (mp7.get_node("Mod_scope") as Node3D).visible and not (mp7.get_node("Mod_reddot") as Node3D).visible and player.gun().has("scope")
 	var mp7_hushed: bool = game.buy_part("mp7", "silencer") and (mp7.get_node("Mod_silencer") as Node3D).visible and str(player.gun().sound) == "mp7_sil" and bool(player.gun().quiet) and Survivor.QUIET_SOUNDS.has("mp7_sil") and game.credits == 2000 - 280 - 120 - 260 - 180
-	# The list of parts names it, with those of the carbine that is carried beside it.
+	# Its two customization slots are available on the weapon's own page.
 	game.hud._open_tab("mods")
-	var mp7_listed := 0
-	for node in game.hud.counter.row_buttons:
-		if (node as Button).text.begins_with("SCHALLDÄMPFER"):
-			mp7_listed += 1
+	game.hud.counter.pick("weapon", "mp7")
+	var mp7_listed: int = game.hud.counter.detail.find_child("AttachmentSlots", true, false).get_child_count()
 	var mp7_heard: bool = mp7_plain == "mp7" and bool(game.sounds.recorded.get("mp7", false)) and bool(game.sounds.recorded.get("mp7_sil", false)) and FieldAudio.MIX.has("mp7") and FieldAudio.MIX.has("mp7_sil")
 	game.resume_run()
 	player.ammo = 3
@@ -4002,6 +3999,12 @@ func _second_exploder(game: Node3D) -> void:
 ## What a shooter hears when his own bullet lands: a tick for flesh, a brighter one for a
 ## head, a fuller one on top for a kill - one answer per shot, and none for anybody else.
 func _hit_answer(game: Node3D) -> void:
+	game.profile.mission = 1
+	game.profile.mode = "story"
+	game.team_enabled = false
+	game.start_run()
+	game.set_process(false)
+	game.mission.plain()
 	var player: Survivor = game.player
 	var sounds: FieldAudio = game.sounds
 	var built := true
@@ -4037,7 +4040,7 @@ func _hit_answer(game: Node3D) -> void:
 	await wait(FieldAudio.HIT_FLOOR + 0.08)
 	sounds.confirm_hit(false, false, false)
 	var soldier: AudioStream = _latest_stream(sounds)
-	expect([own_a, own_b].has(own_first) and [own_a, own_b].has(own_second) and own_first != own_second and (sounds.clips.hit_body as Array).has(soldier), "Hit sounds the player has put into his own folder answer his hits on the infected, never the same twice in a row; a soldier keeps the game's own answer")
+	expect([own_a, own_b].has(own_first) and [own_a, own_b].has(own_second) and own_first != own_second and (sounds.clips[FieldAudio.DING] as Array).has(soldier), "Custom files answer infected hits without repeating; soldiers get the classic hitmarker over a quiet impact")
 	# (From here on the game's own answers are meant: the player's are set aside.)
 	sounds.own_hits.clear()
 	sounds.hit_landed = -10.0
@@ -4140,10 +4143,16 @@ func _sounding(sounds: FieldAudio, kind: String, pitch: float = 0.0) -> bool:
 ## the climb comes to rest on. Soldiers keep the fleshy answer, and the player's own files
 ## come before all of it.
 func _ding_answer(game: Node3D) -> void:
+	game.profile.mission = 1
+	game.profile.mode = "story"
+	game.team_enabled = false
+	game.start_run()
+	game.set_process(false)
+	game.mission.plain()
 	var player: Survivor = game.player
 	var sounds: FieldAudio = game.sounds
 	var ding: String = FieldAudio.DING
-	var families := ["ding_glas", "ding_messing", "ding_tink", "ding_spiel"]
+	var families := ["ding_classic", "ding_glas", "ding_messing", "ding_tink", "ding_spiel"]
 	var built := true
 	for family in families:
 		for suffix in ["", "_head", "_kill"]:
@@ -4158,7 +4167,7 @@ func _ding_answer(game: Node3D) -> void:
 	var rising: bool = ladder.size() >= 4 and ladder.size() <= 7 and float(ladder[0]) == 0.0 and float(ladder[top]) <= 7.0
 	for i in range(1, ladder.size()):
 		rising = rising and float(ladder[i]) > float(ladder[i - 1]) and float(ladder[i]) - float(ladder[i - 1]) <= 2.0
-	expect(built and rising and families.has(ding) and FieldAudio.LADDER_PAUSE >= 0.3 and FieldAudio.LADDER_PAUSE <= 1.5, "Four families of dings are built, with takes for a hit, a head and a kill each, and one of them is played; the ladder climbs in small steps")
+	expect(built and rising and ding == "ding_classic" and FieldAudio.LADDER_PAUSE >= 0.3 and FieldAudio.LADDER_PAUSE <= 1.5, "The classic hitmarker and four optional bell families have body, head and kill variants; the classic click is active and rapid hits climb in small steps")
 	# Hit after hit on an infected: every ding a rung higher, and on the last rung it stays.
 	_wipe_all(game)
 	await wait(FieldAudio.LADDER_PAUSE + 0.4)
@@ -4466,11 +4475,11 @@ func _kit(game: Node3D) -> void:
 	for id in Survivor.ATTACHMENTS:
 		parts += (Survivor.ATTACHMENTS[id] as Dictionary).size()
 		most = maxi(most, (Survivor.ATTACHMENTS[id] as Dictionary).size())
-	rows["mods"] = int(rows.get("mods", 0)) + most * Survivor.CARRY
+	rows["melee"] = Survivor.MELEE_WEAPONS.size()
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 8 and int(rows.heavy) == 7 and int(rows.mods) == 3 and not Survivor.GOODS.has("mags") and parts == 15 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The shop has eight lists, and none is longer than can be scrolled through at a glance (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 8 and int(rows.heavy) == 7 and int(rows.sidearms) == 5 and int(rows.melee) == 7 and not rows.has("mods") and not Survivor.GOODS.has("mags") and parts == 34 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The eight shop lists include five sidearms and seven melee options; attachments live on the weapon pages (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
@@ -5426,6 +5435,9 @@ func map_point(game: Node3D, id: String) -> Vector3:
 func _newer(game: Node3D) -> void:
 	var cabin: CabinMap = game.cabin
 	var mission: MissionDirector = game.mission
+	# This block measures a solo squad size and the first bark, even when run after others.
+	game.team_enabled = false
+	game.bark_until.clear()
 	# --- voices
 	var opening := Radio.pick("mission_start")
 	expect(str(opening.sound) != "" and ResourceLoader.exists(str(opening.sound)) and opening.name == "COLEMAN", "Coleman's radio lines are recorded")
@@ -5450,6 +5462,9 @@ func _newer(game: Node3D) -> void:
 	expect(game.radio_queue.size() == 1 and game.radio_busy > 1.0, "A radio line waits until the one before is over")
 	game._run_radio(60.0)
 	expect(game.radio_queue.is_empty(), "A waiting radio line follows when the channel is free")
+	# Earlier blocks fill the positional sound pool with impacts; this checks bark order.
+	game.sounds.stop_all()
+	game.bark_until.clear()
 	expect(game.bark(game.player, "viper", "reload") and not game.bark(game.player, "viper", "kill"), "Nobody calls out two things at once")
 	# --- the C.R.U.
 	face(game, Vector3(0, 0.05, 22.0), PI)
@@ -5527,7 +5542,7 @@ func _newer(game: Node3D) -> void:
 	player.shot_cooldown = 0.0
 	player.shoot()
 	expect(player.ammo == int(Survivor.WEAPONS.autoshotgun.magazine) - 1 and int(Survivor.WEAPONS.autoshotgun.magazine) == 12 and player.pump_clock < 0.0, "The automatic shotgun needs no pump stroke")
-	expect(player.unlock("pistol") and player.ammo == 15 and player.unlock("revolver") and player.ammo == 6 and int(Survivor.WEAPONS.minigun.from_round) > int(Survivor.WEAPONS.launcher.from_round), "Two handguns are on sale, the heaviest weapons only late in the night")
+	expect(player.equip_weapon("pistol", true) and player.ammo == 15 and player.unlock("revolver") and player.ammo == 6 and int(Survivor.WEAPONS.minigun.from_round) > int(Survivor.WEAPONS.launcher.from_round), "An issued pistol and a purchasable revolver are available, the heaviest weapons only late in the night")
 	# --- holding a position
 	game.start_run()
 	var hold: Dictionary = mission._start_task("zone")
@@ -5565,6 +5580,22 @@ func _newer(game: Node3D) -> void:
 
 ## Manual preparation and the guest's landing cutscene. No network or player saves are
 ## needed for this regression block; the separate session check exercises real peers.
+func _feedback(game: Node3D) -> void:
+	var runner = load("res://tools/feedback_check.gd").new()
+	add_child(runner)
+	await runner.run(game)
+	checks += runner.checks
+	failures += runner.failures
+	runner.queue_free()
+
+func _movement(game: Node3D) -> void:
+	var runner = load("res://tools/movement_check.gd").new()
+	add_child(runner)
+	await runner.run(game)
+	checks += runner.checks
+	failures += runner.failures
+	runner.queue_free()
+
 func _coop_controls(game: Node3D) -> void:
 	game.profile.mission = 1
 	game.profile.mode = "story"
@@ -6963,7 +6994,7 @@ func _overhaul(game: Node3D) -> void:
 	game.hud.show_menu("main")
 	var named := ""
 	for node in game.hud.modal.find_children("*", "Button", true, false):
-		if (node as Button).text.begins_with("FÄHIGKEITEN"):
+		if (node as Button).text == "KARRIERE":
 			named = (node as Button).text
 	game.hud.show_menu("skills")
 	var marks := 0
@@ -6977,7 +7008,7 @@ func _overhaul(game: Node3D) -> void:
 	var stored: bool = game.profile.skill_tree == "hunter" and kept.chosen == "hunter" and kept.spent("sweeper") == 8 and kept.spent("hunter") == 4 and kept.rank("sweeper_fire") == 1
 	game.profile.totals = career
 	game.reset_skills()
-	expect(spread and all_in and sweeping and switched and hunting and rows and named.ends_with("4 FREI") and marks == 1 and stored and skills.spent() == 0, "Points go into each of the trees; only the tree in force counts, another can be put in force without losing a point, and the profile keeps all of it")
+	expect(spread and all_in and sweeping and switched and hunting and rows and named == "KARRIERE" and marks == 1 and stored and skills.spent() == 0, "Points go into each of the trees; only the tree in force counts, another can be put in force without losing a point, and the profile keeps all of it")
 	# --- what the sweeper's flamethrower sets alight goes off without harm
 	var post := Vector3(0, 0.05, 22.0)
 	skills.chosen = "sweeper"
@@ -7115,15 +7146,15 @@ func _overhaul(game: Node3D) -> void:
 	game.interact()
 	var screen: ShopScreen = hud.counter
 	var opened: bool = game.state == "shop" and screen != null and screen.mode == "shop"
-	var lone: bool = not game.sell_weapon("rifle") and player.inventory.has("rifle")
-	var armed: bool = game.buy_weapon("pistol") and game.sell_weapon("rifle") and not player.inventory.has("rifle") and player.current_weapon == "pistol" and game.credits == 3000 - 60
-	var back: bool = game.buy_weapon("ak") and game.sell_weapon("ak") and player.current_weapon == "pistol" and game.credits == 3000 - 60 - 300 + 150
+	var lone: bool = not game.sell_weapon("pistol") and player.inventory.has("rifle")
+	var armed: bool = game.sell_weapon("rifle") and not player.inventory.has("rifle") and player.current_weapon == "pistol" and game.credits == 3000
+	var back: bool = game.buy_weapon("ak") and game.sell_weapon("ak") and player.current_weapon == "pistol" and game.credits == 3000 - 300 + 150
 	# With a sling there are two rifles; a third takes the place of the one the buyer names.
-	var two: bool = game.buy_item("sling") and game.buy_weapon("g36") and game.buy_weapon("m14") and player.carried("primary").size() == 2 and game.credits == 2790 - 250 - 450 - 320
+	var two: bool = game.buy_item("sling") and game.buy_weapon("g36") and game.buy_weapon("m14") and player.carried("primary").size() == 2 and game.credits == 2850 - 250 - 450 - 320
 	var choices: Array = player.replaceable("ak")
 	var usual: String = game.outgoing("ak")
 	var picks_one: bool = choices.size() == 2 and usual == "m14" and choices[0] == "m14" and choices.has("g36") and game.weapon_cost("ak") == 300 - 160 and game.weapon_cost("ak", "g36") == 300 - 225 and game.outgoing("ak", "pistol") == "m14"
-	var chosen: bool = game.buy_weapon("ak", "g36") and player.inventory.has("ak") and player.inventory.has("m14") and not player.inventory.has("g36") and game.credits == 1770 - 75
+	var chosen: bool = game.buy_weapon("ak", "g36") and player.inventory.has("ak") and player.inventory.has("m14") and not player.inventory.has("g36") and game.credits == 1830 - 75
 	expect(opened and lone and armed and back and two and picks_one and chosen and hud.counter == screen, "The shop takes a weapon back for half its price (never the last one), and the buyer chooses which weapon goes for a new one")
 	# --- its screen: a list, the weapon picked in it turning in a picture, one button
 	hud._open_tab("weapons")
@@ -8032,16 +8063,19 @@ func _hive(game: Node3D) -> void:
 	profile.mission = 1
 	game.return_to_menu()
 	await frames(2)
+	hud.show_menu("play")
 	var words := ""
 	var mode_button: Button = null
 	for node in hud.modal.find_children("*", "Button", true, false):
 		words += (node as Button).text + " | "
+	for node in hud.modal.find_children("*", "Label", true, false):
+		words += (node as Label).text + " | "
 	var first_play: String = profile.play()
 	hud._choose_mission(2)
 	for node in hud.modal.find_children("*", "Button", true, false):
-		if (node as Button).text.begins_with("MODUS"):
+		if node.name == "MODUS":
 			mode_button = node as Button
-	expect(words.contains("MISSION 1") and words.contains("MISSION 2") and words.contains("EINSATZ STARTEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and words.contains("MODUS") and mode_button == null and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen in the main menu; the second has leaderboards of its own and neither an endless night nor modifiers")
+	expect(words.contains("MISSION STARTEN") and words.contains("RAUM ÖFFNEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and words.contains("MODUS") and mode_button != null and mode_button.disabled and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen on the play page; the second has leaderboards of its own and disables endless mode and modifiers")
 	profile.mode = "endless"
 	hud._next_board()
 	var after_villa: String = profile.play()
@@ -8204,10 +8238,12 @@ func _hive(game: Node3D) -> void:
 	var told: bool = order.ends_with("NADJA,NADJA,NADJA,SCORPION,VIPER,SCORPION,VIPER,PHANTOM,HAVOC,GHOST,GHOST,COLEMAN,COLEMAN,VIPER,SCORPION,PHANTOM,HAVOC,GHOST,VIPER,SCORPION,COLEMAN") and order.contains("~COLEMAN") and order.rfind("~COLEMAN") < order.find("PHANTOM") and not hive.channel_taken()
 	if not told:
 		print("HIVE_STATION heard: ", order)
+		print("HIVE_STATION state: stage=%s time=%.2f clock=%.2f hold=%s/%.2f line=%.2f queued=%s joined=%s" % [hive.stage, hive.stage_time, hive.clock, hive.hold_id, hive.hold_left, hive.line_left, str(hive.lines.slice(0, 3)), str(game.net.joined)])
 	expect(reached == ["station"] and guarded >= 6 and leaving and locked_in and dealt and early and hive.stage == "power" and hive.puppets.is_empty(), "At the station the guards have to fall; then Nadja leaves through a door that shuts behind her, the three operators come and go, and the train can be started while the last words are still being said (%d guards)" % guarded)
 	var relay_kept: bool = hive.leavers.size() == 1 and bool(hive.leavers[0].keep) and str((hive.leavers[0].node as Teammate).look) == "ghost" and game.team.size() == 2
 	expect(told and relay_kept, "What is said at the station comes in its order, nobody talking over anybody: Nadja through the glass, the squad about her, the three operators, - once Ghost has cleared the channel - a Coleman whose words come through whole, and then who stays and who goes, each with his reason; Ghost stays at the relay")
 	player.global_position = (map.points.booth as Vector3) + Vector3(0, 0.05, 0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(map.interaction_devices.booth).get_center())
 	await frames(4)
 	var asked: bool = hive.prompt() != "" and game.interaction_prompt() == hive.prompt()
 	game.interact()
@@ -8229,6 +8265,7 @@ func _hive(game: Node3D) -> void:
 	_wipe_all(game)
 	reached.clear()
 	player.global_position = (map.points.control as Vector3) + Vector3(0, 0.05, 0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(map.interaction_devices.control).get_center())
 	await frames(4)
 	game.interact()
 	await frames(4)
@@ -8237,6 +8274,7 @@ func _hive(game: Node3D) -> void:
 	_wipe_all(game)
 	await step.call("junction", "security")
 	player.global_position = (map.points.security as Vector3) + Vector3(0, 0.05, 0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(map.interaction_devices.security).get_center())
 	await frames(4)
 	game.interact()
 	await frames(4)
@@ -8252,6 +8290,7 @@ func _hive(game: Node3D) -> void:
 	reached.clear()
 	await step.call("atrium", "generator")
 	player.global_position = (map.points.generator as Vector3) + Vector3(0, 0.05, 0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(map.interaction_devices.generator).get_center())
 	await frames(4)
 	game.interact()
 	await frames(4)
@@ -8783,7 +8822,7 @@ func _hive_caches(game: Node3D) -> void:
 				listed.append(str(entry.id))
 			note = note or str(entry.get("head", "")).contains("Waffenlagern")
 	var refused: bool = not game.buy_weapon("g36") and not game.buy_weapon("minigun") and not player.inventory.has("g36")
-	var plain: bool = game.buy_weapon("ak") and player.inventory.has("ak") and game.buy_weapon("pistol")
+	var plain: bool = game.buy_weapon("ak") and player.inventory.has("ak") and player.inventory.has("pistol")
 	# (The trees of abilities at a locker: the weapon of a tree under the rule it always had -
 	# three points, the tree in force -, the tree in force changed on the spot, and what he
 	# carries of the other tree stays his until he trades it in.)
@@ -8875,6 +8914,7 @@ func _hive_caches(game: Node3D) -> void:
 	expect(unknown and noticed and board_read and board_known == 3 and caches.boards.size() >= 8 and screens_name >= 4, "A cache is a side goal once the survivor has come near it or has read a display that marks tonight's caches (%d displays, %d terminals name the nearest): a line under the stage's goal and a small mark beside the stage's own, never in its place" % [caches.boards.size(), screens_name])
 	# --- a plain one is searched and gives what it holds; a found weapon is his like a bought one
 	face(game, (shed.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(shed.node).get_center())
 	var ask := hive.prompt()
 	game.interact_blocked_until = 0
 	game.interact()
@@ -8897,9 +8937,12 @@ func _hive_caches(game: Node3D) -> void:
 	for entry: Dictionary in hud.counter.entries:
 		carried = carried or (str(entry.get("id", "")) == "revolver" and str(entry.get("tag", "")).begins_with("DABEI"))
 	game.resume_run()
-	# (No place for a second primary weapon: the carbine stays in the crate, and comes back.)
+	# Fill the second issued primary slot so this cache exercises a replacement.
+	player.unlock("ak")
+	player.equip_weapon("revolver", true)
 	var crate: Dictionary = sites[caches._index_of("depot_kiste")]
 	face(game, (crate.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(crate.node).get_center())
 	game.interact()
 	for k in range(8):
 		caches._process(0.5)
@@ -8916,6 +8959,7 @@ func _hive_caches(game: Node3D) -> void:
 	hive.entries.due.clear()
 	var cage: Dictionary = sites[caches._index_of("depot")]
 	face(game, (cage.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(cage.node).get_center())
 	var warns := hive.prompt()
 	var tasks_before: int = game.stats.objectives
 	caches.answered = 0
@@ -8950,6 +8994,7 @@ func _hive_caches(game: Node3D) -> void:
 	var bodies: int = maxi(standing, hive.entries.came - through)
 	_wipe_all(game)
 	face(game, (cage.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(cage.node).get_center())
 	cage.answer = 999.0
 	for k in range(41):
 		caches._process(0.5)
@@ -8973,6 +9018,7 @@ func _hive_caches(game: Node3D) -> void:
 	hive._checkpoint("descent", 0)
 	var later: Dictionary = sites[caches._index_of("scanner")]
 	face(game, (later.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(later.node).get_center())
 	game.interact()
 	for k in range(8):
 		caches._process(0.5)
@@ -8991,7 +9037,7 @@ func _hive_caches(game: Node3D) -> void:
 	game.start_run()
 	await frames(3)
 	hive.set_process(false)
-	var fresh: bool = hive.checkpoint == "landing" and caches.kept.is_empty() and player.inventory.size() == 1 and player.inventory.has("rifle") and caches.night != night_was
+	var fresh: bool = hive.checkpoint == "landing" and caches.kept.is_empty() and player.inventory.size() == 2 and player.inventory.has("rifle") and player.inventory.has("pistol") and caches.night != night_was
 	expect(found_after and kept_ok and places_ok and fresh, "A defeat taken up again at a checkpoint is the same night: the caches opened before that checkpoint stay open and the weapons found by then are in the survivor's hands again, what was found after it lies in its cache again - and a new night is dealt anew")
 	# --- rare weapons: how often, what they have of their own, and that they stay rare
 	await _hive_rare(game)
@@ -9208,9 +9254,8 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 	var only_bench: bool = not game.buy_weapon("ak") and not game.buy_item("grenade") and not game.buy_part("g36", "silencer") and not game.gear_only()
 	game.resume_run()
 	expect(bench_prompt.begins_with("[E] Werkbank") and bench_open and gold == HiveCaches.rare_title("g36", player.inventory.g36.rare) and paid and only_bench and game.state == "playing" and not get_tree().paused, "A workbench between the supply points opens the workbench's screen and stops the fight like any other, shows a rare weapon's gold line (%s), sells a level at the price it has everywhere (%d) - and no weapon, no gear, no attachment" % [gold, cost])
-	# --- an equipment station: the shop's counter with four lists - attachments, gear, what
-	# is used up, the squad's - at the prices of the lockers; no weapon is bought or sold
-	# there and no tree of abilities changed
+	# --- an equipment station: owned weapons expose their attachment editors alongside
+	# gear, consumables and squad supplies; no weapon is bought or sold there.
 	var gear_ok := true
 	var opened: Array[String] = []
 	for station: Dictionary in [rack, cabinet]:
@@ -9225,15 +9270,15 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 		var chips: Array[String] = []
 		for chip in hud.counter.tabs.get_children():
 			chips.append((chip as Button).text)
-		# (Whatever list is asked for: it shows one of its four, and never a weapon or a tree.)
+		# Only carried weapons may appear, and no workbench or class tree.
 		var strays := 0
 		for tab in SurvivalHUD.SHOP_TABS:
 			hud._open_tab(str(tab[0]))
 			strays += 0 if hud.shop_tab in HiveStations.TABS and (hud.shop_tab == str(tab[0])) == (str(tab[0]) in HiveStations.TABS) else 1
 			for entry: Dictionary in hud.counter.entries:
-				strays += 1 if str(entry.get("kind", "")) in ["weapon", "bench"] or entry.has("trees") else 0
+				strays += 1 if (str(entry.get("kind", "")) == "weapon" and not player.inventory.has(str(entry.id))) or str(entry.get("kind", "")) == "bench" or entry.has("trees") else 0
 		hud.counter._show_carried("g36")
-		strays += 0 if hud.shop_tab == "mods" and str(hud.counter.picked.get("kind", "")) == "part" else 1
+		strays += 0 if hud.shop_tab == "weapons" and str(hud.counter.picked.get("kind", "")) == "weapon" else 1
 		var tree_then: String = game.skills.chosen
 		var refused: bool = not game.buy_weapon("ak") and not player.inventory.has("ak") and player.inventory.size() >= 2 and not game.sell_weapon("g36") and player.inventory.has("g36") and not game.may_switch_tree() and not game.choose_tree("breacher" if tree_then != "breacher" else "hunter") and game.skills.chosen == tree_then and not game.buy_upgrade("mags", "g36")
 		var before: int = game.credits
@@ -9241,13 +9286,13 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 		var sold: bool = game.buy_item("grenade") and int(player.items.grenade) == 1 and game.buy_item("mask") and game.buy_item("squad_armor") and game.buy_part("g36", part) and player.owns_part("g36", part)
 		var spent: int = game.price(int(Survivor.GOODS.grenade.price)) + game.price(int(Survivor.GOODS.mask.prices[player.mask_level - 1])) + game.price(int(Survivor.GOODS.squad_armor.prices[int(game.squad_levels.squad_armor) - 1])) + game.price(int(Survivor.ATTACHMENTS.g36[part].price))
 		game.resume_run()
-		gear_ok = gear_ok and said.begins_with("[E] Ausrüstung") and seen and " ".join(PackedStringArray(chips)) == "AUFSÄTZE AUSRÜSTUNG VERBRAUCH TEAM" and strays == 0 and refused and sold and game.credits == before - spent and game.state == "playing" and hud.shop_tab == "weapons" and game.locker_tab == ""
+		gear_ok = gear_ok and said.begins_with("[E] Ausrüstung") and seen and " ".join(PackedStringArray(chips)) == "WAFFEN PISTOLEN SCHWER AUSRÜSTUNG VERBRAUCH TEAM" and strays == 0 and refused and sold and game.credits == before - spent and game.state == "playing" and hud.shop_tab == "weapons" and game.locker_tab == ""
 	# (And a weapon locker is what it was.)
 	face(game, beside(game, "shop", map.points.supply_station, 1), 0.0)
 	game.open_shop()
 	var locker: bool = not game.gear_only() and game.may_switch_tree() and hud.shop_tab == "weapons" and hud.counter.tabs.get_child_count() == SurvivalHUD.SHOP_TABS.size()
 	game.resume_run()
-	expect(gear_ok and " ".join(PackedStringArray(opened)) == "mods gear" and locker, "An equipment station opens the shop's counter from its own side with four lists only - attachments, gear, what is used up, the squad's; the one its sign promises first - and sells them at the lockers' prices; it buys and sells no weapon, improves none and changes no tree of abilities, whatever list is asked for; a weapon locker keeps all its lists")
+	expect(gear_ok and " ".join(PackedStringArray(opened)) == "weapons gear" and locker, "Equipment stations expose attachment editors for carried weapons alongside gear, consumables and squad supplies at normal prices; they never buy or sell weapons, upgrade statistics or change classes, while weapon lockers retain the full shop")
 	# --- on the map in the corner, and after a defeat taken up again
 	face(game, (bench.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
 	await frames(2)
@@ -9343,6 +9388,7 @@ func _hive_rare(game: Node3D) -> void:
 	caches.fill_all({"scanner": "g36", "werkstatt": "revolver", "depot_kiste": "m14", "buero": "mg"}, {"scanner": {"damage": 0.12, "parts": ["reddot"]}, "werkstatt": {"reload": 0.15}, "depot_kiste": {"mags": 0.2, "steady": 0.15}})
 	var locker: Dictionary = sites[caches._index_of("scanner")]
 	face(game, (locker.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(locker.node).get_center())
 	game.interact_blocked_until = 0
 	game.interact()
 	for k in range(8):
@@ -9364,10 +9410,11 @@ func _hive_rare(game: Node3D) -> void:
 	for node in hud.counter.detail.find_children("*", "Label", true, false):
 		said += (node as Label).text + " | "
 	var shop_numbers: Dictionary = HiveCaches.rare_figures(ShopScreen.figures("g36"), record.get("rare", {}))
-	var bought: bool = game.buy_weapon("pistol") and not player.inventory.pistol.has("rare") and game.sell_weapon("pistol")
+	var bought: bool = player.inventory.has("pistol") and not player.inventory.pistol.has("rare") and not game.sell_weapon("pistol")
 	game.resume_run()
 	var shed: Dictionary = sites[caches._index_of("werkstatt")]
 	face(game, (shed.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(shed.node).get_center())
 	game.interact()
 	for k in range(8):
 		caches._process(0.5)
@@ -9377,7 +9424,9 @@ func _hive_rare(game: Node3D) -> void:
 	expect(offer.contains("SELTEN") and offer.contains("12 % Schaden") and offer.contains("Rotpunktvisier") and glints and better and on_top and no_parts and bought and shown, "A rare weapon is seen as one in its cache and in what [E] offers, and arrives better than a plain one of its kind - a G36 that hits 12 % harder with a red dot fitted, a Magnum that reloads 15 % quicker and has no parts, as it takes none -, the workbench's levels come on top, the lockers show what it has and pay more for it, and what they sell is never rare")
 	# --- it stays rare: laid down in a cache and taken back, and after a checkpoint
 	var crate: Dictionary = sites[caches._index_of("depot_kiste")]
+	player.equip_weapon("g36", true)
 	face(game, (crate.stand as Vector3) + Vector3(0, 0.05, 0), 0.0)
+	player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(crate.node).get_center())
 	game.interact()
 	for k in range(8):
 		caches._process(0.5)

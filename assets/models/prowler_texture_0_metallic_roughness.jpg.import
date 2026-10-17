@@ -3,9 +3,10 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://d3h5gr2pr4r6l"
-path="res://.godot/imported/prowler_texture_0_metallic_roughness.jpg-7af97b014e7505bfdf836fbc0c4e9f4f.ctex"
+path.s3tc="res://.godot/imported/prowler_texture_0_metallic_roughness.jpg-7af97b014e7505bfdf836fbc0c4e9f4f.s3tc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc"],
+"vram_texture": true
 }
 generator_parameters={
 "md5": "0a50405e4213289ea94a68209dfddf14"
@@ -14,11 +15,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/models/prowler_texture_0_metallic_roughness.jpg"
-dest_files=["res://.godot/imported/prowler_texture_0_metallic_roughness.jpg-7af97b014e7505bfdf836fbc0c4e9f4f.ctex"]
+dest_files=["res://.godot/imported/prowler_texture_0_metallic_roughness.jpg-7af97b014e7505bfdf836fbc0c4e9f4f.s3tc.ctex"]
 
 [params]
 
-compress/mode=0
+compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -40,4 +41,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=1
+detect_3d/compress_to=0

@@ -1,8 +1,7 @@
 class_name SurvivalHUD
 extends CanvasLayer
-## The interface. While playing: round and tasks top left, score top right, radio and
-## banner in the upper middle, vitals bottom left, weapon and what is in the pockets bottom
-## right. And every menu: main, settings, pause, shop, co-op lobby, leaderboard, skins.
+## Compact HUD: events at the top left; map, clock, tokens and objectives on the right;
+## team and health below left, ammunition and owned equipment below right.
 
 const IVORY := Color("f2f4f5")
 const MUTED := Color("8d9aa1")
@@ -12,6 +11,7 @@ const MINT := Color("7fe3b4")
 const CYAN := Color("74d8ea")
 const DANGER := Color("ff6b57")
 const INK := Color("0f1317")
+const SYMBOLS = preload("res://scripts/ui_symbols.gd")
 const RADIO_INK := Color("e9dfa3")
 const SHOP_NOTES := {
 	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "mp7": "Kompakte MP, 950 Schuss in der Minute, das Magazin im Griff – ohne Kimme und Korn, nimmt Aufsätze", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action: breiter Schrotkegel, der durch zwei Körper weitergeht – für das Rudel in der Tür, wirft Getroffene zurück",
@@ -22,7 +22,7 @@ const SHOP_NOTES := {
 	"fifty": "Schießt durch Schilde und Panzerung und durchschlägt vier Körper"
 }
 ## The lists of the shop.
-const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "SCHWER"], ["class", "KLASSE"], ["mods", "AUFSÄTZE"], ["gear", "AUSRÜSTUNG"], ["use", "VERBRAUCH"], ["team", "TEAM"]]
+const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "SCHWER"], ["melee", "NAHKAMPF"], ["class", "KLASSE"], ["gear", "AUSRÜSTUNG"], ["use", "VERBRAUCH"], ["team", "TEAM"]]
 ## What is carried in the pockets and used with one key: item, key, short name. The
 ## syringe is not counted: its tile shows the seconds until it is ready again.
 ## (The key is read from the game's bindings: item, the action of its key, short name.)
@@ -32,9 +32,10 @@ const TILES := [["syringe", "syringe", "SPRITZE"], ["grenade", "throw_grenade", 
 ## mouse has no binding in that table), and what they do. Every action of the bindings
 ## stands in exactly one line (a check holds that).
 const KEY_HELP := [
+	[["scoreboard"], "Scoreboard anzeigen (halten)"],
 	[["move_forward", "move_left", "move_back", "move_right"], "Bewegen"], [["#Maus"], "Umsehen"],
-	[["#Linke Maustaste"], "Schießen · wirft, was in der Hand liegt"], [["#Rechte Maustaste"], "Zielen"],
-	[["reload"], "Nachladen"], [["sprint"], "Sprinten"], [["jump"], "Springen"], [["crouch"], "Ducken (an / aus)"],
+	[["#Linke Maustaste"], "Schießen · Akimbo: linke Pistole · Wurfzeug werfen"], [["#Rechte Maustaste"], "Zielen · Akimbo: rechte Pistole"],
+	[["reload"], "Nachladen"], [["sprint"], "Sprinten"], [["jump"], "Springen / Hindernis überwinden"], [["crouch"], "Ducken (halten oder umschalten)"],
 	[["interact"], "Benutzen, aufhelfen, Shop"], [["flashlight"], "Taschenlampe · halten: nächste Runde"], [["syringe"], "Heilspritze"], [["melee"], "Nahkampf"],
 	[["weapon_1"], "Primärwaffen durchwechseln"], [["weapon_2"], "Schwere Waffen durchwechseln"],
 	[["weapon_3"], "Sekundärwaffen (ohne: Wurfzeug)"], [["weapon_4"], "Wurfzeug in die Hand nehmen"], [["#Mausrad"], "Nächste / vorige Waffe"],
@@ -65,11 +66,16 @@ var time_label: Label
 var supply_label: Label
 var health_label: Label
 var health_bar: ProgressBar
+var armor_bar: ProgressBar
+var vest_icons: HBoxContainer
+var scoreboard: Control
+var scoreboard_key := ""
 var ammo_label: Label
 var reserve_label: Label
 var rifle_label: Label
 var interaction_label: Label
 var hold_bar: ProgressBar
+var fps_label: Label
 var banner_label: Label
 var detail_label: Label
 var radio_panel: PanelContainer
@@ -84,6 +90,9 @@ var order_marks: Array = []
 var reticle: Control
 var damage_overlay: TextureRect
 var tint_overlay: ColorRect
+var gas_overlay: ColorRect
+var gas_strength := 0.0
+var gas_label: Label
 var splatter_overlay: TextureRect
 var splatter_left := 0.0
 var flash_overlay: ColorRect
@@ -91,6 +100,7 @@ var hit_left := 0.0
 var hit_is_head := false
 var hit_is_dull := false
 var hit_is_blocked := false
+var hit_is_kill := false
 var banner_left := 0.0
 var radio_left := 0.0
 var flash_left := 0.0
@@ -103,6 +113,11 @@ var operator_box: HBoxContainer
 var operator_rows: Array = []
 var hurt_angle := 0.0
 var hurt_left := 0.0
+var hurt_events: Array = []
+var skin_pick := ""
+var patch_pick := ""
+var crosshair_gap := 8.0
+var blood_material: ShaderMaterial
 var pulse := 0.0
 var current_menu := ""
 var address_field: LineEdit
@@ -117,6 +132,7 @@ var shop_tab := "weapons"
 var scope_rect: ColorRect
 ## The menu the settings were opened from, to go back to.
 var settings_back := "main"
+var controls_tab := "movement"
 ## The weapons carried, shown for a moment whenever another one is taken in hand.
 var loadout_box: VBoxContainer
 var loadout_left := 0.0
@@ -157,8 +173,8 @@ func _ready() -> void:
 	play_ui.hide()
 	# The lobby redraws itself when the partner connects or the connection fails.
 	game.net.changed.connect(func() -> void:
-		if modal.visible and current_menu in ["host", "join"]:
-			show_menu(current_menu))
+		if modal.visible and current_menu in ["host", "join", "play"]:
+			show_menu("play" if current_menu == "join" and game.net.matched() else current_menu))
 
 ## A line of text. `military` picks the bold narrow face of headings and numbers.
 func label(text: String, size: int, color: Color = IVORY, military: bool = false) -> Label:
@@ -237,6 +253,9 @@ func _build_play_ui() -> void:
 	vignette_texture.fill_to = Vector2(1.0, 1.0)
 	damage_overlay = TextureRect.new()
 	damage_overlay.texture = vignette_texture
+	blood_material = ShaderMaterial.new()
+	blood_material.shader = preload("res://scripts/wounds.gdshader")
+	damage_overlay.material = blood_material
 	damage_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	damage_overlay.stretch_mode = TextureRect.STRETCH_SCALE
 	damage_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -248,6 +267,14 @@ func _build_play_ui() -> void:
 	tint_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tint_overlay.color = Color(0, 0, 0, 0)
 	play_ui.add_child(tint_overlay)
+	gas_overlay = ColorRect.new()
+	gas_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	gas_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var gas_paint := ShaderMaterial.new()
+	gas_paint.shader = preload("res://scripts/gas_screen.gdshader")
+	gas_overlay.material = gas_paint
+	gas_overlay.hide()
+	play_ui.add_child(gas_overlay)
 	splatter_overlay = TextureRect.new()
 	splatter_overlay.texture = _splatter_texture()
 	splatter_overlay.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -256,38 +283,48 @@ func _build_play_ui() -> void:
 	splatter_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	splatter_overlay.modulate.a = 0.0
 	play_ui.add_child(splatter_overlay)
-	# Top left: the round, what is left of it, and its tasks.
-	var round_box := VBoxContainer.new()
-	round_box.add_theme_constant_override("separation", 0)
-	_anchored(round_box, Control.PRESET_TOP_LEFT, 32, 22, 540, 230)
-	wave_label = label("RUNDE 01 / 10", 30, IVORY, true)
-	round_box.add_child(wave_label)
-	enemy_label = label("", 15, MINT)
-	round_box.add_child(enemy_label)
-	task_label = label("", 15, AMBER)
-	round_box.add_child(task_label)
-	# Top right corner: the map of what lies around the survivor.
+	# The map and its compact intel stack stay separate from combat events.
 	minimap = Minimap.new()
 	minimap.game = game
 	minimap.font = display
 	_anchored(minimap, Control.PRESET_TOP_RIGHT, -32 - Minimap.SIZE, 22, -32, 22 + Minimap.SIZE)
-	# Left of it: level, score, mission clock and supplies.
-	var score_box := VBoxContainer.new()
-	score_box.alignment = BoxContainer.ALIGNMENT_BEGIN
-	score_box.add_theme_constant_override("separation", -3)
-	_anchored(score_box, Control.PRESET_TOP_RIGHT, -344 - Minimap.SIZE, 22, -46 - Minimap.SIZE, 160)
-	difficulty_label = label("FIRETEAM  ·  NORMAL", 14, ORANGE, true)
-	difficulty_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	score_box.add_child(difficulty_label)
-	score_label = label("000000", 36, IVORY, true)
-	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	score_box.add_child(score_label)
-	time_label = label("00:00", 20, CYAN, true)
-	time_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	score_box.add_child(time_label)
-	supply_label = label("VORRAT 0120", 18, AMBER, true)
+	var intel := VBoxContainer.new()
+	intel.add_theme_constant_override("separation", 5)
+	_anchored(intel, Control.PRESET_TOP_RIGHT, -332, Minimap.SIZE + 30, -32, Minimap.SIZE + 230)
+	var readouts := HBoxContainer.new()
+	readouts.name = "MapReadouts"
+	readouts.custom_minimum_size.x = Minimap.SIZE
+	readouts.size_flags_horizontal = Control.SIZE_SHRINK_END
+	readouts.add_theme_constant_override("separation", 8)
+	intel.add_child(readouts)
+	time_label = label("00:00", 18, CYAN, true)
+	time_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	time_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	readouts.add_child(time_label)
+	supply_label = label(SYMBOLS.money(120), 22, AMBER, true)
 	supply_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	score_box.add_child(supply_label)
+	supply_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	readouts.add_child(supply_label)
+	_gap(intel, 12)
+	task_label = label("", 15, IVORY)
+	task_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	task_label.custom_minimum_size.x = 300
+	intel.add_child(task_label)
+	gas_label = label("", 15, AMBER, true)
+	gas_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	gas_label.hide()
+	intel.add_child(gas_label)
+	# Retained for existing game hooks and check tooling, without permanent readouts.
+	for field in ["wave", "enemy", "score", "difficulty"]:
+		var hidden := label("", 14, MUTED)
+		hidden.hide()
+		play_ui.add_child(hidden)
+		match field:
+			"wave": wave_label = hidden
+			"enemy": enemy_label = hidden
+			"score": score_label = hidden
+			"difficulty": difficulty_label = hidden
 	# Top centre: radio traffic from command, then the boss bar.
 	radio_panel = PanelContainer.new()
 	radio_panel.add_theme_stylebox_override("panel", _plate(0.66))
@@ -330,11 +367,11 @@ func _build_play_ui() -> void:
 	detail_label = label("", 17, AMBER)
 	detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_anchored(detail_label, Control.PRESET_CENTER_TOP, -420, 228, 420, 262)
-	# Right edge: kill feed.
+	# Top left: brief combat and team events, newest first.
 	feed = VBoxContainer.new()
-	feed.alignment = BoxContainer.ALIGNMENT_END
-	feed.add_theme_constant_override("separation", 0)
-	_anchored(feed, Control.PRESET_CENTER_RIGHT, -330, -150, -32, 40)
+	feed.add_theme_constant_override("separation", 5)
+	feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_anchored(feed, Control.PRESET_TOP_LEFT, 32, 24, 332, 222)
 	# Bottom left: armour, health as a big number and a bar under it.
 	var vitals := VBoxContainer.new()
 	vitals.alignment = BoxContainer.ALIGNMENT_END
@@ -342,6 +379,7 @@ func _build_play_ui() -> void:
 	_anchored(vitals, Control.PRESET_BOTTOM_LEFT, 32, -168, 340, -30)
 	armor_label = label("", 14, CYAN, true)
 	vitals.add_child(armor_label)
+	armor_label.hide()
 	var health_row := HBoxContainer.new()
 	health_row.add_theme_constant_override("separation", 8)
 	health_label = label("100", 54, IVORY, true)
@@ -349,10 +387,28 @@ func _build_play_ui() -> void:
 	var hp := label("HP", 16, MUTED, true)
 	hp.size_flags_vertical = Control.SIZE_SHRINK_END
 	health_row.add_child(hp)
+	vest_icons = HBoxContainer.new()
+	vest_icons.add_theme_constant_override("separation", 3)
+	vest_icons.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	health_row.add_child(vest_icons)
+	for i in range(3):
+		var vest := TextureRect.new()
+		vest.texture = SYMBOLS.icon("gear")
+		vest.custom_minimum_size = Vector2(22, 28)
+		vest.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		vest.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		vest.modulate = CYAN
+		vest.hide()
+		vest_icons.add_child(vest)
 	vitals.add_child(health_row)
 	health_bar = _bar(MINT, 260, 7)
 	health_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	vitals.add_child(health_bar)
+	_gap(vitals, 4)
+	armor_bar = _bar(Color("579fef"), 260, 5)
+	armor_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	armor_bar.value = 0
+	vitals.add_child(armor_bar)
 	# Above it: the squad.
 	team_box = VBoxContainer.new()
 	team_box.alignment = BoxContainer.ALIGNMENT_END
@@ -366,6 +422,7 @@ func _build_play_ui() -> void:
 	rifle_label = label("M4A4", 15, MUTED, true)
 	rifle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	weapon_box.add_child(rifle_label)
+	rifle_label.hide()
 	var ammo_row := HBoxContainer.new()
 	ammo_row.alignment = BoxContainer.ALIGNMENT_END
 	ammo_row.add_theme_constant_override("separation", 8)
@@ -393,7 +450,13 @@ func _build_play_ui() -> void:
 		var stack := VBoxContainer.new()
 		stack.add_theme_constant_override("separation", -5)
 		tile.add_child(stack)
-		stack.add_child(label(game.keys_of(str(entry[1]), 1), 12, AMBER, true))
+		var glyph := TextureRect.new()
+		glyph.texture = SYMBOLS.icon("use" if str(entry[0]) == "grenade" else str(entry[0]))
+		glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		glyph.custom_minimum_size = Vector2(22, 20)
+		stack.add_child(glyph)
+		stack.add_child(label(game.keys_of(str(entry[1]), 1), 11, AMBER, true))
 		var count := label("0", 24, IVORY, true)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		stack.add_child(count)
@@ -419,6 +482,18 @@ func _build_play_ui() -> void:
 	hold_bar.max_value = 1.0
 	_anchored(hold_bar, Control.PRESET_CENTER_BOTTOM, -120, -108, 120, -102)
 	hold_bar.hide()
+	fps_label = label("", 13, MUTED, true)
+	fps_label.name = "FPSCounter"
+	fps_label.z_index = 10
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(fps_label)
+	fps_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	fps_label.offset_left = -140
+	fps_label.offset_top = 4
+	fps_label.offset_right = -32
+	fps_label.offset_bottom = 22
+	fps_label.visible = game.show_fps
 	reticle = Control.new()
 	reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	reticle.draw.connect(_draw_reticle)
@@ -483,6 +558,19 @@ func _splatter_texture() -> ImageTexture:
 func splatter(strength: float) -> void:
 	splatter_left = clampf(maxf(splatter_left, 0.5 + strength), 0.0, 1.4)
 
+func crosshair_visible() -> bool:
+	var aimed := Input.is_action_pressed("aim") and not bool(game.player.gun().get("akimbo", false))
+	return game.player.controlled and not game.player.menu_open and not aimed and game.player.aim_blend < 0.12 and game.player.melee_pose <= 0.0 and game.player.throw_kind == "" and game.player.throw_recover <= 0.0
+
+func reticle_radius() -> float:
+	var player: Survivor = game.player
+	var pixels := get_viewport().get_visible_rect().size.y / (2.0 * tan(deg_to_rad(player.camera.fov) * 0.5))
+	var base := clampf(4.0 + player.current_spread(false) * pixels + player.recoil * float(player.gun().kick) * 650.0, 5.0, 62.0)
+	if player.gun().has("pellets"):
+		# Shotguns keep a compact circle, including while running and after a blast.
+		return clampf(base * 0.4, 10.0, 24.0) * lerpf(1.0, 1.05, player.sprint_blend)
+	return base * lerpf(1.0, 1.7, player.sprint_blend)
+
 func _draw_reticle() -> void:
 	var centre := reticle.size / 2
 	# Markers for the places a task wants the squad to go: on the spot if it is in view,
@@ -510,20 +598,32 @@ func _draw_reticle() -> void:
 				continue
 			reticle.draw_colored_polygon(PackedVector2Array([at + Vector2(0, -9), at + Vector2(9, 0), at + Vector2(0, 9), at + Vector2(-9, 0)]), tint)
 			reticle.draw_string(ThemeDB.fallback_font, at + Vector2(-70, 27), "%s  %d m" % [marker.text, int(view.global_position.distance_to(spot))], HORIZONTAL_ALIGNMENT_CENTER, 140, 13, tint)
-	if hurt_left > 0:
-		# An arc on the side the damage came from.
-		var colour := Color(0.95, 0.2, 0.12, minf(1.0, hurt_left * 1.6))
-		reticle.draw_arc(centre, 118, hurt_angle - 0.42, hurt_angle + 0.42, 20, colour, 9.0, true)
-	var gap: float = 6.0 + game.player.recoil * 8 + (1.0 - game.player.aim_blend) * 3.0
-	# Behind a fitted sight its own mark does the aiming: the crosshair makes room for it.
-	# Over iron sights a trace of it stays; the launcher, aimed beside its sight, keeps it.
-	var fade := 1.0 if game.player.fitted("sight") != "" else 0.75
-	if Survivor.WEAPONS[game.player.current_weapon].has("grenade"):
-		fade = 0.2
-	var color := Color(0.93, 0.95, 0.86, 0.85 * (1.0 - game.player.aim_blend * fade))
-	reticle.draw_circle(centre, 1.3, color)
-	for direction in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
-		reticle.draw_line(centre + direction * gap, centre + direction * (gap + 6), color, 1.6)
+	for hit: Dictionary in hurt_events:
+		var local: Vector3 = game.player.to_local(hit.source)
+		var angle := atan2(local.z, local.x)
+		var alpha := minf(1.0, float(hit.left) * 1.7)
+		reticle.draw_arc(centre, 116.0, angle - 0.25, angle + 0.25, 24, Color(0.92, 0.16, 0.12, alpha * 0.42), 2.4, true)
+		var toward := Vector2(cos(angle), sin(angle))
+		var across := toward.orthogonal()
+		reticle.draw_colored_polygon(PackedVector2Array([centre + toward * 106, centre + toward * 112 + across * 3, centre + toward * 112 - across * 3]), Color(0.96, 0.23, 0.18, alpha * 0.5))
+	var fade := lerpf(1.0, 0.38, game.player.sprint_blend)
+	var color := Color(0.94, 0.97, 0.96, 0.9 * fade)
+	if crosshair_visible():
+		var data: Dictionary = game.player.gun()
+		var gap := crosshair_gap
+		if data.has("pellets"):
+			# Also bound the brief transition from another weapon's wider reticle.
+			gap = minf(gap, 26.0)
+			reticle.draw_arc(centre, gap, 0, TAU, 40, Color(0.02, 0.025, 0.03, 0.8 * fade), 3.4, true)
+			reticle.draw_arc(centre, gap, 0, TAU, 40, color, 1.4, true)
+		else:
+			var arms := [Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT] if Survivor.kind_of(game.player.current_weapon) == "secondary" else [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]
+			for direction: Vector2 in arms:
+				reticle.draw_line(centre + direction * gap, centre + direction * (gap + 7), Color(0.02, 0.025, 0.03, 0.8 * fade), 3.5, true)
+				reticle.draw_line(centre + direction * gap, centre + direction * (gap + 7), color, 1.5, true)
+		if Survivor.kind_of(game.player.current_weapon) == "secondary":
+			reticle.draw_circle(centre, 2.0, Color(0, 0, 0, 0.55 * fade))
+			reticle.draw_circle(centre, 1.0, color)
 	if hit_left > 0 and hit_is_dull:
 		# It did not get through: stubs in place of the cross, shut in by a ring.
 		color = Color(0.8, 0.62, 0.38, 0.9)
@@ -531,11 +631,14 @@ func _draw_reticle() -> void:
 			reticle.draw_line(centre + direction * 6.5, centre + direction * 9, color, 2)
 		reticle.draw_arc(centre, 14.5, 0.0, TAU, 28, color, 1.6)
 	elif hit_left > 0:
-		color = ORANGE if hit_is_head else (Color(0.62, 0.72, 0.95) if hit_is_blocked else IVORY)
+		color = Color("ff4b45") if hit_is_kill else (ORANGE if hit_is_head else IVORY)
+		color.a = clampf(hit_left / 0.06, 0.0, 1.0)
+		var impulse := lerpf(0.88, 1.08, clampf(hit_left / 0.17, 0.0, 1.0))
 		for direction in [Vector2(-1, -1), Vector2(1, 1), Vector2(-1, 1), Vector2(1, -1)]:
-			reticle.draw_line(centre + direction * 9, centre + direction * 16, color, 2)
+			reticle.draw_line(centre + direction * 4.5 * impulse, centre + direction * 8.5 * impulse, Color(0, 0, 0, color.a * 0.5), 3.0, true)
+			reticle.draw_line(centre + direction * 4.5 * impulse, centre + direction * 8.5 * impulse, color, 1.6, true)
 		if hit_is_blocked:
-			reticle.draw_line(centre + Vector2(-14, -21), centre + Vector2(14, -21), color, 3)
+			reticle.draw_line(centre + Vector2(-7, -12), centre + Vector2(7, -12), color, 1.6, true)
 
 ## The groups of what is carried, one line for each number key: the key, the group, what
 ## of it is in hand (or would come with the key) and how many more the key steps through.
@@ -543,6 +646,7 @@ func _draw_reticle() -> void:
 func loadout(lit: bool = true) -> void:
 	for child in loadout_box.get_children():
 		child.queue_free()
+	loadout_box.hide()
 	var player: Survivor = game.player
 	var lines: Array = group_lines()
 	loadout_mark = str(lines)
@@ -588,7 +692,10 @@ func key_rows() -> Array:
 		var names: Array = []
 		for action: String in entry[0]:
 			names.append(action.trim_prefix("#") if action.begins_with("#") else game.keys_of(action))
-		out.append([" ".join(PackedStringArray(names)) if (entry[0] as Array).size() > 2 else ", ".join(PackedStringArray(names)), str(entry[1])])
+		var description := str(entry[1])
+		if entry[0] == ["crouch"]:
+			description = "Ducken (umschalten)" if game.player.crouch_toggle else "Ducken (halten)"
+		out.append([" ".join(PackedStringArray(names)) if (entry[0] as Array).size() > 2 else ", ".join(PackedStringArray(names)), description])
 	return out
 
 ## The cross that shows a hit. `answered`: whoever calls plays the sound of it himself
@@ -596,9 +703,12 @@ func key_rows() -> Array:
 ## what it hardly gets through (the Crusher's shell), and the mark shows that.
 ## `blocked`: it was aimed at the Crusher's head and struck its forearm: the cross with a
 ## bar over it, in the colour of the arm.
-func hit_marker(headshot: bool, answered: bool = false, dull: bool = false, blocked: bool = false) -> void:
-	hit_left = 0.17
+func hit_marker(headshot: bool, answered: bool = false, dull: bool = false, blocked: bool = false, killed: bool = false) -> void:
+	if hit_is_kill and hit_left > 0.08 and not killed:
+		return
+	hit_left = 0.24 if killed else 0.17
 	hit_is_head = headshot
+	hit_is_kill = killed
 	hit_is_dull = dull
 	hit_is_blocked = blocked
 	if not answered:
@@ -669,17 +779,51 @@ func kill_feed(what: String, points: int, headshot: bool, dim: bool = false) -> 
 	var text := what if points == 0 else "%s  +%d" % [what, points]
 	if headshot:
 		text = "KOPFSCHUSS · " + text
+	if not dim and points > 0:
+		hit_marker(headshot, true, false, false, true)
 	# A guest of a co-op match learns here that his own hit has killed (the host decides
 	# it): the fuller answer follows the tick he heard when he fired.
 	if not dim and points > 0 and game.net.joined:
 		game.sounds.confirm_kill()
-	var entry := label(text, 13 if dim else 17, MUTED if dim else (ORANGE if headshot else (MINT if points == 0 else IVORY)), true)
-	entry.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	var kind := "headshot" if headshot else ("kill" if points > 0 else ("team" if dim else "use"))
+	_feed_entry(text, kind, MUTED if dim else (ORANGE if headshot else (MINT if points == 0 else IVORY)), dim)
+
+func teammate_down(who: String) -> void:
+	_feed_entry("%s · AM BODEN" % who, "downed", DANGER, false, 5.0)
+
+func clear_feed() -> void:
+	for entry in feed.get_children():
+		feed.remove_child(entry)
+		entry.queue_free()
+
+func _feed_entry(text: String, kind: String, tint: Color, dim: bool = false, seconds: float = 2.6) -> void:
+	var entry := HBoxContainer.new()
+	entry.add_theme_constant_override("separation", 9)
+	entry.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var icon := TextureRect.new()
+	icon.name = "EventIcon"
+	icon.texture = SYMBOLS.icon(kind)
+	icon.custom_minimum_size = Vector2(20, 20)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.modulate = tint
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	entry.add_child(icon)
+	var message := label(text, 14 if dim else 17, tint, true)
+	message.name = "EventText"
+	message.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	message.clip_text = true
+	message.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	entry.add_child(message)
 	feed.add_child(entry)
-	if feed.get_child_count() > 6:
-		feed.get_child(0).queue_free()
+	feed.move_child(entry, 0)
+	while feed.get_child_count() > 6:
+		var oldest := feed.get_child(feed.get_child_count() - 1)
+		feed.remove_child(oldest)
+		oldest.queue_free()
 	var fade := entry.create_tween()
-	fade.tween_interval(2.6)
+	fade.tween_interval(seconds)
 	fade.tween_property(entry, "modulate:a", 0.0, 0.6)
 	fade.tween_callback(entry.queue_free)
 
@@ -699,8 +843,22 @@ func damage_from(source: Vector3) -> void:
 	# Screen angle: 0 points right, so straight ahead (-Z) is -PI/2.
 	hurt_angle = atan2(local.z, local.x)
 	hurt_left = 0.9
+	# A burst from one direction refreshes one soft indicator instead of stacking opacity.
+	for hit: Dictionary in hurt_events:
+		var other: Vector3 = game.player.to_local(hit.source)
+		if absf(angle_difference(atan2(other.z, other.x), hurt_angle)) < 0.25:
+			hit.source = source
+			hit.left = 1.15
+			return
+	hurt_events.append({"source": source, "left": 1.15})
+	if hurt_events.size() > 6:
+		hurt_events.pop_front()
 
 func _process(delta: float) -> void:
+	_update_scoreboard()
+	fps_label.visible = game.show_fps
+	if game.show_fps:
+		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
 	if not game.is_playing() or get_tree().paused:
 		return
 	var player: Survivor = game.player
@@ -709,6 +867,10 @@ func _process(delta: float) -> void:
 	banner_left = maxf(0, banner_left - delta)
 	radio_left = maxf(0, radio_left - delta)
 	pulse += delta
+	for event: Dictionary in hurt_events:
+		event.left = float(event.left) - delta
+	hurt_events = hurt_events.filter(func(event: Dictionary) -> bool: return float(event.left) > 0.0)
+	crosshair_gap = lerpf(crosshair_gap, reticle_radius(), minf(1.0, delta * 16.0))
 	banner_label.modulate.a = minf(1, banner_left)
 	detail_label.modulate.a = minf(1, banner_left)
 	radio_panel.modulate.a = minf(1, radio_left)
@@ -725,9 +887,8 @@ func _process(delta: float) -> void:
 		wave_label.text = "RUNDE %02d / %02d" % [maxi(1, game.wave), game.ROUNDS.size()]
 	difficulty_label.text = "FIRETEAM  ·  %s" % str(game.rules.label)
 	var lines: Array[String] = game.hive.summary() if game.hive.on else game.mission.summary()
-	# What the round's modifier is stays in view for as long as the round lasts.
-	if game.modifier != "" and game.phase == "wave":
-		lines.insert(0, "▲  MODIFIKATION  ·  %s" % game.MODIFIERS[game.modifier].label)
+	if not game.hive.on and not game.sandbox.on and game.phase == "preparing":
+		lines = ["F gedrückt halten, um die nächste Runde zu starten"]
 	task_label.text = "\n".join(lines)
 	if game.hive.on:
 		enemy_label.text = ("%d Gegner in der Nähe" % game.alive_count) if game.alive_count > 0 else "Kein Kontakt"
@@ -739,18 +900,28 @@ func _process(delta: float) -> void:
 		enemy_label.text = "%02d Infizierte verbleiben" % (game.remote_remaining if game.net.joined else game.remaining_to_spawn + game.alive_count)
 	score_label.text = "%06d" % game.score
 	time_label.text = game.time_string()
-	supply_label.text = "VORRAT %04d" % game.credits
+	supply_label.text = SYMBOLS.money(game.credits)
 	health_label.text = "%d" % ceili(player.health)
 	health_bar.value = player.health
+	armor_bar.value = player.armor
+	for i in range(vest_icons.get_child_count()):
+		(vest_icons.get_child(i) as Control).visible = i < player.plate_level
 	var low: bool = player.health <= 30
 	health_label.modulate = DANGER if low else Color.WHITE
 	(health_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = DANGER if low else MINT
-	ammo_label.text = "%02d" % player.ammo
+	if player.is_akimbo():
+		var hands: Array = player.dual_rounds()
+		ammo_label.text = "%02d · %02d" % [int(hands[0]), int(hands[1])]
+	else:
+		ammo_label.text = "%02d" % player.ammo
+	var ammo_size := 48 if player.is_akimbo() else 62
+	if ammo_label.get_theme_font_size("font_size") != ammo_size:
+		ammo_label.add_theme_font_size_override("font_size", ammo_size)
 	ammo_label.modulate = DANGER if player.ammo <= player.magazine_size() / 5 else Color.WHITE
-	reserve_label.text = "/ %03d" % player.reserve
-	rifle_label.text = "NACHLADEN …" if player.reload_left > 0 else ("%s  ·  STUFE %d" % [player.weapon_label(), player.weapon_level] if player.weapon_level > 0 else player.weapon_label())
+	reserve_label.text = "/ ∞" if player.infinite_ammo() else "/ %d" % player.reserve
+	rifle_label.text = ""
 	interaction_label.text = game.interaction_prompt()
-	var held: float = maxf(game.help_share(), game.wave_hold_share())
+	var held: float = game.interaction_progress()
 	hold_bar.visible = held > 0.0
 	hold_bar.value = held
 	armor_label.text = ("" if player.armor <= 0.0 else "RÜSTUNG %d" % ceili(player.armor)) + ("" if player.plate_level <= 0 else "     WESTE %s" % "I".repeat(player.plate_level)) + ("" if player.buff_left <= 0.0 else "     GESTÄRKT %d s" % ceili(player.buff_left))
@@ -775,6 +946,7 @@ func _process(delta: float) -> void:
 			(tile[0] as Control).modulate = Color(1, 1, 1, 0.32) if ready_in > 0.0 else (Color(0.55, 1.0, 0.78, 1.0) if player.health < 100.0 else Color(1, 1, 1, 0.7))
 			continue
 		var carried := int(player.items[entry[0]])
+		(tile[0] as Control).visible = carried > 0
 		(tile[1] as Label).text = str(carried)
 		var ready: bool = player.throw_kind == str(entry[0])
 		(tile[0] as Control).modulate = Color(1.0, 0.82, 0.45, 1.0) if ready else Color(1, 1, 1, 1.0 if carried > 0 else 0.32)
@@ -786,38 +958,46 @@ func _process(delta: float) -> void:
 	if int(player.items.revive) > 0:
 		extras.append("ADRENALIN")
 	gear_label.text = "     ".join(extras)
-	# One line per teammate: name, state and a health bar.
-	if team_rows.size() != game.team.size():
+	# The partner sits with the companions above the local health bar.
+	var buddies: Array = []
+	for mate: Teammate in game.team:
+		buddies.append({"name": mate.label, "health": mate.health, "max": mate.max_health, "down": mate.down})
+		mate.visual.ally_outline(mate.down)
+	if game.net.joined:
+		for entry: Dictionary in game.hive.coop.friends.values():
+			if bool(entry.get("in_team", false)):
+				buddies.append({"name": (entry.body as SoldierVisual).config.label, "health": entry.health, "max": entry.maximum, "down": entry.down})
+	if is_instance_valid(game.net.remote):
+		var partner: RemoteSurvivor = game.net.remote
+		buddies.append({"name": partner.label, "health": partner.health, "max": 100.0, "down": partner.down})
+	if team_rows.size() != buddies.size():
 		for child in team_box.get_children():
+			team_box.remove_child(child)
 			child.queue_free()
 		team_rows.clear()
-		for mate in game.team:
+		order_marks.clear()
+		for buddy: Dictionary in buddies:
 			var row := HBoxContainer.new()
-			row.add_theme_constant_override("separation", 8)
-			var mate_name := label(mate.label, 14, CYAN, true)
-			mate_name.custom_minimum_size.x = 150
+			row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+			row.add_theme_constant_override("separation", 6)
+			var mate_name := label(str(buddy.name), 14, CYAN, true)
 			row.add_child(mate_name)
 			var mate_bar := _bar(CYAN, 96, 5)
 			mate_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 			row.add_child(mate_bar)
 			team_box.add_child(row)
 			team_rows.append([mate_name, mate_bar])
-		# Under them the three orders with their keys; the one in force is lit (see above).
-		order_marks.clear()
-		if not game.team.is_empty():
-			var orders := HBoxContainer.new()
-			orders.add_theme_constant_override("separation", 12)
-			for order in game.ORDERS:
-				var mark := label("%s %s" % [game.keys_of("squad_" + str(order), 1), game.ORDERS[order]], 12, MUTED, true)
-				orders.add_child(mark)
-				order_marks.append(mark)
-			team_box.add_child(orders)
 	for i in range(team_rows.size()):
-		var mate: Teammate = game.team[i]
-		(team_rows[i][1] as ProgressBar).max_value = mate.max_health
-		(team_rows[i][1] as ProgressBar).value = mate.health
-		(team_rows[i][0] as Label).text = mate.label + "  ·  " + ("AM BODEN" if mate.down else str(game.ORDERS[mate.order]))
-		(team_rows[i][0] as Label).modulate = DANGER if mate.down or mate.health < mate.max_health * 0.3 else Color.WHITE
+		var buddy: Dictionary = buddies[i]
+		var bar := team_rows[i][1] as ProgressBar
+		bar.max_value = float(buddy.max)
+		bar.value = float(buddy.health)
+		(bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = DANGER if bool(buddy.down) else CYAN
+		var title := team_rows[i][0] as Label
+		title.text = ("✚ " + str(buddy.name) + " · AM BODEN") if bool(buddy.down) else str(buddy.name)
+		title.modulate = DANGER if bool(buddy.down) or float(buddy.health) < float(buddy.max) * 0.3 else Color.WHITE
+		if bool(buddy.down):
+			title.modulate.a = 0.6 + 0.4 * absf(sin(pulse * 5.0))
 	if is_instance_valid(game.boss) and not game.boss.dead:
 		boss_box.show()
 		# A boss may say itself what its bar shows (the Prowler: what it still takes before it breaks off).
@@ -834,15 +1014,22 @@ func _process(delta: float) -> void:
 	else:
 		boss_box.hide()
 	# Red vignette for wounds, a slow heartbeat when badly hurt.
-	var heartbeat := (0.16 + 0.1 * sin(pulse * 5.5)) if low else 0.0
-	damage_overlay.modulate.a = clampf(player.hurt_amount * 0.55 + heartbeat, 0.0, 1.0)
+	damage_overlay.modulate.a = 1.0
+	blood_material.set_shader_parameter("injury", 1.0 if player.down else clampf(1.0 - player.health / 100.0, 0.0, 1.0))
+	blood_material.set_shader_parameter("impact", player.hurt_amount)
+	blood_material.set_shader_parameter("heartbeat", sin(pulse * 6.0))
 	var gas := clampf(player.mist_exposure / 3.0, 0.0, 1.0) * 0.2
+	gas_strength = move_toward(gas_strength, 1.0 if player.in_gas else 0.0, delta * 3.0)
+	gas_overlay.visible = gas_strength > 0.001
+	(gas_overlay.material as ShaderMaterial).set_shader_parameter("strength", gas_strength)
+	gas_label.visible = player.in_gas
+	gas_label.text = "GAS · FILTER AKTIV" if player.filter_left > 0.0 else "GAS · LUFT GIFTIG"
 	if player.acid_amount > gas:
 		tint_overlay.color = Color(0.1, 0.3, 0.9, player.acid_amount * 0.3)
 	else:
 		tint_overlay.color = Color(0.38, 0.56, 0.16, gas)
 	splatter_left = maxf(0, splatter_left - delta * 0.32)
-	splatter_overlay.modulate.a = minf(1.0, splatter_left)
+	splatter_overlay.modulate.a = maxf(minf(0.75, splatter_left), clampf((45.0 - player.health) / 80.0, 0.0, 0.48))
 	flash_left = maxf(0, flash_left - delta * 0.9)
 	flash_overlay.color.a = minf(flash_overlay.color.a, flash_left * flash_left)
 	if blind_left > 0.0:
@@ -960,6 +1147,7 @@ func _open_tab(tab: String) -> void:
 
 func _wear(id: String) -> void:
 	game.profile.wear(id)
+	game.net.update_skin()
 	show_menu("skins")
 
 func _enlist(id: String) -> void:
@@ -991,7 +1179,8 @@ func _choose_mission(number: int) -> void:
 
 ## The second mission: who goes on with the survivor from the station (Profile.company).
 func _company_label() -> String:
-	var pair := Profile.pair_of(Profile.known_company(str(game.profile.company)))
+	var choice: String = str(game.net.lobby_settings.get("company", game.profile.company)) if game.net.joined else str(game.profile.company)
+	var pair := Profile.pair_of(Profile.known_company(choice))
 	return "BEGLEITER AB BAHNHOF  ·  %s" % ("FIRETEAM" if pair.is_empty() else "%s + %s" % [pair[0].to_upper(), pair[1].to_upper()])
 
 func _next_company() -> void:
@@ -1074,7 +1263,7 @@ func _gap(column: Container, height: float) -> void:
 
 ## A heading inside a menu.
 func _section(column: Container, text: String) -> void:
-	column.add_child(label(text, 16, AMBER, true))
+	column.add_child(label(text, 20, AMBER, true))
 
 ## A slider with its name in front and its value behind.
 func _slider(column: Container, text: String, value: float, low: float, high: float, shown: Callable, changed: Callable) -> HSlider:
@@ -1109,7 +1298,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["shop", "bench", "settings", "skins", "board", "skills", "test"]
+	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "skins", "board", "skills", "test"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -1127,17 +1316,30 @@ func show_menu(mode: String) -> void:
 	column.size = Vector2(900 if wide else 660, 640)
 	column.add_theme_constant_override("separation", 6)
 	modal.add_child(column)
-	column.add_child(label("NACHTWACHE   ·   FIRETEAM   ·   HOF 19", 14, ORANGE, true))
+	if mode in ["shop", "bench"]:
+		column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		column.offset_left = 84
+		column.offset_top = 24
+		column.offset_right = -84
+		column.offset_bottom = -24
 	var first: Control = null
 	match mode:
 		"main":
 			first = _menu_main(column)
+		"play":
+			first = preload("res://scripts/play_menu.gd").build(self, column)
+		"career":
+			first = preload("res://scripts/career_menu.gd").build(self, column)
+		"changelog":
+			first = preload("res://scripts/patch_notes.gd").build(self, column)
 		"pause":
 			first = _menu_pause(column)
 		"win", "lose":
 			first = _menu_end(column, mode)
 		"settings":
 			first = _menu_settings(column)
+		"controls":
+			first = preload("res://scripts/controls_menu.gd").build(self, column)
 		"shop", "bench":
 			first = _menu_shop(column, mode)
 		"host":
@@ -1154,60 +1356,73 @@ func show_menu(mode: String) -> void:
 			first = _menu_test(column)
 		"loading":
 			first = _menu_loading(column)
-	var version := label("SOLO + KOOP   ·   v" + NetLink.VERSION, 12, MUTED, true)
+	if mode in ["win", "lose"]:
+		var result := preload("res://scripts/scoreboard.gd").build(self, 446)
+		result.position = Vector2(750, 250)
+		modal.add_child(result)
+	var version := label("v" + NetLink.VERSION, 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	version.position = Vector2(-190, -34)
+	version.position = Vector2(-70, -34)
 	# (The page of abilities fills the screen down to its foot: no room for it there.)
-	version.visible = mode != "skills"
+	version.visible = mode not in ["skills", "shop", "bench"]
 	modal.add_child(version)
 	if mode == "join" and address_field.editable:
 		address_field.grab_focus()
 	elif first != null and not (first is Button and (first as Button).disabled):
 		first.grab_focus()
 
+func back_button(callback: Callable) -> Button:
+	var back := _chip("ZURÜCK", callback, false, 156)
+	back.name = "BackButton"
+	back.custom_minimum_size.y = 44
+	back.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	back.add_theme_font_size_override("font_size", 18)
+	back.icon = SYMBOLS.icon("back")
+	back.expand_icon = true
+	back.add_theme_constant_override("icon_max_width", 24)
+	back.add_theme_constant_override("h_separation", 12)
+	back.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	return back
+
+## Shared page heading with consistent, comfortably sized navigation at the top left.
+func page_header(column: VBoxContainer, title: String, parent_menu: String) -> Button:
+	column.position.y = 22
+	column.custom_minimum_size.x = 1112
+	var back := back_button(show_menu.bind(parent_menu))
+	column.add_child(back)
+	_gap(column, 10)
+	_title(column, title, 42)
+	_gap(column, 20)
+	return back
+
 func _menu_main(column: VBoxContainer) -> Control:
-	_title(column, "NACHT\nWACHE")
-	var second: bool = game.profile.mission == 2
-	if second:
-		_text(column, "Eine Villa im Park. Darunter ein Bahnhof.\nFolge Nadja hinunter in die Anlage.")
-	elif game.profile.mode == "endless":
-		_text(column, "Ein Farmhaus. Darunter ein Labor.\nEndlos: Halte den Hof, solange du kannst.")
-	else:
-		_text(column, "Ein Farmhaus. Darunter ein Labor.\nFinde Nadja und flieg sie aus.")
-	_gap(column, 4)
-	# Which mission: the farm or the villa. The one that is chosen is the one that starts.
-	column.add_child(_pair(_mission_button(1, "MISSION 1  ·  HOF 19"), _mission_button(2, "MISSION 2  ·  DIE VILLA")))
-	var squad: Array = game.profile.squad
-	var start := _button("EINSATZ STARTEN", _start_night, true)
-	column.add_child(start)
-	var note := "   ·   auch im Koop" if second else ("   ·   mit Modifikationen" if game.profile.modifiers else "")
-	column.add_child(label("     mit %s und %s   ·   Stufe %s%s" % [Profile.SKINS[squad[0]].label, Profile.SKINS[squad[1]].label, game.profile.rules().label, note], 15, MUTED))
-	column.add_child(_pair(_button("KOOP HOSTEN", game.host_match), _button("KOOP BEITRETEN", show_menu.bind("join"))))
-	column.add_child(_pair(_button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty), _button("TRUPP & SKINS", show_menu.bind("skins"))))
-	# What the night is: the story or the endless mode, with or without a modifier per round.
-	# The second mission has no rounds, so neither of the two: in their place it asks who
-	# goes on with the survivor from the station.
-	if second:
-		var company_button := _button(_company_label(), _next_company)
-		company_button.custom_minimum_size = Vector2(430, 46)
-		company_button.add_theme_font_size_override("font_size", 19)
-		column.add_child(company_button)
-	else:
-		column.add_child(_pair(_button(_mode_label(), _next_mode), _button(_modifiers_label(), _toggle_modifiers)))
-	# Points that wait to be spent: in the tree in force, or in every tree while none is.
-	var free := 0
-	if Skills.IN_SERVICE:
-		free = game.skills.points_left(game.profile.totals, game.skills.chosen) if Skills.TREES.has(game.skills.chosen) else Skills.points(game.profile.totals)
-	var abilities := "FÄHIGKEITEN"
-	if free > 0:
-		abilities = "FÄHIGKEITEN  ·  %d FREI" % free
-	elif Skills.IN_SERVICE and Skills.TREES.has(game.skills.chosen):
-		# Which tree is in force for the night to come.
-		abilities = "FÄHIGKEITEN  ·  %s" % Skills.TREES[game.skills.chosen].label
-	column.add_child(_pair(_button("BESTENLISTE", show_menu.bind("board")), _button(abilities, show_menu.bind("skills"))))
-	# The test room: no night, nothing kept - a place to try things out.
-	column.add_child(_triple([_button("TESTRAUM", game.start_run.bind(true)), _button("EINSTELLUNGEN", _open_settings.bind("main")), _button("BEENDEN", game.quit_game)]))
-	return start
+	_title(column, "NACHT\nWACHE", 96)
+	_gap(column, 22)
+	var first: Button
+	for entry in [["SPIELEN", "play", "play"], ["KARRIERE", "career", "class"], ["TESTRAUM", "test_room", "test"], ["EINSTELLUNGEN", "settings", "settings"], ["BESTENLISTE", "board", "board"], ["PATCHNOTES", "changelog", "notes"], ["BEENDEN", "quit", "exit"]]:
+		var callback: Callable
+		match str(entry[1]):
+			"quit": callback = game.quit_game
+			"settings": callback = _open_settings.bind("main")
+			"test_room": callback = _start_test_room
+			_: callback = show_menu.bind(entry[1])
+		var button := _button(str(entry[0]), callback, entry[1] == "play")
+		if entry[1] == "test_room":
+			button.name = "TestRoomButton"
+		button.custom_minimum_size = Vector2(390, 52)
+		button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		button.icon = SYMBOLS.icon(str(entry[2]))
+		button.expand_icon = true
+		button.add_theme_constant_override("icon_max_width", 21)
+		column.add_child(button)
+		if first == null:
+			first = button
+	return first
+
+func _start_test_room() -> void:
+	if game.net.active:
+		game.net.close()
+	game.start_run(true)
 
 func _menu_pause(column: VBoxContainer) -> Control:
 	_title(column, "PAUSE")
@@ -1215,6 +1430,12 @@ func _menu_pause(column: VBoxContainer) -> Control:
 	_gap(column, 10)
 	var go := _button("WEITERSPIELEN", game.resume_run, true)
 	column.add_child(go)
+	if game.net.active and game.hive.on:
+		var teleport := _button("ZUM MITSPIELER TELEPORTIEREN", func() -> void:
+			game.resume_run()
+			game.net.teleport_to_partner())
+		teleport.disabled = game.player.down or not is_instance_valid(game.net.remote) or game.net.remote.down or game.net.teleport_wait > 0.0
+		column.add_child(teleport)
 	if game.sandbox.on:
 		column.add_child(_button("TESTMENÜ   (F1)", _open_test_from_pause))
 	column.add_child(_button("EINSTELLUNGEN", _open_settings.bind("pause")))
@@ -1551,15 +1772,29 @@ func _menu_end(column: VBoxContainer, mode: String) -> Control:
 	column.add_child(_button("BEENDEN", game.quit_game))
 	return again
 
+func _toggle_fps() -> void:
+	game.show_fps = not game.show_fps
+	game.keep_setting("video", "show_fps", game.show_fps)
+	var button: Button = modal.find_child("FPSCounterButton", true, false)
+	if button != null:
+		button.text = "FPS   ·   AN" if game.show_fps else "FPS   ·   AUS"
+
+func _toggle_crouch_mode() -> void:
+	game.player.set_crouch_mode(not game.player.crouch_toggle)
+	game.keep_setting("controls", "crouch_toggle", game.player.crouch_toggle)
+	var button: Button = modal.find_child("CrouchModeButton", true, false)
+	if button != null:
+		button.text = "UMSCHALTEN" if game.player.crouch_toggle else "HALTEN"
+
 ## Sound, picture and controls. What is set here is kept for the next start.
 func _menu_settings(column: VBoxContainer) -> Control:
-	_title(column, "EINSTELLUNGEN", 50)
+	page_header(column, "EINSTELLUNGEN", settings_back)
 	_section(column, "TON")
 	var percent := func(value: float) -> String: return "%d %%" % int(round(value * 100.0))
 	for entry in [["Master", "Gesamtlautstärke"], ["Music", "Musik"], ["SFX", "Effekte"], ["Voice", "Stimmen und Funk"]]:
 		var bus := str(entry[0])
 		_slider(column, str(entry[1]), game.sounds.volume(bus), 0.0, 1.0, percent, func(value: float) -> void: game.set_volume(bus, value))
-	_gap(column, 6)
+	_gap(column, 18)
 	_section(column, "BILD")
 	var picture := HBoxContainer.new()
 	picture.add_theme_constant_override("separation", 8)
@@ -1569,42 +1804,42 @@ func _menu_settings(column: VBoxContainer) -> Control:
 	var full := _chip("VOLLBILD", game.toggle_fullscreen, false, 150)
 	full.tooltip_text = "Vollbild an und aus. Auch mit F11 oder Alt+Enter."
 	picture.add_child(full)
+	var fps := _chip("FPS   ·   AN" if game.show_fps else "FPS   ·   AUS", _toggle_fps, false, 180)
+	fps.name = "FPSCounterButton"
+	fps.tooltip_text = "Bildrate oben rechts anzeigen."
+	picture.add_child(fps)
 	column.add_child(picture)
-	_gap(column, 6)
+	_gap(column, 18)
 	_section(column, "STEUERUNG")
 	var turns := func(value: float) -> String: return "%.2f" % value
 	var steer := func(value: float) -> void:
 		game.player.sensitivity = value * 0.0022
 		game.keep_setting("controls", "sensitivity", value)
-	_slider(column, "Mausempfindlichkeit", game.player.sensitivity / 0.0022, 0.4, 2.2, turns, steer)
-	var keys := GridContainer.new()
-	keys.columns = 6
-	keys.add_theme_constant_override("h_separation", 16)
-	keys.add_theme_constant_override("v_separation", 1)
-	for entry in key_rows():
-		var key := label(str(entry[0]), 13, AMBER, true)
-		key.custom_minimum_size.x = 118
-		keys.add_child(key)
-		var what := label(str(entry[1]), 13, MUTED)
-		what.custom_minimum_size.x = 232
-		keys.add_child(what)
-	column.add_child(keys)
-	# What the next night is can only be set before it begins.
-	if settings_back == "main":
-		_gap(column, 4)
-		_section(column, "EINSATZ")
-		var night := HBoxContainer.new()
-		night.add_theme_constant_override("separation", 8)
-		night.add_child(_chip(_mode_label(), _next_mode, game.profile.mode == "endless", 250))
-		night.add_child(_chip(_modifiers_label(), _toggle_modifiers, game.profile.modifiers, 250))
-		var hint := label("Modifikationen: Jede Runde bringt ein zufälliges Ereignis, das angesagt wird.", 13, MUTED)
-		hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		night.add_child(hint)
-		column.add_child(night)
-	_gap(column, 6)
-	var back := _button("ZURÜCK", show_menu.bind(settings_back), true)
-	column.add_child(back)
-	return back
+	var sensitivity := _slider(column, "Mausempfindlichkeit", game.player.sensitivity / 0.0022, 0.4, 2.2, turns, steer)
+	sensitivity.name = "MouseSensitivity"
+	_gap(column, 12)
+	var actions := HBoxContainer.new()
+	actions.add_theme_constant_override("separation", 28)
+	column.add_child(actions)
+	var controls := _button("STEUERUNG", show_menu.bind("controls"))
+	controls.name = "ControlsButton"
+	controls.icon = SYMBOLS.icon("keyboard")
+	controls.expand_icon = true
+	controls.add_theme_constant_override("icon_max_width", 26)
+	controls.add_theme_constant_override("h_separation", 16)
+	controls.custom_minimum_size = Vector2(360, 48)
+	controls.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	actions.add_child(controls)
+	var crouch := HBoxContainer.new()
+	crouch.add_theme_constant_override("separation", 12)
+	crouch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	actions.add_child(crouch)
+	crouch.add_child(label("DUCKEN", 15, MUTED, true))
+	var crouch_mode := _chip("UMSCHALTEN" if game.player.crouch_toggle else "HALTEN", _toggle_crouch_mode, false, 180)
+	crouch_mode.name = "CrouchModeButton"
+	crouch_mode.tooltip_text = "Halte C zum Ducken oder drücke C zum Umschalten. Klicken wechselt den Modus."
+	crouch.add_child(crouch_mode)
+	return sensitivity
 
 ## What two players with different versions of the game are told to do.
 const CLASH_HELP := "Für den Koop brauchen beide denselben Stand: Wer die ältere Version hat, holt das Update\n(GitHub Desktop: „Fetch origin“, dann „Pull origin“) und startet das Spiel neu."
@@ -1663,7 +1898,7 @@ func _menu_join(column: VBoxContainer) -> Control:
 func _menu_board(column: VBoxContainer) -> Control:
 	var lasting: bool = game.profile.mode == "endless"
 	var second: bool = game.profile.mission == 2
-	_title(column, "BESTENLISTE  ·  MISSION 2" if second else ("BESTENLISTE  ·  ENDLOS" if lasting else "BESTENLISTE"), 46)
+	var back := page_header(column, "BESTENLISTE  ·  MISSION 2" if second else ("BESTENLISTE  ·  ENDLOS" if lasting else "BESTENLISTE"), "main")
 	_text(column, "Die zehn besten Einsätze je Modus und Schwierigkeitsstufe. Höhere Stufen vervielfachen den Score.", 16)
 	_gap(column, 6)
 	var table := GridContainer.new()
@@ -1686,36 +1921,10 @@ func _menu_board(column: VBoxContainer) -> Control:
 	_gap(column, 8)
 	var level := _button("STUFE  ·  %s" % game.profile.rules().label, _next_difficulty, true)
 	column.add_child(_pair(level, _button(_board_label(), _next_board)))
-	column.add_child(_button("ZURÜCK", show_menu.bind("main")))
-	return level
+	return back
 
 func _menu_skins(column: VBoxContainer) -> Control:
-	_title(column, "TRUPP & SKINS", 46)
-	_text(column, "Was du trägst und wer dich begleitet. Mehr schaltest du durch Einsätze frei.", 16)
-	_gap(column, 6)
-	var profile: Profile = game.profile
-	var grid := GridContainer.new()
-	grid.columns = 3
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 6)
-	for id in Profile.SKINS:
-		var data: Dictionary = Profile.SKINS[id]
-		var open: bool = profile.unlocked(id)
-		var line := label("%s\n%s" % [data.label, profile.progress(id)], 14, IVORY if open else MUTED)
-		line.custom_minimum_size.x = 300
-		grid.add_child(line)
-		var wear := _chip("GETRAGEN  ✓" if profile.skin == id else ("TRAGEN" if open else "GESPERRT"), _wear.bind(id), profile.skin == id, 160)
-		wear.disabled = not open
-		grid.add_child(wear)
-		var joined: bool = profile.squad.has(id)
-		var join := _chip("IM TRUPP  ✓" if joined else ("IN DEN TRUPP" if bool(data.bot) and open else "–"), _enlist.bind(id), joined, 160)
-		join.disabled = not open or not bool(data.bot)
-		grid.add_child(join)
-	column.add_child(grid)
-	_gap(column, 8)
-	var back := _button("ZURÜCK", show_menu.bind("main"), true)
-	column.add_child(back)
-	return back
+	return preload("res://scripts/career_menu.gd").skins(self, column)
 
 func _next_wish(tree: String) -> void:
 	game.set_wish(tree, game.skills.next_wish(tree))
@@ -1733,8 +1942,11 @@ func _menu_skills(column: VBoxContainer) -> Control:
 	var skills: Skills = game.skills
 	var totals: Dictionary = game.profile.totals
 	var head := HBoxContainer.new()
+	column.position.y = 22
 	head.add_theme_constant_override("separation", 22)
-	head.add_child(label("FÄHIGKEITEN", 36, IVORY, true))
+	var back := back_button(show_menu.bind("career"))
+	head.add_child(back)
+	head.add_child(label("KLASSE", 36, IVORY, true))
 	if not Skills.IN_SERVICE:
 		var mark := label("IN WARTUNG", 18, INK, true)
 		var plate := StyleBoxFlat.new()
@@ -1868,11 +2080,8 @@ func _menu_skills(column: VBoxContainer) -> Control:
 			list.add_child(note)
 		trees.add_child(panel)
 	_gap(column, 2)
-	var back := _button("ZURÜCK", show_menu.bind("main"), true)
-	back.custom_minimum_size = Vector2(372, 46)
 	var foot := HBoxContainer.new()
 	foot.add_theme_constant_override("separation", 12)
-	foot.add_child(back)
 	if Skills.IN_SERVICE:
 		# The points of one tree back, for nothing: the other two keep theirs.
 		for tree_id in Skills.TREES:
@@ -1912,3 +2121,19 @@ func veil() -> ColorRect:
 func hide_menu() -> void:
 	modal.hide()
 	play_ui.show()
+
+func _update_scoreboard() -> void:
+	var wanted: bool = game.is_playing() and not game.player.menu_open and Input.is_action_pressed("scoreboard")
+	var key := str(preload("res://scripts/scoreboard.gd").players(self)) if wanted else ""
+	if key == scoreboard_key:
+		return
+	scoreboard_key = key
+	if is_instance_valid(scoreboard):
+		play_ui.remove_child(scoreboard)
+		scoreboard.queue_free()
+		scoreboard = null
+	if wanted:
+		scoreboard = preload("res://scripts/scoreboard.gd").build(self, 600)
+		scoreboard.set_anchors_preset(Control.PRESET_CENTER)
+		scoreboard.position = Vector2(-300, -150)
+		play_ui.add_child(scoreboard)

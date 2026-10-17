@@ -1,4 +1,4 @@
-// Builds the bright "ding" that answers a hit on an infected - four families of it, each
+// Builds the hit confirmations - a classic dry click and four bell families, each
 // with its own character - by synthesis alone: no recording, and nothing taken from
 // another game. Every family brings
 //   ding_<family>_1..4        a hit: a tick of under two thousandths of a second and a
@@ -43,6 +43,10 @@ const PEAK = -3.0;
 // hit, the seconds between its two strikes, and what its upper partials gain (dB).
 // kill: the seconds its two tones ring, and the level of the thump under them (dB).
 const FAMILIES = {
+  classic: {
+    label: 'Klassisch', pitch: 1850.0, classic: true,
+    about: 'Kurzer, trockener Hitmarker-Klick mit knackigem Anschlag, ohne Glockennachklang. Hellerer Kopftreffer, kompakter Doppelklick beim Abschuss.'
+  },
   // Crystal: few partials far apart, a very clean strike. The clearest of the four.
   glas: {
     label: 'Glas', pitch: 2093.0,
@@ -208,12 +212,37 @@ function finish(x, { drive = 0, lead = LEAD, fade = 0.02, peak = PEAK }) {
 // (Every take is a little brighter or duller than the one before: a row of them on one
 // rung of the ladder is then no row of one sample.)
 const TILT = [0, 2, -2, 1];
+// A classic shooter confirmation: filtered transients with a tiny, fast-falling tonal
+// body. The head is brighter, the kill has a second, lower click. No sampled game audio.
+function classicCue(kind, take) {
+  const isHead = kind === 'head', isKill = kind === 'kill';
+  const duration = isKill ? 0.15 : (isHead ? 0.115 : 0.095);
+  const x = new Float32Array(samples(duration - LEAD));
+  const seed = 9500 + take * 37 + (isHead ? 200 : (isKill ? 400 : 0));
+  mixInto(x, tick([isHead ? 1600 : 900, isHead ? 10500 : 9200, 0.0038, 0], seed), 0);
+  mixInto(x, tick([2200, 8000, 0.0025, -5], seed + 1), 0.004);
+  if (isHead || isKill) mixInto(x, tick([isHead ? 2300 : 1100, 8500, 0.0032, -4], seed + 2), isHead ? 0.012 : 0.02);
+  const pitch = isHead ? 2450 : (isKill ? 1270 : 1850);
+  let phase = 0;
+  for (let i = 0; i < x.length; i++) {
+    const t = i / RATE;
+    phase += 2 * Math.PI * pitch * (0.9 + 0.1 * Math.exp(-t / 0.004)) / RATE;
+    x[i] += Math.sin(phase) * Math.exp(-t / 0.0055) * (1 - Math.exp(-t / 0.0002)) * 0.23;
+    if (isKill) x[i] += Math.sin(2 * Math.PI * 360 * t) * Math.exp(-t / 0.011) * (1 - Math.exp(-t / 0.0006)) * 0.16;
+  }
+  const made = finish(x, { drive: 1.2, fade: 0.006 });
+  const padded = new Float32Array(samples(duration));
+  padded.set(made.subarray(0, padded.length));
+  return padded;
+}
 function hit(family, take) {
+  if (family.classic) return classicCue('body', take);
   return finish(strike(family, family.pitch, { seed: take, bright: TILT[(take - 1) % TILT.length] }), { drive: family.drive });
 }
 // A head: the same bell a fifth (or a fourth) higher with brighter partials, struck
 // twice - a short one first, the full one right behind it.
 function head(family, take) {
+  if (family.classic) return classicCue('head', take);
   const pitch = family.pitch * Math.pow(2, family.head.up / 12);
   const x = new Float32Array(samples(0.5));
   mixInto(x, strike(family, pitch, { seed: 40 + take, bright: family.head.bright, length: 0.2 }), 0, 0.6);
@@ -224,6 +253,7 @@ function head(family, take) {
 // low sound and a breath of noise under them. It is played together with the hit that
 // kills, an octave under it: the two make one chord, and the chord is at rest.
 function kill(family, take) {
+  if (family.classic) return classicCue('kill', take);
   const root = family.pitch / 2;
   const x = new Float32Array(samples(0.75));
   mixInto(x, strike(family, root, { seed: 60 + take, soft: 1, ring: family.kill.ring, length: 0.7 }), 0, 1.0);
@@ -490,7 +520,7 @@ function demo(folder, project, families) {
     'Umschalten: in scripts/sound.gd die eine Zeile',
     `    const DING := "ding_${chosen}"`,
     `ändern auf ${Object.keys(FAMILIES).filter(name => name !== chosen).map(name => `"ding_${name}"`).join(', ')}.`,
-    'Mehr ist nicht nötig, alle vier Familien liegen schon im Spiel.',
+    `Mehr ist nicht nötig, alle ${Object.keys(FAMILIES).length} Familien liegen schon im Spiel.`,
     '',
     'Wichtig: Solange in deinem Spielordner der Ordner "CombatArms_Zombie_Treffersounds" liegt,',
     'spielt das Spiel auf deinem PC weiter deine eigenen Dateien. Um unsere im Spiel zu hören,',
@@ -517,7 +547,7 @@ function demo(folder, project, families) {
     'Die Dateien 1 bis 4 sind alle gleich laut gemacht, damit man den Klang vergleichen kann.',
     'Datei 5 hat die Lautstärken wie im Spiel.',
     '',
-    'Soldaten (C.R.U., Operatoren) behalten den fleischigen Treffer-Ton.',
+    'Soldaten haben denselben kurzen Hitmarker über einem leisen fleischigen Treffer-Ton.',
     '',
     'Zum Nachstellen (scripts/sound.gd): die Lautstärken stehen in MIX unter "ding_...",',
     'die Leiter in LADDER (Halbtöne) und LADDER_PAUSE (Sekunden).',

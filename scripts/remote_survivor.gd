@@ -10,6 +10,7 @@ var label := "MITSPIELER"
 var visual: SoldierVisual
 var name_tag: Label3D
 var health := 100.0
+var kills := 0
 var down := false
 ## The Leech hanging on to the partner, as the host sees it.
 var clung_by: Infected
@@ -49,6 +50,7 @@ func _ready() -> void:
 	visual = SoldierVisual.new()
 	visual.look = look
 	add_child(visual)
+	visual.ally_outline()
 	name_tag = Label3D.new()
 	name_tag.text = label
 	name_tag.font_size = 22
@@ -138,6 +140,7 @@ func set_down(now: bool) -> void:
 	if now == down:
 		return
 	down = now
+	visual.ally_outline(down)
 	collision_layer = 0 if down else 2
 	name_tag.text = label + ("  ·  AM BODEN" if down else "")
 	name_tag.modulate = Color("ff8c6e") if down else Color("9fe4ef")
@@ -146,7 +149,7 @@ func set_down(now: bool) -> void:
 		if visual.mode == "rising":
 			visual.settle()
 		visual.fall()
-		game.hud.announce("DEIN MITSPIELER IST AM BODEN", "Hilf mit [E] auf.", 3.0)
+		game.hud.teammate_down(label)
 	else:
 		rising_left = visual.rise()
 

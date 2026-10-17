@@ -31,6 +31,9 @@ const WEAPONS := {
 	"shotgun": {"label": "SCHROTFLINTE", "slot": 1, "price": 250, "sound": "shotgun", "magazine": 8, "reserve_max": 48, "reload_time": 0.4, "interval": 0.7, "damage": 24.0, "head_multiplier": 1.5, "spread": 0.1, "kick": 0.066, "flash": 2.2, "pellets": 12, "carry": [0.7, 0.5], "shells": true, "punch": 3.1, "settle": 0.72, "push": 8.5},
 	# group: the shop tab it is sold on. from_round: the round after which the shop has it.
 	"pistol": {"label": "M9 PISTOLE", "slot": 2, "price": 60, "group": "sidearms", "sound": "pistol", "magazine": 15, "reserve_max": 120, "reload_time": 1.35, "interval": 0.15, "damage": 26.0, "head_multiplier": 3.0, "spread": 0.012, "kick": 0.014, "flash": 0.8},
+	"usp": {"label": "USP .45", "slot": 2, "price": 260, "group": "sidearms", "sound": "pistol", "magazine": 12, "reserve_max": 120, "reload_time": 1.65, "interval": 0.22, "semi": true, "damage": 55.0, "head_multiplier": 2.7, "spread": 0.009, "kick": 0.021, "flash": 0.9},
+	"g18": {"label": "G18 AUTOMATIK", "slot": 2, "price": 380, "group": "sidearms", "sound": "pistol", "magazine": 18, "reserve_max": 162, "reload_time": 1.8, "interval": 0.065, "damage": 24.0, "head_multiplier": 2.5, "spread": 0.018, "kick": 0.012, "flash": 0.65},
+	"deagle": {"label": "DESERT EAGLE", "slot": 2, "price": 500, "group": "sidearms", "sound": "revolver", "magazine": 7, "reserve_max": 56, "reload_time": 2.0, "interval": 0.38, "semi": true, "damage": 125.0, "head_multiplier": 2.4, "spread": 0.008, "kick": 0.052, "flash": 1.5, "punch": 1.9, "settle": 0.75},
 	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
 	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 12, "reserve_max": 72, "reload_time": 2.0, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.085, "kick": 0.038, "flash": 2.0, "pellets": 10, "carry": [0.65, 0.4], "punch": 2.1, "settle": 0.7, "push": 4.5},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
@@ -65,10 +68,10 @@ const WEAPONS := {
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
 const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil"]
-const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
+const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "usp", "g18", "revolver", "deagle", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
-## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
-## kind, and as many more of any kind as slings were bought (extra_slots).
+## it, and the shop lists whose weapons are of that kind. Two primary slots come issued;
+## a single sling adds a third. Heavy weapons and purchased sidearms keep one slot each.
 const KINDS := {
 	"primary": {"key": 1, "label": "PRIMÄRWAFFE", "groups": ["weapons"]},
 	"heavy": {"key": 2, "label": "SCHWERE WAFFE", "groups": ["heavy", "class"]},
@@ -79,7 +82,6 @@ const KINDS := {
 ## (the mine: laid) with the trigger; each still has its own key as well (THROW_KEYS, B).
 const THROW_GROUP_KEY := 4
 const THROWABLES := ["grenade", "flashbang", "molotov", "heal", "claymore"]
-const CARRY := 1
 ## What the workbench does to a weapon, line by line. key: where the weapon's record keeps
 ## the level of the line ("level" is the damage, as it always was). prices: one for each
 ## level, before the difficulty's factor. step: what one level gives (damage: per shot;
@@ -98,7 +100,17 @@ const UPGRADE_SHARE := 0.15
 ## the scatter is left when aiming; zoom: field of view when aiming; scope: field of view
 ## through a telescopic sight; scope_turn: how much slower the view turns through it).
 ## scale: values it multiplies.
+const PISTOL_PARTS := {
+	"reddot": {"label": "KOMPAKTES ROTPUNKTVISIER", "price": 140, "slot": "sight", "note": "Kompaktes Reflexvisier für eine freie Sicht und präzisere Einzelschüsse.", "set": {"zoom": 43.0, "aim_spread": 0.45}},
+	"scope": {"label": "PISTOLENVISIER 2,5×", "price": 220, "slot": "sight", "note": "Vergrößerndes Visier für kontrollierte Schüsse auf Distanz.", "set": {"scope": 29.0, "scope_turn": 0.5, "aim_spread": 0.3}},
+	"silencer": {"label": "PISTOLENSCHALLDÄMPFER", "price": 170, "slot": "muzzle", "note": "Leiser Schuss und weniger Mündungsfeuer; der Mündungspunkt folgt dem Aufsatz.", "set": {"quiet": true, "flash": 0.25, "sound": "ump_sil"}, "scale": {"kick": 0.85}},
+	"akimbo": {"label": "AKIMBO", "price": 450, "slot": "style", "note": "Linke Maustaste: linke Pistole. Rechte Maustaste: rechte Pistole. Eigene Magazine und Schussfolgen, nur Hüftfeuer; mehr Streuung und längeres Nachladen.", "set": {"akimbo": true}, "scale": {"spread": 2.0, "kick": 1.15}}
+}
+const REVOLVER_PARTS := {
+	"reddot": PISTOL_PARTS.reddot, "scope": PISTOL_PARTS.scope, "akimbo": PISTOL_PARTS.akimbo
+}
 const ATTACHMENTS := {
+	"pistol": PISTOL_PARTS, "usp": PISTOL_PARTS, "g18": PISTOL_PARTS, "deagle": PISTOL_PARTS, "revolver": REVOLVER_PARTS,
 	"rifle": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
@@ -139,7 +151,7 @@ const GOODS := {
 	"vest": {"label": "SCHUTZWESTE", "price": 150, "group": "gear", "note": "50 Rüstung. Rüstung fängt 60 % jedes Treffers ab."},
 	"armor": {"label": "SCHWERE RÜSTUNG", "price": 300, "group": "gear", "note": "100 Rüstung."},
 	"plates": {"label": "BALLISTISCHE WESTE", "prices": [160, 260, 400], "group": "gear", "note": "C.R.U.-Kugeln und -Granaten: 25 / 40 / 55 % weniger Schaden"},
-	"sling": {"label": "WAFFENGURT", "prices": [250, 400, 600], "group": "gear", "note": "Platz für eine Waffe mehr, egal welcher Art. Ohne Gurt trägst du je eine Primär-, eine Sekundär- und eine schwere Waffe."},
+	"sling": {"label": "WAFFENGURT", "prices": [250], "group": "gear", "note": "Schaltet den dritten Primärwaffenplatz frei. Zwei Primärwaffen kannst du schon ohne Gurt tragen. Einmaliger Kauf für diesen Einsatz, keine weiteren Stufen."},
 	"mask": {"label": "GASMASKE", "prices": [150, 250, 400, 600], "group": "gear", "note": "Vier Stufen: Filter für 8, 20, 45 und 120 Sekunden im Giftgas."},
 	# For the two who come along (Game.squad_levels); nothing the survivor carries.
 	"squad_armor": {"label": "TEAM: SCHUTZPLATTEN", "prices": [180, 300, 450], "group": "team", "note": "Deine Begleiter halten mehr aus: +30 % Leben je Stufe."},
@@ -177,7 +189,7 @@ const SHOT_LEAST := 0.33
 ## other lets them scatter as a player's shots do (--bot-scatter sets this).
 static var scatter_in_checks := false
 var current_weapon := "rifle"
-var inventory: Dictionary = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
+var inventory: Dictionary = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}, "pistol": {"ammo": 15, "reserve": 120, "level": 0}}
 var weapon_models: Dictionary = {}
 var game: Node3D
 var camera: Camera3D
@@ -185,18 +197,23 @@ var weapon: Node3D
 var flash: Node3D
 var flash_light: OmniLight3D
 var flash_mesh: MeshInstance3D
+var left_flash: Node3D
+var left_flash_left := 0.0
 var flashlight: SpotLight3D
 var health := 100.0
 var ammo: int:
 	get: return int(inventory[current_weapon].ammo)
-	set(value): inventory[current_weapon].ammo = value
+	set(value): _set_loaded(current_weapon, value)
 var reserve: int:
-	get: return int(inventory[current_weapon].reserve)
-	set(value): inventory[current_weapon].reserve = value
+	get: return reserve_cap(current_weapon) if infinite_ammo() else int(inventory[current_weapon].reserve)
+	set(value):
+		if not infinite_ammo():
+			inventory[current_weapon].reserve = value
 var weapon_level: int:
 	get: return int(inventory[current_weapon].level)
 	set(value): inventory[current_weapon].level = value
 var sensitivity := 0.0022
+var crouch_toggle := false
 var controlled := false
 ## A menu lies over a running co-op match: no input, but the world goes on.
 var menu_open := false
@@ -228,19 +245,39 @@ const LAUNCH_SPEED := 18.5
 const LAUNCH_LIFT := 1.92
 ## Seconds of flight the aiming arc shows.
 const LAUNCH_SHOWN := 4.8
-const THROW_SWING := 0.16
+const THROW_SWING := 0.42
+const THROW_RECOVER := 0.32
+const THROW_VIEW = preload("res://scripts/throw_view.gd")
+var throw_model: Node3D
+var throw_recover := 0.0
 const THROW_AIM_AFTER := 0.2
 ## The key that readies and throws each thing.
 const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov", "heal": "throw_heal"}
 ## A blow with the weapon (key V): how far it reaches and how wide (the cosine of half its
 ## angle), what it does, how fast whoever is struck is thrown back and for how long he
 ## reels, and the seconds until the next blow.
-const MELEE_REACH := 2.4
+const MELEE_REACH := 2.2
 const MELEE_CONE := 0.4
-const MELEE_DAMAGE := 30.0
-const MELEE_PUSH := 6.5
-const MELEE_DAZE := 1.7
-const MELEE_GAP := 0.85
+const MELEE_DAMAGE := 60.0
+const MELEE_PUSH := 3.5
+const MELEE_DAZE := 0.8
+const MELEE_GAP := 0.6
+const MELEE_WEAPONS := {
+	"bash": {"label": "WAFFENSTOSS", "price": 0, "damage": MELEE_DAMAGE, "reach": MELEE_REACH, "gap": MELEE_GAP, "push": MELEE_PUSH, "daze": MELEE_DAZE, "targets": 1},
+	"knife": {"label": "KAMPFMESSER", "price": 180, "damage": 75.0, "reach": 2.0, "gap": 0.45, "push": 3.5, "daze": 0.6, "targets": 1},
+	"bat": {"label": "BASEBALLSCHLÄGER", "price": 250, "damage": 85.0, "reach": 2.8, "gap": 0.8, "push": 7.5, "daze": 1.4, "targets": 2},
+	"machete": {"label": "MACHETE", "price": 350, "damage": 105.0, "reach": 2.7, "gap": 0.8, "push": 5.5, "daze": 1.2, "targets": 3},
+	"crowbar": {"label": "BRECHEISEN", "price": 400, "damage": 125.0, "reach": 2.5, "gap": 0.85, "push": 6.0, "daze": 1.2, "targets": 2},
+	"axe": {"label": "BRECHAXT", "price": 650, "damage": 180.0, "reach": 2.4, "gap": 1.1, "push": 8.0, "daze": 1.7, "targets": 1},
+	"hammer": {"label": "VORSCHLAGHAMMER", "price": 800, "damage": 230.0, "reach": 2.7, "gap": 1.35, "push": 10.0, "daze": 2.0, "targets": 1}
+}
+const MELEE_VIEW = preload("res://scripts/melee_view.gd")
+var melee_weapon := "bash"
+var melee_owned: Array[String] = ["bash"]
+var melee_model: Node3D
+var melee_left := 0.0
+var melee_pending := false
+var melee_kind := "bash"
 ## A blast of shot throws a body back with its full force up to PUSH_NEAR metres and not
 ## at all beyond PUSH_FAR; slower than PUSH_LEAST it moves nobody.
 const PUSH_NEAR := 3.0
@@ -251,13 +288,14 @@ const PUSH_LEAST := 0.8
 const SYRINGE_HEAL := 30.0
 const SYRINGE_WAIT := 8.0
 const SYRINGE_TIME := 0.75
-## Ducked (key C, on and off): how high the eyes and the body are then, how fast the
+## Ducked (key C, held by default): how high the eyes and the body are then, how fast the
 ## survivor moves, and the share of a weapon's scatter and kick that is left.
 const STAND_HEIGHT := 1.75
 const CROUCH_HEIGHT := 1.2
 const CROUCH_EYE := 1.12
 const CROUCH_SPEED := 2.4
 const CROUCH_STEADY := 0.7
+const CROUCH_RECOIL := 0.5
 ## Share of each weapon's full reserve that comes back when a round is over.
 const ROUND_AMMO := 0.5
 ## The stream of the flamethrower: how far it reaches and how narrow it is (the cosine of
@@ -284,16 +322,22 @@ var shot_cooldown := 0.0
 ## The trigger has not been let go since the last shot: a weapon that fires single shots
 ## waits for that.
 var trigger_held := false
+var dual_cooldowns := Vector2.ZERO
+var dual_triggers: Array[bool] = [false, false]
+var dual_kick := Vector2.ZERO
 var melee_cooldown := 0.0
 ## The swing of a blow with the weapon, 1 when it starts to 0 when it is over.
 var melee_pose := 0.0
 ## Seconds until the syringe is ready again, and seconds the hands are still busy with it.
 var syringe_wait := 0.0
 var syringe_left := 0.0
-## Slings bought this night: places for further weapons of any kind.
+## One sling for this night unlocks the third primary slot.
 var extra_slots := 0
 var crouched := false
+## A held input owns the stance until release; scripted poses can still set it directly.
+var crouch_from_input := false
 var body_shape: CollisionShape3D
+var movement: RefCounted
 ## Seconds the flamethrower's stream keeps showing after its last tick, and the seconds
 ## until its next hit marker.
 var flame_left := 0.0
@@ -366,6 +410,7 @@ func _ready() -> void:
 	shape.position.y = 0.88
 	add_child(shape)
 	body_shape = shape
+	movement = preload("res://scripts/player_movement.gd").new(self)
 	camera = Camera3D.new()
 	camera.name = "Eyes"
 	camera.position.y = 1.62
@@ -378,10 +423,10 @@ func _ready() -> void:
 	flashlight.name = "Flashlight"
 	flashlight.position = Vector3(0.12, -0.12, -0.1)
 	flashlight.light_color = Color("e6ecd8")
-	flashlight.light_energy = 3.2
-	flashlight.spot_range = 30
-	flashlight.spot_angle = 27
-	flashlight.spot_attenuation = 1.1
+	flashlight.light_energy = 5.8
+	flashlight.spot_range = 60
+	flashlight.spot_angle = 31
+	flashlight.spot_attenuation = 0.9
 	flashlight.spot_angle_attenuation = 0.7
 	flashlight.shadow_enabled = true
 	flashlight.shadow_bias = 0.06
@@ -412,6 +457,8 @@ func _build_weapon() -> void:
 	weapon_models["mp7"] = WeaponView.build_gun("mp7")
 	for id in WeaponView.MODELS:
 		weapon_models[id] = WeaponView.build_model(id)
+	for id in ["usp", "g18", "deagle"]:
+		weapon_models[id] = WeaponView.build_sidearm(id)
 	for id in weapon_models:
 		var view: Node3D = weapon_models[id]
 		camera.add_child(view)
@@ -432,6 +479,10 @@ func _build_weapon() -> void:
 	flash.visible = false
 	weapon.add_child(flash)
 	flash.position = WeaponView.VIEWS["rifle"].muzzle
+	left_flash = flash.duplicate() as Node3D
+	left_flash.name = "LeftFlash"
+	weapon.add_child(left_flash)
+	left_flash.hide()
 
 ## The infected only chase survivors who are still on their feet.
 func is_targetable() -> bool:
@@ -445,9 +496,46 @@ func magazine_size() -> int:
 	return magazine_of(current_weapon)
 
 ## What the magazine of a weapon holds: more with the workbench's bigger magazine.
-func magazine_of(id: String) -> int:
+func magazine_of(id: String, preview: String = "") -> int:
 	var size := int(round(int(WEAPONS[id].magazine) * (1.0 + rare(id, "mags"))))
-	return size * 3 / 2 if upgrade(id, "mags") > 0 else size
+	if upgrade(id, "mags") + int(preview == "mags") > 0:
+		size = size * 3 / 2
+	if is_akimbo(id):
+		size *= 2
+	return size
+
+func is_akimbo(id: String = "") -> bool:
+	var key := current_weapon if id == "" else id
+	return str((inventory.get(key, {}).get("fitted", {}) as Dictionary).get("style", "")) == "akimbo"
+
+## The sum stays compatible with normal ammunition and cache records; each hand owns
+## its share, so an empty pistol cannot borrow rounds from the other one.
+func dual_rounds(id: String = "") -> Array:
+	var key := current_weapon if id == "" else id
+	var record: Dictionary = inventory[key]
+	var capacity := magazine_of(key) / 2
+	var total := clampi(int(record.ammo), 0, capacity * 2)
+	var hands: Array = record.get("dual_ammo", [])
+	if hands.size() != 2 or int(hands[0]) + int(hands[1]) != total or int(hands[0]) > capacity or int(hands[1]) > capacity:
+		hands = [mini(capacity, ceili(total * 0.5)), total / 2]
+		record["dual_ammo"] = hands
+	return hands
+
+func _set_loaded(id: String, value: int) -> void:
+	var record: Dictionary = inventory[id]
+	if is_akimbo(id):
+		var hands := dual_rounds(id)
+		var target := clampi(value, 0, magazine_of(id))
+		var change := target - int(hands[0]) - int(hands[1])
+		for hand in range(2):
+			var amount := mini(change, magazine_of(id) / 2 - int(hands[hand])) if change >= 0 else -mini(-change, int(hands[hand]))
+			hands[hand] = int(hands[hand]) + amount
+			change -= amount
+		record["dual_ammo"] = hands
+		record.ammo = target
+	else:
+		record.ammo = value
+		record.erase("dual_ammo")
 
 # ---------------------------------------------------------------- the workbench
 
@@ -486,19 +574,21 @@ func raise(id: String, line: String) -> void:
 			record.reserve = int(record.reserve) + reserve_cap(id) - before
 
 ## What a weapon does with each shot as it is now, the workbench counted in (for lists).
-func damage_of(id: String) -> float:
+func damage_of(id: String, preview: String = "") -> float:
 	var data: Dictionary = WEAPONS[id]
+	var level := upgrade(id, "damage") + int(preview == "damage")
 	if data.has("flame") or data.has("grenade"):
-		return float(data.damage) * (1.0 + UPGRADE_SHARE * upgrade(id, "damage"))
-	return float(data.damage) * (1.0 + rare(id, "damage")) + float(UPGRADES.damage.step) * upgrade(id, "damage") / int(data.get("pellets", 1))
+		return float(data.damage) * (1.0 + UPGRADE_SHARE * level)
+	return float(data.damage) * (1.0 + rare(id, "damage")) + float(UPGRADES.damage.step) * level / int(data.get("pellets", 1))
 
 ## Seconds a reload of a weapon takes: quicker with the sweeper's hands and the workbench.
-func reload_of(id: String) -> float:
-	return float(WEAPONS[id].reload_time) * _quicker(id)
+func reload_of(id: String, preview: String = "") -> float:
+	return float(WEAPONS[id].reload_time) * _quicker(id, preview)
 
 ## Share of its time a reload of a weapon still takes.
-func _quicker(id: String) -> float:
-	return 1.0 - minf(0.6, game.skills.quicker(id) + float(UPGRADES.drill.step) * upgrade(id, "drill") + rare(id, "reload"))
+func _quicker(id: String, preview: String = "") -> float:
+	var factor := 1.0 - minf(0.6, game.skills.quicker(id) + float(UPGRADES.drill.step) * (upgrade(id, "drill") + int(preview == "drill")) + rare(id, "reload"))
+	return factor * (1.25 if str((inventory.get(id, {}).get("fitted", {}) as Dictionary).get("style", "")) == "akimbo" else 1.0)
 
 ## Seconds one step of loading the drum takes (see DRUM).
 func drum_time(step: String) -> float:
@@ -520,7 +610,7 @@ func take_item(id: String) -> void:
 			mask_level = mini(4, mask_level + 1)
 			filter_left = filter_capacity()
 		"sling":
-			extra_slots = mini((GOODS.sling.prices as Array).size(), extra_slots + 1)
+			extra_slots = 1
 		"heal_kit":
 			heal_level = 1
 		_:
@@ -532,7 +622,7 @@ func ready_throw(kind: String) -> void:
 	# (Its own key takes it over from whatever the group's key had put in the hand.)
 	if throw_in_hand and throw_swing < 0.0:
 		put_away()
-	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0 or throw_kind != "":
+	if down or int(items[kind]) <= 0 or throw_cooldown > 0.0 or throw_recover > 0.0 or throw_kind != "":
 		return
 	throw_kind = kind
 	throw_held = 0.0
@@ -564,7 +654,49 @@ func _flight(at: Vector3, speed: Vector3, seconds: float, pull: float, damp: flo
 func throw_path(kind: String) -> PackedVector3Array:
 	# A bottle bursts on the first body it strikes; a grenade flies past them.
 	var mask := (1 | 4 | 16) if Throwable.KINDS[kind].get("breaks", false) else (1 | 16)
-	return _flight(camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15, -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5, float(Throwable.KINDS[kind].fuse), 1.0, 0.3, mask)
+	return _flight(_throw_origin(), -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5, float(Throwable.KINDS[kind].fuse), 1.0, 0.3, mask)
+
+func _throw_origin() -> Vector3:
+	var eye := camera.global_position
+	var origin := camera.to_global(Vector3(0.12, -0.02, -0.78))
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(eye, origin, 1 | 16))
+	return (hit.position as Vector3) - (origin - eye).normalized() * 0.08 if not hit.is_empty() else origin
+
+func _animate_throw(delta: float) -> void:
+	throw_recover = maxf(0.0, throw_recover - delta)
+	if throw_kind == "" and throw_recover <= 0.0:
+		if is_instance_valid(throw_model):
+			throw_model.hide()
+		return
+	if down:
+		if is_instance_valid(throw_model):
+			throw_model.hide()
+		return
+	if throw_kind != "" and (not is_instance_valid(throw_model) or str(throw_model.get_meta("kind", "")) != throw_kind):
+		if is_instance_valid(throw_model):
+			throw_model.queue_free()
+		throw_model = THROW_VIEW.build(throw_kind)
+		camera.add_child(throw_model)
+	if not is_instance_valid(throw_model):
+		return
+	throw_model.visible = not menu_open
+	(throw_model.get_node("Prop") as Node3D).visible = throw_kind != ""
+	var ready := Vector3(0.19, -0.16, -0.6)
+	var release := Vector3(0.12, -0.02, -0.78)
+	if throw_kind == "":
+		var recover := 1.0 - throw_recover / THROW_RECOVER
+		throw_model.position = release.lerp(Vector3(0.28, -0.55, -0.4), smoothstep(0.0, 1.0, recover))
+		throw_model.rotation = Vector3(-0.8, 0.1, -0.4).lerp(Vector3(0.4, 0.3, 0.2), recover)
+	elif throw_swing >= 0.0:
+		var swing := clampf(1.0 - throw_swing / THROW_SWING, 0.0, 1.0)
+		var windup := Vector3(0.28, 0.02, -0.52)
+		throw_model.position = ready.lerp(windup, smoothstep(0.0, 0.45, swing)).lerp(release, smoothstep(0.45, 1.0, swing))
+		throw_model.rotation = Vector3(0.15, -0.2, 0.1).lerp(Vector3(-1.1, 0.1, -0.5), smoothstep(0.45, 1.0, swing))
+	else:
+		throw_model.position = ready + Vector3(0, sin(bob_time) * 0.004, 0)
+		throw_model.rotation = Vector3(0.15, -0.2, 0.1)
+	if throw_model.visible:
+		weapon.hide()
 
 ## Where a shell fired from the launcher now would fly: a shallow arc, a little above the
 ## line of sight at first and then falling under it.
@@ -586,6 +718,7 @@ func _hold_throw(delta: float) -> void:
 	var let_go: bool = (pulled and throw_cooldown <= 0.0) if throw_in_hand else not Input.is_action_pressed(str(THROW_KEYS[throw_kind]))
 	if throw_swing < 0.0 and let_go:
 		throw_swing = THROW_SWING
+		game.net.send_throw()
 	if throw_swing >= 0.0:
 		throw_swing -= delta
 		if throw_swing <= 0.0:
@@ -607,38 +740,69 @@ func throw(kind: String) -> void:
 		return
 	items[kind] = int(items[kind]) - 1
 	throw_cooldown = 0.7
+	throw_recover = THROW_RECOVER
 	var body := Throwable.new()
 	body.game = game
 	body.kind = kind
 	body.level = heal_level
 	game.ordnance.add_child(body)
-	body.global_position = camera.global_position - camera.global_basis.z * 0.5 - camera.global_basis.y * 0.15
+	body.global_position = _throw_origin()
 	body.linear_velocity = -camera.global_basis.z * 14.0 + Vector3.UP * 3.2 + velocity * 0.5
 	body.angular_velocity = Vector3(randf_range(-6, 6), randf_range(-6, 6), randf_range(-6, 6))
-	recoil = 0.6
 	game.sounds.play_sound("swipe", -3.0, 1.5)
 
 ## A blow with the weapon: whoever stands right in front is hurt a little, thrown back a
 ## step and reels for a moment. In a co-op match the host works out what it does.
 func melee() -> void:
-	if down or melee_cooldown > 0.0 or throw_kind != "":
+	if down or melee_cooldown > 0.0 or throw_kind != "" or throw_recover > 0.0:
 		return
-	melee_cooldown = MELEE_GAP
+	var blade: Dictionary = MELEE_WEAPONS[melee_weapon]
+	melee_cooldown = float(blade.gap)
+	melee_left = float(blade.gap)
+	melee_kind = melee_weapon
+	melee_pending = true
 	melee_pose = 1.0
+	if is_instance_valid(melee_model):
+		camera.remove_child(melee_model)
+		melee_model.queue_free()
+	melee_model = null
+	if melee_weapon != "bash":
+		melee_model = MELEE_VIEW.build(melee_weapon)
+		camera.add_child(melee_model)
 	shot_cooldown = maxf(shot_cooldown, 0.35)
 	game.sounds.play_sound("swipe", -1.0, 0.85)
+	_advance_melee(0.0)
+
+func melee_windup(id: String) -> float:
+	return {"bash": 0.0, "knife": 0.09, "bat": 0.2, "machete": 0.2, "crowbar": 0.24, "axe": 0.38, "hammer": 0.52}.get(id, 0.2)
+
+func _advance_melee(delta: float) -> void:
+	if down or menu_open:
+		melee_left = 0.0
+		melee_pending = false
+	if melee_left <= 0.0:
+		melee_pose = 0.0
+		return
+	var blade: Dictionary = MELEE_WEAPONS[melee_kind]
+	melee_left = maxf(0.0, melee_left - delta)
+	melee_pose = melee_left / float(blade.gap)
+	if melee_pending and float(blade.gap) - melee_left >= melee_windup(melee_kind):
+		melee_pending = false
+		_melee_strike(blade)
+
+func _melee_strike(blade: Dictionary) -> void:
 	var origin := camera.global_position
 	var ahead := Vector3(-sin(rotation.y), 0, -cos(rotation.y))
 	var space := get_world_3d().direct_space_state
 	var struck := 0
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy.dead:
+		if enemy.dead or enemy.game != game:
 			continue
 		var to := enemy.global_position - global_position
 		var flat := Vector3(to.x, 0, to.z)
 		var gap := flat.length() - float(enemy.spec.radius)
-		if gap > MELEE_REACH or absf(to.y) > 1.6:
+		if gap > float(blade.reach) or absf(to.y) > 1.6:
 			continue
 		# Whoever is close enough to touch is struck wherever he stands in front.
 		if gap > 0.5 and flat.normalized().dot(ahead) < MELEE_CONE:
@@ -648,12 +812,14 @@ func melee() -> void:
 			continue
 		struck += 1
 		var push := flat.normalized() if flat.length() > 0.05 else ahead
-		var damage: float = MELEE_DAMAGE * game.skills.damage_factor(enemy, false)
+		var damage: float = float(blade.damage) * game.skills.damage_factor(enemy, false)
 		if game.net.joined:
 			game.net.report_shove(enemy, push, damage)
 			enemy.show_cue("hit", [1.0, 0.5])
 		else:
-			enemy.shove(push, MELEE_PUSH, MELEE_DAZE, damage)
+			enemy.shove(push, float(blade.push), float(blade.daze), damage)
+		if struck >= int(blade.targets):
+			break
 	if struck > 0:
 		game.sounds.play_sound("melee")
 		game.hud.hit_marker(false)
@@ -678,31 +844,38 @@ func max_reserve() -> int:
 	return reserve_cap(current_weapon)
 
 ## How much ammunition for a weapon fits into the pockets; an ability makes them deeper.
-func reserve_cap(id: String) -> int:
-	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.deeper(id) + float(UPGRADES.pouch.step) * upgrade(id, "pouch") + rare(id, "reserve"))))
+func reserve_cap(id: String, preview: String = "") -> int:
+	return int(round(int(WEAPONS[id].reserve_max) * (1.0 + game.skills.deeper(id) + float(UPGRADES.pouch.step) * (upgrade(id, "pouch") + int(preview == "pouch")) + rare(id, "reserve"))))
 
 ## The weapon in hand as it shoots now: its values from the table, changed by whatever is
 ## fitted to it.
 func gun() -> Dictionary:
-	var record: Dictionary = inventory[current_weapon]
+	return data_for(current_weapon)
+
+func data_for(id: String, preview: String = "") -> Dictionary:
+	if not inventory.has(id):
+		return WEAPONS[id]
+	var record: Dictionary = inventory[id]
 	var on: Dictionary = record.get("fitted", {})
-	var steadied := upgrade(current_weapon, "brace")
+	var steadied := upgrade(id, "brace") + int(preview == "brace")
 	if on.is_empty() and steadied == 0 and not record.has("rare"):
-		return WEAPONS[current_weapon]
-	if not record.has("tuned"):
-		var data: Dictionary = (WEAPONS[current_weapon] as Dictionary).duplicate()
-		data["kick"] = float(data.kick) * (1.0 - float(UPGRADES.brace.step) * steadied) * (1.0 - rare(current_weapon, "steady"))
+		return WEAPONS[id]
+	if preview != "" or not record.has("tuned"):
+		var data: Dictionary = (WEAPONS[id] as Dictionary).duplicate()
+		data["kick"] = float(data.kick) * (1.0 - float(UPGRADES.brace.step) * steadied) * (1.0 - rare(id, "steady"))
 		# (What a rare weapon has of its own: see rare.)
-		data["spread"] = float(data.spread) * (1.0 - rare(current_weapon, "steady"))
-		data["damage"] = float(data.damage) * (1.0 + rare(current_weapon, "damage"))
+		data["spread"] = float(data.spread) * (1.0 - rare(id, "steady"))
+		data["damage"] = float(data.damage) * (1.0 + rare(id, "damage"))
 		for slot in on:
-			var part: Dictionary = ATTACHMENTS[current_weapon][on[slot]]
+			var part: Dictionary = ATTACHMENTS[id][on[slot]]
 			var replaced: Dictionary = part.get("set", {})
 			for key in replaced:
 				data[key] = replaced[key]
 			var scaled: Dictionary = part.get("scale", {})
 			for key in scaled:
 				data[key] = float(data[key]) * float(scaled[key])
+		if preview != "":
+			return data
 		record["tuned"] = data
 	return record.tuned
 
@@ -729,15 +902,24 @@ func fit(id: String, part: String) -> void:
 		on[slot] = part
 	record["fitted"] = on
 	record.erase("tuned")
+	if slot == "style":
+		record.erase("dual_ammo")
+	if int(record.ammo) > magazine_of(id):
+		var excess := int(record.ammo) - magazine_of(id)
+		record.ammo = magazine_of(id)
+		record.reserve = mini(reserve_cap(id), int(record.reserve) + excess)
 	if id == current_weapon:
 		_show_parts()
 
 ## Shows what is fitted to the weapon in hand and puts the muzzle flash at its muzzle.
 func _show_parts() -> void:
 	var on: Array = (inventory[current_weapon].get("fitted", {}) as Dictionary).values()
-	for node in weapon.get_children():
+	for node in weapon.find_children("Mod_*", "Node3D", true, false):
 		if str(node.name).begins_with("Mod_"):
 			(node as Node3D).visible = on.has(str(node.name).trim_prefix("Mod_"))
+	var support := weapon.get_node_or_null("HandSupport") as Node3D
+	if support != null:
+		support.visible = not on.has("akimbo")
 	# Iron sights that fold lie down when a sight is fitted.
 	var irons := weapon.find_child("Sights", true, false) as Node3D
 	if irons != null and WeaponView.GUNS.has(current_weapon) and WeaponView.GUNS[current_weapon].get("folding", false):
@@ -746,6 +928,11 @@ func _show_parts() -> void:
 	if on.has("silencer"):
 		muzzle.z -= WeaponView.SILENCER_LENGTH
 	flash.position = muzzle
+	var twin := weapon.get_node_or_null("Mod_akimbo") as Node3D
+	left_flash.reparent(twin if on.has("akimbo") and twin != null else weapon, false)
+	left_flash.position = muzzle
+	left_flash_left = 0.0
+	left_flash.hide()
 
 func weapon_label() -> String:
 	return weapon_title(current_weapon)
@@ -766,37 +953,34 @@ static func kind_of(id: String) -> String:
 func carried(kind: String) -> Array:
 	return ORDER.filter(func(id: String) -> bool: return inventory.has(id) and kind_of(id) == kind)
 
-## How many weapons are carried beyond one of each kind; `with`: counting this one in.
-func _beyond(with: String = "") -> int:
-	var over := 0
-	for kind in KINDS:
-		var count := carried(kind).size() + (1 if with != "" and not inventory.has(with) and kind_of(with) == kind else 0)
-		over += maxi(0, count - CARRY)
-	return over
+func carry_limit(kind: String) -> int:
+	return 2 + clampi(extra_slots, 0, 1) if kind == "primary" else 1
 
 ## True if another weapon can be carried beside what is carried already.
 func room_for(id: String) -> bool:
-	return _beyond(id) <= extra_slots
+	if id == "pistol" or inventory.has(id):
+		return true
+	var kind := kind_of(id)
+	var count := carried(kind).filter(func(other: String) -> bool: return other != "pistol").size()
+	return count < carry_limit(kind)
 
 ## The weapon that has to go to make room for another one of its kind: the one in hand
 ## if it is of that kind, otherwise the first of them. "" if there is room anyway.
 func to_replace(id: String) -> String:
 	if room_for(id):
 		return ""
-	var same := carried(kind_of(id))
+	var same := carried(kind_of(id)).filter(func(other: String) -> bool: return other != "pistol")
 	return current_weapon if same.has(current_weapon) else str(same[0])
 
-## Every weapon that could go to make room for another one: those of its kind, and of the
-## other kinds any that a sling carries. The one to_replace() names comes first; empty if
-## there is room anyway.
+## Every weapon of the same kind that could make room for another one. The one to_replace() names comes first; empty if there is room anyway.
 func replaceable(id: String) -> Array:
 	var first := to_replace(id)
 	if first == "":
 		return []
 	var out: Array = [first]
 	for kind in KINDS:
-		var same := carried(kind)
-		if kind == kind_of(id) or same.size() > CARRY:
+		var same := carried(kind).filter(func(other: String) -> bool: return other != "pistol")
+		if kind == kind_of(id):
 			for other in same:
 				if not out.has(other):
 					out.append(other)
@@ -815,8 +999,12 @@ func other_weapon(id: String) -> String:
 
 ## Lays a weapon down for good, with whatever was fitted to it. Not the one in hand.
 func drop_weapon(id: String) -> void:
-	if id != current_weapon:
+	if id != current_weapon and id != "pistol":
 		inventory.erase(id)
+
+## The issued M9 always has reserve ammunition. Any sidearm used while down does too.
+func infinite_ammo() -> bool:
+	return current_weapon == "pistol" or (down and kind_of(current_weapon) == "secondary")
 
 ## Ammunition comes back when a round is over: for every weapon carried, `share` of what
 ## its pockets hold.
@@ -838,6 +1026,10 @@ func inject() -> bool:
 	game.sounds.play_sound("syringe")
 	game.hud.flash(Color(0.45, 1.0, 0.75), 0.1)
 	return true
+
+func set_crouch_mode(toggle_mode: bool) -> void:
+	crouch_toggle = toggle_mode
+	crouch_from_input = not toggle_mode and (crouched or Input.is_action_pressed("crouch"))
 
 ## Ducks or stands up again. Standing up needs room above; ducking needs ground below.
 func set_crouched(low: bool) -> void:
@@ -866,6 +1058,7 @@ func unlock(id: String) -> bool:
 
 func equip_weapon(id: String, silent: bool = false) -> bool:
 	if not inventory.has(id): return false
+	if down and kind_of(id) != "secondary": return false
 	if id == current_weapon: return true
 	# Cancelling a reload never transfers rounds; each weapon owns its ammo.
 	reload_left = 0
@@ -876,6 +1069,10 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 	bolt_clock = -1.0
 	spin = 0.0
 	flash_left = 0
+	left_flash_left = 0
+	dual_cooldowns = Vector2.ZERO
+	dual_triggers = [false, false]
+	dual_kick = Vector2.ZERO
 	recoil = 0
 	# A heavy weapon takes a moment longer to bring up.
 	shot_cooldown = float(WEAPONS[id].get("draw", 0.25))
@@ -889,6 +1086,7 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 	weapon.position = (WeaponView.VIEWS[id].hip as Vector3) + Vector3(0.02, -0.2, 0.06)
 	weapon.rotation = Vector3(0.6, 0.2, 0)
 	flash.reparent(weapon, false)
+	left_flash.reparent(weapon, false)
 	_show_parts()
 	throw_kind = ""
 	if not silent:
@@ -966,10 +1164,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not controlled or menu_open:
 		return
 	if down:
-		# Looking around is all that is left.
+		# Stay on the ground, but keep covering the partner with a sidearm.
 		if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			rotate_y(-event.relative.x * sensitivity)
 			camera.rotation.x = clampf(camera.rotation.x - event.relative.y * sensitivity, -0.6, 1.0)
+		if event.is_action_pressed("reload"):
+			start_reload()
 		return
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var factor := 1.0
@@ -1000,8 +1200,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		melee()
 	if event.is_action_pressed("syringe"):
 		inject()
-	if event.is_action_pressed("crouch"):
-		set_crouched(not crouched)
+	if event.is_action_pressed("crouch") and not event.is_echo():
+		crouch_from_input = not crouch_toggle
+		set_crouched(not crouched if crouch_toggle else true)
+	if event.is_action_released("crouch") and not crouch_toggle:
+		set_crouched(false)
+		# Keep trying if a low ceiling prevents standing up at the moment of release.
+		crouch_from_input = crouched
+	if event.is_action_pressed("jump") and not event.is_echo():
+		movement.queue_jump()
 	if event.is_action_pressed("place_claymore"):
 		place_claymore()
 	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -1010,9 +1217,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func _physics_process(delta: float) -> void:
 	buff_left = maxf(0.0, buff_left - delta)
 	shot_cooldown = maxf(0, shot_cooldown - delta)
+	dual_cooldowns = Vector2(maxf(0.0, dual_cooldowns.x - delta), maxf(0.0, dual_cooldowns.y - delta))
+	dual_kick = Vector2(maxf(0.0, dual_kick.x - delta * 9.0), maxf(0.0, dual_kick.y - delta * 9.0))
 	throw_cooldown = maxf(0, throw_cooldown - delta)
 	melee_cooldown = maxf(0, melee_cooldown - delta)
-	melee_pose = move_toward(melee_pose, 0.0, delta * 3.4)
+	_advance_melee(delta)
 	syringe_wait = maxf(0.0, syringe_wait - delta)
 	syringe_left = maxf(0.0, syringe_left - delta)
 	flame_left = maxf(0.0, flame_left - delta)
@@ -1030,7 +1239,7 @@ func _physics_process(delta: float) -> void:
 	throw_pose = move_toward(throw_pose, 1.0 if throw_kind != "" else 0.0, delta * (9.0 if throw_kind != "" else 4.5))
 	# The line of the throw, once the key has been held for a moment.
 	if throw_kind != "" and throw_kind != "claymore" and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
-		game.fx.show_arc(throw_path(throw_kind))
+		game.fx.show_arc(throw_path(throw_kind).slice(3))
 	elif controlled and not down and not menu_open and WEAPONS[current_weapon].has("grenade") and ammo > 0 and reload_left <= 0.0 and Input.is_action_pressed("aim"):
 		# Aiming with the launcher shows the arc of its shell.
 		# The first points lie right in front of the eye and would only be in the way.
@@ -1039,6 +1248,8 @@ func _physics_process(delta: float) -> void:
 		game.fx.hide_arc()
 	flash_left = maxf(0, flash_left - delta)
 	flash.visible = flash_left > 0
+	left_flash_left = maxf(0.0, left_flash_left - delta)
+	left_flash.visible = left_flash_left > 0.0 and is_akimbo()
 	hurt_amount = move_toward(hurt_amount, 0, delta * 1.5)
 	acid_amount = move_toward(acid_amount, 0, delta * 1.2)
 	recoil = move_toward(recoil, 0, delta * 9)
@@ -1106,16 +1317,21 @@ func _physics_process(delta: float) -> void:
 			ammo += count
 			reserve -= count
 	var blocked := menu_open or down
-	camera.position.y = lerpf(camera.position.y, 0.42 if down else (CROUCH_EYE if crouched else 1.62), minf(1.0, delta * 6.0 if down else delta * 10.0))
-	weapon.visible = not down
+	weapon.visible = true
 	var input := Vector2.ZERO if blocked else Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := transform.basis * Vector3(input.x, 0, input.y)
-	var aiming := Input.is_action_pressed("aim") and reload_left <= 0 and not blocked
-	var sprint := Input.is_action_pressed("sprint") and not aiming and input.y < -0.1 and clung_by == null
+	var aiming: bool = Input.is_action_pressed("aim") and reload_left <= 0 and not menu_open and not bool(gun().get("akimbo", false)) and not movement.active()
+	var sprint: bool = Input.is_action_pressed("sprint") and not aiming and input.y < -0.1
+	if not blocked and not crouch_toggle and crouch_from_input:
+		var held := Input.is_action_pressed("crouch")
+		set_crouched(held and not sprint)
+		if not held and not crouched:
+			crouch_from_input = false
 	# Whoever starts to run stands up for it (if there is room to).
 	if sprint and crouched:
 		set_crouched(false)
 		sprint = not crouched
+	camera.position.y = lerpf(camera.position.y, 0.42 if down else (CROUCH_EYE if crouched else 1.62), minf(1.0, delta * 6.0 if down else delta * 10.0))
 	var speed := 6.6 if sprint else 4.3
 	if aiming:
 		speed = 2.6
@@ -1127,43 +1343,15 @@ func _physics_process(delta: float) -> void:
 	# Deep water (HiveAreale.run_waters): every step a struggle as well.
 	speed *= wade
 	if clung_by != null:
-		# With a Leech hanging on, every step is a struggle.
-		speed *= 0.55
 		trauma = maxf(trauma, 0.28)
-	velocity.x = move_toward(velocity.x, direction.x * speed, delta * 30)
-	velocity.z = move_toward(velocity.z, direction.z * speed, delta * 30)
-	if not is_on_floor():
-		velocity.y -= 22 * delta
-		airborne = true
-	elif Input.is_action_just_pressed("jump") and not blocked and wade < 1.0 and game.cabin.has_method("climb_out") and game.cabin.climb_out(global_position) != Vector3.INF:
-		# Out of deep water on to the walkway beside it.
-		global_position = game.cabin.climb_out(global_position)
-		velocity = Vector3.ZERO
-		wade = 1.0
-	elif Input.is_action_just_pressed("jump") and not blocked and crouched:
-		# Out of a crouch the key only gets the survivor back on his feet.
-		set_crouched(false)
-		velocity.y = 0
-	elif Input.is_action_just_pressed("jump") and not blocked:
-		velocity.y = 5.5
-	else:
-		velocity.y = 0
-		if airborne:
-			airborne = false
-			landing = 1.0
-			_footstep(4.0)
-	move_and_slide()
+	var traversing: bool = movement.step(delta, direction, speed, blocked)
+	if traversing:
+		aiming = false
 	_update_mist(delta)
 	if position.y < game.cabin.abyss():
 		position = game.cabin.player_start
-	var firing: bool = Input.is_action_pressed("fire") and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not blocked and not (sprint and input.length() > 0.1)
-	# A weapon that fires single shots wants the trigger let go before the next one.
-	if not Input.is_action_pressed("fire"):
-		trigger_held = false
-	_spin(delta, firing)
-	if firing and spin >= 1.0 and trigger_free():
-		shoot()
-	var moving := input.length() > 0.1 and is_on_floor()
+	_fire_inputs(delta, Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and not menu_open and not traversing and not (sprint and input.length() > 0.1))
+	var moving := input.length() > 0.1 and is_on_floor() and not traversing
 	if moving:
 		bob_time += delta * (12.5 if sprint else 8.5)
 		step_time -= delta
@@ -1171,6 +1359,7 @@ func _physics_process(delta: float) -> void:
 			_footstep(2.0 if sprint else 0.0)
 			step_time = 0.3 if sprint else 0.45
 	_animate_weapon(delta, aiming, sprint and moving, moving)
+	_animate_throw(delta)
 	# Through the telescopic sight only the picture in the lens is left.
 	var sights: Dictionary = gun()
 	var scoped := smoothstep(0.7, 1.0, aim_blend) if sights.has("scope") else 0.0
@@ -1180,9 +1369,26 @@ func _physics_process(delta: float) -> void:
 	var zoom := float(sights.get("scope", sights.get("zoom", 50.0))) if aiming else (BASE_FOV + 5.0 if sprint and moving else BASE_FOV)
 	camera.fov = lerpf(camera.fov, zoom, minf(1, delta * 11))
 
+## The pointer gate is supplied by locomotion; both triggers share the same input path.
+func _fire_inputs(delta: float, allowed: bool) -> void:
+	var firing := Input.is_action_pressed("fire") and allowed
+	# A weapon that fires single shots wants the trigger let go before the next one.
+	if not Input.is_action_pressed("fire"):
+		trigger_held = false
+	_spin(delta, firing)
+	if is_akimbo():
+		for hand in range(2):
+			var held := Input.is_action_pressed("fire" if hand == 0 else "aim")
+			if not held:
+				dual_triggers[hand] = false
+			if held and allowed and trigger_free(hand):
+				shoot(hand)
+	elif firing and spin >= 1.0 and trigger_free():
+		shoot()
+
 ## False while a weapon that fires single shots waits for the trigger to be let go.
-func trigger_free() -> bool:
-	return not (trigger_held and WEAPONS[current_weapon].get("semi", false))
+func trigger_free(hand: int = 1) -> bool:
+	return not ((dual_triggers[hand] if is_akimbo() else trigger_held) and WEAPONS[current_weapon].get("semi", false))
 
 ## The rotary gun has to come up to speed before it fires; every other weapon is ready.
 func _spin(delta: float, firing: bool) -> void:
@@ -1447,8 +1653,13 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 	look_delta = Vector2.ZERO
 	target += Vector3(-sway.x, sway.y, 0) * loose
 	angles += Vector3(sway.y * 1.4, -sway.x * 1.8, -sway.x * 1.4) * loose
-	target += Vector3(0, -velocity.y * 0.0035 - landing * 0.018, recoil * (0.018 if aiming else 0.03))
-	angles.x += recoil * (0.018 if aiming else 0.045)
+	var hand_kick := dual_kick.y if is_akimbo() else recoil
+	target += Vector3(0, -velocity.y * 0.0035 - landing * 0.018, hand_kick * (0.018 if aiming else 0.03))
+	angles.x += hand_kick * (0.018 if aiming else 0.045)
+	var twin := weapon.get_node_or_null("Mod_akimbo") as Node3D
+	if twin != null and is_akimbo():
+		twin.position = Vector3(-0.28, 0, (dual_kick.x - dual_kick.y) * 0.03)
+		twin.rotation.x = (dual_kick.x - dual_kick.y) * 0.045
 	if drum_phase != "":
 		# Turned over while the drum is open, and back again as it is closed.
 		reload_pose = 1.0 - smoothstep(0.25, 0.95, drum_done()) if drum_phase == "close" else move_toward(reload_pose, 1.0, delta * 3.2)
@@ -1514,11 +1725,21 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var dip := smoothstep(0.0, 1.0, throw_pose)
 		target += Vector3(0.03, -0.17, 0.06) * dip
 		angles += Vector3(0.45, 0.2, -0.25) * dip
+	# Bring the weapon down while lifting over a ledge, then return it smoothly.
+	target += Vector3(0.04, -0.2, 0.08) * float(movement.pose)
+	angles += Vector3(0.35, 0.1, -0.12) * float(movement.pose)
 	# Each reload step knocks the weapon for a moment.
 	target += Vector3(0.0, -0.014, 0.008) * jolt
 	angles += Vector3(0.05, 0.0, -0.09) * jolt
 	weapon.position = weapon.position.lerp(target, minf(1, delta * 18))
 	weapon.rotation = weapon.rotation.lerp(angles, minf(1, delta * 16))
+	if is_instance_valid(melee_model):
+		melee_model.visible = melee_pose > 0.0 and not down and not menu_open
+		if melee_model.visible:
+			var swing := sin(melee_pose * PI)
+			weapon.hide()
+			melee_model.position = Vector3(0.26 - swing * 0.36, -0.28 + swing * 0.12, -0.38 - swing * 0.22)
+			melee_model.rotation = Vector3(-1.1, 0.2 + swing * 1.0, -0.5 + swing * 1.4)
 
 func _update_mist(delta: float) -> void:
 	mist_damage_left = maxf(0, mist_damage_left - delta)
@@ -1545,13 +1766,25 @@ func _update_mist(delta: float) -> void:
 		filter_left = minf(filter_capacity(), filter_left + delta * 0.6)
 
 ## Where the muzzle appears on screen, expressed as a world position for tracers.
-func _visible_muzzle() -> Vector3:
-	var local := camera.to_local(flash.global_position)
+func _visible_muzzle(source: Node3D = null) -> Vector3:
+	var local := camera.to_local((flash if source == null else source).global_position)
 	var ratio := tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(WeaponView.VIEW_FOV) * 0.5)
 	return camera.to_global(Vector3(local.x * ratio, local.y * ratio, local.z))
 
-func shoot() -> void:
+func current_spread(aiming: bool = false) -> float:
+	var data := gun()
+	var aim_factor := (0.6 if data.has("pellets") else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0
+	var motion_spread := 1.0 + clampf(Vector2(velocity.x, velocity.z).length() / 6.6, 0.0, 1.0) * 0.4
+	return float(data.spread) * aim_factor * motion_spread * (CROUCH_STEADY if crouched else 1.0)
+
+func shoot(hand: int = 1) -> void:
+	if throw_recover > 0.0 or melee_left > 0.0 or movement.active():
+		return
+	if down and kind_of(current_weapon) != "secondary":
+		return
 	var data: Dictionary = gun()
+	var dual := bool(data.get("akimbo", false))
+	hand = clampi(hand, 0, 1)
 	if drum_phase != "":
 		# The drum cannot fire while it is open: the trigger has it closed first.
 		if drum_phase != "close" and ammo > 0 and not trigger_held:
@@ -1569,6 +1802,16 @@ func shoot() -> void:
 		return
 	if shot_cooldown > 0 or reload_left > 0:
 		return
+	if dual and (dual_cooldowns[hand] > 0.0 or not trigger_free(hand)):
+		return
+	if dual and int(dual_rounds()[hand]) <= 0:
+		dual_triggers[hand] = true
+		if ammo <= 0 and reserve > 0:
+			start_reload()
+		else:
+			dual_cooldowns[hand] = 0.25
+			game.sounds.play_sound("click")
+		return
 	if ammo <= 0:
 		if reserve > 0:
 			start_reload()
@@ -1576,21 +1819,35 @@ func shoot() -> void:
 			shot_cooldown = 0.4
 			game.sounds.play_sound("click")
 		return
-	var aiming := Input.is_action_pressed("aim")
-	ammo -= 1
-	trigger_held = true
-	shot_cooldown = float(data.interval)
+	var aiming := Input.is_action_pressed("aim") and not dual
+	if dual:
+		var hands := dual_rounds()
+		hands[hand] = int(hands[hand]) - 1
+		inventory[current_weapon].ammo = ammo - 1
+		dual_cooldowns[hand] = float(data.interval)
+		dual_triggers[hand] = true
+	else:
+		ammo -= 1
+		trigger_held = true
+		shot_cooldown = float(data.interval)
 	if data.has("flame"):
 		_flame(data)
 		return
 	# A suppressor leaves only a small, dim flash; a shotgun lights up the room.
 	var blaze: float = data.flash
-	flash_left = 0.03 if blaze < 0.5 else (0.075 if blaze > 1.5 else 0.045)
-	flash_mesh.rotation.z = randf() * TAU
-	flash_mesh.scale = Vector3.ONE * randf_range(0.75, 1.3) * blaze
-	flash_light.light_energy = 3.5 * blaze
+	var shot_flash := left_flash if dual and hand == 0 else flash
+	var span := 0.03 if blaze < 0.5 else (0.075 if blaze > 1.5 else 0.045)
+	if dual and hand == 0:
+		left_flash_left = span
+	else:
+		flash_left = span
+	(shot_flash.get_child(1) as MeshInstance3D).rotation.z = randf() * TAU
+	(shot_flash.get_child(1) as MeshInstance3D).scale = Vector3.ONE * randf_range(0.75, 1.3) * blaze
+	(shot_flash.get_child(0) as OmniLight3D).light_energy = 3.5 * blaze
 	var punch: float = data.get("punch", 1.0)
 	recoil = punch
+	if dual:
+		dual_kick[hand] = punch
 	game.sounds.play_sound(data.sound)
 	if data.has("pellets"):
 		# The blast shoves the whole view; a pump gun has to be worked before the next shot.
@@ -1607,10 +1864,10 @@ func shoot() -> void:
 			drum_shot = 0.0
 		return
 	var origin := camera.global_position
-	var muzzle := _visible_muzzle()
+	var muzzle := _visible_muzzle(shot_flash)
 	var pellets := int(data.get("pellets", 1))
 	# Scripted checks fire dead centre; live fire scatters from the hip.
-	var spread := 0.0 if game.check_mode and not scatter_in_checks else float(data.spread) * ((0.6 if pellets > 1 else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0) * (CROUCH_STEADY if crouched else 1.0)
+	var spread := 0.0 if game.check_mode and not scatter_in_checks else current_spread(aiming)
 	# Everything one blast does to the same infected is added up and lands as a single hit.
 	var struck := {}
 	var endpoint := origin - camera.global_basis.z * 90
@@ -1731,7 +1988,7 @@ func shoot() -> void:
 		game.alarm(origin, -camera.global_basis.z)
 	if game.net.active:
 		game.net.send_shot(origin, endpoint, str(data.sound))
-	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0) * (CROUCH_STEADY if crouched else 1.0) * (1.0 - game.skills.steadier(current_weapon))
+	var kick: float = float(data.kick) * (0.55 if aiming and pellets == 1 else 1.0) * (CROUCH_RECOIL if crouched else 1.0) * (1.0 - game.skills.steadier(current_weapon))
 	camera.rotation.x = minf(1.35, camera.rotation.x + kick)
 	climb += kick * float(data.get("settle", 0.0))
 	rotate_y(randf_range(-kick, kick) * 0.35)
@@ -1849,19 +2106,30 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 
 ## Co-op: out of the fight, but the match goes on while the partner still stands.
 func go_down() -> void:
+	movement.reset()
+	var sidearm := str(last_of.get("secondary", "pistol"))
+	if not inventory.has("pistol"):
+		unlock("pistol")
+	if not inventory.has(sidearm) or kind_of(sidearm) != "secondary":
+		sidearm = "pistol"
 	down = true
+	put_away()
+	equip_weapon(sidearm, true)
+	ammo = magazine_size()
+	shot_cooldown = 0.25
 	reload_left = 0.0
 	if drum_phase != "":
 		drum_phase = ""
 		loading_shells = false
 	crouched = false
+	crouch_from_input = false
 	(body_shape.shape as CapsuleShape3D).height = STAND_HEIGHT
 	body_shape.position.y = STAND_HEIGHT * 0.5
 	var helper: Teammate = game.rescuer()
 	if helper != null and not game.net.active:
 		game.hud.announce("DU BIST AM BODEN", "%s kommt dir zu Hilfe." % helper.label, 5.0)
 	else:
-		game.hud.announce("DU BIST AM BODEN", "Dein Mitspieler kann dir aufhelfen. Nach der Runde stehst du wieder.", 5.0)
+		game.hud.announce("DU BIST AM BODEN", "Decke deinen Mitspieler mit der Pistole. [E] halten: aufhelfen.", 5.0)
 
 ## Strengthened for `seconds` (a heal field has put him back on his feet).
 func strengthen(seconds: float) -> void:
@@ -1879,6 +2147,12 @@ func shake_from(source: Vector3, strength: float, reach: float) -> void:
 	trauma = minf(1.0, trauma + strength * clampf(1.0 - global_position.distance_to(source) / reach, 0.0, 1.0))
 
 func reset_survivor() -> void:
+	movement.reset()
+	throw_recover = 0.0
+	throw_cooldown = 0.0
+	if is_instance_valid(throw_model):
+		throw_model.queue_free()
+	throw_model = null
 	wade = 1.0
 	position = game.cabin.player_start
 	rotation = Vector3(0, PI, 0)
@@ -1886,7 +2160,8 @@ func reset_survivor() -> void:
 	velocity = Vector3.ZERO
 	health = 100
 	# The carbine first: it may have been traded in during the last night.
-	inventory = {"rifle": {"ammo": int(WEAPONS.rifle.magazine), "reserve": reserve_cap("rifle"), "level": 0}}
+	down = false
+	inventory = {"rifle": {"ammo": int(WEAPONS.rifle.magazine), "reserve": reserve_cap("rifle"), "level": 0}, "pistol": {"ammo": int(WEAPONS.pistol.magazine), "reserve": reserve_cap("pistol"), "level": 0}}
 	equip_weapon("rifle", true)
 	_show_parts()
 	reload_left = 0
@@ -1904,7 +2179,11 @@ func reset_survivor() -> void:
 	mist_damage_left = 0
 	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0}
 	trigger_held = false
+	dual_triggers = [false, false]
+	dual_cooldowns = Vector2.ZERO
+	dual_kick = Vector2.ZERO
 	crouched = false
+	crouch_from_input = false
 	(body_shape.shape as CapsuleShape3D).height = STAND_HEIGHT
 	body_shape.position.y = STAND_HEIGHT * 0.5
 	syringe_wait = 0.0
@@ -1912,6 +2191,13 @@ func reset_survivor() -> void:
 	extra_slots = 0
 	melee_cooldown = 0.0
 	melee_pose = 0.0
+	melee_left = 0.0
+	melee_pending = false
+	melee_weapon = "bash"
+	melee_owned = ["bash"]
+	if is_instance_valid(melee_model):
+		melee_model.queue_free()
+	melee_model = null
 	flame_left = 0.0
 	burn_report.clear()
 	armor = 0.0

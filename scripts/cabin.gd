@@ -350,6 +350,7 @@ func _glow_material(color: Color, energy: float) -> StandardMaterial3D:
 	return result
 
 func _build_materials() -> void:
+	# Architectural wood and the yard retain their original, restrained finish.
 	_noise_material("siding", 11, 0.02, Vector3(0.3, 3.6, 0.3), 0.92, 5.0)
 	_noise_material("plank_v", 12, 0.02, Vector3(3.6, 0.3, 3.6), 0.92, 5.0)
 	_noise_material("floor", 13, 0.02, Vector3(0.3, 1.0, 3.6), 0.8, 4.0)
@@ -374,10 +375,26 @@ func _build_materials() -> void:
 	# its own emergency supply, chem lights, the radio mast. A blackout leaves it alone.
 	mats["steady"] = glow.duplicate()
 	# Poured concrete and the sealed floor of the laboratory.
-	_noise_material("concrete", 19, 0.016, Vector3(0.3, 0.3, 0.3), 0.93, 2.6, 0.74)
 	_noise_material("epoxy", 20, 0.03, Vector3(0.4, 0.4, 0.4), 0.5, 0.35, 0.86)
 	# Machined steel for security doors and laboratory equipment: smoother than "metal".
 	_noise_material("steel", 21, 0.02, Vector3(0.5, 0.5, 0.5), 0.48, 1.2, 0.8, 0.7)
+	_surface_material("furniture_wood", "wood", Vector3.ONE * 0.7, 2.1, 0.85)
+	_surface_material("concrete", "concrete", Vector3.ONE * 0.65, 1.45, 1.0)
+	# Reuse the same concrete textures with distinct finishes: warm walls, cooler/darker
+	# floor slabs and lighter worn stair treads. No additional texture sets or lights.
+	(mats.concrete as StandardMaterial3D).albedo_color = Color(1.48, 1.45, 1.38)
+	var concrete_floor := (mats.concrete as StandardMaterial3D).duplicate() as StandardMaterial3D
+	concrete_floor.albedo_color = Color(1.12, 1.18, 1.21)
+	concrete_floor.normal_scale = 0.65
+	concrete_floor.roughness = 0.88
+	concrete_floor.uv1_scale = Vector3.ONE * 0.52
+	mats["concrete_floor"] = concrete_floor
+	var concrete_steps := (mats.concrete as StandardMaterial3D).duplicate() as StandardMaterial3D
+	concrete_steps.albedo_color = Color(1.65, 1.62, 1.51)
+	concrete_steps.normal_scale = 0.55
+	concrete_steps.roughness = 0.92
+	concrete_steps.uv1_scale = Vector3.ONE * 0.8
+	mats["concrete_steps"] = concrete_steps
 	# Bulletproof glass, and the fluid in the specimen tanks that glows by itself.
 	var glass := StandardMaterial3D.new()
 	glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -411,6 +428,24 @@ func _build_materials() -> void:
 
 ## A material of the laboratory that is drawn by its own programme. All of them have a
 ## value `power`: how brightly they shine (see lab_glow).
+func _surface_material(key: String, family: String, tiling: Vector3, brightness: float, relief: float) -> void:
+	var base := "res://assets/surfaces/" + family
+	var material := StandardMaterial3D.new()
+	material.vertex_color_use_as_albedo = true
+	material.vertex_color_is_srgb = true
+	material.albedo_color = Color(brightness, brightness, brightness)
+	material.albedo_texture = load(base + "_albedo.png")
+	material.normal_enabled = true
+	material.normal_texture = load(base + "_normal.png")
+	material.normal_scale = relief
+	material.roughness_texture = load(base + "_roughness.png")
+	material.roughness = 1.0
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	material.uv1_triplanar = true
+	material.uv1_world_triplanar = true
+	material.uv1_scale = tiling
+	mats[key] = material
+
 func _lab_shader(key: String, code: String, priority: int) -> ShaderMaterial:
 	var shader := Shader.new()
 	shader.code = code
@@ -636,9 +671,7 @@ func _register(center: Vector3, size: Vector3, yaw: float = 0.0) -> void:
 			obstacles[level].append(rect)
 
 ## Solid box on the world layer. With `blocks_path` it also blocks navigation on the
-## storey it stands on. A low one gets an unseen cap on the railing layer up to 1.3 m:
-## nobody can hop onto it, and a sight line at chest height counts it as an obstacle,
-## while shots still pass over it.
+## storey it stands on. Collision ends at the visible top so low props can be jumped on.
 func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float = 0.0) -> void:
 	# (A small thing on a floor is not solid at all: see snag_kind.)
 	if snag_rule and snag_firm == 0:
@@ -650,14 +683,6 @@ func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float
 	if not blocks_path:
 		return
 	_register(center, size, yaw)
-	var top := center.y + size.y * 0.5
-	for level in range(3):
-		var floor_y := level_height(level)
-		if top > floor_y + 0.12 and top < floor_y + 1.2 and center.y - size.y * 0.5 < floor_y + 0.5:
-			var cap := floor_y + 1.3 - top
-			snag_firm += 1
-			_add_shape(rails, Vector3(center.x, top + cap * 0.5, center.z), Vector3(size.x, cap, size.z), Basis(Vector3.UP, yaw))
-			snag_firm -= 1
 
 ## Box that stops bodies but lets bullets through (railings, fences, window openings).
 func _rail_solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float = 0.0) -> void:
@@ -784,10 +809,10 @@ func _build_environment() -> void:
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = NIGHT_AMBIENT
-	environment.ambient_light_energy = 0.3
+	environment.ambient_light_energy = 0.34
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
-	environment.tonemap_exposure = 1.05
+	environment.tonemap_exposure = 1.10
 	environment.tonemap_white = 6.0
 	environment.ssao_enabled = true
 	environment.ssao_radius = 1.2
@@ -1226,15 +1251,15 @@ func _stair_rail(foot: Vector3, head: Vector3, offset: float, steps: int, tint: 
 	var length := foot.distance_to(head)
 	var shift := side * offset
 	var mid := (foot + head) * 0.5 + shift
-	batch.box(mats["siding"], mid + Vector3.UP * 1.06, Vector3(0.07, 0.08, length + 0.25), _vary(tint, 0.03), slope)
-	batch.box(mats["siding"], mid + Vector3.UP * 0.5, Vector3(0.05, 0.06, length), _vary(tint, 0.03), slope)
+	batch.box(mats["furniture_wood"], mid + Vector3.UP * 1.06, Vector3(0.07, 0.08, length + 0.25), _vary(tint, 0.03), slope)
+	batch.box(mats["furniture_wood"], mid + Vector3.UP * 0.5, Vector3(0.05, 0.06, length), _vary(tint, 0.03), slope)
 	for k in range(steps + 1):
 		var at := foot.lerp(head, float(k) / steps) + shift
 		var post := k == 0 or k == steps
 		if post:
-			_part("plank_v", at + Vector3(0, 0.6, 0), Vector3(0.11, 1.2, 0.11), _vary(tint, 0.03))
+			_part("furniture_wood", at + Vector3(0, 0.6, 0), Vector3(0.11, 1.2, 0.11), _vary(tint, 0.03))
 		elif k % 2 == 0:
-			_part("plank_v", at + Vector3(0, 0.53, 0), Vector3(0.045, 1.06, 0.045), _vary(tint, 0.04))
+			_part("furniture_wood", at + Vector3(0, 0.53, 0), Vector3(0.045, 1.06, 0.045), _vary(tint, 0.04))
 	# Upright collider pieces that step up with the flight: nothing overhangs, so a body
 	# cannot wedge itself under the rail at the foot of the stairs.
 	var forward := Vector3(slope.z.x, 0, slope.z.z).normalized()
@@ -1257,16 +1282,16 @@ func _railing(from: Vector3, to: Vector3, tint: Color, height: float = 1.1) -> v
 	var yaw := atan2(-span.z, span.x)
 	var turn := Basis(Vector3.UP, yaw)
 	var mid := (from + to) * 0.5
-	batch.box(mats["siding"], mid + Vector3(0, height - 0.04, 0), Vector3(length + 0.1, 0.08, 0.11), _vary(tint, 0.03), turn)
-	batch.box(mats["siding"], mid + Vector3(0, 0.16, 0), Vector3(length, 0.07, 0.07), _vary(tint, 0.03), turn)
+	batch.box(mats["furniture_wood"], mid + Vector3(0, height - 0.04, 0), Vector3(length + 0.1, 0.08, 0.11), _vary(tint, 0.03), turn)
+	batch.box(mats["furniture_wood"], mid + Vector3(0, 0.16, 0), Vector3(length, 0.07, 0.07), _vary(tint, 0.03), turn)
 	var count := maxi(2, roundi(length / 0.2))
 	for i in range(1, count):
 		if random.randf() < 0.05:
 			continue
-		batch.box(mats["plank_v"], from.lerp(to, float(i) / count) + Vector3(0, height * 0.5 + 0.04, 0), Vector3(0.045, height - 0.3, 0.045), _vary(tint, 0.04), turn)
+		batch.box(mats["furniture_wood"], from.lerp(to, float(i) / count) + Vector3(0, height * 0.5 + 0.04, 0), Vector3(0.045, height - 0.3, 0.045), _vary(tint, 0.04), turn)
 	for end in [from, to]:
 		var post: Vector3 = end
-		batch.box(mats["plank_v"], post + Vector3(0, (height + 0.06) * 0.5, 0), Vector3(0.11, height + 0.06, 0.11), _vary(tint, 0.03), turn)
+		batch.box(mats["furniture_wood"], post + Vector3(0, (height + 0.06) * 0.5, 0), Vector3(0.11, height + 0.06, 0.11), _vary(tint, 0.03), turn)
 	_rail_solid(mid + Vector3(0, height * 0.5, 0), Vector3(length, height, 0.1), true, yaw)
 
 ## Makes a flight usable for path finding. `bottom` and `top` are the navigation cells
@@ -1298,7 +1323,9 @@ func _concrete_flight(foot: Vector3, head: Vector3, width: float, steps: int, ti
 	for k in range(1, steps):
 		var top := foot.y + k * riser
 		var centre := foot + forward * ((k + 0.5) * tread)
-		batch.box(mats["concrete"], Vector3(centre.x, top - 0.5, centre.z), Vector3(width, 1.0, tread), _vary(tint, 0.012), turn)
+		var step_tint := _vary(tint, 0.012)
+		batch.box(mats["concrete_floor"], Vector3(centre.x, top - 0.515, centre.z), Vector3(width, 1.0, tread), step_tint.darkened(0.08), turn)
+		batch.box(mats["concrete_steps"], Vector3(centre.x, top - 0.012, centre.z), Vector3(width, 0.024, tread), step_tint, turn)
 		# The worn, darker edge of every step.
 		var edge := foot + forward * (k * tread + 0.035)
 		batch.box(mats["plain"], Vector3(edge.x, top + 0.002, edge.z), Vector3(width - 0.02, 0.006, 0.07), Color("2c2d2c"), turn)
@@ -1309,10 +1336,10 @@ func _concrete_flight(foot: Vector3, head: Vector3, width: float, steps: int, ti
 
 func _table(pos: Vector3, size: Vector3, color: Color, yaw: float = 0.0) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "siding", Vector3(0, size.y - 0.035, 0), Vector3(size.x, 0.07, size.z), color)
+	_placed(frame, "furniture_wood", Vector3(0, size.y - 0.035, 0), Vector3(size.x, 0.07, size.z), color)
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		var at: Vector2 = corner
-		_placed(frame, "plank_v", Vector3(at.x * (size.x * 0.5 - 0.09), (size.y - 0.07) * 0.5, at.y * (size.z * 0.5 - 0.09)), Vector3(0.08, size.y - 0.07, 0.08), color.darkened(0.3))
+		_placed(frame, "furniture_wood", Vector3(at.x * (size.x * 0.5 - 0.09), (size.y - 0.07) * 0.5, at.y * (size.z * 0.5 - 0.09)), Vector3(0.08, size.y - 0.07, 0.08), color.darkened(0.3))
 	_solid(pos + Vector3(0, size.y * 0.5, 0), size, true, yaw)
 
 ## Wooden chair whose seat faces local +z; a fallen one lies on its back.
@@ -1320,11 +1347,11 @@ func _chair(pos: Vector3, yaw: float, color: Color, fallen: bool = false) -> voi
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
 	if fallen:
 		frame = Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -PI * 0.5), pos + Vector3(0, 0.22, 0))
-	_placed(frame, "siding", Vector3(0, 0.45, 0), Vector3(0.44, 0.05, 0.44), color)
-	_placed(frame, "plank_v", Vector3(0, 0.76, -0.2), Vector3(0.44, 0.52, 0.04), color)
+	_placed(frame, "furniture_wood", Vector3(0, 0.45, 0), Vector3(0.44, 0.05, 0.44), color)
+	_placed(frame, "furniture_wood", Vector3(0, 0.76, -0.2), Vector3(0.44, 0.52, 0.04), color)
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		var at: Vector2 = corner
-		_placed(frame, "plank_v", Vector3(at.x * 0.19, 0.22, at.y * 0.19), Vector3(0.04, 0.44, 0.04), color.darkened(0.25))
+		_placed(frame, "furniture_wood", Vector3(at.x * 0.19, 0.22, at.y * 0.19), Vector3(0.04, 0.44, 0.04), color.darkened(0.25))
 	if fallen:
 		_solid(pos + Vector3(0, 0.22, 0) + Basis(Vector3.UP, yaw) * Vector3(0, 0, -0.45), Vector3(0.5, 0.44, 1.0), true, yaw)
 	else:
@@ -1332,16 +1359,16 @@ func _chair(pos: Vector3, yaw: float, color: Color, fallen: bool = false) -> voi
 
 func _crate(pos: Vector3, size: Vector3, color: Color, yaw: float = 0.0, solid: bool = true) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "siding", Vector3(0, size.y * 0.5, 0), size, color)
+	_placed(frame, "furniture_wood", Vector3(0, size.y * 0.5, 0), size, color)
 	for face in [-1.0, 1.0]:
 		var z: float = face * (size.z * 0.5 + 0.012)
-		_placed(frame, "plank_v", Vector3(0, size.y * 0.5, z), Vector3(size.x + 0.02, 0.09, 0.025), color.darkened(0.3))
+		_placed(frame, "furniture_wood", Vector3(0, size.y * 0.5, z), Vector3(size.x + 0.02, 0.09, 0.025), color.darkened(0.3))
 		for edge in [-1.0, 1.0]:
 			var x: float = edge * (size.x * 0.5 - 0.04)
-			_placed(frame, "plank_v", Vector3(x, size.y * 0.5, z), Vector3(0.08, size.y, 0.025), color.darkened(0.22))
-	_placed(frame, "siding", Vector3(0, size.y + 0.012, 0), Vector3(size.x + 0.03, 0.025, size.z + 0.03), color.lightened(0.04))
+			_placed(frame, "furniture_wood", Vector3(x, size.y * 0.5, z), Vector3(0.08, size.y, 0.025), color.darkened(0.22))
+	_placed(frame, "furniture_wood", Vector3(0, size.y + 0.012, 0), Vector3(size.x + 0.03, 0.025, size.z + 0.03), color.lightened(0.04))
 	if solid:
-		_solid(pos + Vector3(0, size.y * 0.5, 0), size, true, yaw)
+		_firm_solid(pos + Vector3(0, size.y * 0.5, 0), size, true, yaw)
 
 func _barrel(pos: Vector3, color: Color = Color("4a3a2c")) -> void:
 	batch.cylinder(mats["metal"], pos, 0.3, 0.3, 0.92, _vary(color, 0.04), 10)
@@ -1354,14 +1381,14 @@ func _shelf(pos: Vector3, yaw: float, width: float, depth: float, height: float,
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
 	# (The back stands a little inside the uprights and the boards end in front of it: faces
 	# in one plane flicker.)
-	_placed(frame, "siding", Vector3(0, height * 0.5, -depth * 0.5 + 0.021), Vector3(width - 0.01, height, 0.03), color.darkened(0.25))
+	_placed(frame, "furniture_wood", Vector3(0, height * 0.5, -depth * 0.5 + 0.021), Vector3(width - 0.01, height, 0.03), color.darkened(0.25))
 	for edge in [-1.0, 1.0]:
 		var x: float = edge * (width * 0.5 - 0.02)
-		_placed(frame, "plank_v", Vector3(x, height * 0.5, 0), Vector3(0.04, height, depth), color)
+		_placed(frame, "furniture_wood", Vector3(x, height * 0.5, 0), Vector3(0.04, height, depth), color)
 	var goods := [Color("4d5a45"), Color("6b5a3c"), Color("5a4a44"), Color("3f4a52"), Color("70654b"), Color("4b3f33")]
 	for level in range(levels + 1):
 		var y := 0.08 + level * (height - 0.12) / levels
-		_placed(frame, "siding", Vector3(0, y, 0.018), Vector3(width - 0.04, 0.035, depth - 0.036), color.lightened(0.05))
+		_placed(frame, "furniture_wood", Vector3(0, y, 0.018), Vector3(width - 0.04, 0.035, depth - 0.036), color.lightened(0.05))
 		if level == levels:
 			continue
 		var slots := maxi(1, int(width / 0.42))
@@ -1376,12 +1403,12 @@ func _shelf(pos: Vector3, yaw: float, width: float, depth: float, height: float,
 ## Bed with its head at local -x.
 func _bed(pos: Vector3, yaw: float, blanket: Color, wide: float = 1.0) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "siding", Vector3(0, 0.22, 0), Vector3(2.05, 0.3, wide), Color("3a2e23"))
+	_placed(frame, "furniture_wood", Vector3(0, 0.22, 0), Vector3(2.05, 0.3, wide), Color("3a2e23"))
 	_placed(frame, "cloth", Vector3(0.02, 0.45, 0), Vector3(1.95, 0.18, wide - 0.08), Color("6a6558"))
 	_placed(frame, "cloth", Vector3(0.36, 0.555, 0), Vector3(1.25, 0.05, wide - 0.02), blanket, Vector3(0, random.randf_range(-3, 3), 0))
 	_placed(frame, "cloth", Vector3(-0.7, 0.58, 0), Vector3(0.42, 0.1, wide * 0.62), Color("7c776a"), Vector3(0, random.randf_range(-8, 8), 0))
-	_placed(frame, "plank_v", Vector3(-1.02, 0.5, 0), Vector3(0.06, 1.0, wide), Color("33281e"))
-	_placed(frame, "plank_v", Vector3(1.02, 0.32, 0), Vector3(0.06, 0.64, wide), Color("33281e"))
+	_placed(frame, "furniture_wood", Vector3(-1.02, 0.5, 0), Vector3(0.06, 1.0, wide), Color("33281e"))
+	_placed(frame, "furniture_wood", Vector3(1.02, 0.32, 0), Vector3(0.06, 0.64, wide), Color("33281e"))
 	_solid(pos + Vector3(0, 0.3, 0), Vector3(2.08, 0.6, wide), true, yaw)
 
 ## Sofa or armchair whose seat faces local +z.
@@ -1501,21 +1528,21 @@ func _build_house() -> void:
 		var area: Rect2 = piece
 		_solid(Vector3(area.get_center().x, 3.2, area.get_center().y), Vector3(area.size.x, 0.2, area.size.y), false)
 	for x in [-12.2, -10.9, -9.6, -8.3, -7.0, -5.7, -4.3, -3.4, 3.4, 4.3, 5.7, 7.0, 8.3, 9.6, 10.9, 12.2]:
-		_part("siding", Vector3(x, 2.99, 0), Vector3(0.14, 0.2, 17.7), _vary(Color("2a231c"), 0.02))
+		_part("furniture_wood", Vector3(x, 2.99, 0), Vector3(0.14, 0.2, 17.7), _vary(Color("2a231c"), 0.02))
 	for x in [-1.8, -0.6, 0.6, 1.8]:
-		_part("siding", Vector3(x, 2.99, -3.47), Vector3(0.14, 0.2, 6.95), _vary(Color("2a231c"), 0.02))
-		_part("siding", Vector3(x, 2.99, 7.67), Vector3(0.14, 0.2, 2.35), _vary(Color("2a231c"), 0.02))
+		_part("furniture_wood", Vector3(x, 2.99, -3.47), Vector3(0.14, 0.2, 6.95), _vary(Color("2a231c"), 0.02))
+		_part("furniture_wood", Vector3(x, 2.99, 7.67), Vector3(0.14, 0.2, 2.35), _vary(Color("2a231c"), 0.02))
 	for z in [0.0, 6.5]:
-		_part("siding", Vector3(0, 2.94, z), Vector3(10.0, 0.3, 0.22), _vary(Color("272019"), 0.02))
-		_part("siding", Vector3(0, 3.17, z + (0.03 if z < 1.0 else -0.03)), Vector3(6.0, 0.36, 0.05), _vary(trim, 0.02))
+		_part("furniture_wood", Vector3(0, 2.94, z), Vector3(10.0, 0.3, 0.22), _vary(Color("272019"), 0.02))
+		_part("furniture_wood", Vector3(0, 3.17, z + (0.03 if z < 1.0 else -0.03)), Vector3(6.0, 0.36, 0.05), _vary(trim, 0.02))
 	for x in [-3.0, 3.0]:
-		_part("siding", Vector3(x, 2.94, 3.25), Vector3(0.22, 0.3, 6.5), _vary(Color("272019"), 0.02))
-		_part("siding", Vector3(x * 0.99, 3.17, 3.25), Vector3(0.05, 0.36, 6.5), _vary(trim, 0.02))
-	_part("siding", Vector3(0.3, 3.17, -6.98), Vector3(5.4, 0.36, 0.05), _vary(trim, 0.02))
-	_part("siding", Vector3(2.97, 3.17, -7.9), Vector3(0.05, 0.36, 1.9), _vary(trim, 0.02))
+		_part("furniture_wood", Vector3(x, 2.94, 3.25), Vector3(0.22, 0.3, 6.5), _vary(Color("272019"), 0.02))
+		_part("furniture_wood", Vector3(x * 0.99, 3.17, 3.25), Vector3(0.05, 0.36, 6.5), _vary(trim, 0.02))
+	_part("furniture_wood", Vector3(0.3, 3.17, -6.98), Vector3(5.4, 0.36, 0.05), _vary(trim, 0.02))
+	_part("furniture_wood", Vector3(2.97, 3.17, -7.9), Vector3(0.05, 0.36, 1.9), _vary(trim, 0.02))
 	# Timber posts carry the gallery at the corners of the open hall.
 	for corner in [Vector2(-3, 0), Vector2(3, 0), Vector2(-3, 6.5), Vector2(3, 6.5)]:
-		_prop("plank_v", Vector3(corner.x, UPPER_TOP * 0.5, corner.y), Vector3(0.24, UPPER_TOP, 0.24), _vary(trim, 0.02))
+		_prop("furniture_wood", Vector3(corner.x, UPPER_TOP * 0.5, corner.y), Vector3(0.24, UPPER_TOP, 0.24), _vary(trim, 0.02))
 	_build_stairs(trim)
 	_build_porch(trim)
 	# Front doors swung wide open; the back door lies torn off in the yard, the side door hangs open.
@@ -1582,8 +1609,8 @@ func _build_house() -> void:
 	_part("floor", Vector3(0, UPPER_TOP + 0.06, 0), Vector3(26.2, 0.12, 18.2), Color("241e18"))
 	_solid(Vector3(0, UPPER_TOP + 0.1, 0), Vector3(26.3, 0.2, 18.3), false)
 	for i in range(10):
-		_part("siding", Vector3(-11.7 + i * 2.6, UPPER_TOP - 0.11, 0), Vector3(0.16, 0.22, 17.7), _vary(Color("2a231c"), 0.02))
-	_part("siding", Vector3(0, UPPER_TOP - 0.15, 3.25), Vector3(10.0, 0.3, 0.24), _vary(Color("272019"), 0.02))
+		_part("furniture_wood", Vector3(-11.7 + i * 2.6, UPPER_TOP - 0.11, 0), Vector3(0.16, 0.22, 17.7), _vary(Color("2a231c"), 0.02))
+	_part("furniture_wood", Vector3(0, UPPER_TOP - 0.15, 3.25), Vector3(10.0, 0.3, 0.24), _vary(Color("272019"), 0.02))
 	# Belt board between the storeys.
 	for side in [-1.0, 1.0]:
 		_part("siding", Vector3(0, 3.2, side * (HZ + 0.16)), Vector3(26.5, 0.2, 0.05), _vary(trim, 0.02))
@@ -1659,7 +1686,6 @@ func _build_stairs(trim: Color) -> void:
 		if room > 0.1:
 			_firm_solid(Vector3(high + 0.2125, room * 0.5, -6.98), Vector3(0.425, room, 0.08), false)
 	_add_stair(Vector3(3.0, 0, -8.0), Vector3(-2.4, STOREY, -8.0), STAIRWELL, Vector2i(7, -16), Vector2i(-5, -16), 0, 1, "upper", "foot")
-	lettering("OBERGESCHOSS", Vector3(4.88, 2.0, -7.9), 22, Color("c7a25c")).rotation.y = -PI / 2
 
 ## Balcony on the east wall with wooden stairs down to the yard: the second way up.
 func _build_balcony(trim: Color) -> void:
@@ -1775,7 +1801,7 @@ func _build_ground_floor() -> void:
 	_barrel(Vector3(4.45, 0, -0.4))
 	_barrel(Vector3(4.4, 0, -1.2))
 	_crate(Vector3(4.3, 0, 7.5), Vector3(1.0, 0.9, 1.0), Color("4f4636"), 0.1)
-	_crate(Vector3(4.35, 0.92, 7.5), Vector3(0.7, 0.6, 0.7), Color("463d30"), -0.25, false)
+	_crate(Vector3(4.35, 0.92, 7.5), Vector3(0.7, 0.6, 0.7), Color("463d30"), -0.25)
 	var hub := Vector3(0, 4.6, 3.25)
 	for i in range(8):
 		var angle := TAU * i / 8.0
@@ -1843,7 +1869,7 @@ func _build_ground_floor() -> void:
 	_shelf(Vector3(6.7, 0, -8.63), 0.0, 2.2, 0.42, 2.1, 4, Color("3f352a"), 0.85)
 	_shelf(Vector3(10.6, 0, -8.63), 0.0, 1.6, 0.42, 2.1, 4, Color("3f352a"), 0.85)
 	_crate(Vector3(5.75, 0, -3.62), Vector3(1.0, 0.9, 0.9), Color("4f4636"))
-	_crate(Vector3(5.8, 0.92, -3.6), Vector3(0.72, 0.62, 0.72), Color("463d30"), 0.3, false)
+	_crate(Vector3(5.8, 0.92, -3.6), Vector3(0.72, 0.62, 0.72), Color("463d30"), 0.3)
 	_crate(Vector3(6.85, 0, -3.58), Vector3(0.9, 0.9, 0.8), Color("4a4133"), -0.1)
 	_barrel(Vector3(12.35, 0, -3.5))
 	_barrel(Vector3(11.65, 0, -3.45), Color("3d4438"))
@@ -1859,7 +1885,7 @@ func _build_upper_floor() -> void:
 	var wood := Color("4b3b2b")
 	# --- Landing and gallery.
 	_crate(Vector3(4.1, floor_y, -8.2), Vector3(1.2, 0.9, 1.0), Color("4f4636"))
-	_crate(Vector3(4.15, floor_y + 0.92, -8.25), Vector3(0.8, 0.7, 0.8), Color("463d30"), 0.2, false)
+	_crate(Vector3(4.15, floor_y + 0.92, -8.25), Vector3(0.8, 0.7, 0.8), Color("463d30"), 0.2)
 	_shelf(Vector3(-4.7, floor_y, -1.6), PI / 2, 2.0, 0.4, 2.0, 4, Color("3f352a"), 0.6)
 	_crate(Vector3(4.5, floor_y, -1.6), Vector3(0.7, 0.9, 1.6), Color("3f3327"))
 	_crate(Vector3(-4.4, floor_y, 8.3), Vector3(0.9, 0.9, 0.9), Color("4a4133"), 0.15)
@@ -1885,7 +1911,7 @@ func _build_upper_floor() -> void:
 	_shelf(Vector3(5.3, floor_y, -7.8), PI / 2, 1.8, 0.4, 2.0, 4, Color("3f352a"), 0.8)
 	_crate(Vector3(8.8, floor_y, -8.3), Vector3(1.1, 0.9, 0.9), Color("4f4636"))
 	_crate(Vector3(12.2, floor_y, -8.3), Vector3(1.0, 0.9, 0.9), Color("4a4133"), 0.1)
-	_crate(Vector3(12.2, floor_y + 0.92, -8.3), Vector3(0.7, 0.6, 0.7), Color("463d30"), -0.3, false)
+	_crate(Vector3(12.2, floor_y + 0.92, -8.3), Vector3(0.7, 0.6, 0.7), Color("463d30"), -0.3)
 	_crate(Vector3(6.2, floor_y, -3.52), Vector3(1.3, 0.9, 0.7), Color("3f3327"))
 	_bulb(Vector3(9.0, 5.55, -6.0), 1.8, 7.5, 0.26, UPPER_TOP, true)
 	_bed(Vector3(6.15, floor_y, 6.2), 0.0, Color("4d3a34"), 1.7)
@@ -1903,7 +1929,7 @@ func _station(kind: String, title: String, detail: String, pos: Vector3, yaw: fl
 	_placed(frame, "siding", Vector3(0, 0.46, 0), Vector3(0.78, 0.92, 1.45), Color("38443c"))
 	_placed(frame, "siding", Vector3(0.02, 0.95, 0), Vector3(0.86, 0.06, 1.55), Color("6b5a43"))
 	_glow_box(frame * Vector3(0.4, 0.78, 0), Vector3(0.02, 0.05, 1.25), color, 1.8, frame.basis)
-	var label := lettering(title + "\n" + detail + " VORRAT", frame * Vector3(0.1, 1.85, 0), 30, color)
+	var label := lettering(title + "\n" + detail + " ◈", frame * Vector3(0.1, 1.85, 0), 30, color)
 	label.rotation.y = yaw + PI / 2
 	match kind:
 		"health":
@@ -1937,8 +1963,9 @@ func _build_stations() -> void:
 	# The weapon shop stands in the great hall, between the two archways to the stair hall.
 	# Its shutter is rolled up between rounds and comes down while the infected attack.
 	var shop_pos := Vector3(0, 0, -2.53)
-	_prop("siding", shop_pos + Vector3(0, 0.45, 0), Vector3(1.9, 0.9, 0.7), Color("33403a"))
-	_part("siding", shop_pos + Vector3(0, 0.93, 0), Vector3(2.0, 0.06, 0.8), Color("6b5a43"))
+	# Stop the counter before the right-hand bay, leaving the keeper visible to her feet.
+	_prop("siding", shop_pos + Vector3(-0.43, 0.45, 0), Vector3(1.04, 0.9, 0.7), Color("33403a"))
+	_part("siding", shop_pos + Vector3(-0.43, 0.93, 0), Vector3(1.12, 0.06, 0.8), Color("6b5a43"))
 	for x in [-0.97, 0.97]:
 		_part("metal", shop_pos + Vector3(x, 1.55, 0.3), Vector3(0.08, 1.2, 0.1), Color("3a3d3c"))
 		_part("metal", shop_pos + Vector3(x, 1.55, -0.02), Vector3(0.04, 1.2, 0.58), Color("30332f"))
@@ -2929,7 +2956,7 @@ func _build_cellar() -> void:
 	# --- Below ground: floor and ceiling of the whole basement. The ceiling lies inside
 	# the ground; it and the walls throw the shadow that keeps moonlight and lightning out.
 	_chunk("Cellar")
-	for zone in [[_span(-14.3, -25.4, 9.0, -13.6), "epoxy", Color("5d655f")], [_span(-14.3, -13.6, 9.0, -6.4), "concrete", Color("5a5c58")], [_span(-14.3, -32.0, 9.0, -25.4), "concrete", Color("5a5c58")]]:
+	for zone in [[_span(-14.3, -25.4, 9.0, -13.6), "epoxy", Color("5d655f")], [_span(-14.3, -13.6, 9.0, -6.4), "concrete_floor", Color("5a5c58")], [_span(-14.3, -32.0, 9.0, -25.4), "concrete_floor", Color("5a5c58")]]:
 		_block(zone[1], zone[0], f - 0.4, f, zone[2], false)
 	# (Four colliders rather than one, for the same reason as on the ground.)
 	for quarter in [_span(-14.3, -32.0, -2.65, -19.2), _span(-2.65, -32.0, 9.0, -19.2), _span(-14.3, -19.2, -2.65, -6.4), _span(-2.65, -19.2, 9.0, -6.4)]:
@@ -4987,7 +5014,7 @@ func _sink(depth: float) -> void:
 	environment.volumetric_fog_density = lerpf(0.03, 0.012, below)
 	environment.volumetric_fog_emission_energy = lerpf(1.0, 0.15, below)
 	environment.ambient_light_color = DAY_AMBIENT if daylight else NIGHT_AMBIENT.lerp(CELLAR_AMBIENT, below)
-	environment.ambient_light_energy = lerpf(0.95, 0.7, below) if daylight else lerpf(0.3, 0.16, below)
+	environment.ambient_light_energy = lerpf(0.95, 0.7, below) if daylight else lerpf(0.34, 0.18, below)
 	if surfaced:
 		_show_hall()
 

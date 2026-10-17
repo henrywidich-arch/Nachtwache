@@ -5,8 +5,7 @@ extends Node3D
 ## patch until they cover a good part of it, and now and then a flood that rises from the
 ## cellar into the ground floor of the farmhouse and drives everybody without a mask
 ## upstairs.
-## The gas is meant to be hard to see: a pale haze over the ground, a little thicker than
-## the night's own. What gives it away is where it lies and how it moves.
+## Its green-grey haze and a few close smoke wisps reveal the growing bank in the dark.
 ## A gas mask (its filter, see Survivor) is what lets a survivor walk through any of it.
 ## The host decides where and when; a co-op guest shows what it is told
 ## (export_state / adopt).
@@ -35,9 +34,9 @@ const BITE := 0.55
 const TINT := Color(0.56, 0.68, 0.42)
 ## How thick the haze is where it is thickest: a bank in the yard, the cloud of a gas
 ## grenade (which is meant to be seen), and the flooded ground floor.
-const YARD_HAZE := 0.3
-const GRENADE_HAZE := 0.45
-const FLOOD_HAZE := 0.1
+const YARD_HAZE := 0.42
+const GRENADE_HAZE := 0.58
+const FLOOD_HAZE := 0.34
 ## How much it shines by itself: without that it could not be seen in the dark at all.
 const YARD_GLOW := 0.2
 const GRENADE_GLOW := 0.3
@@ -56,12 +55,12 @@ void fog() {
 	float round_rim = 1.0 - smoothstep(0.62, 1.0, length((UVW.xz - 0.5) * 2.0));
 	vec3 inside = (0.5 - abs(UVW - 0.5)) * SIZE;
 	float box_rim = smoothstep(0.0, 2.5, min(inside.x, inside.z));
-	float low = pow(clamp(1.0 - UVW.y, 0.0, 1.0), 1.6);
+	float low = clamp(1.0 - UVW.y, 0.0, 1.0);
 	vec3 at = WORLD_POSITION;
 	float wide = texture(clumps, vec3(at.x * 0.031 + TIME * 0.011, at.y * 0.05, at.z * 0.031 + TIME * 0.007)).r;
 	float fine = texture(clumps, vec3(at.x * 0.083 - TIME * 0.019, at.y * 0.11 + TIME * 0.005, at.z * 0.083)).r;
 	float clump = smoothstep(0.3, 0.74, wide * 0.65 + fine * 0.35);
-	DENSITY = thickness * amount * mix(box_rim, round_rim, lens) * low * mix(0.3, 1.0, clump);
+	DENSITY = thickness * amount * mix(box_rim, round_rim, lens) * low * mix(0.42, 1.0, clump);
 	ALBEDO = tint;
 	EMISSION = tint * glow * amount * clump;
 }
@@ -69,6 +68,9 @@ void fog() {
 
 static var haze_shader: Shader
 static var haze_clumps: NoiseTexture3D
+static var smoke_mesh: QuadMesh
+const SMOKE_NEAR := 3
+var smoke_left := 0.0
 
 var game: Node3D
 var random := RandomNumberGenerator.new()
@@ -132,6 +134,8 @@ func clear() -> void:
 	flood_strength = 0.0
 	if flood_volume != null:
 		flood_volume.hide()
+		if flood_volume.get_child_count() > 0:
+			(flood_volume.get_child(0) as CPUParticles3D).emitting = false
 
 ## How many banks a round has, before the night's difficulty is counted in.
 static func pockets_for(number: int) -> int:
@@ -338,7 +342,10 @@ func _add(at: Vector3, seconds: float, strength: float, radius: float = POCKET_R
 	add_child(volume)
 	# Its floor lies a little under the ground, where the haze is thickest.
 	volume.global_position = at + Vector3(0, height * 0.5 - 0.25, 0)
-	var pocket := {"pos": at, "left": seconds, "strength": strength, "going": false, "volume": volume, "radius": radius, "indoors": indoors, "thrown": indoors, "bank": 0}
+	var smoke := smoke_wisps(radius)
+	volume.add_child(smoke)
+	smoke.position.y = -height * 0.5 + 0.7
+	var pocket := {"pos": at, "left": seconds, "strength": strength, "going": false, "volume": volume, "smoke": smoke, "radius": radius, "indoors": indoors, "thrown": indoors, "bank": 0}
 	pockets.append(pocket)
 	return pocket
 
@@ -373,6 +380,15 @@ func _announce(state: String) -> void:
 
 ## Both machines: patches grow and thin out, and the house fills and empties.
 func _show(delta: float) -> void:
+	smoke_left -= delta
+	if smoke_left <= 0.0:
+		smoke_left = 0.35
+		var nearby := pockets.duplicate()
+		var here: Vector3 = game.player.global_position
+		nearby.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return (a.pos as Vector3).distance_squared_to(here) < (b.pos as Vector3).distance_squared_to(here))
+		for i in range(nearby.size()):
+			var pocket: Dictionary = nearby[i]
+			(pocket.smoke as CPUParticles3D).emitting = i < SMOKE_NEAR and (pocket.pos as Vector3).distance_to(here) < 26.0 and float(pocket.strength) > 0.1
 	for pocket in pockets.duplicate():
 		var goal := 0.0 if pocket.going else 1.0
 		pocket.strength = move_toward(float(pocket.strength), goal, delta / FADE)
@@ -387,15 +403,64 @@ func _show(delta: float) -> void:
 			flood_volume.name = "HouseGas"
 			flood_volume.shape = RenderingServer.FOG_VOLUME_SHAPE_BOX
 			flood_volume.size = Vector3(CabinMap.HX * 2.0, 3.0, CabinMap.HZ * 2.0)
-			flood_volume.material = haze(FLOOD_HAZE, 0.05, false)
+			flood_volume.material = haze(FLOOD_HAZE, 0.16, false)
 			add_child(flood_volume)
 			flood_volume.global_position = Vector3(0, 1.4, 0)
+			var smoke := smoke_wisps(7.0)
+			smoke.position.y = -0.6
+			flood_volume.add_child(smoke)
 		flood_volume.show()
 		# During the warning a thin haze creeps over the floor.
 		var haze_now := 0.3 if flood_state == "warning" else 0.0
 		(flood_volume.material as ShaderMaterial).set_shader_parameter("amount", maxf(haze_now, flood_strength))
+		(flood_volume.get_child(0) as CPUParticles3D).emitting = game.player.global_position.distance_to(Vector3.ZERO) < 26.0
 	elif flood_volume != null:
 		flood_volume.hide()
+		(flood_volume.get_child(0) as CPUParticles3D).emitting = false
+
+static func smoke_wisps(radius: float) -> CPUParticles3D:
+	if smoke_mesh == null:
+		var gradient := Gradient.new()
+		gradient.colors = PackedColorArray([Color.WHITE, Color(1, 1, 1, 0)])
+		var texture := GradientTexture2D.new()
+		texture.gradient = gradient
+		texture.width = 64
+		texture.height = 64
+		texture.fill = GradientTexture2D.FILL_RADIAL
+		texture.fill_from = Vector2(0.5, 0.5)
+		texture.fill_to = Vector2(1, 0.5)
+		var paint := StandardMaterial3D.new()
+		paint.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		paint.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		paint.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		paint.vertex_color_use_as_albedo = true
+		paint.albedo_color = Color(TINT, 0.15)
+		paint.albedo_texture = texture
+		paint.no_depth_test = false
+		smoke_mesh = QuadMesh.new()
+		smoke_mesh.size = Vector2(2.6, 2.0)
+		smoke_mesh.material = paint
+	var smoke := CPUParticles3D.new()
+	smoke.name = "GasWisps"
+	smoke.mesh = smoke_mesh
+	smoke.amount = 12
+	smoke.lifetime = 3.4
+	smoke.emitting = false
+	smoke.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	smoke.emission_box_extents = Vector3(radius * 0.65, 0.3, radius * 0.65)
+	smoke.direction = Vector3(0.35, 0.2, 0.15)
+	smoke.spread = 50.0
+	smoke.initial_velocity_min = 0.15
+	smoke.initial_velocity_max = 0.35
+	smoke.gravity = Vector3.ZERO
+	smoke.scale_amount_min = 0.8
+	smoke.scale_amount_max = 1.5
+	smoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var fade := Gradient.new()
+	fade.offsets = PackedFloat32Array([0, 0.2, 0.75, 1])
+	fade.colors = PackedColorArray([Color(1, 1, 1, 0), Color.WHITE, Color.WHITE, Color(1, 1, 1, 0)])
+	smoke.color_ramp = fade
+	return smoke
 
 # ---------------------------------------------------------------- co-op
 

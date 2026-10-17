@@ -78,8 +78,41 @@ func _process(delta: float) -> void:
 		return
 	clock += delta
 	pivot.rotation.y = sin(clock * PACE) * SWING
+	if models.get(shown) is SoldierVisual:
+		(models[shown] as SoldierVisual).animate(delta, Vector3.ZERO, false, false)
+
+## The selected skin uses the same body the co-op partner sees.
+func show_soldier(look: String) -> void:
+	var key := "skin_" + look
+	for other in models:
+		(models[other] as Node3D).visible = other == key
+	shown = key
+	if not models.has(key):
+		var model := SoldierVisual.new()
+		model.look = look
+		pivot.add_child(model)
+		model.position.y = -float(SoldierVisual.LOOKS[look].height) * 0.5
+		model.rotation.y = -PI * 0.5
+		model.set_meta("size", Vector3(0.8, 2.0, 0.9))
+		models[key] = model
+	_frame(Vector3(0.8, 2.0, 0.9))
 
 ## Shows a weapon, with these parts on it ("reddot", "scope", "silencer"). "" shows none.
+func show_melee(id: String) -> void:
+	var key := "melee_" + id
+	var height := 0.8 if id in ["bat", "crowbar", "hammer"] else 0.64
+	for other in models:
+		(models[other] as Node3D).visible = other == key
+	shown = key
+	if not models.has(key):
+		var model := Survivor.MELEE_VIEW.build(id)
+		model.rotation.y = PI * 0.5
+		model.position.y = -0.22 if height > 0.7 else -0.16
+		model.set_meta("size", Vector3(0.2, height, 0.32))
+		pivot.add_child(model)
+		models[key] = model
+	_frame(Vector3(0.2, height, 0.32))
+
 func show_weapon(id: String, parts: Array = []) -> void:
 	for other in models:
 		(models[other] as Node3D).visible = other == id
@@ -100,7 +133,14 @@ func show_weapon(id: String, parts: Array = []) -> void:
 	var irons := model.find_child("Sights", true, false) as Node3D
 	if irons != null and WeaponView.GUNS.has(id) and WeaponView.GUNS[id].get("folding", false):
 		irons.visible = not sighted
-	_frame(model.get_meta("size", Vector3(0.1, 0.3, 0.8)))
+	var extent: Vector3 = model.get_meta("size", Vector3(0.1, 0.3, 0.8))
+	var twin := model.find_child("Mod_akimbo", true, false) as Node3D
+	if twin != null:
+		# Fan the pair slightly in the showroom, so a side view shows both weapons.
+		twin.position.z = 0.13
+		if parts.has("akimbo"):
+			extent.z += 0.13
+	_frame(extent)
 
 ## Puts the camera where the weapon fills the picture: beside it, a little above, the
 ## muzzle to the right.

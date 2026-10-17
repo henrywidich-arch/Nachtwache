@@ -2017,15 +2017,6 @@ func _solid(center: Vector3, size: Vector3, blocks_path: bool = true, yaw: float
 	if not blocks_path:
 		return
 	_register(center, size, yaw)
-	var top := center.y + size.y * 0.5
-	var flat := Vector2(center.x, center.z)
-	for level in range(floors.size()):
-		var floor_y := float(floors[level].y)
-		if (floors[level].bounds as Rect2).has_point(flat) and top > floor_y + 0.12 and top < floor_y + 1.2 and center.y - size.y * 0.5 < floor_y + 0.5:
-			var cap := floor_y + 1.3 - top
-			snag_firm += 1
-			_add_shape(rails, Vector3(center.x, top + cap * 0.5, center.z), Vector3(size.x, cap, size.z), Basis(Vector3.UP, yaw))
-			snag_firm -= 1
 
 # ---------------------------------------------------------------- paths
 

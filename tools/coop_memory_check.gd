@@ -29,7 +29,7 @@ func _run() -> void:
 		var game := (load("res://scenes/main.tscn") as PackedScene).instantiate()
 		game.check_mode = true
 		viewport.add_child(game)
-		game.team_enabled = false
+		game.team_enabled = "--bots" in OS.get_cmdline_user_args()
 		game.story_in_checks = true
 		game.hive.seed_wanted = 6
 		game.profile.mission = mission if index == 0 else 3 - mission

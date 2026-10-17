@@ -10,6 +10,23 @@ var task_stage := ""
 var summary: Array[String] = []
 var markers: Array = []
 
+## Before a mission seals an arena, bring the human left outside to the one inside.
+func gather(room_id: String = "", piece_id: String = "") -> void:
+	if not game.net.hosting or not is_instance_valid(game.net.remote):
+		return
+	var inside := func(at: Vector3) -> bool:
+		return str(director.map.room_at(at).get("id", "")) == room_id if room_id != "" else str(director.map.piece_at(at).get("id", "")) == piece_id
+	var host_in: bool = inside.call(game.player.global_position)
+	var guest_in: bool = inside.call(game.net.remote.global_position)
+	if host_in == guest_in:
+		return
+	if host_in:
+		game.net.place_partner(game.net.safe_near(game.player.global_position, room_id, piece_id))
+	else:
+		game.player.global_position = game.net.safe_near(game.net.remote.global_position, room_id, piece_id)
+		game.player.velocity = Vector3.ZERO
+		game.hud.flash(Color.BLACK, 0.5)
+
 func _init(owner_director: Node) -> void:
 	director = owner_director
 	game = director.game
@@ -32,6 +49,16 @@ func position_near(at: Vector3) -> Vector3:
 			return other
 	return here
 
+func export_friends() -> Array:
+	var bodies: Array = []
+	for node in game.mates.get_children():
+		if node is Teammate and not node.is_queued_for_deletion():
+			bodies.append([str(node.get_instance_id()), node.look, node.global_position, node.rotation.y, node.velocity, node.down, node.lifted, node.health, node.max_health, game.team.has(node)])
+	for entry: Dictionary in director.puppets:
+		if is_instance_valid(entry.node) and not entry.node.is_queued_for_deletion():
+			bodies.append([str(entry.node.get_instance_id()), str(entry.look), entry.node.global_position, entry.node.rotation.y, Vector3.ZERO, false, 0.0])
+	return bodies
+
 func export_state() -> Dictionary:
 	var map: HiveMap = director.map
 	var doors := {}
@@ -42,13 +69,7 @@ func export_state() -> Dictionary:
 	var moods := {}
 	for id: String in map.zones:
 		moods[id] = str(map.zones[id].mood)
-	var bodies: Array = []
-	for node in game.mates.get_children():
-		if node is Teammate and not node.is_queued_for_deletion():
-			bodies.append([str(node.get_instance_id()), node.look, node.global_position, node.rotation.y, node.velocity, node.down, node.lifted])
-	for entry: Dictionary in director.puppets:
-		if is_instance_valid(entry.node) and not entry.node.is_queued_for_deletion():
-			bodies.append([str(entry.node.get_instance_id()), str(entry.look), entry.node.global_position, entry.node.rotation.y, Vector3.ZERO, false, 0.0])
+	var bodies := export_friends()
 	var task := {}
 	var source: Dictionary = director.run.task
 	if not source.is_empty():
@@ -75,6 +96,8 @@ func adopt(state: Dictionary) -> void:
 	var map: HiveMap = director.map
 	director.stage = str(state.stage)
 	director.stage_time = float(state.time)
+	if director.checkpoint != str(state.checkpoint):
+		director.caches.keep(str(state.checkpoint))
 	director.checkpoint = str(state.checkpoint)
 	director.goal = str(state.goal)
 	director.marker = state.marker
@@ -123,17 +146,24 @@ func _adopt_friends(bodies: Array) -> void:
 			var body := SoldierVisual.new()
 			body.look = str(data[1])
 			game.mates.add_child(body)
+			body.ally_outline()
 			body.global_position = data[2]
 			friends[id] = {"body": body, "at": data[2], "yaw": data[3], "velocity": data[4], "down": false}
 		var entry: Dictionary = friends[id]
+		(entry.body as SoldierVisual).visible = director.intro_left <= 0.0 and game.story.intro_left <= 0.0
 		entry.at = data[2]
 		entry.yaw = float(data[3])
 		entry.velocity = data[4]
 		entry.lifted = float(data[6])
+		entry.health = float(data[7]) if data.size() > 7 else 100.0
+		entry.maximum = float(data[8]) if data.size() > 8 else 100.0
+		entry.in_team = bool(data[9]) if data.size() > 9 else false
 		if bool(data[5]) != bool(entry.down):
 			entry.down = bool(data[5])
+			(entry.body as SoldierVisual).ally_outline(bool(entry.down))
 			if entry.down:
 				(entry.body as SoldierVisual).fall()
+				game.hud.teammate_down(str((entry.body as SoldierVisual).config.label))
 			else:
 				(entry.body as SoldierVisual).settle()
 	for id: String in friends.keys():
@@ -189,13 +219,17 @@ func _adopt_task(task: Dictionary) -> void:
 ## On the guest, find the item beside that player, even if the host is at another one.
 func nearby_use() -> Dictionary:
 	var here: Vector3 = game.player.global_position
-	var task: Dictionary = director.run.task
-	for key in ["items", "places"]:
-		for item: Dictionary in task.get(key, []):
-			if not bool(item.get("taken", item.get("done", false))) and here.distance_to(item.pos) < 2.6:
-				return {"key": "g_item" if key == "items" else "g_switch", "at": item.pos,
-					"text": str(task.event.get("use", "[E] Benutzen"))}
+	var focused: Dictionary = director.run.focused_use()
+	if not focused.is_empty():
+		return focused
+	if director.use_key in ["g_item", "g_switch", "g_slot", "g_hack"]:
+		return {}
 	if director.use_at != Vector3.INF and here.distance_to(director.use_at) < 2.6:
+		var device: Node3D = director.map.interaction_devices.get(director.use_key)
+		if device != null:
+			if not game.aims_at_object(device):
+				return {}
+			return {"key": director.use_key, "at": director.use_at, "text": director.use_text, "node": device}
 		return {"key": director.use_key, "at": director.use_at, "text": director.use_text}
 	return {}
 

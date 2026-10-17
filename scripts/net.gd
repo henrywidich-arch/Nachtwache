@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.67"
+const VERSION := "0.68"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
@@ -47,6 +47,11 @@ var match_mission := 1
 var match_night: Dictionary = {}
 var match_company := "fireteam"
 var match_checkpoint := ""
+var player_name := ""
+var partner_name := "MITSPIELER"
+var lobby_settings: Dictionary = {}
+var income_seen := 0
+var teleport_wait := 0.0
 ## This side's version (VERSION; a check can start as another one with --mp-version=).
 var version := VERSION
 var hello: NetHello
@@ -74,6 +79,7 @@ var port: int:
 	get: return PORT + (10 if game != null and game.check_mode and not "--mp-router" in OS.get_cmdline_user_args() else 0)
 
 func _ready() -> void:
+	player_name = "%s-%03d" % [["FALKE", "WOLF", "FUCHS", "RABE", "LUCHS", "OTTER"].pick_random(), randi_range(100, 999)]
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -188,6 +194,10 @@ func close() -> void:
 	match_mission = 1
 	match_night = {}
 	match_checkpoint = ""
+	income_seen = 0
+	teleport_wait = 0.0
+	lobby_settings.clear()
+	partner_name = "MITSPIELER"
 	partner_version = ""
 	hello_left = 0.0
 	clash = ""
@@ -210,6 +220,7 @@ func _on_peer_connected(id: int) -> void:
 		hello.hello.rpc_id(id, version)
 	# Each tells the other what it wears.
 	_skin.rpc_id(id, game.profile.skin)
+	_identity.rpc_id(id, player_name)
 	if hosting:
 		partner = id
 		phase = "connected"
@@ -224,7 +235,19 @@ func _on_hello(theirs: String) -> void:
 		# (A greeting that took longer than HELLO_WAIT puts right what the wait made of it.)
 		clash = ""
 		hello_left = 0.0
+		broadcast_lobby()
 		changed.emit()
+
+func broadcast_lobby() -> void:
+	if hosting and matched() and game.state == "menu":
+		_lobby.rpc_id(partner, {"mission": game.profile.mission, "level": game.profile.difficulty,
+			"label": game.profile.rules().label, "mode": game.profile.mode,
+			"modifiers": game.profile.modifiers, "bots": game.team_enabled, "company": game.profile.company})
+
+@rpc("authority", "call_remote", "reliable")
+func _lobby(settings: Dictionary) -> void:
+	lobby_settings = settings
+	changed.emit()
 
 ## Whether the two are connected and of the same version: only then can a match begin.
 func matched() -> bool:
@@ -287,6 +310,20 @@ func _skin(look: String) -> void:
 	if Profile.SKINS.has(look):
 		partner_skin = look
 
+func update_skin() -> void:
+	if matched():
+		_skin.rpc_id(partner, game.profile.skin)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _identity(nickname: String) -> void:
+	partner_name = nickname.strip_edges().left(24)
+	if partner_name == "":
+		partner_name = "MITSPIELER"
+	if is_instance_valid(remote):
+		remote.label = partner_name
+		remote.name_tag.text = partner_name
+	changed.emit()
+
 func spawn_remote() -> void:
 	_drop_remote()
 	if partner == 0:
@@ -294,6 +331,7 @@ func spawn_remote() -> void:
 	remote = RemoteSurvivor.new()
 	remote.name = "CoopPartner"
 	remote.game = game
+	remote.label = partner_name
 	# The host sees Viper at their side, the guest sees Scorpion.
 	remote.look = partner_skin
 	game.mates.add_child(remote)
@@ -304,6 +342,7 @@ func spawn_remote() -> void:
 # ---------------------------------------------------------------- every frame
 
 func _physics_process(delta: float) -> void:
+	teleport_wait = maxf(0.0, teleport_wait - delta)
 	if not active or partner == 0 or game.state == "menu":
 		return
 	clock += delta
@@ -312,11 +351,13 @@ func _physics_process(delta: float) -> void:
 		state_left = STATE_INTERVAL
 		var player: Survivor = game.player
 		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0) | (8 if player.crouched else 0) | (16 if Input.is_action_pressed("interact") and player.controlled and not player.menu_open else 0)
-		_state.rpc_id(partner, player.global_position, player.rotation.y, player.camera.rotation.x, player.velocity, flags, player.health)
+		_state.rpc_id(partner, player.global_position, player.rotation.y, player.camera.rotation.x, player.velocity, flags, player.health, game.kills)
 	if not hosting:
+		if not game.hive.on:
+			game.hive.coop.move_friends(delta)
 		_prune(delta)
 		return
-	if game.hive.on and is_instance_valid(remote) and remote.interacting and not remote.down:
+	if is_instance_valid(remote) and remote.interacting and not remote.down:
 		game.hive.coop.help_from_partner(delta)
 	snapshot_left -= delta
 	if snapshot_left <= 0.0:
@@ -340,9 +381,11 @@ func _physics_process(delta: float) -> void:
 		for who in game.operators:
 			if is_instance_valid(who) and not who.dead:
 				bars.append_array([who.net_id, who.health])
-		_status.rpc_id(partner, game.wave, game.phase, game.preparation_left, game.credits, game.score, game.remaining_to_spawn + game.alive_count, boss_id, boss_health, game.elapsed, bars)
+		_status.rpc_id(partner, game.wave, game.phase, game.preparation_left, game.income_total, game.score, game.remaining_to_spawn + game.alive_count, boss_id, boss_health, game.elapsed, bars)
 		if game.hive.on:
 			_hive_state.rpc_id(partner, game.hive.coop.export_state())
+		else:
+			_allies.rpc_id(partner, game.hive.coop.export_friends())
 
 ## Guest: infected the host no longer mentions are gone.
 func _prune(_delta: float) -> void:
@@ -364,20 +407,22 @@ func start_match() -> void:
 		match_night = game.hive.prepare_night() if match_mission == 2 else {}
 		match_company = game.profile.company
 		match_checkpoint = game.hive.resume_at
-		_begin.rpc_id(partner, game.profile.difficulty, game.profile.mode, game.profile.modifiers, match_mission, match_night, match_company, match_checkpoint)
+		_begin.rpc_id(partner, game.profile.difficulty, game.profile.mode, game.profile.modifiers, match_mission, match_night, match_company, match_checkpoint, game.team_enabled)
 
 @rpc("authority", "call_remote", "reliable")
-func _begin(level: String, mode: String = "story", modifiers: bool = false, mission: int = 1, night: Dictionary = {}, company: String = "fireteam", checkpoint: String = "") -> void:
+func _begin(level: String, mode: String = "story", modifiers: bool = false, mission: int = 1, night: Dictionary = {}, company: String = "fireteam", checkpoint: String = "", bots: bool = true) -> void:
 	# Not with a host of another version, whatever it thinks it can start.
 	if clash != "":
 		return
 	game.level = level
 	game.mode = mode
 	game.modifiers_on = modifiers
+	game.team_enabled = bots
 	match_mission = mission
 	match_night = night
 	match_company = company
 	match_checkpoint = checkpoint
+	income_seen = 0
 	if mission == 2:
 		game.hive.night = night
 		game.hive.night_fresh = true
@@ -451,7 +496,7 @@ func _snapshot(data: PackedFloat32Array) -> void:
 			seen[id] = clock
 
 @rpc("authority", "call_remote", "unreliable_ordered")
-func _status(wave: int, phase_now: String, break_left: float, credits: int, score: int, remaining: int, boss_id: int, boss_health: float, elapsed: float, bars: PackedFloat32Array = PackedFloat32Array()) -> void:
+func _status(wave: int, phase_now: String, break_left: float, income: int, score: int, remaining: int, boss_id: int, boss_health: float, elapsed: float, bars: PackedFloat32Array = PackedFloat32Array()) -> void:
 	for i in range(0, bars.size() - 1, 2):
 		var who: Variant = puppets.get(int(bars[i]))
 		if is_instance_valid(who):
@@ -459,7 +504,10 @@ func _status(wave: int, phase_now: String, break_left: float, credits: int, scor
 	game.wave = wave
 	game.phase = phase_now
 	game.preparation_left = break_left
-	game.credits = credits
+	# Lost/duplicate status packets cannot lose or duplicate earnings. Spending stays local.
+	if income > income_seen:
+		game.credits += income - income_seen
+		income_seen = income
 	game.score = score
 	game.remote_remaining = remaining
 	if game.hive.on:
@@ -534,10 +582,14 @@ func _pickup_gone(id: int) -> void:
 
 func send_finish(victory: bool) -> void:
 	if hosting and partner != 0:
-		_finish.rpc_id(partner, victory, game.stats)
+		_finish.rpc_id(partner, victory, game.stats, PackedInt32Array([game.kills, remote.kills if is_instance_valid(remote) else 0]))
 
 @rpc("authority", "call_remote", "reliable")
-func _finish(victory: bool, team_stats: Dictionary = {}) -> void:
+func _finish(victory: bool, team_stats: Dictionary = {}, final_kills: PackedInt32Array = PackedInt32Array()) -> void:
+	if final_kills.size() == 2:
+		game.kills = final_kills[1]
+		if is_instance_valid(remote):
+			remote.kills = final_kills[0]
 	# What the team did counts for the career of both players.
 	for key in team_stats:
 		if game.stats.has(key):
@@ -678,16 +730,17 @@ func _heal(center: Vector3, level: int) -> void:
 
 ## A guest struck an enemy with his weapon: the host throws it back.
 func report_shove(enemy: Infected, direction: Vector3, damage: float) -> void:
-	_shove.rpc_id(1, enemy.net_id, direction, damage)
+	_shove.rpc_id(1, enemy.net_id, direction, damage, game.player.melee_weapon)
 
 @rpc("any_peer", "call_remote", "reliable")
-func _shove(id: int, direction: Vector3, damage: float) -> void:
-	if not hosting:
+func _shove(id: int, direction: Vector3, damage: float, weapon: String = "bash") -> void:
+	if not hosting or multiplayer.get_remote_sender_id() != partner or not is_instance_valid(remote) or remote.down or not Survivor.MELEE_WEAPONS.has(weapon):
 		return
+	var blade: Dictionary = Survivor.MELEE_WEAPONS[weapon]
 	for node in get_tree().get_nodes_in_group("infected"):
 		var enemy := node as Infected
-		if enemy.net_id == id:
-			enemy.shove(direction, Survivor.MELEE_PUSH, Survivor.MELEE_DAZE, clampf(damage, 0.0, 80.0), remote)
+		if enemy.game == game and enemy.net_id == id and enemy.global_position.distance_to(remote.global_position) < float(blade.reach) + 1.0:
+			enemy.shove(direction, float(blade.push), float(blade.daze), clampf(damage, 0.0, float(blade.damage) * 3.0), remote)
 			return
 
 ## What a guest's flamethrower did to an enemy since his last report.
@@ -720,14 +773,57 @@ func _shake(id: int) -> void:
 		if enemy.net_id == id and enemy.clung_to is RemoteSurvivor:
 			enemy.shake()
 
-func spend(cost: int) -> void:
+func spend(_cost: int) -> void:
+	# Kept as a transaction hook: the buyer already changed their own purse.
+	pass
+
+## A recovery action in the co-op pause menu, validated by the host.
+func teleport_to_partner() -> void:
+	if not active or not game.hive.on or game.state != "playing" or game.player.down or teleport_wait > 0.0:
+		return
+	if not is_instance_valid(remote) or remote.down:
+		return
 	if joined:
-		_spend.rpc_id(1, cost)
+		_request_teleport.rpc_id(1)
+	else:
+		game.player.global_position = safe_near(remote.global_position)
+		game.player.velocity = Vector3.ZERO
+		game.hud.flash(Color.BLACK, 0.5)
+	teleport_wait = 5.0
 
 @rpc("any_peer", "call_remote", "reliable")
-func _spend(cost: int) -> void:
-	if hosting:
-		game.credits = maxi(0, game.credits - cost)
+func _request_teleport() -> void:
+	if not hosting or multiplayer.get_remote_sender_id() != partner or not game.hive.on or game.state != "playing" or teleport_wait > 0.0:
+		return
+	if game.player.down or not is_instance_valid(remote) or remote.down:
+		return
+	place_partner(safe_near(game.player.global_position))
+	teleport_wait = 5.0
+
+## Standing room beside a player, on that player's floor. Never teleport into a wall.
+func safe_near(anchor: Vector3, room_id: String = "", piece_id: String = "") -> Vector3:
+	var shape := CapsuleShape3D.new()
+	shape.radius = 0.3
+	shape.height = 1.7
+	var space := game.get_world_3d().direct_space_state
+	for ring in [1.2, 1.8, 0.7, 2.4]:
+		for step in range(12):
+			var at: Vector3 = anchor + Vector3(sin(step * TAU / 12.0), 0, cos(step * TAU / 12.0)) * float(ring)
+			if room_id != "" and str(game.cabin.room_at(at).get("id", "")) != room_id:
+				continue
+			if piece_id != "" and str(game.hive_map.piece_at(at).get("id", "")) != piece_id:
+				continue
+			var ground := space.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3.UP * 0.6, at + Vector3.DOWN * 1.0, 1))
+			if ground.is_empty() or (ground.normal as Vector3).y < 0.65:
+				continue
+			at.y = (ground.position as Vector3).y + 0.04
+			var query := PhysicsShapeQueryParameters3D.new()
+			query.shape = shape
+			query.collision_mask = 1 | 16
+			query.transform = Transform3D(Basis.IDENTITY, at + Vector3.UP * 0.9)
+			if space.intersect_shape(query, 1).is_empty():
+				return at
+	return anchor + Vector3(0, 0.05, 0)
 
 func request_next_wave() -> void:
 	if joined:
@@ -743,6 +839,11 @@ func _next_wave() -> void:
 @rpc("authority", "call_remote", "reliable")
 func _hive_state(state: Dictionary) -> void:
 	game.hive.coop.adopt(state)
+
+@rpc("authority", "call_remote", "reliable")
+func _allies(bodies: Array) -> void:
+	if not game.hive.on and game.state == "playing":
+		game.hive.coop._adopt_friends(bodies)
 
 func request_hive_use(key: String, at: Vector3) -> void:
 	if joined:
@@ -794,7 +895,7 @@ func _hive_voice(said: Dictionary, at: Vector3) -> void:
 # ---------------------------------------------------------------- both ways
 
 @rpc("any_peer", "call_remote", "unreliable_ordered")
-func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int, health: float) -> void:
+func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int, health: float, kills: int = 0) -> void:
 	if multiplayer.get_remote_sender_id() != partner:
 		return
 	if not is_instance_valid(remote):
@@ -811,6 +912,16 @@ func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int
 	remote.set_down(flags & 4 != 0)
 	remote.set_crouched(flags & 8 != 0)
 	remote.health = health
+	remote.kills = maxi(remote.kills, kills)
+
+func send_throw() -> void:
+	if partner != 0:
+		_throw_motion.rpc_id(partner)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _throw_motion() -> void:
+	if multiplayer.get_remote_sender_id() == partner and is_instance_valid(remote):
+		remote.visual.throw()
 
 func send_shot(from: Vector3, to: Vector3, sound: String) -> void:
 	if partner != 0:
