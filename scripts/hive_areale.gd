@@ -10,7 +10,7 @@ extends RefCounted
 ## and the infected follow the squad from one to the next. A storey between two of those
 ## (a gallery, a catwalk) is a floor of its piece alone.
 ##
-##   --hive-layout=showcase | <seed> | classic   which night a map built by a tool shows
+##   --hive-layout=showcase | all | <seed> | classic   which night a map built by a tool shows
 
 ## How much a body in deep water moves, how long until it hurts, and how much.
 const WADE := 0.4
@@ -30,6 +30,9 @@ static func wanted_from_args() -> Dictionary:
 			var what := arg.trim_prefix("--hive-layout=")
 			if what == "showcase":
 				return HiveLayout.showcase()
+			# ("all": a chain in every seam, the crash first, every area of the pool.)
+			if what == "all":
+				return HiveLayout.every_seam()
 			if what.is_valid_int():
 				return HiveLayout.plan(int(what))
 	return HiveLayout.classic()
@@ -43,25 +46,24 @@ static func random_part(map: HiveMap) -> bool:
 static func declare_floors(map: HiveMap) -> void:
 	if not random_part(map):
 		return
+	# (Each chain of a night has floors of its own: its pieces lie far from the others'.)
 	var heights := HiveLayout.heights_of(map.night)
 	var keys: Array = heights.keys()
 	keys.sort()
 	keys.reverse()
-	var shared_count := 0
-	for h in keys:
-		if HiveLayout.shared_height(float(h)):
-			shared_count += 1
 	var shared_index := 0
 	for h in keys:
 		var pieces: Array = heights[h]
 		if HiveLayout.shared_height(float(h)):
-			var bounds := Rect2()
+			var by_chain := {}
 			for piece: Dictionary in pieces:
+				var chain := int(piece.get("chain", 0))
 				for part: Rect2 in piece.parts:
-					bounds = part if bounds.size == Vector2.ZERO else bounds.merge(part)
-			shared_index += 1
-			var label := "SEKTOR C" if shared_count == 1 else "SEKTOR C · %d" % shared_index
-			map.area_floors["%.2f" % float(h)] = map._floor("areal_%d" % shared_index, label, float(h), bounds.grow(3.0))
+					by_chain[chain] = part if not by_chain.has(chain) else (by_chain[chain] as Rect2).merge(part)
+			for chain in by_chain:
+				shared_index += 1
+				var label := "SEKTOR C · %d" % (int(round((HiveLayout.BASE - float(h)) / HiveLayout.STOREY)) + 1)
+				map.area_floors["%d|%.2f" % [int(chain), float(h)]] = map._floor("areal_%d" % shared_index, label, float(h), (by_chain[chain] as Rect2).grow(3.0))
 		else:
 			for piece: Dictionary in pieces:
 				var bounds := Rect2()
@@ -72,7 +74,7 @@ static func declare_floors(map: HiveMap) -> void:
 
 ## The floor a height of a piece stands on.
 static func area_floor(map: HiveMap, h: float, piece: Dictionary) -> int:
-	var key := "%.2f" % snappedf(h, 0.01)
+	var key := "%d|%.2f" % [int(piece.get("chain", 0)), snappedf(h, 0.01)]
 	if map.area_floors.has(key):
 		return int(map.area_floors[key])
 	var own := "%s|%.2f" % [str(piece.get("id", "")), snappedf(h, 0.01)]
@@ -123,10 +125,17 @@ static func lay(map: HiveMap) -> void:
 		var spot: Vector3 = link.spot
 		var side := int(link.side)
 		var at := spot.x if side == HiveCore.NORTH or side == HiveCore.SOUTH else spot.z
+		# (The doorway of a lift's twin is built from the cabin's side, as the real one is,
+		# and has no word over it: the real one has none.)
+		var lift := str(piece(map, str(link.b)).get("kind", "")) == "lift" or str(piece(map, str(link.a)).get("kind", "")) == "lift"
+		if str(piece(map, str(link.b)).get("kind", "")) == "lift":
+			var swap := a
+			a = b
+			b = swap
 		map._begin_zone(str(map.room_of[a].zone))
 		var door := map._door(a, b, at, AreaKit.PORT_WIDE, {"kind": "script", "name": str(link.name), "starts_open": bool(link.open), "height": AreaKit.PORT_TALL})
 		map.areal_points[str(link.name)] = spot
-		if str(link.name).ends_with("_out") and not door.is_empty():
+		if str(link.name).ends_with("_out") and not door.is_empty() and not lift:
 			_sign(map, str(link.name), door)
 		map._end_zone()
 	map._shared_dice()
@@ -460,3 +469,44 @@ static func stair_shaft(map: HiveMap, from: Vector2, side: int, wide: float, y_f
 	if y_first > y_second:
 		route.reverse()
 	map._link(route, FLIGHT, first_level if y_first < y_second else second_level, second_level if y_first < y_second else first_level)
+
+# ---------------------------------------------------------------- the freight lifts of the seams
+
+## A freight lift's cabin (HiveLayout.LIFTS): a small room of dark steel with its door on
+## `door_side` (the doorway itself is made by whoever joins it to a room), a rail round its
+## back, its call panel, its name and a lamp. Built the same way in the old map and as its
+## twin at the end of a chain, so that nobody sees a difference when the ride is over.
+static func lift_cabin(map: HiveMap, room_id: String, rect: Rect2, door_side: int, level: int, title: String) -> Dictionary:
+	var made := map._room(room_id, level, rect, 3.0, "panel", {
+		"lamps": "none", "look": {"panel": Color(0.48, 0.5, 0.52), "wainscot": Color(0.22, 0.24, 0.26), "stripe": Color("c9a227"), "strip": false}
+	})
+	var kept := map.batch
+	map._chunk("Kit", false)
+	var inner: Rect2 = made.inner
+	var y := float(made.y)
+	var back := (door_side + 2) % 4
+	var left := (door_side + 1) % 4
+	var right := (door_side + 3) % 4
+	var span := func(side: int) -> Vector2:
+		return Vector2(inner.position.x, inner.end.x) if side in [HiveCore.NORTH, HiveCore.SOUTH] else Vector2(inner.position.y, inner.end.y)
+	for side in [back, left, right]:
+		var run: Vector2 = span.call(side)
+		map._face_box(made, side, "plate", run.x + 0.25, run.y - 0.25, 0.95, 1.0, -0.1, -0.05, Color("8a9094"))
+		map._face_box(made, side, "plate", run.x + 0.3, run.y - 0.3, 0.0, 0.12, -0.06, 0.0, Color("1d2022"))
+	var panel: Vector2 = span.call(left)
+	var middle := (panel.x + panel.y) * 0.5
+	map._face_box(made, left, "plate", middle - 0.2, middle + 0.2, 1.05, 1.65, -0.04, 0.0, Color("2a2e31"))
+	for k in range(4):
+		map._face_glow(made, left, middle - 0.05, middle + 0.05, 1.2 + k * 0.12, 1.26 + k * 0.12, -0.05, -0.04, Color("ffcf6a") if k == 0 else Color("5c6266"), 3.0 if k == 0 else 1.0)
+	var centre := inner.get_center()
+	map._part("tread", Vector3(centre.x, y + 0.006, centre.y), Vector3(inner.size.x - 0.1, 0.012, inner.size.y - 0.1), Color(0.34, 0.36, 0.38))
+	map._glow_box(Vector3(centre.x, y + 2.96, centre.y), Vector3(1.6, 0.04, 0.6), Color("e6eef4"), 4.0)
+	map._light(Vector3(centre.x, y + 2.5, centre.y), Color("e6eef4"), 1.6, 6.0, false, 0.0, 0.3, HiveCore.LAMP_FADE)
+	var name: Vector2 = span.call(back)
+	map._stencil(room_id, back, (name.x + name.y) * 0.5, 2.3, title, 44, Color(0.72, 0.6, 0.24))
+	map.batch = kept
+	return made
+
+## Where the doorway of a lift lies along the wall it is in (HiveLayout.LIFTS).
+static func lift_door_at(rect: Rect2, door_side: int) -> float:
+	return rect.get_center().x if door_side in [HiveCore.NORTH, HiveCore.SOUTH] else rect.get_center().y

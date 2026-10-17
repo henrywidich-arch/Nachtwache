@@ -34,6 +34,8 @@ const PICK_REACH := 2.4
 const LOCK_SECONDS := 5.0
 ## Seconds into the ride when the train is derailed (it runs RIDE_SECONDS otherwise).
 const CRASH_AT := 9.5
+## Seconds a ride of a freight lift of the seams lasts.
+const LIFT_RIDE := 3.0
 ## Lines for each kind of objective, said when it begins (cues that exist in Radio).
 const KIND_LINES := {
 	"lockdown": ["line:m2_n_lock", "line:m2_lockdown", "talk:m2_locked"],
@@ -54,6 +56,17 @@ var piece_of: Dictionary = {}
 ## The objective of the area whose stage runs: {kind, state, ...}.
 var task: Dictionary = {}
 var lock_left := 0.0
+## Stage -> the index of the chain of areas it belongs to (HiveLayout night.chains).
+var chain_of: Dictionary = {}
+## The stage of the old route -> the head of the chain that comes in before it.
+var redirects: Dictionary = {}
+## The chains the squad is past (index -> true).
+var passed: Dictionary = {}
+## The lift ride that waits for the survivor or runs: {room (the cabin he has to be in),
+## door (that shuts behind him), to_door (that opens when it arrives), shift (how far
+## everybody in the cabin is moved), then (the stage that follows), chain, passes, phase,
+## left}.
+var ride: Dictionary = {}
 
 func _ready() -> void:
 	name = "Areale"
@@ -62,83 +75,113 @@ func _ready() -> void:
 # ---------------------------------------------------------------- the night's stages
 
 ## Makes the director's tables for the night of the map: its order of stages, what each
-## is called, who keeps coming, where a defeat is taken up again.
+## is called, who keeps coming, where a defeat is taken up again. The old route is the
+## spine (HiveDirector.ORDER); each chain of areas of the night (HiveLayout.SEAMS) comes in
+## before the stage of the old route it leads to: its lift ("c<n>_lift"), its areas
+## ("a<i>", "a<i>_out"), and for the last seam the lock ("g_lock") in place of the
+## facility's own decontamination stage. A crash puts the tunnel ("g_crash", "g_escape")
+## and its chain between the ride and the terminal.
 func setup() -> void:
 	map = director.map
 	game = director.game
 	piece_of.clear()
+	chain_of.clear()
+	redirects.clear()
+	passed.clear()
+	ride = {}
 	task = {}
 	on = HiveAreale.random_part(map)
+	var order: Array = HiveDirector.ORDER.duplicate()
+	var stages: Dictionary = HiveDirector.STAGES.duplicate()
+	var pressure: Dictionary = HiveDirector.PRESSURE.duplicate()
+	var checkpoints: Dictionary = HiveDirector.CHECKPOINTS.duplicate(true)
 	if not on:
-		director.order = HiveDirector.ORDER.duplicate()
-		director.stages = HiveDirector.STAGES.duplicate()
-		director.pressure = HiveDirector.PRESSURE.duplicate()
-		director.checkpoints = HiveDirector.CHECKPOINTS.duplicate()
+		director.order = order
+		director.stages = stages
+		director.pressure = pressure
+		director.checkpoints = checkpoints
 		return
-	var order: Array = HiveDirector.ORDER.slice(0, HiveDirector.ORDER.find("ride") + 1)
-	var stages: Dictionary = {}
-	var pressure: Dictionary = {}
-	var checkpoints: Dictionary = {}
-	for id in order:
-		if HiveDirector.STAGES.has(id):
-			stages[id] = HiveDirector.STAGES[id]
-		if HiveDirector.PRESSURE.has(id):
-			pressure[id] = HiveDirector.PRESSURE[id]
-	for id in ["landing", "descent"]:
-		checkpoints[id] = HiveDirector.CHECKPOINTS[id]
-	var chain: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == 0)
-	var arrival: Dictionary = chain[0]
-	var a_info := HiveLayout.info(str(arrival.def))
-	var start := {"open": ["descent", "station"], "credits": 900}
-	if str(arrival.def) == "ankunft":
-		order.append("g_arrive")
-		stages["g_arrive"] = [str(a_info.label), str(a_info.goal), "%s_control" % arrival.id, int(a_info.strength)]
-		pressure["g_arrive"] = _crowd(a_info.crowd)
-		checkpoints["g_arrive"] = _with(start, {"at": "%s_in" % arrival.id})
-		piece_of["g_arrive"] = arrival
-	else:
-		order.append_array(["g_crash", "g_escape"])
-		stages["g_crash"] = [str(a_info.label), str(a_info.goal), "%s_exit" % arrival.id, int(a_info.strength)]
-		stages["g_escape"] = [str(a_info.label), str(a_info.goal_up), "%s_top" % arrival.id, int(a_info.strength)]
-		pressure["g_crash"] = _crowd(a_info.crowd)
-		checkpoints["g_crash"] = _with(start, {"at": "%s_in" % arrival.id})
-		piece_of["g_crash"] = arrival
-		piece_of["g_escape"] = arrival
-	var areas: Array = chain.filter(func(piece: Dictionary) -> bool: return str(piece.kind) == "area")
-	var end: Dictionary = chain[chain.size() - 1]
-	for index in range(areas.size()):
-		var piece: Dictionary = areas[index]
-		var p_info := HiveLayout.info(str(piece.def))
-		var key := "a%d" % index
-		var next: Dictionary = areas[index + 1] if index + 1 < areas.size() else end
-		var event: Dictionary = piece.get("event", {})
-		order.append_array([key, key + "_out"])
-		stages[key] = [str(p_info.label), str(event.get("goal", "Den Bereich durchqueren")), "%s_entry" % piece.id, int(p_info.get("strength", 6)) + (1 if index >= 2 else 0)]
-		stages[key + "_out"] = [str(p_info.label), "Weiter zum nächsten Bereich" if next != end else "Weiter zur Schleuse am Ende des Sektors", "%s_entry" % next.id, int(p_info.get("strength", 6))]
-		pressure[key] = _crowd(p_info.get("crowd", []))
-		var calm: Array = (pressure[key] as Array).duplicate()
-		calm[1] = maxi(4, int(round(int(calm[1]) * 0.7)))
-		calm[2] = float(calm[2]) * 1.2
-		calm[4] = [2, 3]
-		pressure[key + "_out"] = calm
-		piece_of[key] = piece
-		piece_of[key + "_out"] = piece
-		if index == int(map.night.get("checkpoint", -1)):
-			checkpoints[key] = {"at": "%s_entry" % piece.id, "open": ["descent", "station"], "credits": 1300}
-	order.append("g_lock")
-	stages["g_lock"] = [str(HiveLayout.info(str(end.def)).label), str(HiveLayout.info(str(end.def)).goal), "%s_mid" % end.id, 7]
-	piece_of["g_lock"] = end
-	for id in ["labs", "hall", "exit"]:
-		order.append(id)
-		stages[id] = HiveDirector.STAGES[id]
-		if HiveDirector.PRESSURE.has(id):
-			pressure[id] = HiveDirector.PRESSURE[id]
-	checkpoints["labs"] = HiveDirector.CHECKPOINTS.labs.duplicate()
-	checkpoints["labs"]["open"] = ["descent", "station", "decon", "research"]
+	var chains: Array = map.night.get("chains", [])
+	for index in range(chains.size()):
+		var chain: Dictionary = chains[index]
+		var members: Array = (map.night.pieces as Array).filter(func(piece: Dictionary) -> bool: return int(piece.get("chain", 0)) == index)
+		var head: Dictionary = members[0]
+		var tail: Dictionary = members[members.size() - 1]
+		var areas: Array = members.filter(func(piece: Dictionary) -> bool: return str(piece.kind) == "area")
+		var inserted: Array = []
+		if str(chain.seam) == "s0":
+			var a_info := HiveLayout.info(str(head.def))
+			inserted.append_array(["g_crash", "g_escape"])
+			stages["g_crash"] = [str(a_info.label), str(a_info.goal), "%s_exit" % head.id, int(a_info.strength)]
+			stages["g_escape"] = [str(a_info.label), str(a_info.goal_up), "%s_top" % head.id, int(a_info.strength)]
+			pressure["g_crash"] = _crowd(a_info.crowd)
+			checkpoints["g_crash"] = {"at": "%s_in" % head.id, "open": ["descent", "station"], "credits": 900}
+			# (The train never came in at the terminal: a defeat there is taken up in its hall.)
+			checkpoints["terminal"] = _with(checkpoints["terminal"], {"at": "terminal"})
+			piece_of["g_crash"] = head
+			piece_of["g_escape"] = head
+		else:
+			var lift_stage := "c%d_lift" % index
+			inserted.append(lift_stage)
+			var part := str(HiveDirector.STAGES[str(chain.from)][0])
+			stages[lift_stage] = [part, "Mit dem Lastenaufzug weiter (%s)" % str(HiveLayout.LIFTS[chain.out].title).replace("  ", " "), "lift_%s_mid" % chain.out, int(HiveDirector.STAGES[str(chain.from)][3])]
+			piece_of[lift_stage] = head
+			chain_of[lift_stage] = index
+		for k in range(areas.size()):
+			var piece: Dictionary = areas[k]
+			var p_info := HiveLayout.info(str(piece.def))
+			var key := "a%d" % int(piece.area_index)
+			var event: Dictionary = piece.get("event", {})
+			var last := k == areas.size() - 1
+			var next_id := str(areas[k + 1].id) if not last else str(tail.id)
+			inserted.append_array([key, key + "_out"])
+			var onward := "Weiter zum nächsten Bereich"
+			if last:
+				onward = "Weiter zur Schleuse" if str(chain.in) == "decon" else "Mit dem Lastenaufzug zurück in die Anlage"
+			stages[key] = [str(p_info.label), str(event.get("goal", "Den Bereich durchqueren")), "%s_entry" % piece.id, int(p_info.get("strength", 6)) + (1 if int(piece.area_index) >= 2 else 0)]
+			stages[key + "_out"] = [str(p_info.label), onward, "%s_entry" % next_id, int(p_info.get("strength", 6))]
+			pressure[key] = _crowd(p_info.get("crowd", []))
+			var calm: Array = (pressure[key] as Array).duplicate()
+			calm[1] = maxi(4, int(round(int(calm[1]) * 0.7)))
+			calm[2] = float(calm[2]) * 1.2
+			calm[4] = [2, 3]
+			pressure[key + "_out"] = calm
+			piece_of[key] = piece
+			piece_of[key + "_out"] = piece
+			chain_of[key] = index
+			chain_of[key + "_out"] = index
+		if str(chain.in) == "decon":
+			inserted.append("g_lock")
+			stages["g_lock"] = [str(HiveLayout.info(str(tail.def)).label), str(HiveLayout.info(str(tail.def)).goal), "%s_mid" % tail.id, 7]
+			piece_of["g_lock"] = tail
+			chain_of["g_lock"] = index
+		# Where the chain comes in: before the stage of the old route it leads to - in place of
+		# the facility's own lock, when it ends in the lock's twin.
+		var before := "decon" if str(chain.in) == "decon" else str(chain.to)
+		var at := order.find(before)
+		if str(chain.seam) == "s0":
+			at = order.find("terminal")
+		for k in range(inserted.size()):
+			order.insert(at + k, inserted[k])
+		if str(chain.in) == "decon":
+			order.erase("decon")
+		# The stage the old route would go on with is the chain's first, until it is passed.
+		if str(chain.seam) != "s0":
+			redirects[before] = inserted[0]
 	director.order = order
 	director.stages = stages
 	director.pressure = pressure
 	director.checkpoints = checkpoints
+
+## The stage the director goes on with when it would enter `id`: the head of a chain of
+## the night that comes in before that stage of the old route and is not passed yet.
+func redirect(id: String) -> String:
+	if not on or not redirects.has(id):
+		return id
+	var head := str(redirects[id])
+	if passed.has(int(chain_of.get(head, -1))):
+		return id
+	return head
 
 ## Who keeps coming, as a piece's contract says it ([kinds, alive, seconds, pack]), in the
 ## form of HiveDirector.PRESSURE (from anywhere near that nobody sees).
@@ -155,8 +198,8 @@ static func _with(base: Dictionary, extra: Dictionary) -> Dictionary:
 ## The sharks of a piece with deep water (its "sharks", its water: AreaKit.shark_water).
 func release_sharks(piece: Dictionary) -> Array:
 	var made: Array = []
-	var map := director.game.cabin as HiveMap
-	var water: SharkWater = map.shark_waters.get(str(piece.id), null) if map != null else null
+	var cabin := director.game.cabin as HiveMap
+	var water: SharkWater = cabin.shark_waters.get(str(piece.id), null) if cabin != null else null
 	if water == null:
 		return made
 	for k in range(int(HiveLayout.info(str(piece.def)).get("sharks", 0))):
@@ -176,24 +219,43 @@ func staff(stage: String) -> Array:
 func owns(stage: String) -> bool:
 	return piece_of.has(stage)
 
-## The ride ends here: where the car of the arrival stands (INF without a random part).
-func car() -> Vector3:
-	if not on:
-		return Vector3.INF
-	return map.points.get("%s_car" % _arrival().id, Vector3.INF)
+## The crash of the night ({} on a night the train comes in).
+func _crash() -> Dictionary:
+	if not on or not bool(map.night.get("crash", false)):
+		return {}
+	for piece: Dictionary in map.night.pieces:
+		if str(piece.def) == "absturz":
+			return piece
+	return {}
 
-func _arrival() -> Dictionary:
-	return map.night.pieces[0]
+## The ride ends here: in the car of the crash (INF when the train comes in at the terminal).
+func car() -> Vector3:
+	var crash := _crash()
+	return Vector3.INF if crash.is_empty() else map.points.get("%s_car" % crash.id, Vector3.INF)
 
 func crashes() -> bool:
-	return on and str(_arrival().def) == "absturz"
+	return not _crash().is_empty()
 
-## A night taken up again at a checkpoint of the random part: what has to be open then.
+## The id of the piece of the crash (for the tunnel of its ride).
+func crash_id() -> String:
+	return str(_crash().get("id", ""))
+
+## A night taken up again at a checkpoint: what has to be open then, and which chains the
+## squad is past.
 func resume(from: String) -> void:
 	if not on:
 		return
-	if from in ["g_arrive", "g_crash"]:
-		map.set_door("%s_car" % _arrival().id, true, true)
+	var from_rank: int = director.order.find(from)
+	var chains: Array = map.night.get("chains", [])
+	for index in range(chains.size()):
+		var chain: Dictionary = chains[index]
+		var to := "labs" if str(chain.in) == "decon" else str(chain.to)
+		if director.order.find(to) <= from_rank and from_rank >= 0:
+			passed[index] = true
+			if str(chain.in) != "decon":
+				map.set_door("lift_%s" % chain.in, true, true)
+	if from == "g_crash":
+		map.set_door("%s_car" % crash_id(), true, true)
 
 # ---------------------------------------------------------------- a stage begins
 
@@ -219,10 +281,30 @@ func enter(id: String) -> void:
 		"g_lock":
 			lock_left = -1.0
 		_:
+			if id.ends_with("_lift"):
+				# Into the freight lift of the old route; its twin stands at the chain's head.
+				var chain: Dictionary = map.night.chains[int(chain_of[id])]
+				var real: Rect2 = HiveLayout.LIFTS[chain.out].rect
+				map.set_door("lift_%s" % chain.out, true)
+				game.sounds.play_at("shutter_open", map.points.get("lift_%s_mid" % chain.out, Vector3.ZERO))
+				director.talk("m2_down")
+				ride = {"room": "lift_%s" % chain.out, "door": "lift_%s" % chain.out, "to_door": "%s_out" % piece.id,
+					"shift": (piece.origin as Vector3) - Vector3(real.position.x, HiveMap.UNDER, real.position.y),
+					"then": _first_area(int(chain_of[id])), "chain": int(chain_of[id]), "passes": false, "phase": "wait", "left": 0.0}
+				return
 			if id.ends_with("_out"):
 				map.set_port("%s_out" % piece.id, true)
 				game.sounds.play_at("shutter_open", map.points.get("%s_out" % piece.id, Vector3.ZERO))
 				director._all_clear()
+				# The last area of a chain that ends in a lift's twin: that ride waits for him.
+				var index := int(chain_of.get(id, -1))
+				var tail := _tail(index)
+				if str(tail.get("kind", "")) == "lift" and _last_area(index) == piece:
+					var chain: Dictionary = map.night.chains[index]
+					var real: Rect2 = HiveLayout.LIFTS[chain["in"]].rect
+					ride = {"room": "%s_kabine" % tail.id, "door": "%s_in" % tail.id, "to_door": "lift_%s" % chain["in"],
+						"shift": Vector3(real.position.x, HiveMap.UNDER, real.position.y) - (tail.origin as Vector3),
+						"then": str(chain.to), "chain": index, "passes": true, "phase": "wait", "left": 0.0}
 				return
 			# An area: what waits in it, and what is to be done there.
 			var p_info := HiveLayout.info(str(piece.def))
@@ -262,6 +344,10 @@ func update(delta: float) -> void:
 	var piece: Dictionary = piece_of.get(stage, {})
 	var here: Vector3 = game.player.global_position
 	var inside := map.piece_at(here)
+	if not ride.is_empty() and _run_ride(delta):
+		return
+	if stage.ends_with("_lift"):
+		return
 	match stage:
 		"g_arrive":
 			pass
@@ -270,18 +356,96 @@ func update(delta: float) -> void:
 				director._enter("g_escape")
 		"g_escape":
 			if here.distance_to(map.points.get("%s_top" % piece.id, here)) < 3.5:
-				director._enter("a0")
+				director._enter(_first_area(0))
 		"g_lock":
 			_run_lock(delta, piece, inside)
 		_:
 			if stage.ends_with("_out"):
+				if not ride.is_empty():
+					return
 				var index := int(stage.trim_prefix("a").trim_suffix("_out"))
 				var next := "a%d" % (index + 1)
-				var wanted: String = next if piece_of.has(next) else "g_lock"
-				if str(inside.get("id", "")) == str(piece_of[wanted].id):
+				var wanted: String = next if piece_of.has(next) and int(chain_of.get(next, -1)) == int(chain_of.get(stage, -2)) else "g_lock"
+				if piece_of.has(wanted) and str(inside.get("id", "")) == str(piece_of[wanted].id):
 					director._enter(wanted)
 				return
 			_run_area(delta, piece, str(inside.get("id", "")) == str(piece.id))
+
+## The first area of a chain, as its stage.
+func _first_area(index: int) -> String:
+	for piece: Dictionary in map.night.pieces:
+		if int(piece.get("chain", 0)) == index and str(piece.kind) == "area":
+			return "a%d" % int(piece.area_index)
+	return ""
+
+func _last_area(index: int) -> Dictionary:
+	var last := {}
+	for piece: Dictionary in map.night.pieces:
+		if int(piece.get("chain", 0)) == index and str(piece.kind) == "area":
+			last = piece
+	return last
+
+func _tail(index: int) -> Dictionary:
+	var last := {}
+	for piece: Dictionary in map.night.pieces:
+		if int(piece.get("chain", 0)) == index:
+			last = piece
+	return last
+
+## A ride of a freight lift of the seams. Once the survivor stands in the cabin its door
+## shuts behind him (whoever of the squad is not in yet is brought in), the cabin rides
+## for LIFT_RIDE seconds, and then everybody in it stands in the cabin at the other end -
+## the twin at a chain's head, or the real lift in the old route - whose door opens. What
+## was in the cabin with them stays behind. True while it holds the stage.
+func _run_ride(delta: float) -> bool:
+	var player: Survivor = game.player
+	var here := player.global_position
+	if str(ride.phase) == "wait":
+		var room := map.room_at(here)
+		if room.is_empty() or str(room.id) != str(ride.room):
+			return false
+		map.set_door(str(ride.door), false)
+		game.sounds.play_at("shutter_close", here)
+		game.hud.announce("LASTENAUFZUG", "Der Aufzug fährt …", 3)
+		for mate: Teammate in game.team:
+			var at := map.room_at(mate.global_position)
+			if at.is_empty() or str(at.id) != str(ride.room):
+				mate.global_position = here + Vector3(randf_range(-1.0, 1.0), 0.05, randf_range(-1.0, 1.0))
+				mate.velocity = Vector3.ZERO
+		ride.phase = "ride"
+		ride.left = LIFT_RIDE
+		director.progress = 0.0
+		director.progress_text = "AUFZUG FÄHRT"
+		return true
+	ride.left = float(ride.left) - delta
+	director.progress = clampf(1.0 - float(ride.left) / LIFT_RIDE, 0.0, 1.0)
+	player.trauma = maxf(player.trauma, 0.12)
+	if float(ride.left) > 0.0:
+		return true
+	var cabin: Rect2 = map.room_of[str(ride.room)].outer
+	for node in game.enemies.get_children():
+		var enemy := node as Infected
+		if enemy != null and not enemy.dead and cabin.grow(0.5).has_point(Vector2(enemy.global_position.x, enemy.global_position.z)) and absf(enemy.global_position.y - here.y) < 3.0:
+			enemy._retire()
+			enemy.queue_free()
+			game.alive_count = maxi(0, game.alive_count - 1)
+	var shift: Vector3 = ride.shift
+	player.global_position += shift
+	player.velocity = Vector3.ZERO
+	for mate: Teammate in game.team:
+		if mate.down:
+			mate.revive(true)
+		mate.global_position += shift
+		mate.velocity = Vector3.ZERO
+	map.set_door(str(ride.to_door), true)
+	game.sounds.play_at("shutter_open", player.global_position)
+	director.progress = -1.0
+	if bool(ride.passes):
+		passed[int(ride.chain)] = true
+	var then := str(ride.then)
+	ride = {}
+	director._enter(then)
+	return true
 
 ## The objective of an area.
 func _run_area(delta: float, piece: Dictionary, inside: bool) -> void:
@@ -558,6 +722,7 @@ func _run_lock(delta: float, piece: Dictionary, inside: Dictionary) -> void:
 		mate.velocity = Vector3.ZERO
 	director.progress = -1.0
 	map.unlock("decon", true)
+	passed[int(chain_of.get("g_lock", -1))] = true
 	director._enter("labs")
 
 # ---------------------------------------------------------------- what the HUD says
