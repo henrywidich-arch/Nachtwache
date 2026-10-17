@@ -17,7 +17,7 @@ func info() -> Dictionary:
 		"id": "lagerhalle", "kind": "area", "label": "LAGERHALLE", "name": "Lagerhalle (Hochregale, Kran)", "class": "gross",
 		"size": Vector2(52.0, 40.0), "levels": [0.0, 4.2], "mood": "sodium",
 		"staff": ["hive_worker", "hive_office"],
-		"views": [["oben_sw", Vector3(2, 9.8, 38), Vector3(30, 0, 14)], ["oben_no", Vector3(50, 9.8, 2), Vector3(20, 0, 28)], ["auge", Vector3(26, 1.62, 38), Vector3(26, 2, 4)], ["galerie", Vector3(4, 5.82, 30), Vector3(30, 2, 20)]],
+		"views": [["bild", Vector3(49, 1.8, 37.5), Vector3(6, 4.5, 8)], ["oben_sw", Vector3(2, 9.8, 38), Vector3(30, 0, 14)], ["oben_no", Vector3(50, 9.8, 2), Vector3(20, 0, 28)], ["auge", Vector3(26, 1.62, 38), Vector3(26, 2, 4)], ["galerie", Vector3(4, 5.82, 30), Vector3(30, 2, 20)]],
 		"ports": [
 			{"side": SOUTH, "at": 26.0, "y": 0.0, "room": "halle", "role": "in"},
 			{"side": WEST, "at": 20.0, "y": 0.0, "room": "halle", "role": "in"},

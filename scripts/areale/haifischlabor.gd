@@ -56,7 +56,7 @@ func info() -> Dictionary:
 		"id": "haifischlabor", "kind": "area", "label": "HAIFISCHLABOR", "name": "Haifischlabor (geflutet)", "class": "gross",
 		"size": Vector2(56.0, 48.0), "levels": [0.0, 4.2], "mood": "water", "sharks": 2,
 		"staff": ["hive_lab2", "hive_lab", "hive_worker"],
-		"views": [["oben_sw", Vector3(4, 10.5, 45), Vector3(34, 0, 18)], ["oben_no", Vector3(52, 10.5, 3), Vector3(20, 0, 32)], ["auge_einstieg", Vector3(8, 1.62, 45.5), Vector3(27, 1, 26)], ["auge_engstelle", Vector3(4, 1.62, 26), Vector3(27, 1, 26)], ["auge_damm", Vector3(49.2, 1.62, 40), Vector3(49.2, 1, 12)], ["beobachtung", Vector3(18, 5.82, 2), Vector3(28, 0, 26)]],
+		"views": [["bild", Vector3(53, 2.2, 46.6), Vector3(24, 2.5, 8)], ["oben_sw", Vector3(4, 10.5, 45), Vector3(34, 0, 18)], ["oben_no", Vector3(52, 10.5, 3), Vector3(20, 0, 32)], ["auge_einstieg", Vector3(8, 1.62, 45.5), Vector3(27, 1, 26)], ["auge_engstelle", Vector3(4, 1.62, 26), Vector3(27, 1, 26)], ["auge_damm", Vector3(49.2, 1.62, 40), Vector3(49.2, 1, 12)], ["beobachtung", Vector3(18, 5.82, 2), Vector3(28, 0, 26)]],
 		"ports": [
 			{"side": SOUTH, "at": 8.0, "y": 0.0, "room": "halle", "role": "in"},
 			{"side": WEST, "at": 20.0, "y": 0.0, "room": "halle", "role": "in"},
