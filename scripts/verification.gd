@@ -2831,6 +2831,8 @@ func _later(game: Node3D) -> void:
 	var prowl_off: float = Vector2(prowl_back.x - player.global_position.x, prowl_back.z - player.global_position.z).length() if prowl_back != Vector3.INF else -1.0
 	var prowl_fair: bool = prowl_back != Vector3.INF and prowl_off >= Prowler.SHIFT_REACH.x - 0.6 and prowl_off <= Prowler.SHIFT_REACH.y + 0.6 and game.cabin.level_of(prowl_back) == game.cabin.level_of(player.global_position) and not prowl_g._seen_by_any(prowl_back) and prowl_g.is_targetable() and prowl_g.shift_rest > Prowler.SHIFT_REST - Prowler.SHIFT_HIDDEN - Prowler.SHIFT_GIVE_UP - 1.0
 	var prowl_rests: bool = prowl_g.shift_rest > 0.0
+	# (The dice of the rest of the run are their own again.)
+	randomize()
 	expect(prowl_hidden and prowl_fair and prowl_rests and prowl_g.mode == "shift", "Out of sight the Prowler can be gone and come again on its prey's level - %.0f m off him, where nobody of the squad can see, growling first - and not again for a while" % prowl_off)
 	# Through narrow parts at a prowl, in the open at a gallop.
 	prowl_g.shift_phase = ""
