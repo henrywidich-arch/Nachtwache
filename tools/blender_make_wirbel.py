@@ -411,6 +411,11 @@ def slab(name, outline, x0, x1, material):
     return mesh_object(name, bm, material)
 
 
+# (From round 5) the iron sights, a node of their own ("Sights"): the game lays them down
+# when a sight is fitted, so that the front post does not fill a scope (seen in the game).
+SIGHTS = []
+
+
 def build(m):
     body, drum, bolt, trig = [], [], [], []
     w = RECV_W / 2.0
@@ -597,19 +602,29 @@ def build(m):
             cut(rail, notch, "EXACT")
     body.append(rail)
     # --- sights on the rail: an aperture at the back, a post at the front
-    rear = box("RearSight", (-0.010, CAGE_Y[0] - 0.010, RAIL_Z - 0.001), (0.010, CAGE_Y[0] + 0.004, RAIL_Z + 0.020), m["blued"], bevel=0.0015)
-    peep = cylinder("peep", (0, CAGE_Y[0] - 0.02, RAIL_Z + 0.013), (0, CAGE_Y[0] + 0.02, RAIL_Z + 0.013), 0.0022, m["blued"], 16)
+    if ROUND < 5:
+        rear = box("RearSight", (-0.010, CAGE_Y[0] - 0.010, RAIL_Z - 0.001), (0.010, CAGE_Y[0] + 0.004, RAIL_Z + 0.020), m["blued"], bevel=0.0015)
+        peep = cylinder("peep", (0, CAGE_Y[0] - 0.02, RAIL_Z + 0.013), (0, CAGE_Y[0] + 0.02, RAIL_Z + 0.013), 0.0022, m["blued"], 16)
+    else:
+        # (Seen in the game, round 5's first aperture - a hole of 4 mm in a block of 2 cm -
+        # filled the picture when aimed and showed the post as a speck.) A ghost ring: a
+        # thin ring of 13 mm on a short, narrow foot, the post framed inside it.
+        rear = box("RearSight", (-0.0045, CAGE_Y[0] - 0.008, RAIL_Z - 0.001), (0.0045, CAGE_Y[0] + 0.002, RAIL_Z + 0.006), m["blued"], bevel=0.0012)
+        ring = cylinder("Ring", (0, CAGE_Y[0] - 0.006, RAIL_Z + 0.013), (0, CAGE_Y[0], RAIL_Z + 0.013), 0.0085, m["blued"], 32)
+        union(rear, ring)
+        bevel_object(rear, 0.0008, 2, 30.0)
+        peep = cylinder("peep", (0, CAGE_Y[0] - 0.02, RAIL_Z + 0.013), (0, CAGE_Y[0] + 0.02, RAIL_Z + 0.013), 0.0065, m["blued"], 32)
     cut(rear, peep)
-    body.append(rear)
+    (SIGHTS if ROUND >= 5 else body).append(rear)
     # (Round 5: the tip of the post level with the middle of the aperture, 13 mm over the
     # rail, so that the line over both is parallel to the bore.)
     tip = 0.017 if ROUND < 5 else 0.013
     post = box("FrontPost", (-0.0014, CAGE_Y[1] - 0.008, RAIL_Z - 0.001), (0.0014, CAGE_Y[1] - 0.002, RAIL_Z + tip), m["blued"], bevel=0.0006)
-    body.append(post)
+    (SIGHTS if ROUND >= 5 else body).append(post)
     if ROUND >= 2:
         # Ears that guard the front post.
         for side in (-1.0, 1.0):
-            body.append(box("Ear", (side * 0.008 - 0.0018, CAGE_Y[1] - 0.010, RAIL_Z - 0.001), (side * 0.008 + 0.0018, CAGE_Y[1], RAIL_Z + tip + 0.002), m["blued"], bevel=0.0008))
+            (SIGHTS if ROUND >= 5 else body).append(box("Ear", (side * 0.008 - 0.0018, CAGE_Y[1] - 0.010, RAIL_Z - 0.001), (side * 0.008 + 0.0018, CAGE_Y[1], RAIL_Z + tip + 0.002), m["blued"], bevel=0.0008))
     # --- the drum
     core = cylinder("Drum", (0, DRUM_Y[0], DRUM_Z), (0, DRUM_Y[1], DRUM_Z), DRUM_R, m["steel"], 32 if ROUND == 1 else 48, bevel=0.002)
     if ROUND >= 2:
@@ -907,6 +922,8 @@ def main():
     bolt = join(bolt_parts, "Bolt")
     trigger = join(trigger_parts, "Trigger")
     parts = (body, magazine, bolt, trigger)
+    if SIGHTS:
+        parts += (join(SIGHTS, "Sights"),)
     for o in parts:
         bpy.context.view_layer.objects.active = o
         bpy.ops.object.select_all(action="DESELECT")
@@ -936,7 +953,7 @@ def main():
     root = link(bpy.data.objects.new("Wirbel", None))
     for o in parts:
         o.parent = root
-    print("ROUND", ROUND, "triangles body", triangles(body), "magazine", triangles(magazine), "bolt", triangles(bolt), "trigger", triangles(trigger),
+    print("ROUND", ROUND, "triangles body", triangles(body) + (triangles(parts[4]) if len(parts) > 4 else 0), "magazine", triangles(magazine), "bolt", triangles(bolt), "trigger", triangles(trigger),
           "all", sum(triangles(o) for o in parts), "texture", TEX)
     if RENDER:
         render_views(os.path.abspath(RENDER), PREFIX)
