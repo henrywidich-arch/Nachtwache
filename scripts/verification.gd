@@ -8027,16 +8027,25 @@ func _operators(game: Node3D) -> void:
 	game._say("round_clear")
 	var honest: bool = not Radio.hijacked and not hud.radio_label.text.contains("#")
 	story.stage = "escort"
+	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	game._say("round_clear")
 	var taken: bool = Radio.hijacked and hud.radio_label.text.begins_with("COLEMAN:") and hud.radio_label.text.contains("#")
 	var said: Dictionary = Radio.pick("evac_start")
 	var nadja_line: Dictionary = Radio.pick("nadja_static")
-	story.stage = was_at
-	story.enabled = was_on
+	# (Back before her escape the channel is honest again - checked in the lab, since the
+	# stage an earlier block left the story in may be a later one.)
+	story.stage = "lab"
+	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	game._say("round_clear")
-	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and not Radio.hijacked and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel"), "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's")
+	var honest_again: bool = not Radio.hijacked
+	story.stage = was_at
+	story.enabled = was_on
+	game.radio_queue.clear()
+	game.radio_busy = 0.0
+	game._say("round_clear")
+	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and honest_again and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel"), "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's")
 	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	# --- two versions of the game cannot play together, and both are told so
@@ -11410,6 +11419,10 @@ func _squad_levels(game: Node3D) -> void:
 		var mid: Vector3 = map.points["lift_%s_mid" % id]
 		var out: Vector2 = HiveCore.OUT[int(HiveLayout.LIFTS[id].door)]
 		var cell := map.nearest_cell(mid + Vector3(out.x, 0, out.y) * 9.0, map.level_of(mid + Vector3(0, 0.3, 0)))
+		# (Companions knocked down earlier in the level are stood up first: this is about boarding.)
+		for mate: Teammate in helper.mates:
+			if mate.down:
+				mate.revive(true)
 		helper._put_all(Vector3(cell.x * CabinMap.CELL, mid.y, cell.y * CabinMap.CELL))
 		await helper._wait_for(1.5)
 		var run: HiveAreaRun = hive.run
