@@ -12,6 +12,12 @@ const WEAPONS := {
 	# The G36: the quickest and steadiest of the rifles, with a reload that sounds like no
 	# other's. Parts: see ATTACHMENTS.
 	"g36": {"label": "G36", "slot": 1, "price": 450, "sound": "g36", "magazine": 30, "reserve_max": 240, "reload_time": 2.2, "interval": 0.08, "damage": 35.0, "head_multiplier": 2.7, "spread": 0.0085, "kick": 0.009, "flash": 1.0, "cues": [[0.15, "g36_mag_out"], [0.62, "g36_mag_in"], [0.85, "g36_bolt"]]},
+	# The WIRBEL (tools/blender_make_wirbel.py): a rifle whose magazine is a drum of 45 rounds
+	# lying along the barrel on top; it turns on by one of its eight flutes with every shot
+	# (rotor: steps to a turn, see _rotor). In its numbers it lies between the AK and the
+	# M21E: 370 damage a second while it fires (AK 360, M21E 380), a magazine half as big
+	# again as the AK's, a slower reload. Sold from round three. Parts: see ATTACHMENTS.
+	"wirbel": {"label": "WIRBEL W-45", "slot": 1, "price": 600, "from_round": 3, "sound": "wirbel", "magazine": 45, "reserve_max": 270, "reload_time": 3.0, "interval": 0.095, "damage": 37.0, "head_multiplier": 2.4, "spread": 0.016, "kick": 0.0125, "flash": 1.2, "rotor": 8, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	"p90": {"label": "P90", "slot": 1, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
 	# cues: when in its reload each step is heard. Parts for it: see ATTACHMENTS.
 	"ump": {"label": "UMP45", "slot": 1, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
@@ -64,8 +70,8 @@ const WEAPONS := {
 	"fifty": {"label": "M107 KALIBER .50", "slot": 3, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
-const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil"]
-const ORDER := ["rifle", "ak", "g36", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
+const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil", "wirbel_sil"]
+const ORDER := ["rifle", "ak", "g36", "wirbel", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "revolver", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
 ## it, and the shop lists whose weapons are of that kind. A survivor carries CARRY of each
 ## kind, and as many more of any kind as slings were bought (extra_slots).
@@ -118,6 +124,11 @@ const ATTACHMENTS := {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	},
+	"wirbel": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier auf der Schiene über der Trommel: Leuchtpunkt im Ring, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – nur die Trommel tickt noch", "set": {"sound": "wirbel_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"mp7": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
@@ -316,6 +327,18 @@ var bolt_clock := -1.0
 ## Rotary gun: 0 at rest, 1 when the barrels are up to speed. Other weapons stay at 1.
 var spin := 1.0
 var spin_voice: AudioStreamPlayer
+## The WIRBEL's drum (rotor in WEAPONS): every shot kicks it on with a speed that, left to
+## run down by itself (ROTOR_TAU), turns it exactly one step; in full fire the kicks add up
+## to a steady turn (a step per shot), and when the trigger is let go it runs on a little
+## and stops. rotor_turn: its angle; rotor_speed: radians a second. rotor_kick: 1 at a shot,
+## running down - the bolt's way back and forth.
+const ROTOR_TAU := 0.3
+## Below this speed (radians a second) the drum's pawl catches it (see _rotor).
+const ROTOR_CATCH := 1.0
+var rotor_turn := 0.0
+var rotor_speed := 0.0
+var rotor_kick := 0.0
+var trigger_pull := 0.0
 ## Shell-by-shell reload: the chamber was empty, so the reload ends with a pump stroke.
 var chamber_empty := false
 ## The drum of the launcher while it is loaded: the step it is in ("" for none, see DRUM), the
@@ -406,6 +429,7 @@ func _build_weapon() -> void:
 	weapon_models["ump"] = WeaponView.build_gun("ump")
 	weapon_models["ak"] = WeaponView.build_gun("ak")
 	weapon_models["mp7"] = WeaponView.build_gun("mp7")
+	weapon_models["wirbel"] = WeaponView.build_gun("wirbel")
 	for id in WeaponView.MODELS:
 		weapon_models[id] = WeaponView.build_model(id)
 	for id in weapon_models:
@@ -871,6 +895,8 @@ func equip_weapon(id: String, silent: bool = false) -> bool:
 	pump_clock = -1.0
 	bolt_clock = -1.0
 	spin = 0.0
+	rotor_speed = 0.0
+	rotor_kick = 0.0
 	flash_left = 0
 	recoil = 0
 	# A heavy weapon takes a moment longer to bring up.
@@ -1208,6 +1234,52 @@ func _spin(delta: float, firing: bool) -> void:
 	elif spin_voice.playing:
 		spin_voice.stop()
 
+## The WIRBEL's moving parts, each frame: the drum turns on as its shots kicked it and runs
+## down; a new one comes in at rest. The bolt (the charging handle on the left) runs back
+## with each shot and is pulled back by the hand at the end of a reload; the trigger
+## follows the finger.
+func _rotor(delta: float) -> void:
+	var data: Dictionary = WEAPONS[current_weapon]
+	var done := 1.0 - reload_left / float(data.reload_time) if reload_left > 0.0 and not loading_shells else 1.0
+	if done < 1.0:
+		rotor_speed = 0.0
+		# The full drum goes in with its index mark at the top of its window.
+		if done > 0.4:
+			rotor_turn = 0.0
+	var step := TAU / float(data.rotor)
+	if rotor_speed >= ROTOR_CATCH:
+		rotor_turn += rotor_speed * delta
+	elif rotor_speed > 0.0:
+		# Slow enough for the pawl: it is drawn on into the next notch and stops there, with
+		# a flute (and its rounds) square in the window, never half way between two.
+		var notch := ceilf(rotor_turn / step - 0.001) * step
+		rotor_turn = move_toward(rotor_turn, notch, maxf(rotor_speed, ROTOR_CATCH * 0.6) * delta)
+		if is_equal_approx(rotor_turn, notch):
+			rotor_speed = 0.0
+	rotor_turn = fmod(rotor_turn, TAU)
+	rotor_speed *= exp(-delta / ROTOR_TAU)
+	rotor_kick = move_toward(rotor_kick, 0.0, delta / minf(0.08, float(data.interval)))
+	var clip := weapon.get_node_or_null("Magazine") as Node3D
+	if clip != null and clip.get_child_count() > 0:
+		var drum := clip.get_child(0) as Node3D
+		if not drum.has_meta("rest"):
+			drum.set_meta("rest", drum.basis)
+		# Clockwise, as the shooter sees it.
+		drum.basis = (drum.get_meta("rest") as Basis) * Basis(Vector3.BACK, -rotor_turn)
+	var bolt := weapon.find_child("Bolt", true, false) as Node3D
+	if bolt != null:
+		if not bolt.has_meta("rest"):
+			bolt.set_meta("rest", bolt.position)
+		# Back hard, forward a little slower; at the end of a reload the hand pulls it back.
+		var stroke := 1.0 - rotor_kick
+		var shot := smoothstep(0.0, 0.25, stroke) * (1.0 - smoothstep(0.4, 1.0, stroke)) if rotor_kick > 0.0 else 0.0
+		var pulled := smoothstep(0.8, 0.86, done) * (1.0 - smoothstep(0.88, 0.95, done))
+		bolt.position = (bolt.get_meta("rest") as Vector3) + Vector3(0, 0, float(WeaponView.GUNS[current_weapon].bolt_travel)) * maxf(shot, pulled)
+	var trigger := weapon.find_child("Trigger", true, false) as Node3D
+	if trigger != null:
+		trigger_pull = move_toward(trigger_pull, 1.0 if trigger_held and reload_left <= 0.0 else 0.0, delta * 14.0)
+		trigger.rotation.x = deg_to_rad(-16.0) * trigger_pull
+
 ## Fires a 40 mm shell that goes off where it lands.
 func _launch(data: Dictionary) -> void:
 	var shell := Throwable.new()
@@ -1476,6 +1548,9 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var step: Dictionary = WeaponView.reload_step(current_weapon, done)
 		clip.position = step.magazine
 		(weapon.get_node("Support") as Node3D).position = step.hand
+	# The WIRBEL: its drum turns, its bolt runs back, its trigger is pulled.
+	if WEAPONS[current_weapon].has("rotor"):
+		_rotor(delta)
 	# The launcher: the drum turns on after each shot (and back for each shell loaded), the front
 	# frame swings out while it is loaded, and the left hand brings the shells.
 	if WEAPONS[current_weapon].has("drum"):
@@ -1597,6 +1672,13 @@ func shoot() -> void:
 			pump_cued = false
 	if data.has("bolt"):
 		bolt_clock = 0.0
+	if data.has("rotor"):
+		# The drum is kicked on by one step (see _rotor).
+		rotor_speed += TAU / float(data.rotor) / ROTOR_TAU
+		rotor_kick = 1.0
+		# CASINGS: the WIRBEL throws its cases out of the port on the right of its receiver,
+		# at WeaponView.GUNS.wirbel.eject (in the view, beside the mount): that is where a
+		# shared ejected-casing system (branch machine-pistol) takes them from.
 	if data.has("grenade"):
 		_launch(data)
 		if data.has("drum"):

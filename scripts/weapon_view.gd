@@ -95,6 +95,22 @@ const GUNS := {
 		"rail": 0.1519, "optic": -0.15, "irons": 0.1754,
 		"support": Vector3(0, 0.1093, -0.4104), "handle": Vector3(-0.03, 0.133, -0.52),
 		"magazine_out": Vector3(-0.1, -0.99, 0.0), "magazine_foot": Vector3(0.0014, -0.1467, -0.174)
+	},
+	# The WIRBEL (tools/blender_make_wirbel.py, which prints these places): its magazine is
+	# a drum on top, between two towers that carry the rail. The trough it lies in is open
+	# on the left, and that is where it comes out, sideways and a little up, under the
+	# rail's edge and over the trough's lip; the hand takes it by its left side. The left
+	# hand holds the foregrip (hands: "grip"). Aimed through the ghost ring at the back of
+	# the rail over the post at its front (irons: the middle of the ring, level with the
+	# tip of the post; folding: they are laid down under a fitted sight, else its post fills
+	# a scope). handle: the charging handle on the left, which runs back with every
+	# shot (bolt_travel). eject: the port on the right where its cases come out.
+	"wirbel": {
+		"scene": "res://assets/models/wirbel.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.072, -0.6), "bore": 0.0062,
+		"rail": 0.2, "optic": -0.1, "irons": 0.213, "hands": "grip", "folding": true,
+		"support": Vector3(0, 0.012, -0.355), "handle": Vector3(-0.026, 0.078, -0.112), "bolt_travel": 0.075,
+		"magazine_out": Vector3(-0.6, 0.183, 0.0), "magazine_foot": Vector3(-0.045, 0.116, -0.148),
+		"eject": Vector3(0.026, 0.075, -0.057)
 	}
 }
 ## The reflex sight is the user's model of a holographic sight: a hood with a tunnel to
@@ -241,6 +257,15 @@ const VIEWS := {
 		"hip": Vector3(0.115, -0.148, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.0612, -0.19), "aim_angles": Vector3(-0.73, 0.0, 0.0), "muzzle": Vector3(0, 0.0064, -0.5453),
 		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+	},
+	# The WIRBEL (build_gun): held lower than the others, its drum and rail standing high;
+	# aimed through its ghost ring, 15 cm before the eye. For a reload it is tipped up and
+	# turned a little, so that its open left side and the drum sliding out of it face the
+	# eye, but hardly rolled (rolled like the others, the drum flew up into the picture).
+	"wirbel": {
+		"hip": Vector3(0.12, -0.19, -0.36), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.133, -0.24), "muzzle": Vector3(0, -0.008, -0.52),
+		"reload_low": Vector3(-0.03, 0.0, 0.03), "reload_turn": Vector3(0.3, 0.35, -0.3)
 	},
 	# The MP7 (build_gun): no iron sights, so aimed along the top of its rail, 2.5 cm above it
 	# and 16 cm behind its end. For a reload it is raised high and rolled far over to the
