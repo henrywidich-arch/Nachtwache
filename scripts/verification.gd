@@ -2144,7 +2144,7 @@ func _loadout(game: Node3D) -> void:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int({"primary": 1, "secondary": 2, "heavy": 3}[kind]) and int(Survivor.KINDS.primary.key) == 1 and int(Survivor.KINDS.heavy.key) == 2 and int(Survivor.KINDS.secondary.key) == 3
-	expect(keyed and int(kinds.primary) == 9 and int(kinds.secondary) == 5 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, including the three new sidearms")
+	expect(keyed and int(kinds.primary) == 9 and int(kinds.secondary) == 6 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, including the three new sidearms and the HORNISSE")
 	# --- two issued primary slots; a third trades in a chosen primary
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
@@ -2403,7 +2403,7 @@ func _loadout(game: Node3D) -> void:
 	var cued := true
 	for cue in Survivor.WEAPONS.g36.cues:
 		cued = cued and str(cue[1]).begins_with("g36_")
-	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 10 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 retains its shot, physical reload, aligned sights and working attachments in the new weapon editor")
+	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 11 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 retains its shot, physical reload, aligned sights and working attachments in the new weapon editor")
 	_wipe(game)
 	# --- the MP7: its magazine comes out of the pistol grip, and it has no iron sights
 	game.preparation_left = 9999.0
@@ -2443,6 +2443,91 @@ func _loadout(game: Node3D) -> void:
 		if mp7_clip != null:
 			mp7_out = maxf(mp7_out, mp7_clip.position.length())
 	expect(mp7_got and mp7_rail and mp7_down and mp7_dot and mp7_scoped and mp7_hushed and mp7_listed == 2 and mp7_heard and mp7_clip != null and mp7.get_node_or_null("Support") != null and mp7_out > 0.12 and mp7_clip.position.length() < 0.001 and player.ammo == 30 and Survivor.kind_of("mp7") == "primary" and str(Survivor.WEAPONS.mp7.label) == "MP7" and Survivor.ORDER.find("mp7") == Survivor.ORDER.find("ump") + 1 and float(Survivor.WEAPONS.mp7.interval) < float(Survivor.WEAPONS.p90.interval) and SurvivalHUD.SHOP_NOTES.has("mp7"), "The MP7 is a quick primary weapon whose magazine comes out of its pistol grip; it has no iron sights and is aimed along its rail or through a fitted sight, and takes a suppressor with a shot of its own")
+	_wipe(game)
+	# --- the HORNISSE: a machine pistol among the sidearms, from round three on
+	game.preparation_left = 9999.0
+	game.credits = 2000
+	game.wave = 2
+	player.extra_slots = 1
+	player.inventory = {"rifle": {"ammo": 30, "reserve": 180, "level": 0}}
+	player.equip_weapon("rifle", true)
+	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
+	game.interact()
+	var hn_early: bool = not game.buy_weapon("hornet") and not player.inventory.has("hornet")
+	game.wave = 3
+	game.hud._open_tab("sidearms")
+	var hn_shelved := false
+	for entry: Dictionary in game.hud.counter.entries:
+		hn_shelved = hn_shelved or str(entry.get("id", "")) == "hornet"
+	var hn_price: int = game.shelf("hornet")
+	var hn_got: bool = game.buy_weapon("hornet") and player.current_weapon == "hornet" and player.inventory.has("rifle") and game.credits == 2000 - hn_price and player.ammo == 30
+	var hornet: Node3D = player.weapon
+	var hn_dot: bool = game.buy_part("hornet", "reddot") and (hornet.get_node("Mod_reddot") as Node3D).visible and player.fitted("sight") == "reddot"
+	var hn_hushed: bool = game.buy_part("hornet", "silencer") and (hornet.get_node("Mod_silencer") as Node3D).visible and str(player.gun().sound) == "hornet_sil" and bool(player.gun().quiet) and Survivor.QUIET_SOUNDS.has("hornet_sil") and not Survivor.ATTACHMENTS.hornet.has("scope")
+	var hn_heard: bool = bool(game.sounds.recorded.get("hornet", false)) and bool(game.sounds.recorded.get("hornet_sil", false)) and FieldAudio.MIX.has("hornet") and FieldAudio.MIX.has("hornet_sil")
+	game.resume_run()
+	# Its rate: held down for a second (sixty physics steps) it fires twenty rounds.
+	player.ammo = 30
+	player.shot_cooldown = 0.0
+	player.reload_left = 0.0
+	var hn_fired := 0
+	# The slide runs back with each shot and home again: seen back and seen home, again and again.
+	var hn_breech := hornet.get_node_or_null("Breech") as Node3D
+	var hn_travel: float = float(WeaponView.GUNS.hornet.slide)
+	var hn_back := 0
+	var hn_home := 0
+	var hn_cases: int = game.brass.thrown
+	for i in range(60):
+		var before: int = player.ammo
+		player.shoot()
+		hn_fired += before - player.ammo
+		await get_tree().physics_frame
+		if hn_breech != null:
+			hn_back += 1 if hn_breech.position.z > hn_travel * 0.5 else 0
+			hn_home += 1 if hn_breech.position.z < hn_travel * 0.3 else 0
+	player.trigger_held = false
+	# Every shot threw a case, and they lie about.
+	var hn_thrown: int = game.brass.thrown - hn_cases
+	var hn_about: int = game.brass.count()
+	# The last shot leaves the slide back.
+	player.ammo = 1
+	player.shot_cooldown = 0.0
+	player.shoot()
+	await frames(3)
+	var hn_locked: bool = hn_breech != null and player.ammo == 0 and is_equal_approx(hn_breech.position.z, hn_travel)
+	# The reload: the magazine leaves the grip downwards and comes back full; the slide stays
+	# back until the hand lets it go near the end, then it is home.
+	player.start_reload()
+	var hn_clip := hornet.get_node_or_null("Magazine") as Node3D
+	var hn_out := 0.0
+	var hn_held := true
+	var hn_steps := int(float(Survivor.WEAPONS.hornet.reload_time) * 60.0)
+	for i in range(hn_steps + 20):
+		await get_tree().physics_frame
+		if hn_clip != null:
+			hn_out = maxf(hn_out, hn_clip.position.length())
+		if i < int(hn_steps * 0.8) and hn_breech != null:
+			hn_held = hn_held and is_equal_approx(hn_breech.position.z, hn_travel)
+	var hn_released: bool = hn_breech != null and hn_breech.position.z < 0.0005
+	var hn_way: Vector3 = WeaponView.reload_step("hornet", 0.38).magazine
+	# The cases lie a few seconds and are gone.
+	for k in range(20):
+		game.brass._physics_process(0.5)
+	var hn_gone: bool = game.brass.count() == 0
+	# A partner's HORNISSE in co-op throws its cases as well (by the sound of the shot).
+	var hn_partner := RemoteSurvivor.new()
+	hn_partner.game = game
+	game.mates.add_child(hn_partner)
+	hn_partner.global_position = player.global_position + Vector3(1.4, 0, 0.6)
+	await frames(2)
+	var hn_before_partner: int = game.brass.thrown
+	hn_partner.show_shot(hn_partner.global_position + Vector3(0, 1.4, -10), "hornet")
+	hn_partner.show_shot(hn_partner.global_position + Vector3(0, 1.4, -10), "p90")
+	var hn_partner_cases: int = game.brass.thrown - hn_before_partner
+	hn_partner.queue_free()
+	await frames(2)
+	expect(hn_back >= 15 and hn_home >= 15 and hn_thrown == hn_fired and hn_about > 0 and hn_locked and hn_held and hn_released and hn_gone and hn_partner_cases == 1 and hornet.get_node_or_null("Port") != null and BrassCasings.SOUNDS.has("hornet") and BrassCasings.SOUNDS.has("hornet_sil"), "The HORNISSE's slide runs back and home with every shot and stays back after the last one until the reload lets it go; every shot throws a case, which lies a while and is gone, in a co-op partner's hand too (back %d, home %d, cases %d of %d shots, about %d, partner %d)" % [hn_back, hn_home, hn_thrown, hn_fired, hn_about, hn_partner_cases])
+	expect(hn_early and hn_shelved and hn_got and hn_dot and hn_hushed and hn_heard and hn_fired >= 19 and hn_fired <= 21 and hn_clip != null and hn_out > 0.1 and hn_way.y < -0.1 and hn_clip.position.length() < 0.001 and player.ammo == 30 and Survivor.kind_of("hornet") == "secondary" and int(Survivor.KINDS.secondary.key) == 3 and Survivor.ORDER.find("hornet") == Survivor.ORDER.find("g18") + 1 and float(Survivor.WEAPONS.hornet.interval) < float(Survivor.WEAPONS.pistol.interval) and float(Survivor.WEAPONS.hornet.damage) < float(Survivor.WEAPONS.pistol.damage) and SurvivalHUD.SHOP_NOTES.has("hornet") and Skills.WISHES.sweeper.plain.has("hornet"), "The HORNISSE is a sidearm on key 3, sold from round three: it fires twenty rounds a second, takes a red dot and a suppressor of its own sound, and its magazine leaves the grip and comes back full (fired %d, shelved %s, bought %s)" % [hn_fired, hn_shelved, hn_got])
 	_wipe(game)
 	# --- the keys
 	var bound := {}
@@ -4535,7 +4620,7 @@ func _kit(game: Node3D) -> void:
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 8 and int(rows.heavy) == 7 and int(rows.sidearms) == 5 and int(rows.melee) == 7 and not rows.has("mods") and not Survivor.GOODS.has("mags") and parts == 34 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The eight shop lists include five sidearms and seven melee options; attachments live on the weapon pages (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 8 and int(rows.heavy) == 7 and int(rows.sidearms) == 6 and int(rows.melee) == 7 and not rows.has("mods") and not Survivor.GOODS.has("mags") and parts == 36 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The eight shop lists include six sidearms and seven melee options; attachments live on the weapon pages (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
@@ -7332,7 +7417,7 @@ func _overhaul(game: Node3D) -> void:
 		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x * small and mark_z > face_z + WeaponView.HOLO_TUNNEL.y * small
 		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS * small) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE * small) and rail_y + (WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5) * small > (spec.mount as Vector3).y + float(spec.irons)
 		sights += 1
-	expect(sights == 10 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all ten guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
+	expect(sights == 11 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all eleven guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
 	# --- the lobby says what the router said
 	var link: NetLink = game.net
 	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")
@@ -7414,7 +7499,7 @@ func _wish(game: Node3D) -> void:
 	var none: bool = skills.wish_list("sweeper").is_empty() and not skills.set_wish("sweeper", "shotgun") and skills.wish() == ""
 	skills.ranks = {"sweeper_damage": 3, "sweeper_wish": 1, "breacher_heavy": 3, "breacher_wish": 2}
 	skills.chosen = "sweeper"
-	var first: bool = skills.wish_list("sweeper") == (["p90", "mp7", "shotgun"] as Array[String]) and not skills.set_wish("sweeper", "minigun") and not skills.set_wish("sweeper", "m14") and skills.set_wish("sweeper", "shotgun") and skills.wish() == "shotgun"
+	var first: bool = skills.wish_list("sweeper") == (["p90", "mp7", "shotgun", "hornet"] as Array[String]) and not skills.set_wish("sweeper", "minigun") and not skills.set_wish("sweeper", "m14") and skills.set_wish("sweeper", "shotgun") and skills.wish() == "shotgun"
 	var second: bool = skills.wish_list("breacher").has("mg") and skills.set_wish("breacher", "mg") and skills.wish() == "shotgun" and skills.wish("breacher") == "mg"
 	skills.chosen = "breacher"
 	var switched: bool = skills.wish() == "mg"

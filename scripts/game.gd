@@ -84,6 +84,8 @@ var hud: SurvivalHUD
 var sounds: FieldAudio
 var music: MusicDirector
 var fx: CombatEffects
+## Empty cases thrown out of the weapons that have them (brass.gd).
+var brass: BrassCasings
 var preview_camera: Camera3D
 var menu_light: SpotLight3D
 var shop_camera: Camera3D
@@ -296,6 +298,10 @@ func _ready() -> void:
 	fx.name = "Effects"
 	fx.game = self
 	add_child(fx)
+	brass = BrassCasings.new()
+	brass.name = "Brass"
+	brass.game = self
+	add_child(brass)
 	shopkeeper = NpcVisual.new()
 	shopkeeper.name = "Shopkeeper"
 	shopkeeper.game = self
@@ -476,6 +482,10 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_gun_check")
+	elif "--gun-anim" in args or "--gun-fps" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_gun_anim")
 	elif "--story-check" in args:
 		check_mode = true
 		call_deferred("_run_story_check")
@@ -618,6 +628,7 @@ func _warm_up() -> void:
 		await get_tree().process_frame
 	stage.queue_free()
 	fx.clear()
+	brass.clear()
 	sounds.hush = false
 	var fade := create_tween()
 	fade.tween_property(curtain, "color:a", 0.0, 0.7)
@@ -813,6 +824,7 @@ func _clear_match_nodes() -> void:
 	survivors.clear()
 	survivors.append(player)
 	fx.clear()
+	brass.clear()
 	boss = null
 
 ## The words under the opening banner: what is open tonight.
@@ -4482,7 +4494,9 @@ func _run_gun_check() -> void:
 		looks = [["1_plain", []]]
 	for entry in looks:
 		for part in entry[1]:
-			player.fit(id, str(part))
+			# (Only the parts this gun takes.)
+			if (Survivor.ATTACHMENTS[id] as Dictionary).has(str(part)):
+				player.fit(id, str(part))
 		await get_tree().create_timer(0.6).timeout
 		await _capture(folder, "%s_%s_hip.png" % [id, entry[0]])
 		Input.action_press("aim")
@@ -4490,6 +4504,12 @@ func _run_gun_check() -> void:
 		await _capture(folder, "%s_%s_aim.png" % [id, entry[0]])
 		Input.action_release("aim")
 		await get_tree().create_timer(0.35).timeout
+	# --gun-fire: a picture of a shot, its flash at the muzzle.
+	if "--gun-fire" in OS.get_cmdline_user_args():
+		player.shot_cooldown = 0.0
+		player.shoot()
+		await _capture(folder, "%s_4b_fire.png" % id)
+		await get_tree().create_timer(0.4).timeout
 	player.ammo = 3
 	player.start_reload()
 	var waits := [0.2, 0.25, 0.28, 0.38, 0.33, 0.24, 0.16, 0.16]
@@ -4528,6 +4548,125 @@ func _run_gun_check() -> void:
 	print("SHOP gun=%s tab=%s credits=%d owned=%s" % [id, tab, credits, str(player.inventory.has(id))])
 	print("GUN_CAPTURE_COMPLETE")
 	get_tree().quit()
+
+## A weapon's animations one after another, step by step (--gun-anim, --gun=<id>): standing
+## and looking about, firing a whole magazine from the hip, the reload after it, aiming in,
+## firing aimed, aiming out, and the same with every part fitted. Recorded with the movie
+## writer (--write-movie x.avi --fixed-fps 60), each frame is one physics step; a MARK line
+## names the frame each part begins with. --gun-fps instead: no recording, vsync off, and the
+## frame times of standing still against those of firing four magazines (with their cases).
+func _run_gun_anim() -> void:
+	var id := "hornet"
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--gun="):
+			id = arg.trim_prefix("--gun=")
+	var timing := "--gun-fps" in OS.get_cmdline_user_args()
+	await get_tree().create_timer(1.0).timeout
+	start_run()
+	set_process(false)
+	hud.banner_left = 0
+	hud.radio_left = 0
+	mission.plain()
+	preparation_left = 9999.0
+	cabin.set_daylight(not timing)
+	_place_player(Vector3(0, 0.05, 12.5), 180)
+	player.unlock(id)
+	for gap in [6.0, 12.0, 20.0]:
+		var foe := spawn_enemy("mauler")
+		foe.set_physics_process(false)
+		foe.position = Vector3((gap - 12.0) * 0.1, 0.05, 12.5 + gap)
+		foe.rotation.y = 0.0
+	if timing:
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
+		Engine.max_fps = 0
+		await _steps(60)
+		var still := await _frame_times(150, "", 0)
+		var firing := await _frame_times(0, id, 4)
+		print("GUN_FPS still avg=%.2fms p99=%.2fms max=%.2fms | firing avg=%.2fms p99=%.2fms max=%.2fms frames=%d | cases thrown=%d about=%d tinks=%d" % [still[0], still[1], still[2], firing[0], firing[1], firing[2], int(firing[3]), brass.thrown, brass.count(), brass.tinks])
+		print("GUN_ANIM_COMPLETE")
+		get_tree().quit()
+		return
+	await _steps(30)
+	_mark("idle")
+	for i in range(70):
+		player.look_delta = Vector2(sin(i * 0.12) * 22.0, cos(i * 0.09) * 6.0)
+		await get_tree().physics_frame
+	await _steps(20)
+	_mark("fire_hip")
+	await _fire_out(0)
+	await _steps(30)
+	_mark("reload_empty")
+	player.start_reload()
+	await _steps(int(float(Survivor.WEAPONS[id].reload_time) * 60.0) + 20)
+	_mark("aim_in")
+	Input.action_press("aim")
+	await _steps(30)
+	_mark("fire_aim")
+	await _fire_out(14)
+	await _steps(15)
+	_mark("aim_out")
+	Input.action_release("aim")
+	await _steps(35)
+	for part in (Survivor.ATTACHMENTS.get(id, {}) as Dictionary):
+		if str(part) != "scope":
+			player.fit(id, str(part))
+	await _steps(20)
+	_mark("parts_aim_in")
+	Input.action_press("aim")
+	await _steps(30)
+	_mark("parts_fire_aim")
+	player.ammo = 24
+	await _fire_out(12)
+	await _steps(12)
+	_mark("parts_reload")
+	Input.action_release("aim")
+	player.start_reload()
+	await _steps(int(float(Survivor.WEAPONS[id].reload_time) * 60.0) + 20)
+	_mark("end")
+	print("GUN_ANIM gun=%s ammo=%d cases thrown=%d about=%d tinks=%d" % [id, player.ammo, brass.thrown, brass.count(), brass.tinks])
+	print("GUN_ANIM_COMPLETE")
+	get_tree().quit()
+
+func _steps(count: int) -> void:
+	for i in range(count):
+		await get_tree().physics_frame
+
+func _mark(title: String) -> void:
+	print("MARK %s frame=%d" % [title, Engine.get_frames_drawn()])
+
+## Holds the trigger down, a shot each physics step the weapon allows, until keep rounds
+## are left (0: until it is empty and the slide stays back).
+func _fire_out(keep: int) -> void:
+	player.shot_cooldown = 0.0
+	while player.ammo > keep:
+		player.shoot()
+		await get_tree().physics_frame
+	player.trigger_held = false
+
+## Frame times over count frames standing still, or (count 0) while firing as many
+## magazines of the weapon, each reloaded: [average ms, 99th percentile ms, longest ms, frames].
+func _frame_times(count: int, id: String, magazines: int) -> Array:
+	var times: Array[float] = []
+	var last := Time.get_ticks_usec()
+	var left := magazines
+	var frames := 0
+	while (count > 0 and frames < count) or (count == 0 and left > 0):
+		if count == 0 and player.reload_left <= 0.0:
+			if player.ammo > 0:
+				player.shoot()
+			else:
+				player.start_reload()
+				left -= 1
+		await get_tree().process_frame
+		var now := Time.get_ticks_usec()
+		times.append((now - last) / 1000.0)
+		last = now
+		frames += 1
+	times.sort()
+	var total := 0.0
+	for time in times:
+		total += time
+	return [total / maxf(1.0, times.size()), times[int(times.size() * 0.99)], times[times.size() - 1], frames]
 
 ## Screenshots of the newer weapons: from the hip, aimed, and the shop that sells them.
 func _run_weapons_check() -> void:
@@ -5171,6 +5310,7 @@ func _run_visual_check() -> void:
 	for node in get_tree().get_nodes_in_group("infected"):
 		node.queue_free()
 	fx.clear()
+	brass.clear()
 	alive_count = 0
 	player.health = 100
 	player.hurt_amount = 0

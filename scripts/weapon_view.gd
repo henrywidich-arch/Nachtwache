@@ -69,6 +69,20 @@ const GUNS := {
 	# of its foot; the left hand holds the foregrip (hands: "grip"). No iron sights: irons is
 	# the top of the rail, which a sight clamps to. magazine_out is shorter than on the
 	# others: the short magazine needs only 16 cm to clear the grip, and stays in the picture.
+	# The HORNISSE (tools/blender_make_hornet.py), a machine pistol: held like the pistol,
+	# the left hand round the right (hands: "cup"); its magazine runs down the grip and well
+	# below it and comes out along the grip. rail and irons: the slide's top and the tip of
+	# its front sight; a sight sits on the slide just before the rear sight.
+	"hornet": {
+		"scene": "res://assets/models/hornet.glb", "mount": Vector3(0, -0.075, 0.076), "muzzle": Vector3(0, 0.06, -0.15), "bore": 0.0046,
+		"rail": 0.081, "optic": 0.012, "irons": 0.0868, "hands": "cup", "holo": 0.62, "metal": 0.65,
+		"support": Vector3(-0.014, -0.012, 0.004), "handle": Vector3(-0.02, 0.02, -0.01),
+		"magazine_out": Vector3(0, -0.9563, 0.2924), "magazine_foot": Vector3(0, -0.1212, 0.0453),
+		# slide: how far the slide ("Breech" in the model) runs back with a shot; port: where
+		# the empty cases leave it (right side, before the rear sight). A red dot does not ride
+		# the slide (it came back into the eye with every shot): it stays where it is fitted.
+		"slide": 0.026, "port": Vector3(0.0128, 0.068, -0.022)
+	},
 	"mp7": {
 		"scene": "res://assets/models/mp7.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.1238, -0.315), "bore": 0.0115,
 		"rail": 0.1814, "optic": -0.045, "irons": 0.1814, "hands": "grip",
@@ -248,6 +262,12 @@ const VIEWS := {
 	# The MP7 (build_gun): no iron sights, so aimed along the top of its rail, 2.5 cm above it
 	# and 16 cm behind its end. For a reload it is raised high and rolled far over to the
 	# left, so that the foot of the grip and the magazine that comes out of it can be seen.
+	# The HORNISSE (build_gun): held as the pistol is, aimed over its sights.
+	"hornet": {
+		"hip": Vector3(0.11, -0.13, -0.47), "hip_angles": Vector3(0.5, 5.0, -2.0),
+		"aim": Vector3(0.0, -0.0118, -0.43), "muzzle": Vector3(0, -0.015, -0.074),
+		"reload_low": Vector3(-0.03, 0.06, 0.02), "reload_turn": Vector3(0.35, 0.3, -0.7)
+	},
 	"mp7": {
 		"hip": Vector3(0.12, -0.16, -0.42), "hip_angles": Vector3(0.5, 6.5, -2.5),
 		"aim": Vector3(0.0, -0.1264, -0.3254), "muzzle": Vector3(0, 0.0438, -0.235),
@@ -679,6 +699,21 @@ static func build_gun(id: String) -> Node3D:
 	magazine.get_parent().remove_child(magazine)
 	clip.add_child(magazine)
 	magazine.position += mount
+	# A slide that runs with the shots: the model's "Breech" under a holder of its own.
+	var slide := model.find_child("Breech", true, false) as Node3D
+	if slide != null:
+		var holder := Node3D.new()
+		holder.name = "Breech"
+		view.add_child(holder)
+		slide.owner = null
+		slide.get_parent().remove_child(slide)
+		holder.add_child(slide)
+		slide.position += mount
+	if gun.has("port"):
+		var port := Node3D.new()
+		port.name = "Port"
+		port.position = mount + (gun.port as Vector3)
+		view.add_child(port)
 	var hand := Node3D.new()
 	hand.name = "Support"
 	view.add_child(hand)
@@ -686,6 +721,9 @@ static func build_gun(id: String) -> Node3D:
 	# hands: "grip" closes the hand round a foregrip instead of laying it under the handguard.
 	if str(gun.get("hands", "")) == "grip":
 		_grip_hand(support, mount + (gun.support as Vector3), -1.0, false, Vector3(-0.15, -0.24, 0.2))
+	elif str(gun.get("hands", "")) == "cup":
+		# A pistol's: the left hand closed round the right one (as build_model does).
+		_grip_hand(support, mount + (gun.support as Vector3), -1.0, false, Vector3(-0.16, -0.22, 0.2))
 	else:
 		_cradle_hand(support, mount + (gun.support as Vector3), Vector3(-0.13, -0.27, 0.17))
 	for mesh in support.commit(hand, "Hand", false):
