@@ -50,6 +50,11 @@ func aim_item(game: Node3D, task: Dictionary, index: int, offset: Vector3) -> vo
 ## the area's task (an item, a switch, the fuse box or the terminal), else at the device the
 ## stage wants used, then using it.
 func _use_hive(game: Node3D) -> bool:
+	_aim_hive(game)
+	return game.hive.use()
+
+## Looks at what [E] in mission two would be for (see _use_hive); the bot does it too.
+func _aim_hive(game: Node3D) -> void:
 	var hive: HiveDirector = game.hive
 	var run: HiveAreaRun = hive.run
 	var eye: Camera3D = game.player.camera
@@ -73,7 +78,6 @@ func _use_hive(game: Node3D) -> bool:
 		target = hive.map.interaction_devices.get(hive.use_key)
 	if target != null:
 		eye.look_at(preload("res://scripts/interaction_focus.gd").bounds(target).get_center())
-	return hive.use()
 
 ## A place to stand in front of a station: one metre from it, towards `room`.
 func beside(game: Node3D, kind: String, room: Vector3, index: int = 0) -> Vector3:
@@ -9779,6 +9783,8 @@ func _hive_bot(game: Node3D, limit: float) -> void:
 		# --- use what is to be used: what the stage wants used, and a plain weapon cache
 		# the bot stands before (a sealed one it leaves alone)
 		if hive.use_at != Vector3.INF and player.global_position.distance_to(hive.use_at) < 2.6:
+			# (Since v0.68 [E] acts on what is aimed at: the bot looks at it first.)
+			_aim_hive(game)
 			game.interact()
 		else:
 			hive.caches.bot_use()
