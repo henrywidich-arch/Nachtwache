@@ -19,10 +19,12 @@ const FADE := 0.8
 const GRAVITY := 9.8
 ## No two tinks closer together than this (seconds), and how loud (dB on its mix).
 const TINK_GAP := 0.09
-## The kinds of case: radius and length (metres).
-const KINDS := {"9mm": [0.0049, 0.0192]}
-## Shots of a co-op partner that throw a case, by their sound.
-const SOUNDS := {"hornet": "9mm", "hornet_sil": "9mm"}
+## The kinds of case: radius and length (metres), how hard they are thrown, and how far
+## behind a partner's muzzle the port is (co-op). The pool's mesh is the 9 mm case; another
+## kind is that case stretched.
+const KINDS := {"9mm": [0.0049, 0.0192, 1.0, 0.13], "rifle": [0.0056, 0.039, 1.25, 0.5]}
+## Shots of a co-op partner that throw a case, by their sound, and the kind of case.
+const SOUNDS := {"hornet": "9mm", "hornet_sil": "9mm", "wirbel": "rifle", "wirbel_sil": "rifle"}
 
 var game: Node3D
 var spots := PackedVector3Array()
@@ -33,6 +35,7 @@ var floors := PackedFloat32Array()
 var ages := PackedFloat32Array()
 var bounces := PackedInt32Array()
 var turns: Array[Basis] = []
+var sizes := PackedVector3Array()
 var next := 0
 var live := 0
 var tink_left := 0.0
@@ -68,6 +71,7 @@ func _ready() -> void:
 	ages.resize(POOL)
 	bounces.resize(POOL)
 	turns.resize(POOL)
+	sizes.resize(POOL)
 	clear()
 
 ## Every case gone (a new match, a new level).
@@ -79,7 +83,9 @@ func clear() -> void:
 
 ## Throws a case from `from`: `frame` gives right (x), up (y) and back (z) of the weapon,
 ## `carry` the shooter's own speed, which the case keeps.
-func eject(from: Vector3, frame: Basis, carry: Vector3 = Vector3.ZERO) -> void:
+func eject(from: Vector3, frame: Basis, carry: Vector3 = Vector3.ZERO, kind: String = "9mm") -> void:
+	var shape: Array = KINDS.get(kind, KINDS["9mm"])
+	var base: Array = KINDS["9mm"]
 	var i := next
 	next = (next + 1) % POOL
 	if ages[i] < 0.0:
@@ -88,7 +94,7 @@ func eject(from: Vector3, frame: Basis, carry: Vector3 = Vector3.ZERO) -> void:
 	var right := frame.x.normalized()
 	var up := frame.y.normalized()
 	var back := frame.z.normalized()
-	var speed := right * random.randf_range(1.5, 2.3) + up * random.randf_range(1.3, 2.0) + back * random.randf_range(0.1, 0.5) + carry
+	var speed := (right * random.randf_range(1.5, 2.3) + up * random.randf_range(1.3, 2.0) + back * random.randf_range(0.1, 0.5)) * float(shape[2]) + carry
 	var floor_y := from.y - 1.6
 	var world := get_world_3d()
 	if world != null:
@@ -107,6 +113,7 @@ func eject(from: Vector3, frame: Basis, carry: Vector3 = Vector3.ZERO) -> void:
 	floors[i] = floor_y
 	ages[i] = 0.0
 	bounces[i] = 0
+	sizes[i] = Vector3(float(shape[0]) / float(base[0]), float(shape[1]) / float(base[1]), float(shape[0]) / float(base[0]))
 	# Thrown sideways: the case's length lies across the bore.
 	turns[i] = frame.orthonormalized() * Basis(Vector3.FORWARD, PI / 2)
 	_place(i, 1.0)
@@ -156,7 +163,8 @@ func _physics_process(delta: float) -> void:
 				_place(i, left)
 
 func _place(i: int, size: float) -> void:
-	multimesh.set_instance_transform(i, Transform3D(turns[i].scaled(Vector3.ONE * size), spots[i]))
+	# (The case's own stretch along its axis, then the turn it has.)
+	multimesh.set_instance_transform(i, Transform3D(turns[i] * Basis.from_scale(sizes[i] * size), spots[i]))
 
 ## How many cases are about (for the checks).
 func count() -> int:

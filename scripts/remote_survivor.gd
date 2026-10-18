@@ -167,4 +167,5 @@ func show_shot(to: Vector3, sound: String) -> void:
 	game.sounds.play_at(sound, visual.muzzle_position(), -3.0)
 	# A weapon that throws its empty cases does so in the partner's hand too (brass.gd).
 	if BrassCasings.SOUNDS.has(sound) and game.get("brass") != null:
-		game.brass.eject(visual.muzzle_position() + global_basis.z * 0.13 + global_basis.x * 0.012, global_basis)
+		var kind := str(BrassCasings.SOUNDS[sound])
+		game.brass.eject(visual.muzzle_position() + global_basis.z * float(BrassCasings.KINDS[kind][3]) + global_basis.x * 0.012, global_basis, Vector3.ZERO, kind)

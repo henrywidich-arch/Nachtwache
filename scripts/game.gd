@@ -4489,6 +4489,12 @@ func _run_gun_check() -> void:
 		foe.set_physics_process(false)
 		foe.position = Vector3((gap - 20.0) * 0.12, 0.05, 12.5 + gap)
 		foe.rotation.y = 0.0
+	# --gun-motion: frame sequences of the weapon in motion instead (see _gun_motion).
+	if "--gun-motion" in OS.get_cmdline_user_args():
+		await _gun_motion(folder, id)
+		print("GUN_CAPTURE_COMPLETE")
+		get_tree().quit()
+		return
 	var looks := [["1_plain", []], ["2_reddot", ["reddot"]], ["3_scope", ["scope"]], ["4_silencer", ["scope", "reddot", "silencer"]]]
 	if not Survivor.ATTACHMENTS.has(id):
 		looks = [["1_plain", []]]
@@ -4667,6 +4673,43 @@ func _frame_times(count: int, id: String, magazines: int) -> Array:
 	for time in times:
 		total += time
 	return [total / maxf(1.0, times.size()), times[int(times.size() * 0.99)], times[times.size() - 1], frames]
+
+## --gun-check --gun-motion: the weapon in motion, a picture every few hundredths of a
+## second of game time, with the game slowed to a fifth so that each is taken on time:
+## a second of full fire, the trigger let go (what runs on), a reload, aiming in and out.
+## A MOTION line for each picture gives its game time, the drum's angle and the bolt's way
+## back (on a weapon that has them).
+func _gun_motion(folder: String, id: String) -> void:
+	await get_tree().create_timer(0.8).timeout
+	player.ammo = player.magazine_size()
+	var fire := func() -> void:
+		player.shoot()
+	var bolt := player.weapon.find_child("Bolt", true, false) as Node3D
+	var rest: Vector3 = bolt.position if bolt != null else Vector3.ZERO
+	Engine.time_scale = 0.2
+	var start := Time.get_ticks_msec()
+	var clock := 0.0
+	for part in [["1_feuer", 26, 0.04], ["2_auslauf", 16, 0.06], ["3_nachladen", 22, 0.15], ["4_zielen_rein", 10, 0.035], ["5_zielen_raus", 10, 0.035]]:
+		match str(part[0]):
+			"1_feuer":
+				get_tree().physics_frame.connect(fire)
+			"2_auslauf":
+				get_tree().physics_frame.disconnect(fire)
+			"3_nachladen":
+				player.ammo = 3
+				player.start_reload()
+			"4_zielen_rein":
+				Input.action_press("aim")
+			"5_zielen_raus":
+				Input.action_release("aim")
+		for i in range(int(part[1])):
+			await get_tree().create_timer(float(part[2])).timeout
+			clock += float(part[2])
+			var file := "%s_%s_%02d.png" % [id, part[0], i + 1]
+			await _capture(folder, file)
+			print("MOTION %s t=%.2f turn=%.0f speed=%.1f bolt=%.3f ammo=%d" % [file, clock, rad_to_deg(player.rotor_turn), player.rotor_speed, (bolt.position - rest).z if bolt != null else 0.0, player.ammo])
+	Engine.time_scale = 1.0
+	print("MOTION took %d ms" % (Time.get_ticks_msec() - start))
 
 ## Screenshots of the newer weapons: from the hip, aimed, and the shop that sells them.
 func _run_weapons_check() -> void:
