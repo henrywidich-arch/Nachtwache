@@ -1343,6 +1343,8 @@ func _physics_process(delta: float) -> void:
 	# Deep water (HiveAreale.run_waters): every step a struggle as well.
 	speed *= wade
 	if clung_by != null:
+		# With a Leech hanging on, every step is a struggle (lost in v0.68's new movement).
+		speed *= 0.55
 		trauma = maxf(trauma, 0.28)
 	var traversing: bool = movement.step(delta, direction, speed, blocked)
 	if traversing:

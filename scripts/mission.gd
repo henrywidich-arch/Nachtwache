@@ -919,7 +919,9 @@ func nearest_item(aimed: bool = false) -> Array:
 			var pos: Vector3 = item.pos
 			var gap := Vector2(pos.x - player.global_position.x, pos.z - player.global_position.z).length()
 			if gap < best_gap and absf(pos.y - player.global_position.y) < 1.5:
-				if aimed and not game.aims_at_object(props.get("%d:%d" % [int(task.id), i])):
+				# (A hack module is clamped onto a locked door: before that it has no shape, and its
+				# place lies behind the lock, so it is used from beside the door, not aimed at.)
+				if aimed and str(item.kind) != "hack" and not game.aims_at_object(props.get("%d:%d" % [int(task.id), i])):
 					continue
 				best_gap = gap
 				best = [task, i]

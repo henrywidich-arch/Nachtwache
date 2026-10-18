@@ -56,7 +56,8 @@ func run(game: Node3D) -> void:
 	await frames()
 	var map_rect := hud.minimap.get_global_rect()
 	var readouts: Control = hud.time_label.get_parent()
-	expect(is_equal_approx(hud.time_label.global_position.x, map_rect.position.x) and is_equal_approx(hud.supply_label.get_global_rect().end.x, map_rect.end.x) and is_equal_approx(hud.time_label.get_global_rect().get_center().y, hud.supply_label.get_global_rect().get_center().y) and hud.task_label.global_position.y - readouts.get_global_rect().end.y >= 20.0, "Time and tokens share one row aligned to the map edges, with breathing room before the objectives")
+	# (The clock and the tokens within a pixel of each other: their fonts differ by half a pixel.)
+	expect(is_equal_approx(hud.time_label.global_position.x, map_rect.position.x) and is_equal_approx(hud.supply_label.get_global_rect().end.x, map_rect.end.x) and absf(hud.time_label.get_global_rect().get_center().y - hud.supply_label.get_global_rect().get_center().y) <= 1.0 and hud.task_label.global_position.y - readouts.get_global_rect().end.y >= 20.0, "Time and tokens share one row aligned to the map edges, with breathing room before the objectives")
 	expect(not (hud.tiles.grenade[0] as Control).visible and not (hud.tiles.flashbang[0] as Control).visible and (hud.tiles.syringe[0] as Control).visible, "Empty pocket tiles disappear while the issued syringe stays")
 	player.items.grenade = 1
 	hud._process(0.05)

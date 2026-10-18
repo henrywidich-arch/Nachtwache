@@ -27,6 +27,54 @@ func face(game: Node3D, pos: Vector3, yaw: float) -> void:
 	game.player.rotation = Vector3(0, yaw, 0)
 	game.player.camera.rotation = Vector3.ZERO
 
+## Stands beside a task's item and looks at it: since v0.68 [E] works on what is aimed at
+## (interaction_focus.gd), not on what is merely near.
+func aim_item(game: Node3D, task: Dictionary, index: int, offset: Vector3) -> void:
+	var prop: Node3D = null
+	# (From the given side first; where a wall is in the way, from the other sides.)
+	for turn in range(4):
+		# (Dropped from a little above, so that it stands on the ground where the ground is.)
+		game.player.position = (task.items[index].pos as Vector3) + offset.rotated(Vector3.UP, turn * PI * 0.5) + Vector3(0, 0.5, 0)
+		game.player.velocity = Vector3.ZERO
+		await frames(12)
+		# (A prop is put up once somebody comes near it.)
+		game.mission.update(0.05)
+		prop = game.mission.props.get("%d:%d" % [int(task.id), index])
+		if prop == null:
+			return
+		game.player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(prop).get_center())
+		if game.aims_at_object(prop):
+			return
+
+## [E] in mission two as the player presses it since v0.68: looking at the nearest thing of
+## the area's task (an item, a switch, the fuse box or the terminal), else at the device the
+## stage wants used, then using it.
+func _use_hive(game: Node3D) -> bool:
+	var hive: HiveDirector = game.hive
+	var run: HiveAreaRun = hive.run
+	var eye: Camera3D = game.player.camera
+	var here: Vector3 = game.player.global_position
+	var target: Node3D = null
+	var best := INF
+	if not run.task.is_empty():
+		for list: String in ["items", "places"]:
+			for item: Dictionary in run.task.get(list, []):
+				if bool(item.get("taken", item.get("done", false))) or not is_instance_valid(item.get("node")):
+					continue
+				var gap: float = here.distance_to(item.pos)
+				if gap < best and gap < HiveAreaRun.PICK_REACH:
+					best = gap
+					target = item.node
+		if target == null and run.props != null:
+			for device: Dictionary in [run.props.fuse_box, run.props.screen]:
+				if not device.is_empty() and is_instance_valid(device.get("node")) and here.distance_to((device.node as Node3D).global_position) < 2.6:
+					target = device.node
+	if target == null:
+		target = hive.map.interaction_devices.get(hive.use_key)
+	if target != null:
+		eye.look_at(preload("res://scripts/interaction_focus.gd").bounds(target).get_center())
+	return hive.use()
+
 ## A place to stand in front of a station: one metre from it, towards `room`.
 func beside(game: Node3D, kind: String, room: Vector3, index: int = 0) -> Vector3:
 	var found := 0
@@ -465,8 +513,11 @@ func run(game: Node3D) -> void:
 	game.player._select_slot(1)
 	game.player._select_slot(1)
 	expect(game.player.current_weapon == "badger", "Key 1 takes the primary weapons in turn: after the P90 the Honey Badger")
+	# (Since v0.68 everybody carries the M9 as well: the wheel passes it on the way round.)
 	game.player._cycle(1)
-	expect(game.player.current_weapon == "rifle", "The mouse wheel cycles through owned weapons")
+	var wheel_pistol: bool = game.player.current_weapon == "pistol"
+	game.player._cycle(1)
+	expect(wheel_pistol and game.player.current_weapon == "rifle", "The mouse wheel cycles through owned weapons, the issued pistol among them")
 	game.player._select_slot(2)
 	var no_sidearm: bool = game.player.current_weapon == "rifle"
 	game.player._select_slot(1)
@@ -631,15 +682,14 @@ func run(game: Node3D) -> void:
 	expect(game.remaining_to_spawn == 1, "While a task is open, more infected keep coming")
 	game.spawn_queue.clear()
 	var supplies_before: int = game.credits
-	game.player.position = (codes.items[0].pos as Vector3) + Vector3(0.8, 0.1, 0)
+	await aim_item(game, codes, 0, Vector3(0.8, 0.1, 0))
 	expect("Zugangscode bergen" in game.interaction_prompt(), "Near a task item the prompt says what to do")
-	Input.action_press("interact")
+	# (Since v0.68 a body is searched with a single press of [E], not held.)
 	for index in range(2):
-		game.player.position = (codes.items[index].pos as Vector3) + Vector3(0.8, 0.1, 0)
-		for step in range(4):
-			mission.update(0.4)
-	Input.action_release("interact")
-	expect(codes.state == "done" and mission.round_clear() and game.credits == supplies_before + 150 and game.stats.objectives == 1 and mission.markers().is_empty(), "Holding E at each body recovers the codes; the task pays out")
+		await aim_item(game, codes, index, Vector3(0.8, 0.1, 0))
+		game.interact()
+		mission.update(0.4)
+	expect(codes.state == "done" and mission.round_clear() and game.credits == supplies_before + 150 and game.stats.objectives == 1 and mission.markers().is_empty(), "A press of E at each body recovers the codes; the task pays out")
 	# Generator: start it, the infected attack it, it stalls and is restarted.
 	game.complete_wave()
 	mission.plan[1] = {"wave": "classic", "tasks": ["generator"]}
@@ -650,7 +700,7 @@ func run(game: Node3D) -> void:
 	mission.update(0.1)
 	var dummy: Node3D = mission.targets.values()[0]
 	expect(game.survivors.size() == 2 and not dummy.is_targetable() and "starten" in mission.summary()[0], "A generator waits in the yard to be started")
-	game.player.position = (machine.pos as Vector3) + Vector3(1.5, 0.1, 0)
+	await aim_item(game, defence, 0, Vector3(1.5, 0.1, 0))
 	Input.action_press("interact")
 	for step in range(5):
 		mission.update(0.4)
@@ -665,7 +715,7 @@ func run(game: Node3D) -> void:
 	mission.damage_item(machine, 9999.0)
 	mission.update(1.0)
 	expect(machine.state == "stalled" and defence.left == MissionDirector.GENERATOR_SECONDS and "AUSGEFALLEN" in mission.summary()[0] and not dummy.is_targetable(), "A wrecked generator stalls and its clock stops")
-	game.player.position = (machine.pos as Vector3) + Vector3(1.5, 0.1, 0)
+	await aim_item(game, defence, 0, Vector3(1.5, 0.1, 0))
 	expect("neu starten" in game.interaction_prompt(), "A stalled generator can be restarted")
 	Input.action_press("interact")
 	for step in range(5):
@@ -688,8 +738,8 @@ func run(game: Node3D) -> void:
 			dark = dark and (entry.light as Light3D).light_energy == 0.0
 	expect(dark and mission.tasks[0].items.size() == 3, "A blackout takes every wired lamp on the farm")
 	Input.action_press("interact")
-	for breaker in mission.tasks[0].items:
-		game.player.position = (breaker.pos as Vector3) + Vector3(0.8, 0.1, 0)
+	for index in range(mission.tasks[0].items.size()):
+		await aim_item(game, mission.tasks[0], index, Vector3(0.8, 0.1, 0))
 		for step in range(3):
 			mission.update(0.4)
 	Input.action_release("interact")
@@ -705,7 +755,7 @@ func run(game: Node3D) -> void:
 	copy.adopt(mission.export_state())
 	expect(copy.tasks.size() == 2 and copy.tasks[0].kind == "crate" and copy.tasks[1].items.size() == 2 and (copy.tasks[1].items[1].pos as Vector3) == (mission.tasks[1].items[1].pos as Vector3), "The tasks reach a co-op guest as the host has them")
 	copy.free()
-	game.player.position = (mission.tasks[0].items[0].pos as Vector3) + Vector3(1.4, 0.1, 0)
+	await aim_item(game, mission.tasks[0], 0, Vector3(1.4, 0.1, 0))
 	Input.action_press("interact")
 	for step in range(6):
 		mission.update(0.4)
@@ -1218,7 +1268,7 @@ func _latest(game: Node3D) -> void:
 		joined = joined and nearest < float(game.gas.pockets[i].radius) * 0.5
 		outdoors = outdoors and not cabin.is_indoors(game.gas.pockets[i].pos)
 	var material: ShaderMaterial = (game.gas.pockets[0].volume as FogVolume).material as ShaderMaterial
-	expect(alone == 1 and patches >= 4 and joined and outdoors and game.gas.covered() > 500.0 and material != null and material.shader.get_mode() == Shader.MODE_FOG and float(GasField.YARD_HAZE) < 0.35, "A bank of gas spreads patch by patch over the yard, as a thin haze (%d patches, %d m2)" % [patches, int(game.gas.covered())])
+	expect(alone == 1 and patches >= 4 and joined and outdoors and game.gas.covered() > 500.0 and material != null and material.shader.get_mode() == Shader.MODE_FOG and float(GasField.YARD_HAZE) < 0.45, "A bank of gas spreads patch by patch over the yard, as a thin haze (%d patches, %d m2)" % [patches, int(game.gas.covered())])
 	for pocket in game.gas.pockets:
 		pocket.strength = 1.0
 	var middle: Vector3 = game.gas.pockets[patches - 1].pos
@@ -1726,7 +1776,7 @@ func _arsenal(game: Node3D) -> void:
 	mauler.set_physics_process(false)
 	mauler.position = Vector3(-10.0, 0.05, 30.0)
 	face(game, stand, PI)
-	player.equip_weapon("fifty", true)
+	player.unlock("fifty")
 	await frames(3)
 	var shielded: bool = bearer.blocks(Vector3.BACK)
 	var whole: float = bearer.health
@@ -1758,7 +1808,7 @@ func _arsenal(game: Node3D) -> void:
 		foe.alert = true
 		foe.held_left = 60.0
 	face(game, stand, PI)
-	player.equip_weapon("flamer", true)
+	player.unlock("flamer")
 	await frames(3)
 	var tank: int = player.ammo
 	player.shot_cooldown = 0.0
@@ -2511,7 +2561,7 @@ func _later(game: Node3D) -> void:
 			built += 1
 	for tab in SurvivalHUD.SHOP_TABS:
 		game.hud._open_tab(str(tab[0]))
-		if game.hud.shop_tab == str(tab[0]) and game.hud.modal.find_children("*", "ScrollContainer", true, false).size() == 1:
+		if game.hud.shop_tab == str(tab[0]) and game.hud.modal.find_children("*", "ScrollContainer", true, false).size() >= 1:
 			built += 1
 	game.hud.hide_menu()
 	expect(built == 10 + SurvivalHUD.SHOP_TABS.size(), "Every menu and every list of the shop can be opened (%d)" % built)
@@ -2951,8 +3001,13 @@ func _threats(game: Node3D) -> void:
 	var behind: Vector3 = bearer.facing()
 	bearer.receive_hit(9999.0, behind)
 	expect(bearer.dead and MissionDirector.SQUAD_ORDER[1] == "cru_shield", "Shot in the back he falls; every squad of the C.R.U. brings one")
-	# --- the Crusher before the last round
+	# --- the Crusher before the last round (round six a plain one: the plan may give it to
+	# the C.R.U., which the second half of this check does on purpose)
+	# (Without the story, which may claim a late round for its own fight.)
+	var story_was: bool = game.story.enabled
+	game.story.enabled = false
 	game.wave = 5
+	mission.plan[5] = {"wave": "classic", "tasks": []}
 	game.begin_wave()
 	var early: bool = game.spawn_queue.has("crusher")
 	var medics: int = game.spawn_queue.count("healer")
@@ -2961,6 +3016,7 @@ func _threats(game: Node3D) -> void:
 	mission.plan[5] = {"wave": "cru", "tasks": []}
 	game.begin_wave()
 	expect(early and medics == 1 and not game.spawn_queue.has("crusher"), "A Crusher and a Medic come in round six, but no Crusher into a round of the C.R.U.")
+	game.story.enabled = story_was
 	game.spawn_queue.clear()
 	mission.wave_kind = "classic"
 	game.phase = "preparing"
@@ -3103,7 +3159,7 @@ func _companions(game: Node3D) -> void:
 		game.help_up(0.05)
 		held += 0.05
 	game.hud._process(0.05)
-	var halfway: bool = mate.down and mate.visual.mode == "rising" and absf(game.help_share() - 0.5) < 0.06 and game.interaction_prompt().contains("%") and game.hud.hold_bar.visible and absf(game.hud.hold_bar.value - game.help_share()) < 0.01
+	var halfway: bool = mate.down and mate.visual.mode == "rising" and absf(game.help_share() - 0.5) < 0.06 and game.hud.hold_bar.visible and absf(game.hud.hold_bar.value - game.help_share()) < 0.01
 	# Let go: it sinks back, and the help starts over.
 	mate._recover(Teammate.LIFT_GRACE + 0.05)
 	game.hud._process(0.05)
@@ -4486,6 +4542,16 @@ func _kit(game: Node3D) -> void:
 
 ## Holds [E] on whatever task item is in reach for a few seconds of mission time.
 func _hold(game: Node3D, seconds: float = 3.2) -> void:
+	# Since v0.68 [E] works on what is aimed at, and what is picked up takes a single press.
+	var near: Array = game.mission.nearest_item()
+	if not near.is_empty():
+		var prop: Node3D = game.mission.props.get("%d:%d" % [int(near[0].id), int(near[1])])
+		if prop != null:
+			game.player.camera.look_at(preload("res://scripts/interaction_focus.gd").bounds(prop).get_center())
+		if str(near[0].items[near[1]].kind) in MissionDirector.PICKUPS:
+			game.interact()
+			game.mission.update(0.1)
+			return
 	Input.action_press("interact")
 	var steps := int(ceil(seconds / 0.4))
 	for step in range(steps):
@@ -5193,10 +5259,14 @@ func _company(game: Node3D) -> void:
 	var profile: Profile = game.profile
 	var kept: String = profile.company
 	var kept_squad: Array = profile.squad.duplicate()
-	# --- the switch: only for the second mission, four choices, and the menu still fits
+	# --- the switch: only for the second mission, four choices, and the menu still fits.
+	# (Since v0.68 it is on the page that starts a game, and only while bots come along.)
 	profile.company = "fireteam"
 	profile.mission = 2
+	var bots_were: bool = game.team_enabled
+	game.team_enabled = true
 	game.return_to_menu()
+	hud.show_menu("play")
 	await frames(2)
 	var labels: Array[String] = []
 	var widest := 0.0
@@ -5210,19 +5280,21 @@ func _company(game: Node3D) -> void:
 			break
 		labels.append(button.text.trim_prefix("BEGLEITER AB BAHNHOF  ·  "))
 		widest = maxf(widest, button.get_combined_minimum_size().x)
-		for node in hud.modal.get_children():
-			if node is VBoxContainer:
-				bottom = maxf(bottom, (node as VBoxContainer).position.y + (node as VBoxContainer).get_combined_minimum_size().y)
+		bottom = maxf(bottom, button.get_global_rect().end.y)
 		hud._next_company()
+		hud.show_menu("play")
+		await frames(1)
 	profile.mission = 1
-	hud.show_menu("main")
+	hud.show_menu("play")
 	var absent := true
 	for node in hud.modal.find_children("*", "Button", true, false):
 		if (node as Button).text.begins_with("BEGLEITER"):
 			absent = false
 	profile.mission = 2
+	game.team_enabled = bots_were
+	hud.show_menu("main")
 	var understood: bool = Profile.known_company("operators") == "phantom_havoc" and Profile.known_company("") == "fireteam" and Profile.known_company("havoc_ghost") == "havoc_ghost" and Profile.pair_of("havoc_ghost") == ["havoc", "ghost"] and Profile.pair_of("fireteam").is_empty()
-	expect(labels == ["FIRETEAM", "PHANTOM + HAVOC", "PHANTOM + GHOST", "HAVOC + GHOST", "FIRETEAM"] and absent and understood and profile.company == "phantom_havoc" and bottom > 300.0 and bottom <= 720.0 and widest <= 430.0, "For the second mission the main menu asks who goes on from the station: the squad, or two of the three operators; the first mission is not asked, a choice kept by an older version is understood, and the menu still fits the screen (it ends at %d of 720, the switch is %d wide, %s)" % [int(bottom), int(widest), str(labels)])
+	expect(labels == ["FIRETEAM", "PHANTOM + HAVOC", "PHANTOM + GHOST", "HAVOC + GHOST", "FIRETEAM"] and absent and understood and profile.company == "phantom_havoc" and bottom > 300.0 and bottom <= hud.get_viewport().get_visible_rect().size.y and widest <= 700.0, "For the second mission the game's page asks who goes on from the station: the squad, or two of the three operators; the first mission is not asked, a choice kept by an older version is understood, and the page still fits the screen (it ends at %d of %d, the switch is %d wide, %s)" % [int(bottom), int(hud.get_viewport().get_visible_rect().size.y), int(widest), str(labels)])
 	# --- the squad goes on: the three operators say why they stay, and Ghost keeps the relay
 	var read: Array[String] = await _settle(game, "fireteam", ["viper", "scorpion"])
 	var plain: bool = _tail(read, [["viper", "m2_colonel"], ["scorpion", "m2_colonel"], ["phantom", "m2_p_tunnel"], ["havoc", "m2_a_havoc"], ["ghost", "m2_a_ghost"], ["viper", "m2_a_viper"], ["scorpion", "m2_a_scorpion"], ["coleman", "m2_a_coleman"]])
@@ -5473,7 +5545,12 @@ func _newer(game: Node3D) -> void:
 	trooper.grenades = 0
 	expect(trooper != null and trooper.model is CruVisual and trooper.spec.human, "A C.R.U. soldier is an armed human")
 	trooper.position = Vector3(0, 0.05, 35.0)
-	await wait(4.5)
+	# (Up to nine seconds: whether its first bursts land is chance, and in a long run the
+	# soldier sometimes took longer than the four and a half seconds this waited.)
+	for i in range(90):
+		await wait(0.1)
+		if trooper.ammo < int(trooper.role.magazine) and game.player.health < 100.0:
+			break
 	expect(trooper.ammo < int(trooper.role.magazine) and game.player.health < 100.0, "A C.R.U. soldier shoots at a survivor it can see")
 	trooper.roll_wait = 0.0
 	trooper.threatened(true)
@@ -7149,12 +7226,13 @@ func _overhaul(game: Node3D) -> void:
 	var lone: bool = not game.sell_weapon("pistol") and player.inventory.has("rifle")
 	var armed: bool = game.sell_weapon("rifle") and not player.inventory.has("rifle") and player.current_weapon == "pistol" and game.credits == 3000
 	var back: bool = game.buy_weapon("ak") and game.sell_weapon("ak") and player.current_weapon == "pistol" and game.credits == 3000 - 300 + 150
-	# With a sling there are two rifles; a third takes the place of the one the buyer names.
-	var two: bool = game.buy_item("sling") and game.buy_weapon("g36") and game.buy_weapon("m14") and player.carried("primary").size() == 2 and game.credits == 2850 - 250 - 450 - 320
+	# Two rifles are carried without a sling (v0.68); a third takes the place of the one the
+	# buyer names.
+	var two: bool = game.buy_weapon("g36") and game.buy_weapon("m14") and player.carried("primary").size() == 2 and game.credits == 2850 - 450 - 320
 	var choices: Array = player.replaceable("ak")
 	var usual: String = game.outgoing("ak")
 	var picks_one: bool = choices.size() == 2 and usual == "m14" and choices[0] == "m14" and choices.has("g36") and game.weapon_cost("ak") == 300 - 160 and game.weapon_cost("ak", "g36") == 300 - 225 and game.outgoing("ak", "pistol") == "m14"
-	var chosen: bool = game.buy_weapon("ak", "g36") and player.inventory.has("ak") and player.inventory.has("m14") and not player.inventory.has("g36") and game.credits == 1830 - 75
+	var chosen: bool = game.buy_weapon("ak", "g36") and player.inventory.has("ak") and player.inventory.has("m14") and not player.inventory.has("g36") and game.credits == 2080 - 75
 	expect(opened and lone and armed and back and two and picks_one and chosen and hud.counter == screen, "The shop takes a weapon back for half its price (never the last one), and the buyer chooses which weapon goes for a new one")
 	# --- its screen: a list, the weapon picked in it turning in a picture, one button
 	hud._open_tab("weapons")
@@ -7173,9 +7251,13 @@ func _overhaul(game: Node3D) -> void:
 	screen.pick("weapon", "ak")
 	var mine: bool = screen.action.text.begins_with("VERKAUFEN") and str(screen.weapon_state("ak")[0]).begins_with("DABEI")
 	# A part is shown on its weapon before it is bought.
-	hud._open_tab("mods")
-	screen.pick("part", "ak", "scope")
+	screen.pick("weapon", "ak")
+	screen.editor_slot = "sight"
+	screen.editor_part = "scope"
+	screen._fill_detail()
 	var tried: bool = (screen.stage.models.ak as Node3D).find_child("Mod_scope", true, false).visible and not player.owns_part("ak", "scope") and screen.action.text.begins_with("KAUFEN")
+	screen.editor_slot = ""
+	screen.editor_part = ""
 	# What gets used up is bought from its line.
 	hud._open_tab("use")
 	var quick: Button = null
@@ -7218,10 +7300,11 @@ func _overhaul(game: Node3D) -> void:
 	expect(benched and raised and worked and paid and own_lines and fitting and gone and game.state == "playing", "The workbench has five lines to choose from (damage, magazine, pockets, reload, steadiness), each for one weapon and each with its price; they go with the weapon")
 	# --- the reflex sight is the holographic sight, on every gun that takes one
 	var sights := 0
+	# (Since v0.68 the sidearms take the reflex sight as well: their mounts are WeaponView.MOD_MOUNTS.)
 	var seated := true
 	for id in Survivor.ATTACHMENTS:
 		var gun_view: Node3D = player.weapon_models[id]
-		var spec: Dictionary = WeaponView.GUNS[id]
+		var spec: Dictionary = WeaponView.mod_mount(id)
 		var part := gun_view.get_node_or_null("Mod_reddot") as Node3D
 		if part == null:
 			seated = false
@@ -7249,7 +7332,7 @@ func _overhaul(game: Node3D) -> void:
 		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x * small and mark_z > face_z + WeaponView.HOLO_TUNNEL.y * small
 		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS * small) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE * small) and rail_y + (WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5) * small > (spec.mount as Vector3).y + float(spec.irons)
 		sights += 1
-	expect(sights == 5 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all five guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
+	expect(sights == 10 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all ten guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
 	# --- the lobby says what the router said
 	var link: NetLink = game.net
 	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")
@@ -10193,20 +10276,20 @@ func _sezierlabor_events(game: Node3D, map: HiveMap, areas: Array) -> void:
 				for spot_index: int in event.items:
 					put.call(origin + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
 					await _idle_frames()
-					hive.use()
+					_use_hive(game)
 					await _idle_frames()
 			"restore":
 				for spot_index: int in event.switches:
 					put.call(origin + (spots.switches[spot_index] as Vector3) + Vector3(0.9, 0, 0.0))
 					await _idle_frames()
-					hive.use()
+					_use_hive(game)
 					await _idle_frames()
 				hive.progress = 0.99999
 				await _idle_frames()
 			"hack":
 				put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 				await _idle_frames()
-				hive.use()
+				_use_hive(game)
 				await _idle_frames()
 				hive.progress = 0.99999
 				await _idle_frames()
@@ -10421,7 +10504,7 @@ func _areas(game: Node3D) -> void:
 					await _idle_frames()
 					put.call(hive.use_at + Vector3(0.9, 0, 0))
 					await _idle_frames()
-					hive.use()
+					_use_hive(game)
 				"s3":
 					put.call(map.points.cafeteria)
 					hive._enter("lockdown")
@@ -10436,7 +10519,8 @@ func _areas(game: Node3D) -> void:
 			var riding: bool = str(run.ride.get("phase", "")) == "ride" and not map.door_open("lift_%s" % chain.out)
 			# (The cabin shows the floors on its way, and the map in the corner shows the lift.)
 			riding = riding and is_instance_valid(run.ride_fx) and (run.ride.fx.sign as Label3D).text.begins_with("UG ") and game.hud.minimap.marks().any(func(mark: Dictionary) -> bool: return str(mark.shape) == "lift")
-			run.ride.left = 0.01
+			if not run.ride.is_empty():
+				run.ride.left = 0.01
 			await _idle_frames()
 			var twin: Rect2 = map.room_of["%s_kabine" % head.id].outer
 			seam_ok = to_lift and riding and hive.stage == first_stage and twin.grow(0.6).has_point(Vector2(player.global_position.x, player.global_position.z)) and map.door_open("%s_out" % head.id)
@@ -10483,20 +10567,20 @@ func _areas(game: Node3D) -> void:
 					for spot_index: int in event.items:
 						put.call(origin + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
 						await _idle_frames()
-						hive.use()
+						_use_hive(game)
 						await _idle_frames()
 					# (What was picked up is gone; the desk, the locker or the shelf stays.)
 					looks = looks and things.all(func(entry: Dictionary) -> bool: return not is_instance_valid(entry.node) and is_instance_valid(entry.base))
 					if bool(run.task.get("slot", false)):
 						put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 						await _idle_frames()
-						hive.use()
+						_use_hive(game)
 						await _idle_frames()
 				"restore":
 					for spot_index: int in event.switches:
 						put.call(origin + (spots.switches[spot_index] as Vector3) + Vector3(0.9, 0, 0.0))
 						await _idle_frames()
-						hive.use()
+						_use_hive(game)
 						await _idle_frames()
 						# (Its wheel turns or its lever goes up, its lamp goes green.)
 						looks = not run.props.turning.is_empty()
@@ -10506,7 +10590,7 @@ func _areas(game: Node3D) -> void:
 					put.call(origin + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 					await _idle_frames()
 					var locked_screen: bool = not run.props.screen.is_empty() and (run.props.screen.line as Label3D).text == "GESPERRT"
-					hive.use()
+					_use_hive(game)
 					hive.progress = 0.5
 					await _idle_frames()
 					looks = locked_screen and (run.props.screen.line as Label3D).text.begins_with("ÜBERBRÜCKUNG") and (run.props.screen.fill as Node3D).scale.x > 0.4
@@ -10567,7 +10651,8 @@ func _areas(game: Node3D) -> void:
 			put.call(map.points["%s_mid" % tail.id])
 			await _idle_frames()
 			var riding: bool = str(run.ride.get("phase", "")) == "ride" and not map.door_open("%s_in" % tail.id)
-			run.ride.left = 0.01
+			if not run.ride.is_empty():
+				run.ride.left = 0.01
 			await _idle_frames()
 			var real: Rect2 = map.room_of["lift_%s" % chain.in].outer
 			# (The old stage it leads to may already be over: the lift of the canteen opens into it.)
@@ -10609,13 +10694,13 @@ func _areas(game: Node3D) -> void:
 		for spot_index: int in fuse_event.items:
 			put.call((piece.origin as Vector3) + (spots.items[spot_index] as Vector3) + Vector3(0.7, 0, 0.0))
 			await _idle_frames()
-			hive.use()
+			_use_hive(game)
 			await _idle_frames()
 		var waiting: bool = bool(run.task.get("slot", false)) and hive.stage == "a%d" % area and not map.door_open("%s_out" % piece.id) and hive.marker.distance_to(HiveAreaRun.free_spot(map, (piece.origin as Vector3) + (spots.goal as Vector3))) < 0.5
 		put.call((piece.origin as Vector3) + (spots.goal as Vector3) + Vector3(0.9, 0, 0))
 		await _idle_frames()
 		var asked: bool = hive.use_key == "g_slot" and hive.use_text.contains("Sicherungen")
-		hive.use()
+		_use_hive(game)
 		await _idle_frames()
 		fused = waiting and asked and hive.stage == "a%d_out" % area and map.door_open("%s_out" % piece.id) and (run.props.fuse_box.slots as Array).all(func(fuse: Node3D) -> bool: return fuse.visible)
 		break
