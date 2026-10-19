@@ -51,7 +51,15 @@ const VIEWS := {
 	"yard_southeast": [Vector3(8, 1.62, 18), Vector3(24, 1.2, 34)],
 	"yard_west": [Vector3(-15.5, 1.62, 12), Vector3(-32, 2, -20)],
 	"paddock": [Vector3(20, 1.62, 4), Vector3(36, 1.2, 2)],
-	"fence_gas": [Vector3(-36, 1.62, 6), Vector3(-52, 1.5, 4)]
+	"fence_gas": [Vector3(-36, 1.62, 6), Vector3(-52, 1.5, 4)],
+	# Close views of surfaces and props.
+	"porch_close": [Vector3(-3.0, 1.62, 13.6), Vector3(-6.0, 1.2, 9.2)],
+	"chimney": [Vector3(18.5, 1.62, 9.5), Vector3(13.6, 3.2, 5.1)],
+	"crash_car": [Vector3(6.8, 1.62, 24.6), Vector3(2.8, 0.7, 28.0)],
+	"tractor": [Vector3(14.8, 1.62, -16.8), Vector3(9.5, 0.9, -21.0)],
+	"garage_wreck": [Vector3(-30.6, 1.62, -20.4), Vector3(-34.7, 0.7, -23.2)],
+	"well": [Vector3(-15.8, 1.62, 16.0), Vector3(-19.0, 0.6, 13.0)],
+	"floor_close": [Vector3(1.5, 1.62, 4.5), Vector3(3.2, 0.0, 1.5)]
 }
 const FPS_VIEWS := ["hall", "house_front", "yard_to_barn"]
 

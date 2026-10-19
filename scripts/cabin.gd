@@ -38,8 +38,10 @@ const TREE_MODELS := [
 	"res://assets/models/trees/DeadTree_2.gltf", "res://assets/models/trees/DeadTree_4.gltf"
 ]
 const TREE_MODEL_HEIGHT := 12.0
-const TREE_MODEL_REACH := 30.0
-const TREE_MODEL_SHARE := 0.5
+const TREE_MODEL_REACH := 52.0
+const TREE_MODEL_SHARE := 1.0
+## Beyond this distance a grove of model trees gives way to drawn firs.
+const TREE_MODEL_FAR := 70.0
 const TREE_TINT := Color(0.42, 0.46, 0.44)
 const GAS_MARGIN := 1.6
 ## Sides of the yard that gas can drift across for a round. The buildings stay safe.
@@ -181,6 +183,8 @@ var batch: MeshBatch = MeshBatch.new()
 ## How many trees of the forest are models (see TREE_MODELS), and of how many kinds.
 var model_trees := 0
 var tree_kinds := 0
+## Trees of the yard: [foot, height, dead]; _build_forest plants models there.
+var yard_trees: Array = []
 var body: StaticBody3D
 var rails: StaticBody3D
 var mats: Dictionary = {}
@@ -210,6 +214,7 @@ func _ready() -> void:
 	add_child(rails)
 	_build_points()
 	_build_materials()
+	_build_farm_materials()
 	_build_environment()
 	_build_ground()
 	_build_house()
@@ -425,6 +430,91 @@ func _build_materials() -> void:
 	glass.render_priority = 2
 	_lab_shader("blink", LAB_BLINK, 0)
 	_lab_shader("screen", LAB_SCREEN, 0)
+	# Tracks, hay and vehicles have their own surfaces on the farm (_build_farm_materials).
+	mats["dirt"] = mats["ground"]
+	mats["straw"] = mats["cloth"]
+	mats["paint"] = mats["metal"]
+	mats["rubber"] = mats["plain"]
+	mats["chrome"] = mats["steel"]
+	mats["car_glass"] = mats["glass"]
+
+## The farm's own surfaces (scripts/farm_surface.gdshader with the textures of
+## assets/surfaces/farm, made by tools/make_farm_surfaces.py) take the place of the plain
+## noise of the shared materials. Mission two keeps those: it never calls this.
+const FARM_SURFACE := preload("res://scripts/farm_surface.gdshader")
+var farm_materials: Array[ShaderMaterial] = []
+
+func _build_farm_materials() -> void:
+	# Insides of the buildings, where no rain gets: [low corner, high corner].
+	var dry := [
+		[Vector3(-HX, -1.0, -HZ), Vector3(HX, UPPER_TOP + 0.1, HZ)],
+		[Vector3(-7.2, -1.0, HZ + 0.15), Vector3(7.2, 2.66, 11.95)],
+		[Vector3(BARN.position.x + 0.08, -1.0, BARN.position.y + 0.08), Vector3(BARN.end.x - 0.08, 3.95, BARN.end.y - 0.08)],
+		[Vector3(GARAGE.position.x + 0.06, -1.0, GARAGE.position.y + 0.06), Vector3(GARAGE.end.x - 0.06, 2.88, GARAGE.end.y + 0.25)],
+		[Vector3(GUEST.position.x + 0.13, -1.0, GUEST.position.y + 0.13), Vector3(GUEST.end.x - 0.13, 2.75, GUEST.end.y - 0.13)],
+		[Vector3(SHED.position.x + 0.06, -1.0, SHED.position.y + 0.06), Vector3(SHED.end.x - 0.06, 2.15, SHED.end.y - 0.06)],
+		[Vector3(BUNKER.position.x, -1.0, BUNKER.position.y), Vector3(BUNKER.end.x, 3.0, BUNKER.end.y)]
+	]
+	var low := PackedVector3Array()
+	var high := PackedVector3Array()
+	for box in dry:
+		low.append(box[0])
+		high.append(box[1])
+	var macro: Texture2D = load("res://assets/surfaces/farm/macro.png")
+	var farm := func(key: String, surface: String, metres: float, brightness: float, extra: Dictionary = {}) -> ShaderMaterial:
+		var material := ShaderMaterial.new()
+		material.shader = FARM_SURFACE
+		var base := "res://assets/surfaces/farm/" + surface
+		material.set_shader_parameter("albedo_map", load(base + "_albedo.jpg"))
+		material.set_shader_parameter("normal_map", load(base + "_normal.jpg"))
+		material.set_shader_parameter("roughness_map", load(base + "_roughness.jpg"))
+		material.set_shader_parameter("macro_map", macro)
+		material.set_shader_parameter("metres", metres)
+		material.set_shader_parameter("brightness", brightness)
+		material.set_shader_parameter("dry_low", low)
+		material.set_shader_parameter("dry_high", high)
+		material.set_shader_parameter("dry_count", low.size())
+		material.set_shader_parameter("weathered", 1.0)
+		for name in extra:
+			if String(name).ends_with("_b") and extra[name] is String:
+				material.set_shader_parameter(name, load("res://assets/surfaces/farm/" + String(extra[name]) + "_" + String(name).trim_suffix("_b") + ".jpg"))
+			else:
+				material.set_shader_parameter(name, extra[name])
+		mats[key] = material
+		farm_materials.append(material)
+		return material
+	# Indoors the boards of the walls show their inner face: oiled, never rained on.
+	farm.call("siding", "siding", 1.7, 2.3, {"board_shift": 1.0, "tint_saturation": 0.75, "normal_depth": 1.1, "wet_gloss": 0.28, "specular": 0.32, "roughness_add": 0.05, "albedo_b": "panel", "normal_b": "panel", "roughness_b": "panel", "dry_b": 1.0, "metres_b": 1.8, "brightness_b": 2.5})
+	farm.call("plank_v", "planks", 1.7, 2.5, {"board_shift": 1.0, "tint_saturation": 0.8, "normal_depth": 1.1, "wet_gloss": 0.28, "specular": 0.32, "roughness_add": 0.05})
+	farm.call("floor", "floor", 1.9, 2.4, {"board_shift": 1.0, "tint_saturation": 0.55, "normal_depth": 0.9, "macro_strength": 0.12, "wet_gloss": 0.35, "specular": 0.38, "roughness_add": 0.12})
+	farm.call("stone", "stone", 1.5, 3.4, {"tint_saturation": 0.5, "normal_depth": 1.2})
+	farm.call("roof", "shingle", 2.2, 2.6, {"tint_saturation": 0.6, "splash": 0.0, "wet_gloss": 0.5, "macro_strength": 0.3, "board_shift": 1.0})
+	farm.call("metal", "metal", 1.3, 1.25, {"metallic": 0.45, "roughness_scale": 0.95, "normal_depth": 0.8, "splash": 0.6})
+	farm.call("ground", "meadow", 3.2, 5.2, {"tint_saturation": 0.45, "albedo_b": "dirt", "normal_b": "dirt", "roughness_b": "dirt", "blend_b": 0.65, "metres_b": 2.6, "brightness_b": 3.6, "puddles": 0.6, "wet_gloss": 0.3, "splash": 0.0, "macro_strength": 0.25})
+	farm.call("dirt", "dirt", 2.6, 3.6, {"tint_saturation": 0.5, "puddles": 1.15, "wet_gloss": 0.55, "splash": 0.0, "macro_strength": 0.22})
+	farm.call("cloth", "fabric", 0.55, 0.85, {"normal_depth": 0.7, "splash": 0.0, "wet_gloss": 0.25})
+	# Vehicles: paint over the rusty sheet, chrome, tyres and tinted glass.
+	farm.call("paint", "carpaint", 1.4, 0.82, {"metallic": 0.25, "normal_depth": 0.6, "splash": 0.8, "macro_strength": 0.1})
+	var chrome := StandardMaterial3D.new()
+	chrome.vertex_color_use_as_albedo = true
+	chrome.vertex_color_is_srgb = true
+	chrome.metallic = 0.85
+	chrome.roughness = 0.36
+	chrome.albedo_color = Color(0.8, 0.8, 0.8)
+	mats["chrome"] = chrome
+	var rubber := StandardMaterial3D.new()
+	rubber.vertex_color_use_as_albedo = true
+	rubber.vertex_color_is_srgb = true
+	rubber.roughness = 0.72
+	rubber.metallic_specular = 0.35
+	mats["rubber"] = rubber
+	var pane := StandardMaterial3D.new()
+	pane.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pane.albedo_color = Color(0.05, 0.065, 0.07, 0.5)
+	pane.roughness = 0.04
+	pane.metallic_specular = 1.0
+	mats["car_glass"] = pane
+	farm.call("straw", "straw", 1.1, 2.6, {"board_shift": 1.0, "tint_saturation": 0.35, "normal_depth": 1.2, "splash": 0.0, "wet_gloss": 0.3})
 
 ## A material of the laboratory that is drawn by its own programme. All of them have a
 ## value `power`: how brightly they shine (see lab_glow).
@@ -889,7 +979,7 @@ func _dirt_path(route: Array, width: float) -> void:
 		for piece in range(pieces):
 			var mid := a.lerp(b, (piece + 0.5) / pieces)
 			lift += 1
-			_part("ground", Vector3(mid.x + random.randf_range(-0.2, 0.2), 0.004 + (lift % 9) * 0.0012, mid.y + random.randf_range(-0.2, 0.2)), Vector3(span / pieces + 1.3, 0.012, width * random.randf_range(0.85, 1.15)), _vary(Color("3a3024"), 0.03), Vector3(0, heading + random.randf_range(-7, 7), 0))
+			_part("dirt", Vector3(mid.x + random.randf_range(-0.2, 0.2), 0.004 + (lift % 9) * 0.0012, mid.y + random.randf_range(-0.2, 0.2)), Vector3(span / pieces + 1.3, 0.012, width * random.randf_range(0.85, 1.15)), _vary(Color("3a3024"), 0.03), Vector3(0, heading + random.randf_range(-7, 7), 0))
 		var marks := int(ceil(span / 0.5)) + 1
 		for mark in range(marks + 1):
 			var p := a.lerp(b, float(mark) / marks)
@@ -1206,9 +1296,46 @@ func _roof_plane(eave_a: Vector3, eave_b: Vector3, top_a: Vector3, rows: int, de
 	var width := eave_a.distance_to(eave_b)
 	var eave_mid := (eave_a + eave_b) * 0.5
 	batch.box(mats[material], eave_mid + up_slope * (slope_length * 0.5) - normal * 0.07, Vector3(width, 0.12, slope_length), deck, tilt)
+	# Every course is laid in lengths of its own: shingles faded by the sun or replaced
+	# darker, a few that slipped, a few missing so the deck shows, moss on the old ones.
+	var tones: Array[Color] = []
 	for row in range(rows):
-		var at := (row + 0.5) * slope_length / rows
-		batch.box(mats[material], eave_mid + up_slope * at + normal * 0.03, Vector3(width + 0.1, 0.06, slope_length / rows + 0.09), _vary(cover, 0.02), tilt * Basis(Vector3.RIGHT, -0.045))
+		tones.append(_vary(cover, 0.02))
+	_own_dice(int(eave_a.x * 73.0 + eave_a.z * 131.0 + eave_a.y * 17.0) + rows)
+	var sheet := material == "metal"
+	var course := slope_length / rows
+	for row in range(rows):
+		var at := (row + 0.5) * course
+		var start := -width * 0.5 - 0.05
+		while start < width * 0.5 + 0.04:
+			var length := minf(random.randf_range(0.8, 1.0) if sheet else random.randf_range(0.6, 2.4), width * 0.5 + 0.05 - start)
+			if width * 0.5 + 0.05 - (start + length) < 0.3:
+				length = width * 0.5 + 0.05 - start
+			var centre := eave_mid + along * (start + length * 0.5) + up_slope * at + normal * 0.03
+			var roll := random.randf()
+			var tone: Color = tones[row]
+			var shade := random.randf_range(-0.1, 0.12)
+			tone = tone.lightened(shade) if shade > 0.0 else tone.darkened(-shade)
+			var lift := -0.045
+			if roll < 0.035 and row > 0 and row < rows - 1:
+				start += length
+				continue
+			elif roll < 0.1:
+				# Replaced: newer and darker, or with a cast of rust on a sheet.
+				tone = tone.darkened(0.25) if not sheet else tone.lerp(Color("4a2c1e"), 0.45)
+			elif roll < 0.16:
+				lift -= random.randf_range(0.03, 0.08)
+				centre -= up_slope * random.randf_range(0.02, 0.06)
+			elif roll < 0.3:
+				tone = tone.lerp(Color("6b6a62"), 0.25)
+			var spin := Basis(Vector3(0, 1, 0), random.randf_range(-0.012, 0.012))
+			batch.box(mats[material], centre, Vector3(length - 0.012, 0.06, course + 0.09), tone, tilt * spin * Basis(Vector3.RIGHT, lift))
+			# Moss in the shade of the courses, mostly low on the slope.
+			if not sheet and random.randf() < 0.12 * (1.0 - float(row) / rows) + 0.02:
+				var spot := centre + along * random.randf_range(-length * 0.4, length * 0.4) - up_slope * course * 0.3 + normal * 0.05
+				batch.ellipsoid(mats["cloth"], spot, Vector3(random.randf_range(0.12, 0.4), 0.025, random.randf_range(0.08, 0.22)), _vary(Color("2c3320"), 0.03), tilt, 7, 3)
+			start += length
+	_shared_dice()
 
 # ---------------------------------------------------------------- stairs and railings
 
@@ -1337,9 +1464,15 @@ func _concrete_flight(foot: Vector3, head: Vector3, width: float, steps: int, ti
 func _table(pos: Vector3, size: Vector3, color: Color, yaw: float = 0.0) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
 	_placed(frame, "furniture_wood", Vector3(0, size.y - 0.035, 0), Vector3(size.x, 0.07, size.z), color)
+	# The apron under the top, and turned legs.
+	for side in [-1.0, 1.0]:
+		_placed(frame, "furniture_wood", Vector3(side * (size.x * 0.5 - 0.09), size.y - 0.13, 0), Vector3(0.03, 0.12, size.z - 0.22), color.darkened(0.2))
+		_placed(frame, "furniture_wood", Vector3(0, size.y - 0.13, side * (size.z * 0.5 - 0.09)), Vector3(size.x - 0.22, 0.12, 0.03), color.darkened(0.2))
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		var at: Vector2 = corner
-		_placed(frame, "furniture_wood", Vector3(at.x * (size.x * 0.5 - 0.09), (size.y - 0.07) * 0.5, at.y * (size.z * 0.5 - 0.09)), Vector3(0.08, size.y - 0.07, 0.08), color.darkened(0.3))
+		var foot := Vector3(at.x * (size.x * 0.5 - 0.09), 0, at.y * (size.z * 0.5 - 0.09))
+		batch.cylinder(mats["furniture_wood"], frame * foot, 0.028, 0.04, size.y - 0.07, color.darkened(0.3), 8, frame.basis)
+		batch.ellipsoid(mats["furniture_wood"], frame * (foot + Vector3(0, size.y * 0.45, 0)), Vector3(0.05, 0.035, 0.05), color.darkened(0.25), frame.basis, 8, 4)
 	_solid(pos + Vector3(0, size.y * 0.5, 0), size, true, yaw)
 
 ## Wooden chair whose seat faces local +z; a fallen one lies on its back.
@@ -1347,15 +1480,89 @@ func _chair(pos: Vector3, yaw: float, color: Color, fallen: bool = false) -> voi
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
 	if fallen:
 		frame = Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -PI * 0.5), pos + Vector3(0, 0.22, 0))
-	_placed(frame, "furniture_wood", Vector3(0, 0.45, 0), Vector3(0.44, 0.05, 0.44), color)
-	_placed(frame, "furniture_wood", Vector3(0, 0.76, -0.2), Vector3(0.44, 0.52, 0.04), color)
+	_placed(frame, "furniture_wood", Vector3(0, 0.45, 0.01), Vector3(0.44, 0.045, 0.42), color)
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
 		var at: Vector2 = corner
-		_placed(frame, "furniture_wood", Vector3(at.x * 0.19, 0.22, at.y * 0.19), Vector3(0.04, 0.44, 0.04), color.darkened(0.25))
+		var tall := 0.43 if at.y > 0 else 0.98
+		batch.cylinder(mats["furniture_wood"], frame * Vector3(at.x * 0.19, 0, at.y * 0.18), 0.022, 0.018 if at.y > 0 else 0.016, tall, color.darkened(0.25), 7, frame.basis)
+	# Stretchers between the legs, spindles and a curved top rail in the back.
+	for side in [-1.0, 1.0]:
+		_placed(frame, "furniture_wood", Vector3(side * 0.19, 0.16, 0), Vector3(0.025, 0.025, 0.36), color.darkened(0.25))
+	_placed(frame, "furniture_wood", Vector3(0, 0.2, 0.18), Vector3(0.36, 0.025, 0.025), color.darkened(0.25))
+	for k in range(4):
+		batch.cylinder(mats["furniture_wood"], frame * Vector3(-0.105 + k * 0.07, 0.47, -0.18), 0.011, 0.011, 0.38, color, 6, frame.basis)
+	_placed(frame, "furniture_wood", Vector3(0, 0.88, -0.19), Vector3(0.44, 0.09, 0.035), color, Vector3(-6, 0, 0))
+	_placed(frame, "furniture_wood", Vector3(0, 0.62, -0.18), Vector3(0.38, 0.04, 0.03), color.darkened(0.1))
 	if fallen:
 		_solid(pos + Vector3(0, 0.22, 0) + Basis(Vector3.UP, yaw) * Vector3(0, 0, -0.45), Vector3(0.5, 0.44, 1.0), true, yaw)
 	else:
 		_solid(pos + Vector3(0, 0.5, 0), Vector3(0.46, 1.0, 0.46), true, yaw)
+
+## Bed with its head at local -x: a turned head- and footboard, a mattress, the sheet
+## turned down over a quilt, pillows.
+func _bed(pos: Vector3, yaw: float, blanket: Color, wide: float = 1.0) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var skew := random.randf_range(-3, 3)
+	var pillow_turn := random.randf_range(-8, 8)
+	var wood := Color("3a2e23")
+	for side in [-1.0, 1.0]:
+		_placed(frame, "furniture_wood", Vector3(0, 0.3, side * (wide * 0.5 - 0.03)), Vector3(1.96, 0.16, 0.05), wood)
+	for end in [-1.0, 1.0]:
+		var x: float = end * 1.02
+		var tall := 1.05 if end < 0 else 0.68
+		for side in [-1.0, 1.0]:
+			batch.cylinder(mats["furniture_wood"], frame * Vector3(x, 0, side * (wide * 0.5 - 0.03)), 0.04, 0.035, tall, wood.darkened(0.1), 8, frame.basis)
+			batch.ellipsoid(mats["furniture_wood"], frame * Vector3(x, tall + 0.03, side * (wide * 0.5 - 0.03)), Vector3(0.05, 0.045, 0.05), wood, frame.basis, 8, 5)
+		_placed(frame, "furniture_wood", Vector3(x, tall - 0.08, 0), Vector3(0.05, 0.1, wide - 0.06), wood)
+		_placed(frame, "furniture_wood", Vector3(x, 0.38, 0), Vector3(0.04, 0.08, wide - 0.06), wood)
+		var slats := maxi(3, int(wide / 0.16))
+		for k in range(slats):
+			var z := -(wide - 0.2) * 0.5 + (k + 0.5) * (wide - 0.2) / slats
+			_placed(frame, "furniture_wood", Vector3(x, (tall + 0.38) * 0.5, z), Vector3(0.025, tall - 0.46, 0.04), wood.lightened(0.04))
+	_placed(frame, "cloth", Vector3(0.02, 0.45, 0), Vector3(1.94, 0.2, wide - 0.1), Color("6a6558"))
+	# Quilt over the foot end, hanging down at the sides; the sheet folded back over it.
+	var quilt_at := Vector3(0.3, 0.565, 0)
+	_placed(frame, "cloth", quilt_at, Vector3(1.32, 0.04, wide - 0.04), blanket, Vector3(0, skew, 0))
+	for side in [-1.0, 1.0]:
+		_placed(frame, "cloth", quilt_at + Vector3(0, -0.13, side * (wide * 0.5 - 0.015)), Vector3(1.3, 0.26, 0.025), blanket.darkened(0.1), Vector3(0, skew, 0))
+	_placed(frame, "cloth", quilt_at + Vector3(-0.6, 0.025, 0), Vector3(0.22, 0.03, wide - 0.06), Color("8c8576"), Vector3(0, skew, 0))
+	var pillows := 2 if wide > 1.3 else 1
+	for i in range(pillows):
+		var z := 0.0 if pillows == 1 else (i - 0.5) * wide * 0.48
+		batch.ellipsoid(mats["cloth"], frame * Vector3(-0.72, 0.6, z), Vector3(0.2, 0.07, wide * 0.3 / pillows + 0.08), Color("8a8578"), frame.basis * Basis(Vector3.UP, deg_to_rad(pillow_turn)), 10, 6)
+	_solid(pos + Vector3(0, 0.3, 0), Vector3(2.08, 0.6, wide), true, yaw)
+
+## Sofa or armchair whose seat faces local +z: a plinth on turned feet, rolled arms,
+## loose seat and back cushions, a pillow or two.
+func _sofa(pos: Vector3, yaw: float, color: Color, length: float = 2.0) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	var wood := Color("2c2119")
+	var dark := color.darkened(0.12)
+	_placed(frame, "furniture_wood", Vector3(0, 0.13, 0.02), Vector3(length - 0.04, 0.1, 0.78), wood)
+	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var at: Vector2 = corner
+		batch.cylinder(mats["furniture_wood"], frame * Vector3(at.x * (length * 0.5 - 0.1), 0, at.y * 0.33), 0.03, 0.04, 0.08, wood, 8, frame.basis)
+	_placed(frame, "cloth", Vector3(0, 0.27, 0.03), Vector3(length - 0.06, 0.2, 0.76), dark)
+	_placed(frame, "cloth", Vector3(0, 0.62, -0.31), Vector3(length - 0.06, 0.56, 0.2), dark, Vector3(-6, 0, 0))
+	var roll_x := frame.basis * Basis(Vector3.BACK, -PI / 2)
+	batch.cylinder(mats["cloth"], frame * Vector3(-(length - 0.06) * 0.5, 0.9, -0.34), 0.1, 0.1, length - 0.06, dark, 12, roll_x)
+	for side in [-1.0, 1.0]:
+		var x: float = side * (length * 0.5 - 0.1)
+		_placed(frame, "cloth", Vector3(x, 0.42, 0.03), Vector3(0.18, 0.38, 0.74), color.darkened(0.15))
+		batch.cylinder(mats["cloth"], frame * Vector3(x, 0.63, -0.35), 0.11, 0.11, 0.74, color.darkened(0.15), 12, frame.basis * Basis(Vector3.RIGHT, PI / 2))
+	var seats := maxi(1, roundi((length - 0.34) / 0.85))
+	var span := (length - 0.4) / seats
+	for seat in range(seats):
+		var x := -(length - 0.4) * 0.5 + (seat + 0.5) * span
+		_placed(frame, "cloth", Vector3(x, 0.44, 0.06), Vector3(span - 0.03, 0.13, 0.6), color.lightened(0.04))
+		batch.cylinder(mats["cloth"], frame * Vector3(x - (span - 0.03) * 0.5, 0.44, 0.36), 0.065, 0.065, span - 0.03, color.lightened(0.04), 10, roll_x)
+		_placed(frame, "cloth", Vector3(x, 0.72, -0.17), Vector3(span - 0.04, 0.42, 0.14), color.lightened(0.02), Vector3(-12, 0, 0))
+	# Pillows of another cloth against the arms.
+	var hue := absf(sin(pos.x * 12.9 + pos.z * 78.2))
+	var pillow := Color("6e5226") if hue < 0.5 else Color("5a2a26")
+	for side in ([-1.0, 1.0] if length > 1.4 else [1.0]):
+		batch.ellipsoid(mats["cloth"], frame * Vector3(side * (length * 0.5 - 0.36), 0.66, -0.06), Vector3(0.2, 0.18, 0.07), pillow, frame.basis * Basis(Vector3.FORWARD, side * 0.35) * Basis(Vector3.RIGHT, -0.3), 10, 6)
+	_solid(pos + Vector3(0, 0.48, 0), Vector3(length, 0.96, 0.86), true, yaw)
 
 func _crate(pos: Vector3, size: Vector3, color: Color, yaw: float = 0.0, solid: bool = true) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
@@ -1400,37 +1607,13 @@ func _shelf(pos: Vector3, yaw: float, width: float, depth: float, height: float,
 			_placed(frame, "plain", Vector3(-width * 0.5 + 0.26 + slot * (width - 0.52) / maxf(1.0, slots - 1.0) + random.randf_range(-0.03, 0.03), y + 0.02 + item.y * 0.5, random.randf_range(-0.03, 0.04)), item, _vary(tone, 0.05), Vector3(0, random.randf_range(-12, 12), 0))
 	_solid(pos + Vector3(0, height * 0.5, 0), Vector3(width, height, depth), true, yaw)
 
-## Bed with its head at local -x.
-func _bed(pos: Vector3, yaw: float, blanket: Color, wide: float = 1.0) -> void:
-	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "furniture_wood", Vector3(0, 0.22, 0), Vector3(2.05, 0.3, wide), Color("3a2e23"))
-	_placed(frame, "cloth", Vector3(0.02, 0.45, 0), Vector3(1.95, 0.18, wide - 0.08), Color("6a6558"))
-	_placed(frame, "cloth", Vector3(0.36, 0.555, 0), Vector3(1.25, 0.05, wide - 0.02), blanket, Vector3(0, random.randf_range(-3, 3), 0))
-	_placed(frame, "cloth", Vector3(-0.7, 0.58, 0), Vector3(0.42, 0.1, wide * 0.62), Color("7c776a"), Vector3(0, random.randf_range(-8, 8), 0))
-	_placed(frame, "furniture_wood", Vector3(-1.02, 0.5, 0), Vector3(0.06, 1.0, wide), Color("33281e"))
-	_placed(frame, "furniture_wood", Vector3(1.02, 0.32, 0), Vector3(0.06, 0.64, wide), Color("33281e"))
-	_solid(pos + Vector3(0, 0.3, 0), Vector3(2.08, 0.6, wide), true, yaw)
-
-## Sofa or armchair whose seat faces local +z.
-func _sofa(pos: Vector3, yaw: float, color: Color, length: float = 2.0) -> void:
-	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "cloth", Vector3(0, 0.22, 0.03), Vector3(length, 0.44, 0.8), color)
-	_placed(frame, "cloth", Vector3(0, 0.66, -0.32), Vector3(length, 0.62, 0.2), color.darkened(0.08))
-	for edge in [-1.0, 1.0]:
-		var x: float = edge * (length * 0.5 - 0.08)
-		_placed(frame, "cloth", Vector3(x, 0.4, 0.03), Vector3(0.17, 0.36, 0.8), color.darkened(0.15))
-	var seats := maxi(1, roundi((length - 0.34) / 0.85))
-	for seat in range(seats):
-		_placed(frame, "cloth", Vector3(-(length - 0.34) * 0.5 + (seat + 0.5) * (length - 0.34) / seats, 0.47, 0.08), Vector3((length - 0.34) / seats - 0.03, 0.08, 0.62), color.lightened(0.05))
-	_solid(pos + Vector3(0, 0.48, 0), Vector3(length, 0.96, 0.86), true, yaw)
-
 func _rug(center: Vector3, size: Vector2, color: Color) -> void:
 	_part("cloth", center + Vector3(0, 0.022, 0), Vector3(size.x, 0.012, size.y), color.darkened(0.15))
 	_part("cloth", center + Vector3(0, 0.026, 0), Vector3(size.x - 0.5, 0.012, size.y - 0.5), color)
 
 func _bale(pos: Vector3, yaw: float = 0.0, solid: bool = true) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "cloth", Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035))
+	_placed(frame, "straw", Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035))
 	for band in [-0.32, 0.32]:
 		_placed(frame, "plain", Vector3(0, 0.36, band), Vector3(0.915, 0.735, 0.025), Color("2b2416"))
 	if solid:
@@ -1439,7 +1622,7 @@ func _bale(pos: Vector3, yaw: float = 0.0, solid: bool = true) -> void:
 ## Big round bale lying on its side; its axis points along local x.
 func _round_bale(pos: Vector3, yaw: float) -> void:
 	var turn := Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, PI / 2)
-	batch.cylinder(mats["cloth"], pos + Vector3(0, 0.75, 0) + Basis(Vector3.UP, yaw) * Vector3(0.6, 0, 0), 0.75, 0.75, 1.2, _vary(Color("5b4d2c"), 0.03), 14, turn)
+	batch.cylinder(mats["straw"], pos + Vector3(0, 0.75, 0) + Basis(Vector3.UP, yaw) * Vector3(0.6, 0, 0), 0.75, 0.75, 1.2, _vary(Color("5b4d2c"), 0.03), 14, turn)
 	_solid(pos + Vector3(0, 0.75, 0), Vector3(1.2, 1.5, 1.4), true, yaw)
 
 ## Stacked firewood; the logs point along local x, the pile runs along local z.
@@ -1617,7 +1800,60 @@ func _build_house() -> void:
 		_part("siding", Vector3(side * (HX + 0.16), 3.2, 0), Vector3(0.05, 0.2, 18.5), _vary(trim, 0.02))
 	_build_balcony(trim)
 	_build_roof(siding, trim)
+	_build_skirt()
 	_clear_air(Vector3(0, 3.1, 0), Vector3(25.6, 6.1, 17.6))
+
+## What a farmhouse stands on and drains with: a low plinth of fieldstone at the foot of
+## the outer walls (not under the porch, the doors, the cellar hatch, the chimney and the
+## outside stairs), gutters under both eaves and the downpipes at the corners. Only for
+## the eye: the walls' colliders already reach as far.
+func _build_skirt() -> void:
+	_chunk("HouseLow")
+	var face := 0.06
+	var tall := 0.42
+	var stone := Color("575550")
+	# [axis "x" or "z", the fixed coordinate, start, end] of every stretch of plinth.
+	var runs := [
+		["x", HZ, -HX - 0.21, -7.25], ["x", HZ, 7.25, HX + 0.21],
+		["x", -HZ, -HX - 0.21, -4.6], ["x", -HZ, -2.4, HX + 0.21],
+		["z", -HX, -HZ - 0.21, -6.1], ["z", -HX, -3.4, -2.6], ["z", -HX, -0.6, HZ + 0.21],
+		["z", HX, -0.4, 4.4], ["z", HX, 5.8, HZ + 0.21]
+	]
+	for run in runs:
+		var fixed: float = run[1]
+		var out := signf(fixed) * (absf(fixed) + 0.15 + face * 0.5)
+		var mid := (float(run[2]) + float(run[3])) * 0.5
+		var length := float(run[3]) - float(run[2])
+		if run[0] == "x":
+			_part("stone", Vector3(mid, tall * 0.5, out), Vector3(length, tall, face), stone)
+			_part("concrete", Vector3(mid, tall + 0.012, out - signf(fixed) * 0.01), Vector3(length, 0.024, face + 0.03), Color("4c4a45"))
+		else:
+			_part("stone", Vector3(out, tall * 0.5, mid), Vector3(face, tall, length), stone)
+			_part("concrete", Vector3(out - signf(fixed) * 0.01, tall + 0.012, mid), Vector3(face + 0.03, 0.024, length), Color("4c4a45"))
+	_chunk("Roof")
+	var tin := Color("3b3d3b")
+	var eave_z := HZ + 0.9
+	for side in [-1.0, 1.0]:
+		var z: float = side * (eave_z + 0.07)
+		# The gutter: a trough with a lip, held by brackets.
+		_part("metal", Vector3(0, 5.86, z), Vector3(27.5, 0.04, 0.14), tin)
+		_part("metal", Vector3(0, 5.92, z + side * 0.07), Vector3(27.5, 0.13, 0.025), tin)
+		_part("metal", Vector3(0, 5.9, z - side * 0.065), Vector3(27.5, 0.09, 0.015), tin)
+		for k in range(12):
+			_part("metal", Vector3(-13.2 + k * 2.4, 5.91, z), Vector3(0.03, 0.025, 0.17), Color("232421"))
+		# Downpipes near both corners: back under the eave to the wall, then down.
+		for x in [-12.55, 12.55]:
+			var wall_z: float = side * (HZ + 0.25)
+			var top := Vector3(x, 5.86, z)
+			var bend := Vector3(x, 5.2, wall_z)
+			batch.cylinder(mats["metal"], top, 0.05, 0.05, 0.12, tin, 8, Basis(Vector3.RIGHT, PI))
+			var along := bend - top
+			batch.cylinder(mats["metal"], top, 0.045, 0.045, along.length(), tin, 8, Basis.looking_at(along, Vector3.UP if absf(along.normalized().y) < 0.98 else Vector3.BACK) * Basis(Vector3.RIGHT, -PI / 2))
+			batch.cylinder(mats["metal"], Vector3(x, 0.32, wall_z), 0.045, 0.045, 4.88, tin, 8)
+			for y in [1.2, 2.6, 4.0]:
+				_part("metal", Vector3(x, y, wall_z - side * 0.04), Vector3(0.12, 0.04, 0.06), Color("232421"))
+			# The shoe at the foot turns the water away from the wall.
+			batch.cylinder(mats["metal"], Vector3(x, 0.32, wall_z), 0.045, 0.05, 0.26, tin, 8, Basis(Vector3.RIGHT, side * deg_to_rad(125)))
 
 func _build_roof(siding: Color, trim: Color) -> void:
 	_chunk("Roof")
@@ -1792,8 +2028,8 @@ func _build_ground_floor() -> void:
 	_chunk("HouseLow")
 	var wood := Color("4b3b2b")
 	# --- Great hall: kept open, with a chandelier under the roof beams.
-	_rug(Vector3(0, 0, 3.4), Vector2(5.4, 4.4), Color("44332b"))
-	_prop("siding", Vector3(-4.62, 0.24, 7.2), Vector3(0.5, 0.48, 2.0), Color("43372b"))
+	_persian_rug(Vector3(0, 0, 3.4), Vector2(4.6, 3.75), "rug_red")
+	_prop("furniture_wood", Vector3(-4.62, 0.24, 7.2), Vector3(0.5, 0.48, 2.0), Color("43372b"))
 	_table(Vector3(-4.4, 0, -0.9), Vector3(0.9, 0.84, 1.3), Color("3f3327"))
 	_part("metal", Vector3(-4.45, 1.01, -0.9), Vector3(0.5, 0.34, 0.72), Color("262a26"))
 	_glow_box(Vector3(-4.19, 1.05, -0.97), Vector3(0.012, 0.09, 0.3), Color("7fe0a4"), 2.2)
@@ -1816,43 +2052,43 @@ func _build_ground_floor() -> void:
 		_part("plain", rim + Vector3(0, 0.07, 0), Vector3(0.05, 0.07, 0.05), Color("2b2a26"))
 		_glow_ball(rim + Vector3(0, 0.15, 0), 0.05, Color("ffcf8a"), 5.0)
 	_light(hub - Vector3(0, 0.35, 0), Color("ffbd75"), 4.4, 15.0, true, 0.08, 0.7)
-	_bulb(Vector3(-3.3, 2.5, -1.4), 1.9, 6.0, 0.14)
-	_bulb(Vector3(3.3, 2.5, -1.4), 1.9, 6.0, 0.2)
-	_bulb(Vector3(0, 2.5, 7.7), 2.0, 6.5, 0.12)
+	_fixture("globe", Vector3(-3.3, 2.5, -1.4), 1.9, 6.0, 0.14)
+	_fixture("globe", Vector3(3.3, 2.5, -1.4), 1.9, 6.0, 0.2)
+	_fixture("lantern", Vector3(0, 2.4, 7.7), 2.0, 6.5, 0.12)
 	# --- Lounge: sofas around the fireplace, books, a piano.
 	_build_fireplace(5.1)
-	_rug(Vector3(10.3, 0, 5.1), Vector2(4.6, 5.4), Color("3b2a26"))
+	_persian_rug(Vector3(10.3, 0, 5.1), Vector2(5.4, 4.6), "rug_blue", PI / 2)
 	_sofa(Vector3(8.9, 0, 5.1), PI / 2, Color("3c3f33"), 2.2)
 	_sofa(Vector3(10.4, 0, 1.9), 0.0, Color("3a3d35"), 2.0)
 	_sofa(Vector3(10.0, 0, 7.7), PI, Color("453a30"), 1.0)
 	_table(Vector3(10.6, 0, 5.1), Vector3(0.7, 0.42, 1.2), Color("3f3327"))
 	_shelf(Vector3(5.3, 0, 7.0), PI / 2, 2.6, 0.4, 2.2, 5, Color("3f352a"), 0.85)
-	_prop("siding", Vector3(5.42, 0.62, -0.8), Vector3(0.65, 1.25, 1.6), Color("1f1915"))
+	_prop("furniture_wood", Vector3(5.42, 0.62, -0.8), Vector3(0.65, 1.25, 1.6), Color("1f1915"))
 	_part("plain", Vector3(5.8, 0.78, -0.8), Vector3(0.22, 0.03, 1.4), Color("8f8a78"))
-	_prop("siding", Vector3(6.25, 0.24, -0.8), Vector3(0.4, 0.48, 0.7), Color("2a211a"))
-	_prop("siding", Vector3(6.4, 1.05, -2.62), Vector3(0.6, 2.1, 0.4), Color("3a2e23"))
+	_prop("furniture_wood", Vector3(6.25, 0.24, -0.8), Vector3(0.4, 0.48, 0.7), Color("2a211a"))
+	_prop("furniture_wood", Vector3(6.4, 1.05, -2.62), Vector3(0.6, 2.1, 0.4), Color("3a2e23"))
 	_part("plain", Vector3(6.4, 1.75, -2.41), Vector3(0.34, 0.34, 0.02), Color("b9b39f"))
 	_crate(Vector3(8.8, 0, 8.45), Vector3(1.1, 0.5, 0.55), Color("3f3327"))
-	_bulb(Vector3(9.0, 2.55, -0.6), 2.0, 6.5, 0.16)
+	_fixture("drum", Vector3(9.0, 2.5, -0.6), 2.0, 6.5, 0.16)
 	# --- Kitchen: counter under the windows, an island, the breach in the west wall.
-	_prop("siding", Vector3(-9.45, 0.45, -8.53), Vector3(6.5, 0.9, 0.62), Color("4a4233"))
+	_prop("furniture_wood", Vector3(-9.45, 0.45, -8.53), Vector3(6.5, 0.9, 0.62), Color("4a4233"))
 	_part("stone", Vector3(-9.45, 0.92, -8.53), Vector3(6.6, 0.05, 0.68), Color("605c53"))
 	_part("metal", Vector3(-10.2, 0.93, -8.53), Vector3(0.7, 0.06, 0.45), Color("7a7d7c"))
 	_part("metal", Vector3(-7.0, 0.95, -8.53), Vector3(0.75, 0.08, 0.6), Color("1d1d1c"))
 	for x in [-11.95, -8.5]:
-		_part("siding", Vector3(x, 2.4, -8.68), Vector3(1.3, 0.7, 0.34), Color("463e30"))
+		_part("furniture_wood", Vector3(x, 2.4, -8.68), Vector3(1.3, 0.7, 0.34), Color("463e30"))
 	_prop("metal", Vector3(-5.5, 0.9, -8.45), Vector3(0.7, 1.8, 0.72), Color("76756a"))
 	_part("metal", Vector3(-5.5, 1.3, -8.07), Vector3(0.5, 0.04, 0.03), Color("2a2a28"))
-	_prop("siding", Vector3(-8.8, 0.45, -5.0), Vector3(2.0, 0.9, 1.1), Color("463e30"))
-	_part("siding", Vector3(-8.8, 0.93, -5.0), Vector3(2.15, 0.06, 1.25), Color("5a4b38"))
+	_prop("furniture_wood", Vector3(-8.8, 0.45, -5.0), Vector3(2.0, 0.9, 1.1), Color("463e30"))
+	_part("furniture_wood", Vector3(-8.8, 0.93, -5.0), Vector3(2.15, 0.06, 1.25), Color("5a4b38"))
 	_part("metal", Vector3(-8.3, 1.03, -5.1), Vector3(0.34, 0.14, 0.34), Color("2a2a28"))
 	_shelf(Vector3(-11.9, 0, -1.3), PI, 1.8, 0.4, 2.0, 4, Color("463e30"), 0.8)
 	_table(Vector3(-6.3, 0, -1.9), Vector3(1.0, 0.76, 0.9), wood)
 	_chair(Vector3(-7.15, 0, -1.9), PI / 2, wood)
 	_chair(Vector3(-6.3, 0, -2.75), 0.0, wood, true)
-	_bulb(Vector3(-9.0, 2.5, -4.6), 2.1, 8.5, 0.24, CEILING, true)
+	_fixture("enamel", Vector3(-9.0, 2.45, -4.6), 2.1, 8.5, 0.24, CEILING, true)
 	# --- Dining room: the long table, sideboard and china cabinet.
-	_rug(Vector3(-9.4, 0, 4.6), Vector2(3.4, 5.2), Color("3a2c2a"))
+	_persian_rug(Vector3(-9.4, 0, 4.6), Vector2(5.2, 3.4), "rug_red", PI / 2)
 	_table(Vector3(-9.4, 0, 4.6), Vector3(1.3, 0.78, 3.6), wood)
 	for z in [3.4, 4.6, 5.8]:
 		_chair(Vector3(-10.42, 0, z), PI / 2, wood)
@@ -1860,11 +2096,12 @@ func _build_ground_floor() -> void:
 	_chair(Vector3(-9.4, 0, 2.42), 0.0, wood)
 	_chair(Vector3(-9.2, 0, 6.8), PI + 0.3, wood)
 	for i in range(4):
-		_part("plain", Vector3(-9.4 + random.randf_range(-0.3, 0.3), 0.8, 3.3 + i * 0.85), Vector3(0.24, 0.03, 0.24), _vary(Color("8a8676"), 0.04))
-	_prop("siding", Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7), Color("3f3327"))
+		var plate := Vector3(-9.4 + random.randf_range(-0.3, 0.3), 0.785, 3.3 + i * 0.85)
+		batch.cylinder(mats["chrome"], plate, 0.1, 0.13, 0.018, _vary(Color("8a8676"), 0.04), 18)
+	_prop("furniture_wood", Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7), Color("3f3327"))
 	_shelf(Vector3(-12.0, 0, -0.68), 0.0, 1.6, 0.42, 2.1, 4, Color("3f352a"), 0.6)
-	_prop("siding", Vector3(-5.37, 1.0, 7.2), Vector3(0.5, 2.0, 1.5), Color("3d3227"))
-	_bulb(Vector3(-9.2, 2.5, 3.8), 2.2, 9.0, 0.1, CEILING, true)
+	_prop("furniture_wood", Vector3(-5.37, 1.0, 7.2), Vector3(0.5, 2.0, 1.5), Color("3d3227"))
+	_fixture("candles", Vector3(-9.4, 2.35, 4.6), 2.2, 9.0, 0.1, CEILING, true)
 	# --- Supply room: shelves, crates and barrels around the two stations.
 	_shelf(Vector3(6.7, 0, -8.63), 0.0, 2.2, 0.42, 2.1, 4, Color("3f352a"), 0.85)
 	_shelf(Vector3(10.6, 0, -8.63), 0.0, 1.6, 0.42, 2.1, 4, Color("3f352a"), 0.85)
@@ -1873,11 +2110,12 @@ func _build_ground_floor() -> void:
 	_crate(Vector3(6.85, 0, -3.58), Vector3(0.9, 0.9, 0.8), Color("4a4133"), -0.1)
 	_barrel(Vector3(12.35, 0, -3.5))
 	_barrel(Vector3(11.65, 0, -3.45), Color("3d4438"))
-	_bulb(Vector3(9.0, 2.55, -6.0), 2.2, 6.5, 0.1)
+	_fixture("enamel", Vector3(9.0, 2.5, -6.0), 2.2, 6.5, 0.1)
 	# --- Stair hall: the wardrobe behind the shop wall and a bench by the back door.
-	_prop("siding", Vector3(0, 1.0, -3.4), Vector3(2.2, 2.0, 0.55), Color("3d3227"))
+	_prop("furniture_wood", Vector3(0, 1.0, -3.4), Vector3(2.2, 2.0, 0.55), Color("3d3227"))
 	_part("plank_v", Vector3(0, 1.0, -3.69), Vector3(0.03, 1.8, 0.02), Color("1f1915"))
-	_bulb(Vector3(0.5, 2.55, -5.0), 2.0, 8.5, 0.12, CEILING, true)
+	_fixture("lantern", Vector3(0.5, 2.45, -5.0), 2.0, 8.5, 0.12, CEILING, true)
+	_dress_ground_floor()
 
 func _build_upper_floor() -> void:
 	_chunk("HouseUp")
@@ -1889,15 +2127,15 @@ func _build_upper_floor() -> void:
 	_shelf(Vector3(-4.7, floor_y, -1.6), PI / 2, 2.0, 0.4, 2.0, 4, Color("3f352a"), 0.6)
 	_crate(Vector3(4.5, floor_y, -1.6), Vector3(0.7, 0.9, 1.6), Color("3f3327"))
 	_crate(Vector3(-4.4, floor_y, 8.3), Vector3(0.9, 0.9, 0.9), Color("4a4133"), 0.15)
-	_bulb(Vector3(0.4, 5.5, -4.2), 2.3, 10.0, 0.12, UPPER_TOP, true)
-	_bulb(Vector3(0, 5.5, 7.8), 1.8, 6.5, 0.1, UPPER_TOP)
+	_fixture("globe", Vector3(0.4, 5.45, -4.2), 2.3, 10.0, 0.12, UPPER_TOP, true)
+	_fixture("dome", Vector3(0, 5.5, 7.8), 1.8, 6.5, 0.1, UPPER_TOP)
 	# --- West wing: a bedroom in the north, a dormitory in the south.
 	_bed(Vector3(-11.7, floor_y, -1.75), 0.0, Color("4a3f37"))
 	_bed(Vector3(-5.65, floor_y, -7.8), PI / 2, Color("3c4438"))
-	_prop("siding", Vector3(-5.4, floor_y + 1.0, -2.6), Vector3(0.55, 2.0, 1.6), Color("3d3227"))
-	_prop("siding", Vector3(-12.57, floor_y + 0.5, -3.9), Vector3(0.5, 1.0, 1.3), Color("3f3327"))
-	_rug(Vector3(-9.0, floor_y, -5.0), Vector2(3.0, 2.4), Color("3a2c2a"))
-	_bulb(Vector3(-9.0, 5.55, -5.0), 1.9, 8.0, 0.2, UPPER_TOP, true)
+	_prop("furniture_wood", Vector3(-5.4, floor_y + 1.0, -2.6), Vector3(0.55, 2.0, 1.6), Color("3d3227"))
+	_prop("furniture_wood", Vector3(-12.57, floor_y + 0.5, -3.9), Vector3(0.5, 1.0, 1.3), Color("3f3327"))
+	_persian_rug(Vector3(-9.0, floor_y, -5.0), Vector2(3.0, 2.4), "rug_blue")
+	_fixture("drum", Vector3(-9.0, 5.5, -5.0), 1.9, 8.0, 0.2, UPPER_TOP, true)
 	_bed(Vector3(-11.7, floor_y, 3.95), 0.0, Color("3c4438"))
 	_bed(Vector3(-11.7, floor_y, 0.0), 0.0, Color("4a3f37"))
 	_table(Vector3(-5.75, floor_y, 8.3), Vector3(1.2, 0.76, 0.7), wood)
@@ -1906,20 +2144,568 @@ func _build_upper_floor() -> void:
 	_table(Vector3(-8.6, floor_y, 5.6), Vector3(1.4, 0.76, 0.9), wood)
 	for i in range(3):
 		_part("metal", Vector3(-9.0 + i * 0.42, floor_y + 0.88, 5.6), Vector3(0.3, 0.2, 0.42), _vary(Color("4e5a3c"), 0.03), Vector3(0, random.randf_range(-15, 15), 0))
-	_bulb(Vector3(-9.0, 5.55, 4.0), 2.1, 9.0, 0.1, UPPER_TOP, true)
+	_fixture("dome", Vector3(-9.0, 5.55, 4.0), 2.1, 9.0, 0.1, UPPER_TOP, true)
 	# --- East wing: a store loft in the north, the master bedroom with the balcony door.
 	_shelf(Vector3(5.3, floor_y, -7.8), PI / 2, 1.8, 0.4, 2.0, 4, Color("3f352a"), 0.8)
 	_crate(Vector3(8.8, floor_y, -8.3), Vector3(1.1, 0.9, 0.9), Color("4f4636"))
 	_crate(Vector3(12.2, floor_y, -8.3), Vector3(1.0, 0.9, 0.9), Color("4a4133"), 0.1)
 	_crate(Vector3(12.2, floor_y + 0.92, -8.3), Vector3(0.7, 0.6, 0.7), Color("463d30"), -0.3)
 	_crate(Vector3(6.2, floor_y, -3.52), Vector3(1.3, 0.9, 0.7), Color("3f3327"))
-	_bulb(Vector3(9.0, 5.55, -6.0), 1.8, 7.5, 0.26, UPPER_TOP, true)
+	_fixture("enamel", Vector3(9.0, 5.5, -6.0), 1.8, 7.5, 0.26, UPPER_TOP, true)
 	_bed(Vector3(6.15, floor_y, 6.2), 0.0, Color("4d3a34"), 1.7)
-	_prop("siding", Vector3(6.2, floor_y + 1.0, -2.6), Vector3(1.8, 2.0, 0.55), Color("3d3227"))
+	_prop("furniture_wood", Vector3(6.2, floor_y + 1.0, -2.6), Vector3(1.8, 2.0, 0.55), Color("3d3227"))
 	_prop("stone", Vector3(12.6, floor_y + 1.45, 5.1), Vector3(0.5, 2.9, 1.6), Color("504e4a"))
-	_prop("siding", Vector3(8.8, floor_y + 0.5, 8.55), Vector3(1.2, 1.0, 0.5), Color("3f3327"))
-	_rug(Vector3(9.5, floor_y, 3.4), Vector2(3.4, 2.6), Color("44332b"))
-	_bulb(Vector3(9.2, 5.55, 3.0), 2.1, 9.0, 0.14, UPPER_TOP, true)
+	_prop("furniture_wood", Vector3(8.8, floor_y + 0.5, 8.55), Vector3(1.2, 1.0, 0.5), Color("3f3327"))
+	_persian_rug(Vector3(9.5, floor_y, 3.4), Vector2(3.4, 2.6), "rug_red")
+	_fixture("globe", Vector3(9.2, 5.45, 3.0), 2.1, 9.0, 0.14, UPPER_TOP, true)
+	_dress_upper_floor()
+
+# ---------------------------------------------------------------- lamps and furnishings
+
+## Emissive cylinder (lamp shades seen lit, flames in glass). `inside` turns its faces
+## inwards, so that a shade shows its lit inner side from below.
+func _glow_cylinder(base: Vector3, bottom: float, top: float, height: float, color: Color, strength: float, sides: int = 14, basis: Basis = Basis.IDENTITY, inside: bool = false) -> void:
+	var factor := pow(clampf(strength / 7.0, 0.0, 1.0), 1.0 / 2.2)
+	var turn := basis * (Basis.from_scale(Vector3(-1, 1, 1)) if inside else Basis.IDENTITY)
+	batch.cylinder(mats[glow_key], base, bottom, top, height, Color(color.r * factor, color.g * factor, color.b * factor), sides, turn, false)
+
+func _glow_egg(center: Vector3, radii: Vector3, color: Color, strength: float) -> void:
+	var factor := pow(clampf(strength / 7.0, 0.0, 1.0), 1.0 / 2.2)
+	batch.ellipsoid(mats[glow_key], center, radii, Color(color.r * factor, color.g * factor, color.b * factor), Basis.IDENTITY, 14, 8)
+
+## A short chain of links between two heights.
+func _lamp_chain(x: float, z: float, y0: float, y1: float, color: Color) -> void:
+	var links := maxi(2, int((y1 - y0) / 0.05))
+	for i in range(links):
+		var y := y0 + (i + 0.5) * (y1 - y0) / links
+		batch.box(mats["chrome"], Vector3(x, y, z), Vector3(0.022, 0.05, 0.008), color, Basis(Vector3.UP, (i % 2) * PI / 2))
+
+## A ceiling lamp of one of several kinds, lit as _bulb lights it (and rolling the same
+## dice): "enamel" (a farmhouse pendant), "globe" (milk glass on a chain), "dome" (flat
+## against the ceiling), "lantern", "drum" (a fabric shade), "candles" (a ring of candle
+## bulbs, the dining room's), "tube" (a workshop's fluorescent strip).
+func _fixture(style: String, pos: Vector3, energy: float, reach: float, flicker: float, ceiling: float = CEILING, shadows: bool = false) -> Light3D:
+	var drop := ceiling - pos.y
+	var brass := Color("7a5c2c")
+	var iron := Color("1b1b1a")
+	var warm := Color("ffcf8a")
+	var light_at := pos
+	match style:
+		"enamel":
+			batch.cylinder(mats["metal"], Vector3(pos.x, ceiling - 0.03, pos.z), 0.07, 0.07, 0.03, iron, 10)
+			_part("plain", pos + Vector3(0, drop * 0.5 + 0.1, 0), Vector3(0.012, drop - 0.1, 0.012), Color("0c0c0c"))
+			batch.cylinder(mats["metal"], pos + Vector3(0, 0.12, 0), 0.045, 0.04, 0.08, iron, 10)
+			batch.cylinder(mats["paint"], pos + Vector3(0, -0.06, 0), 0.27, 0.05, 0.19, Color("2e4a3b"), 18)
+			batch.cylinder(mats["metal"], pos + Vector3(0, -0.07, 0), 0.275, 0.275, 0.014, iron, 18)
+			_glow_cylinder(pos + Vector3(0, -0.055, 0), 0.262, 0.047, 0.18, Color("ffeccc"), 2.6, 18, Basis.IDENTITY, true)
+			_glow_ball(pos + Vector3(0, -0.02, 0), 0.055, warm, 6.0)
+		"globe":
+			batch.cylinder(mats["chrome"], Vector3(pos.x, ceiling - 0.04, pos.z), 0.09, 0.06, 0.04, brass, 12)
+			_lamp_chain(pos.x, pos.z, pos.y + 0.22, ceiling - 0.04, brass)
+			batch.cylinder(mats["chrome"], pos + Vector3(0, 0.14, 0), 0.07, 0.04, 0.08, brass, 12)
+			_glow_egg(pos, Vector3(0.17, 0.16, 0.17), Color("ffd4a0"), 2.6)
+		"dome":
+			light_at = Vector3(pos.x, ceiling - 0.3, pos.z)
+			batch.cylinder(mats["chrome"], Vector3(pos.x, ceiling - 0.045, pos.z), 0.27, 0.27, 0.03, brass, 18)
+			_glow_egg(Vector3(pos.x, ceiling - 0.05, pos.z), Vector3(0.25, 0.12, 0.25), Color("ffd6a4"), 2.6)
+			batch.ellipsoid(mats["chrome"], Vector3(pos.x, ceiling - 0.18, pos.z), Vector3(0.025, 0.03, 0.025), brass)
+		"lantern":
+			_lamp_chain(pos.x, pos.z, pos.y + 0.3, ceiling - 0.02, iron)
+			batch.cylinder(mats["metal"], pos + Vector3(0, 0.17, 0), 0.17, 0.03, 0.14, iron, 4, Basis(Vector3.UP, PI / 4))
+			batch.cylinder(mats["metal"], pos + Vector3(0, -0.22, 0), 0.13, 0.15, 0.04, iron, 4, Basis(Vector3.UP, PI / 4))
+			for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+				var at: Vector2 = corner
+				_part("metal", pos + Vector3(at.x * 0.095, -0.03, at.y * 0.095), Vector3(0.018, 0.38, 0.018), iron)
+			for side in [Vector3(1, 0, 0), Vector3(-1, 0, 0), Vector3(0, 0, 1), Vector3(0, 0, -1)]:
+				var face: Vector3 = side
+				_part("glass", pos + face * 0.094 + Vector3(0, -0.03, 0), Vector3(0.18, 0.34, 0.18) * (Vector3.ONE - face.abs()) + face.abs() * 0.006, Color.WHITE)
+			_glow_egg(pos + Vector3(0, -0.04, 0), Vector3(0.035, 0.07, 0.035), warm, 6.0)
+		"drum":
+			batch.cylinder(mats["metal"], Vector3(pos.x, ceiling - 0.03, pos.z), 0.06, 0.06, 0.03, iron, 10)
+			_part("plain", pos + Vector3(0, drop * 0.5 + 0.12, 0), Vector3(0.01, drop - 0.12, 0.01), Color("0c0c0c"))
+			_glow_cylinder(pos + Vector3(0, -0.12, 0), 0.28, 0.28, 0.26, Color("a8642e"), 0.9, 20)
+			_glow_cylinder(pos + Vector3(0, -0.118, 0), 0.275, 0.275, 0.256, Color("ffbb70"), 2.2, 20, Basis.IDENTITY, true)
+			for y in [-0.12, 0.14]:
+				batch.cylinder(mats["chrome"], pos + Vector3(0, y - 0.006, 0), 0.284, 0.284, 0.012, brass, 20, Basis.IDENTITY, false)
+			_glow_ball(pos + Vector3(0, -0.02, 0), 0.05, warm, 6.0)
+		"candles":
+			_lamp_chain(pos.x, pos.z, pos.y + 0.2, ceiling - 0.02, brass)
+			batch.cylinder(mats["chrome"], pos + Vector3(0, -0.15, 0), 0.03, 0.05, 0.36, brass, 10)
+			batch.ellipsoid(mats["chrome"], pos + Vector3(0, -0.17, 0), Vector3(0.07, 0.05, 0.07), brass)
+			for i in range(6):
+				var angle := TAU * i / 6.0
+				var out := Vector3(cos(angle), 0, sin(angle))
+				_beam(Transform3D.IDENTITY, "chrome", pos + Vector3(0, -0.1, 0), pos + out * 0.42 + Vector3(0, 0.0, 0), Vector2(0.018, 0.018), brass)
+				var cup := pos + out * 0.42
+				batch.cylinder(mats["chrome"], cup, 0.04, 0.05, 0.03, brass, 10)
+				batch.cylinder(mats["plain"], cup + Vector3(0, 0.03, 0), 0.016, 0.016, 0.11, Color("d8d0b8"), 8)
+				_glow_egg(cup + Vector3(0, 0.17, 0), Vector3(0.022, 0.04, 0.022), warm, 6.5)
+		"tube":
+			for x in [-0.5, 0.5]:
+				_part("plain", Vector3(pos.x + x, (pos.y + ceiling) * 0.5 + 0.03, pos.z), Vector3(0.008, ceiling - pos.y - 0.06, 0.008), Color("0c0c0c"))
+			_part("metal", pos + Vector3(0, 0.03, 0), Vector3(1.3, 0.05, 0.16), Color("4a4c4a"))
+			_glow_box(pos + Vector3(0, -0.005, 0), Vector3(1.22, 0.035, 0.045), Color("e8f0ff"), 6.0)
+	if shadows:
+		return _light(light_at - Vector3(0, 0.1, 0), Color("ffbd75"), energy, reach, true, flicker, 0.6)
+	_light(light_at + Vector3(0, 0.12, 0), Color("ffbd75"), energy * 0.4, minf(3.0, drop + 2.0), false, flicker, 0.2)
+	return _spot(light_at - Vector3(0, 0.03, 0), Vector3.DOWN, Color("dfe8ff") if style == "tube" else Color("ffbd75"), energy * 1.3, reach, 82.0, flicker, 0.6)
+
+## A brass wall lamp with a small fabric shade, its plate on the wall, looking along `out`.
+func _brass_sconce(pos: Vector3, out: Vector3, energy: float) -> void:
+	var brass := Color("7a5c2c")
+	_part("chrome", pos - out * 0.01, Vector3(0.1, 0.18, 0.1) * (Vector3.ONE - out.abs()) + out.abs() * 0.02, brass)
+	_beam(Transform3D.IDENTITY, "chrome", pos, pos + out * 0.17 + Vector3(0, 0.08, 0), Vector2(0.016, 0.016), brass)
+	var shade := pos + out * 0.19 + Vector3(0, 0.1, 0)
+	_glow_cylinder(shade, 0.09, 0.065, 0.14, Color("c47f42"), 1.3, 14)
+	_glow_cylinder(shade + Vector3(0, 0.002, 0), 0.087, 0.063, 0.136, Color("ffc888"), 2.8, 14, Basis.IDENTITY, true)
+	_light(shade + Vector3(0, 0.05, 0) + out * 0.08, Color("ffb46a"), energy, 4.2, false, 0.08, 0.0, 22.0)
+
+## Standing lamp with a fabric shade.
+func _floor_lamp(pos: Vector3, energy: float) -> void:
+	var brass := Color("6e5228")
+	batch.cylinder(mats["chrome"], pos, 0.17, 0.15, 0.03, brass, 16)
+	batch.cylinder(mats["chrome"], pos + Vector3(0, 0.03, 0), 0.016, 0.014, 1.42, brass, 8)
+	var shade := pos + Vector3(0, 1.38, 0)
+	_glow_cylinder(shade, 0.26, 0.18, 0.3, Color("b87a44"), 1.3, 18)
+	_glow_cylinder(shade + Vector3(0, 0.003, 0), 0.256, 0.177, 0.294, Color("ffc888"), 2.8, 18, Basis.IDENTITY, true)
+	_light(shade + Vector3(0, 0.12, 0), Color("ffb066"), energy, 4.8, false, 0.06, 0.0, 22.0)
+
+## Table lamp: a glazed foot and a cone shade.
+func _table_lamp(pos: Vector3, foot: Color, energy: float) -> void:
+	batch.ellipsoid(mats["chrome"], pos + Vector3(0, 0.1, 0), Vector3(0.075, 0.1, 0.075), foot, Basis.IDENTITY, 12, 8)
+	batch.cylinder(mats["chrome"], pos + Vector3(0, 0.19, 0), 0.015, 0.012, 0.1, Color("6e5228"), 8)
+	var shade := pos + Vector3(0, 0.24, 0)
+	_glow_cylinder(shade, 0.16, 0.1, 0.17, Color("bf8248"), 1.4, 16)
+	_glow_cylinder(shade + Vector3(0, 0.002, 0), 0.157, 0.098, 0.166, Color("ffc888"), 2.8, 16, Basis.IDENTITY, true)
+	_light(shade + Vector3(0, 0.07, 0), Color("ffb066"), energy, 3.4, false, 0.06, 0.0, 22.0)
+
+## Candles that burn on whatever happens to the farm's power.
+func _candles(pos: Vector3, count: int, spread: float, energy: float = 0.7) -> void:
+	var before := glow_key
+	glow_key = "steady"
+	for i in range(count):
+		var angle := TAU * i / maxf(1.0, count) + random.randf_range(-0.4, 0.4)
+		var at := pos + Vector3(cos(angle), 0, sin(angle)) * (spread if count > 1 else 0.0)
+		var tall := random.randf_range(0.08, 0.2)
+		batch.cylinder(mats["chrome"], at, 0.04, 0.035, 0.015, Color("6e5228"), 10)
+		batch.cylinder(mats["plain"], at + Vector3(0, 0.015, 0), 0.017, 0.017, tall, Color("ddd5bd"), 8)
+		_glow_egg(at + Vector3(0, tall + 0.04, 0), Vector3(0.012, 0.028, 0.012), Color("ffc06a"), 6.8)
+	glow_key = before
+	_light(pos + Vector3(0, 0.3, 0), Color("ff9b4a"), energy, 3.6, false, 0.32, 0.0, 22.0)
+	flickers[flickers.size() - 1]["wired"] = false
+
+## Paraffin lamp with a glass chimney, also off the farm's circuit.
+func _oil_lamp(pos: Vector3, energy: float = 0.9) -> void:
+	var brass := Color("7a5c2c")
+	batch.cylinder(mats["chrome"], pos, 0.08, 0.06, 0.03, brass, 12)
+	batch.ellipsoid(mats["chrome"], pos + Vector3(0, 0.09, 0), Vector3(0.075, 0.065, 0.075), brass, Basis.IDENTITY, 12, 8)
+	batch.cylinder(mats["chrome"], pos + Vector3(0, 0.15, 0), 0.035, 0.035, 0.03, brass, 10)
+	batch.cylinder(mats["glass"], pos + Vector3(0, 0.18, 0), 0.04, 0.03, 0.2, Color.WHITE, 12)
+	var before := glow_key
+	glow_key = "steady"
+	_glow_egg(pos + Vector3(0, 0.23, 0), Vector3(0.012, 0.03, 0.012), Color("ffbe6a"), 6.8)
+	glow_key = before
+	_light(pos + Vector3(0, 0.3, 0), Color("ffa04f"), energy, 4.4, false, 0.22, 0.0, 22.0)
+	flickers[flickers.size() - 1]["wired"] = false
+
+## A rug with a picture on it (rug_red, rug_blue in assets/surfaces/farm), fringes at its
+## ends. `size` is across (x) and along (z) before `yaw` turns it.
+func _persian_rug(center: Vector3, size: Vector2, picture: String, yaw: float = 0.0) -> void:
+	var rug := MeshInstance3D.new()
+	rug.name = "Rug"
+	var plane := PlaneMesh.new()
+	plane.size = size
+	rug.mesh = plane
+	var weave := StandardMaterial3D.new()
+	weave.albedo_texture = load("res://assets/surfaces/farm/%s_albedo.jpg" % picture)
+	weave.normal_enabled = true
+	weave.normal_texture = load("res://assets/surfaces/farm/%s_normal.jpg" % picture)
+	weave.normal_scale = 0.8
+	weave.roughness = 1.0
+	weave.metallic_specular = 0.2
+	# Old wool in a dim house: dark and dusty, never brighter than the boards around it.
+	weave.albedo_color = Color(0.43, 0.4, 0.38)
+	weave.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	rug.material_override = weave
+	rug.position = center + Vector3(0, 0.03, 0)
+	rug.rotation.y = yaw
+	rug.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(rug)
+	var turn := Basis(Vector3.UP, yaw)
+	for end in [-1.0, 1.0]:
+		for k in range(int(size.y / 0.03)):
+			var at := Vector3(-size.x * 0.5 * end - end * 0.045, 0.031, -size.y * 0.5 + (k + 0.5) * size.y / int(size.y / 0.03))
+			batch.box(mats["plain"], center + turn * at, Vector3(0.09, 0.006, 0.012), Color("4e4636"), turn * Basis(Vector3.UP, (k % 3 - 1) * 0.12))
+
+## A framed painting (painting_* in assets/surfaces/farm) on a wall facing `out`.
+func _oil_painting(pos: Vector3, out: Vector3, size: Vector2, picture: String) -> void:
+	var canvas := MeshInstance3D.new()
+	canvas.name = "Painting"
+	var quad := QuadMesh.new()
+	quad.size = size
+	canvas.mesh = quad
+	var oil := StandardMaterial3D.new()
+	oil.albedo_texture = load("res://assets/surfaces/farm/%s_albedo.jpg" % picture)
+	oil.roughness = 0.55
+	oil.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	canvas.material_override = oil
+	canvas.transform = Transform3D(Basis.looking_at(-out, Vector3.UP), pos + out * 0.035)
+	canvas.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(canvas)
+	var across := Vector3.UP.cross(out).normalized()
+	var gilt := Color("6b5126")
+	var depth := out.abs() * 0.05 + (Vector3.ONE - out.abs()) * 0.0
+	for side in [-1.0, 1.0]:
+		var flat: Vector3 = (Vector3.ONE - out.abs())
+		_part("furniture_wood", pos + out * 0.03 + across * side * (size.x * 0.5 + 0.035), (across.abs() * 0.07 + Vector3.UP * (size.y + 0.14)) * flat + depth, gilt)
+		_part("furniture_wood", pos + out * 0.03 + Vector3.UP * side * (size.y * 0.5 + 0.035), (across.abs() * (size.x + 0.14) + Vector3.UP * 0.07) * flat + depth, gilt)
+	_part("plain", pos + out * 0.008, (across.abs() * size.x + Vector3.UP * size.y) * (Vector3.ONE - out.abs()) + out.abs() * 0.016, Color("1a140e"))
+
+## Panels, drawers, handles, a cornice and a plinth on the front of a piece of furniture
+## that is a plain box (`centre`, `size`) facing `out`. `layout`: "doors", "drawers",
+## "chest" (drawers over doors), "kitchen" (a row of drawers over doors along a counter),
+## "glass" (glazed doors with plates behind).
+func _front(centre: Vector3, size: Vector3, out: Vector3, layout: String, color: Color) -> void:
+	var along_x := absf(out.z) > 0.5
+	var width := size.x if along_x else size.z
+	var depth := size.z if along_x else size.x
+	var across := Vector3(1, 0, 0) if along_x else Vector3(0, 0, 1)
+	var face := centre + out * (depth * 0.5)
+	var low := centre.y - size.y * 0.5
+	var high := centre.y + size.y * 0.5
+	var brass := Color("8a6a34")
+	var panel := func(u0: float, u1: float, v0: float, v1: float, knob: Vector2, glazed: bool = false) -> void:
+		var mid := face + across * ((u0 + u1) * 0.5) + Vector3(0, (v0 + v1) * 0.5 - centre.y, 0) + out * 0.008
+		var extent := across * (u1 - u0 - 0.03) + Vector3(0, v1 - v0 - 0.03, 0) + out * 0.016
+		_part("furniture_wood", mid, extent.abs(), color.lightened(0.12))
+		if glazed:
+			_part("plain", mid + out * 0.009, (across * (u1 - u0 - 0.13) + Vector3(0, v1 - v0 - 0.13, 0)).abs() + out.abs() * 0.004, Color("120e0b"))
+			for k in range(3):
+				var shelf_y := v0 + 0.12 + k * (v1 - v0 - 0.2) / 3.0
+				for plate in range(2):
+					var at := face + across * (u0 + (u1 - u0) * (0.3 + plate * 0.4)) + Vector3(0, shelf_y + 0.11 - centre.y, 0) + out * 0.004
+					batch.cylinder(mats["chrome"], at, 0.095, 0.095, 0.008, Color("c9c3b0"), 14, Basis.looking_at(out, Vector3.UP) * Basis(Vector3.RIGHT, PI / 2))
+			_part("glass", mid + out * 0.012, (across * (u1 - u0 - 0.12) + Vector3(0, v1 - v0 - 0.12, 0)).abs() + out.abs() * 0.004, Color.WHITE)
+		else:
+			_part("furniture_wood", mid + out * 0.009, (across * (u1 - u0 - 0.12) + Vector3(0, v1 - v0 - 0.12, 0)).abs() + out.abs() * 0.006, color.darkened(0.08))
+		var at := face + across * (u0 + (u1 - u0) * knob.x) + Vector3(0, v0 + (v1 - v0) * knob.y - centre.y, 0) + out * 0.03
+		batch.ellipsoid(mats["chrome"], at, Vector3(0.018, 0.018, 0.018), brass, Basis.IDENTITY, 8, 5)
+	var u_left := -width * 0.5
+	var u_right := width * 0.5
+	match layout:
+		"doors", "glass":
+			var leaves := 2 if width > 0.7 else 1
+			for i in range(leaves):
+				var u0 := u_left + i * width / leaves
+				panel.call(u0, u0 + width / leaves, low + 0.1, high - 0.06, Vector2(0.88 if i == 0 and leaves == 2 else 0.12, 0.5), layout == "glass")
+		"drawers":
+			var count := clampi(int(size.y / 0.25), 2, 5)
+			for i in range(count):
+				var v0 := low + 0.1 + i * (size.y - 0.16) / count
+				panel.call(u_left, u_right, v0, v0 + (size.y - 0.16) / count, Vector2(0.5, 0.5))
+		"chest":
+			var split := low + size.y * 0.62
+			for i in range(2):
+				panel.call(u_left + i * width * 0.5, u_left + (i + 1) * width * 0.5, split, high - 0.05, Vector2(0.5, 0.55))
+			panel.call(u_left, 0.0, low + 0.1, split, Vector2(0.85, 0.5))
+			panel.call(0.0, u_right, low + 0.1, split, Vector2(0.15, 0.5))
+		"kitchen":
+			var bays := maxi(1, roundi(width / 0.6))
+			for i in range(bays):
+				var u0 := u_left + i * width / bays
+				var u1 := u0 + width / bays
+				panel.call(u0, u1, high - 0.2, high - 0.02, Vector2(0.5, 0.5))
+				panel.call(u0, u1, low + 0.1, high - 0.2, Vector2(0.85 if i % 2 == 0 else 0.15, 0.82))
+	# Cornice and plinth.
+	_part("furniture_wood", Vector3(centre.x, high + 0.025, centre.z) + out * 0.015, (across * (width + 0.05) + Vector3(0, 0.05, 0)).abs() + out.abs() * (depth + 0.03), color.darkened(0.15))
+	_part("furniture_wood", Vector3(centre.x, low + 0.045, centre.z) + out * 0.012, (across * (width + 0.01) + Vector3(0, 0.09, 0)).abs() + out.abs() * (depth + 0.024), color.darkened(0.3))
+
+## Small bedside cupboard with a drawer.
+func _nightstand(pos: Vector3, out: Vector3, color: Color) -> void:
+	var size := Vector3(0.45, 0.55, 0.4) if absf(out.z) > 0.5 else Vector3(0.4, 0.55, 0.45)
+	_part("furniture_wood", pos + Vector3(0, size.y * 0.5, 0), size, color)
+	_front(pos + Vector3(0, size.y * 0.5, 0), size, out, "drawers", color)
+	_solid(pos + Vector3(0, size.y * 0.5, 0), size, true)
+
+## What makes the rooms of the ground floor lived in: lamps on the walls and tables,
+## candles that burn through a blackout, fronts on the cupboards, pictures, a kitchen with
+## its pots, the trophy over the fire. All of it rolls dice of its own.
+func _dress_ground_floor() -> void:
+	_chunk("HouseLow")
+	_own_dice(30711)
+	var wood := Color("3f3327")
+	# Hall: sconces beside a painting over the bench, a coat rack, the door mat.
+	_oil_painting(Vector3(-4.91, 1.95, 7.2), Vector3(1, 0, 0), Vector2(1.15, 0.85), "painting_lake")
+	_brass_sconce(Vector3(-4.91, 1.95, 6.25), Vector3(1, 0, 0), 0.8)
+	_brass_sconce(Vector3(-4.91, 1.95, 8.15), Vector3(1, 0, 0), 0.8)
+	_brass_sconce(Vector3(4.91, 1.95, 6.3), Vector3(-1, 0, 0), 0.8)
+	_front(Vector3(-4.62, 0.24, 7.2), Vector3(0.5, 0.48, 2.0), Vector3(1, 0, 0), "drawers", Color("43372b"))
+	var rack := Vector3(-2.35, 0, 8.55)
+	batch.cylinder(mats["furniture_wood"], rack, 0.2, 0.17, 0.04, Color("2c2119"), 10)
+	batch.cylinder(mats["furniture_wood"], rack, 0.03, 0.025, 1.85, Color("2c2119"), 8)
+	for k in range(4):
+		var angle := TAU * k / 4.0 + 0.4
+		_beam(Transform3D.IDENTITY, "furniture_wood", rack + Vector3(0, 1.7, 0), rack + Vector3(cos(angle) * 0.18, 1.82, sin(angle) * 0.18), Vector2(0.02, 0.02), Color("2c2119"))
+	_part("cloth", rack + Vector3(0.12, 1.32, 0.06), Vector3(0.12, 0.85, 0.42), Color("3b3a30"), Vector3(0, 30, 4))
+	_part("cloth", rack + Vector3(-0.1, 1.42, -0.08), Vector3(0.1, 0.66, 0.36), Color("4a2e22"), Vector3(0, -50, -3))
+	batch.ellipsoid(mats["cloth"], rack + Vector3(0.0, 1.88, 0.0), Vector3(0.16, 0.06, 0.16), Color("3a3127"))
+	_part("cloth", Vector3(0, 0.022, 8.45), Vector3(1.5, 0.014, 0.75), Color("5e4a2e"))
+	# Lounge: a standing lamp by the sofa, a lamp on the chest, things on the mantel,
+	# antlers over it, a painting, a basket of logs, a candle on the piano.
+	_floor_lamp(Vector3(8.75, 0, 3.55), 1.1)
+	_table_lamp(Vector3(8.8, 0.54, 8.45), Color("4a5a52"), 0.9)
+	_candles(Vector3(12.1, 1.49, 4.3), 1, 0.0, 0.5)
+	_candles(Vector3(12.1, 1.49, 5.95), 2, 0.07, 0.5)
+	_part("furniture_wood", Vector3(12.12, 1.6, 5.1), Vector3(0.12, 0.22, 0.3), Color("2a1f17"))
+	_part("plain", Vector3(12.055, 1.62, 5.1), Vector3(0.005, 0.12, 0.12), Color("c9c1a6"))
+	_part("furniture_wood", Vector3(12.13, 2.45, 5.1), Vector3(0.04, 0.32, 0.24), Color("2a1f17"))
+	for side in [-1.0, 1.0]:
+		var base := Vector3(12.08, 2.5, 5.1 + side * 0.05)
+		var tine := base
+		for k in range(4):
+			var next := tine + Vector3(-0.06, 0.12, side * 0.1)
+			_beam(Transform3D.IDENTITY, "plain", tine, next, Vector2(0.03 - k * 0.005, 0.03 - k * 0.005), Color("c8b998"))
+			_beam(Transform3D.IDENTITY, "plain", next, next + Vector3(-0.08, 0.1, side * 0.01), Vector2(0.015, 0.015), Color("c8b998"))
+			tine = next
+	_oil_painting(Vector3(11.5, 1.9, -2.91), Vector3(0, 0, 1), Vector2(1.3, 0.95), "painting_moon")
+	batch.cylinder(mats["straw"], Vector3(12.35, 0, 6.85), 0.26, 0.3, 0.38, Color("5b4d2c"), 14)
+	for k in range(4):
+		batch.cylinder(mats["plank_v"], Vector3(12.25 + k * 0.06, 0.38, 6.75 + (k % 2) * 0.12), 0.055, 0.05, 0.5, Color("3b2f24"), 7, Basis(Vector3.BACK, PI / 2) * Basis(Vector3.RIGHT, 0.2 * k))
+	_candles(Vector3(5.42, 1.26, -0.3), 3, 0.06, 0.5)
+	_part("furniture_wood", Vector3(5.42, 1.27, -1.05), Vector3(0.4, 0.04, 0.6), Color("2a211a"), Vector3(0, 6, 0))
+	_part("chrome", Vector3(6.4, 1.2, -2.395), Vector3(0.04, 0.5, 0.01), Color("8a6a34"))
+	batch.cylinder(mats["chrome"], Vector3(6.4, 0.95, -2.39), 0.07, 0.07, 0.01, Color("8a6a34"), 14, Basis(Vector3.RIGHT, PI / 2))
+	# Kitchen: drawers and doors along the counter, wall cupboards, burners and a kettle
+	# on the stove, the tap, a rack of pans over the island, a paraffin lamp.
+	_front(Vector3(-9.45, 0.45, -8.53), Vector3(6.5, 0.9, 0.62), Vector3(0, 0, 1), "kitchen", Color("4a4233"))
+	for x in [-11.95, -8.5]:
+		_front(Vector3(x, 2.4, -8.68), Vector3(1.3, 0.7, 0.34), Vector3(0, 0, 1), "doors", Color("463e30"))
+	for k in range(4):
+		batch.cylinder(mats["metal"], Vector3(-7.18 + (k % 2) * 0.36, 0.99, -8.66 + int(k / 2) * 0.28), 0.09, 0.09, 0.012, Color("0d0d0d"), 12)
+	batch.cylinder(mats["chrome"], Vector3(-7.18, 1.0, -8.38), 0.1, 0.11, 0.17, Color("3a3d3c"), 14)
+	_beam(Transform3D.IDENTITY, "chrome", Vector3(-7.08, 1.1, -8.38), Vector3(-6.98, 1.16, -8.38), Vector2(0.02, 0.02), Color("3a3d3c"))
+	batch.cylinder(mats["chrome"], Vector3(-6.82, 1.0, -8.66), 0.12, 0.13, 0.13, Color("4a4d4a"), 14)
+	_beam(Transform3D.IDENTITY, "chrome", Vector3(-10.2, 0.96, -8.74), Vector3(-10.2, 1.22, -8.74), Vector2(0.025, 0.025), Color("9a9c98"))
+	_beam(Transform3D.IDENTITY, "chrome", Vector3(-10.2, 1.22, -8.74), Vector3(-10.2, 1.2, -8.54), Vector2(0.022, 0.022), Color("9a9c98"))
+	_front(Vector3(-5.5, 0.9, -8.45), Vector3(0.7, 1.8, 0.72), Vector3(0, 0, 1), "doors", Color("76756a"))
+	var rail := Vector3(-8.8, 2.25, -5.0)
+	_part("furniture_wood", rail, Vector3(1.6, 0.06, 0.06), Color("2c2119"))
+	for x in [-0.75, 0.75]:
+		_part("plain", rail + Vector3(x, 0.42, 0), Vector3(0.01, 0.8, 0.01), Color("0c0c0c"))
+	for k in range(5):
+		var hook := rail + Vector3(-0.6 + k * 0.3, -0.05, 0)
+		_part("metal", hook + Vector3(0, -0.04, 0), Vector3(0.008, 0.08, 0.008), Color("1b1b1a"))
+		var radius := random.randf_range(0.1, 0.16)
+		var pan := hook + Vector3(0, -0.12 - radius, 0)
+		batch.cylinder(mats["chrome"], pan, radius, radius, 0.05, Color("3a3532") if k % 2 == 0 else Color("6a4a2c"), 14, Basis(Vector3.RIGHT, PI / 2) * Basis(Vector3.UP, 0.0))
+		_part("metal", hook + Vector3(0, -0.1, 0.0), Vector3(0.02, 0.12, 0.02), Color("1b1b1a"))
+	_oil_lamp(Vector3(-9.35, 0.96, -4.85), 0.9)
+	for k in range(3):
+		batch.cylinder(mats["chrome"], Vector3(-6.45 + k * 0.17, 0.76, -1.75 - k * 0.08), 0.04, 0.035, 0.09, Color("b8b2a0"), 10)
+	batch.cylinder(mats["chrome"], Vector3(-6.1, 0.76, -2.05), 0.13, 0.13, 0.015, Color("c9c3b0"), 14)
+	batch.ellipsoid(mats["plain"], Vector3(-6.1, 0.82, -2.05), Vector3(0.11, 0.05, 0.07), Color("8a6a3e"))
+	# Dining room: the blue rug, candles down the table, sconces and a painting over the
+	# sideboard, fronts on sideboard and china cabinet.
+	_candles(Vector3(-9.4, 0.78, 4.0), 3, 0.08, 0.55)
+	_candles(Vector3(-9.4, 0.78, 5.3), 2, 0.07, 0.45)
+	_oil_painting(Vector3(-12.85, 1.85, 4.0), Vector3(1, 0, 0), Vector2(1.2, 0.85), "painting_storm")
+	_brass_sconce(Vector3(-12.85, 1.95, 3.05), Vector3(1, 0, 0), 0.7)
+	_brass_sconce(Vector3(-12.85, 1.95, 4.95), Vector3(1, 0, 0), 0.7)
+	_front(Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7), Vector3(1, 0, 0), "chest", wood)
+	_front(Vector3(-5.37, 1.0, 7.2), Vector3(0.5, 2.0, 1.5), Vector3(-1, 0, 0), "glass", Color("3d3227"))
+	# Stair hall: the wardrobe's doors.
+	_front(Vector3(0, 1.0, -3.4), Vector3(2.2, 2.0, 0.55), Vector3(0, 0, -1), "doors", Color("3d3227"))
+	_shared_dice()
+
+func _dress_upper_floor() -> void:
+	_chunk("HouseUp")
+	_own_dice(30713)
+	var floor_y := STOREY
+	var wood := Color("3f3327")
+	# North-west bedroom: a nightstand with its lamp, fronts on wardrobe and dresser.
+	_nightstand(Vector3(-12.55, floor_y, -2.55), Vector3(1, 0, 0), wood)
+	_table_lamp(Vector3(-12.55, floor_y + 0.55, -2.55), Color("6a3a2a"), 0.8)
+	_front(Vector3(-5.4, floor_y + 1.0, -2.6), Vector3(0.55, 2.0, 1.6), Vector3(-1, 0, 0), "doors", Color("3d3227"))
+	_front(Vector3(-12.57, floor_y + 0.5, -3.9), Vector3(0.5, 1.0, 1.3), Vector3(1, 0, 0), "drawers", wood)
+	_candles(Vector3(-12.5, floor_y + 1.05, -3.6), 1, 0.0, 0.35)
+	# Dormitory: a nightstand between the beds, candles on the writing table.
+	_nightstand(Vector3(-12.55, floor_y, 0.85), Vector3(1, 0, 0), wood)
+	_oil_lamp(Vector3(-12.55, floor_y + 0.55, 0.85), 0.7)
+	_candles(Vector3(-5.9, floor_y + 0.76, 8.35), 2, 0.06, 0.45)
+	# Master bedroom: nightstands with lamps, a painting over the bed, an armchair in the
+	# corner, fronts on wardrobe and dresser.
+	for z in [5.05, 7.35]:
+		_nightstand(Vector3(5.32, floor_y, z), Vector3(1, 0, 0), wood)
+		_table_lamp(Vector3(5.32, floor_y + 0.55, z), Color("c8bfa6"), 0.7)
+	_oil_painting(Vector3(5.09, floor_y + 1.75, 6.2), Vector3(1, 0, 0), Vector2(1.05, 0.72), "painting_lake")
+	_sofa(Vector3(11.75, floor_y, 7.85), -2.3, Color("4a3a30"), 1.0)
+	_front(Vector3(6.2, floor_y + 1.0, -2.6), Vector3(1.8, 2.0, 0.55), Vector3(0, 0, 1), "doors", Color("3d3227"))
+	_front(Vector3(8.8, floor_y + 0.5, 8.55), Vector3(1.2, 1.0, 0.5), Vector3(0, 0, -1), "drawers", wood)
+	_candles(Vector3(8.4, floor_y + 1.05, 8.6), 2, 0.05, 0.35)
+	_shared_dice()
+
+## The workshop beside the workbench: tools on the board, a vise, a strip light, gas
+## bottles, shelving, oil on the floor and a chain hoist over the open engine.
+func _dress_garage() -> void:
+	_chunk("Garage")
+	_own_dice(30717)
+	var iron := Color("1b1b1a")
+	# Tools on the board behind the bench.
+	var board := -25.86
+	var handle := Color("5a3a22")
+	_part("furniture_wood", Vector3(-31.25, 1.82, board), Vector3(0.03, 0.26, 0.02), handle, Vector3(0, 0, 8))
+	_part("metal", Vector3(-31.23, 1.97, board + 0.005), Vector3(0.14, 0.05, 0.03), iron, Vector3(0, 0, 8))
+	for k in range(3):
+		_part("chrome", Vector3(-30.95 + k * 0.08, 1.7 - k * 0.04, board), Vector3(0.025, 0.24 + k * 0.05, 0.01), Color("8e918f"))
+		batch.cylinder(mats["chrome"], Vector3(-30.95 + k * 0.08, 1.83 + k * 0.0, board), 0.025, 0.025, 0.01, Color("8e918f"), 10, Basis(Vector3.RIGHT, PI / 2))
+	_part("chrome", Vector3(-30.45, 1.6, board), Vector3(0.36, 0.14, 0.006), Color("9a9c98"), Vector3(0, 0, -4))
+	_part("furniture_wood", Vector3(-30.22, 1.62, board), Vector3(0.1, 0.12, 0.03), handle)
+	for k in range(4):
+		batch.cylinder(mats["chrome"], Vector3(-30.15 + k * 0.06, 1.9, board), 0.006, 0.006, 0.12, Color("8e918f"), 6)
+		batch.cylinder(mats["plain"], Vector3(-30.15 + k * 0.06, 2.02, board), 0.014, 0.012, 0.1, [Color("7a1e14"), Color("2c4a7a"), Color("c99a1c"), Color("2a2a28")][k], 8)
+	# Vise and clutter on the bench, a strip light over it.
+	var vise := Vector3(-27.98, 0.98, -25.45)
+	_part("metal", vise + Vector3(0, 0.05, 0), Vector3(0.16, 0.1, 0.24), Color("2b3a4a"))
+	_part("metal", vise + Vector3(0, 0.14, -0.06), Vector3(0.18, 0.1, 0.06), Color("2b3a4a"))
+	_part("metal", vise + Vector3(0, 0.14, 0.07), Vector3(0.18, 0.1, 0.06), Color("2b3a4a"))
+	_beam(Transform3D.IDENTITY, "chrome", vise + Vector3(-0.0, 0.12, 0.1), vise + Vector3(0, 0.12, 0.3), Vector2(0.02, 0.02), Color("8e918f"))
+	batch.cylinder(mats["paint"], Vector3(-28.9, 0.98, -25.6), 0.06, 0.06, 0.12, Color("6a5a2a"), 10)
+	batch.cylinder(mats["paint"], Vector3(-28.75, 0.98, -25.7), 0.05, 0.05, 0.09, Color("3a5a3a"), 10)
+	_part("cloth", Vector3(-29.15, 0.995, -25.35), Vector3(0.3, 0.02, 0.22), Color("6a4a3a"), Vector3(0, 25, 0))
+	_fixture("tube", Vector3(-28.6, 2.55, -25.35), 1.0, 5.5, 0.12, 3.05)
+	# Gas bottles on a little cart by the barrels.
+	for k in range(2):
+		var bottle := Vector3(-27.3 - k * 0.27, 0.06, -25.62)
+		batch.cylinder(mats["paint"], bottle, 0.12, 0.12, 1.18, [Color("2a3a2c"), Color("6a2a20")][k], 14)
+		batch.ellipsoid(mats["paint"], bottle + Vector3(0, 1.18, 0), Vector3(0.12, 0.07, 0.12), [Color("2a3a2c"), Color("6a2a20")][k])
+		batch.cylinder(mats["chrome"], bottle + Vector3(0, 1.22, 0), 0.03, 0.03, 0.1, Color("8a6a34"), 8)
+	_part("metal", Vector3(-27.43, 0.04, -25.6), Vector3(0.62, 0.04, 0.32), iron)
+	_hose(Vector3(-27.3, 1.38, -25.62), Vector3(-27.9, 0.99, -25.4), 0.012, Color("2a1a14"), 0.35)
+	_hose(Vector3(-27.57, 1.38, -25.62), Vector3(-27.85, 0.99, -25.5), 0.012, Color("142a14"), 0.3)
+	# Shelving by the front with cans and boxes; jerrycans and a battery.
+	_shelf(Vector3(-26.32, 0, -20.3), -PI / 2, 1.6, 0.42, 2.0, 4, Color("3a3a36"), 0.95)
+	for k in range(3):
+		var can := Vector3(-26.45, 0, -24.0 + k * 0.32)
+		_part("paint", can + Vector3(0, 0.25, 0), Vector3(0.17, 0.5, 0.34), [Color("3f4a2c"), Color("6a2a20"), Color("3f4a2c")][k], Vector3(0, random.randf_range(-8, 8), 0))
+		_part("paint", can + Vector3(0, 0.52, 0.1), Vector3(0.05, 0.05, 0.08), Color("2a2a28"))
+	_part("plain", Vector3(-27.1, 0.11, -23.2), Vector3(0.32, 0.22, 0.18), Color("141414"))
+	for x in [-27.2, -27.0]:
+		batch.cylinder(mats["chrome"], Vector3(x, 0.22, -23.2), 0.015, 0.015, 0.02, Color("8a6a34"), 8)
+	# Oil on the floor under the engine, a creeper beside the truck, a chain hoist.
+	batch.ellipsoid(mats["chrome"], Vector3(-34.6, 0.021, -21.2), Vector3(0.55, 0.003, 0.32), Color("0b0b0a"), Basis(Vector3.UP, 0.4), 14, 3)
+	batch.ellipsoid(mats["chrome"], Vector3(-34.2, 0.022, -21.75), Vector3(0.2, 0.003, 0.14), Color("0b0b0a"), Basis(Vector3.UP, 1.1), 10, 3)
+	var creeper := Transform3D(Basis(Vector3.UP, 0.3), Vector3(-33.1, 0, -22.4))
+	_placed(creeper, "furniture_wood", Vector3(0, 0.09, 0), Vector3(0.45, 0.03, 1.0), Color("6a2a20"))
+	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		var at: Vector2 = corner
+		batch.ellipsoid(mats["rubber"], creeper * Vector3(at.x * 0.18, 0.035, at.y * 0.42), Vector3(0.035, 0.035, 0.035), Color("161616"))
+	_part("chrome", Vector3(-34.5, 3.05 - 0.6, -21.2), Vector3(0.012, 1.2, 0.012), Color("4a4c4a"))
+	_part("metal", Vector3(-34.5, 2.4, -21.2), Vector3(0.18, 0.22, 0.12), Color("6a5a1a"))
+	_lamp_chain(-34.42, -21.2, 1.75, 2.3, Color("4a4c4a"))
+	_beam(Transform3D.IDENTITY, "metal", Vector3(-34.42, 1.75, -21.2), Vector3(-34.42, 1.66, -21.12), Vector2(0.025, 0.025), iron)
+	_front(Vector3(-32.0, 0.95, -25.6), Vector3(0.9, 1.9, 0.5), Vector3(0, 0, 1), "drawers", Color("5a2f28"))
+	_shared_dice()
+
+## Inside the barn: a lantern, the wheelbarrow, milk cans, feed sacks, tack on the
+## stalls, tools against the posts, loose hay; outside a hay hoist under the gable.
+func _dress_barn() -> void:
+	_chunk("Barn")
+	_own_dice(30719)
+	var iron := Color("1b1b1a")
+	var timber := Color("2f2820")
+	_fixture("lantern", Vector3(27.15, 2.2, -20.13), 0.9, 6.0, 0.25, 2.62)
+	var barrow := Transform3D(Basis(Vector3.UP, 0.5), Vector3(26.0, 0, -17.4))
+	_placed(barrow, "metal", Vector3(0, 0.55, 0.1), Vector3(0.62, 0.3, 0.8), Color("3a4a3a"), Vector3(-12, 0, 0))
+	_placed(barrow, "metal", Vector3(0, 0.41, 0.12), Vector3(0.5, 0.04, 0.6), Color("2a3a2a"), Vector3(-12, 0, 0))
+	for side in [-1.0, 1.0]:
+		_beam(barrow, "furniture_wood", Vector3(side * 0.22, 0.3, -0.45), Vector3(side * 0.28, 0.62, 0.95), Vector2(0.04, 0.04), timber)
+		_beam(barrow, "metal", Vector3(side * 0.22, 0.32, 0.6), Vector3(side * 0.22, 0.0, 0.7), Vector2(0.025, 0.025), iron)
+	_wheel(barrow, Vector3(0, 0.2, -0.5), 0.2, 0.08, Color("6a5a3a"))
+	for k in range(3):
+		var can := Vector3([26.65, 26.98, 26.78][k], 0, [-27.45, -27.3, -27.0][k] + 0.2)
+		batch.cylinder(mats["chrome"], can, 0.16, 0.16, 0.45, Color("7a7c78"), 14)
+		batch.cylinder(mats["chrome"], can + Vector3(0, 0.45, 0), 0.16, 0.08, 0.12, Color("7a7c78"), 14)
+		batch.cylinder(mats["chrome"], can + Vector3(0, 0.57, 0), 0.09, 0.09, 0.06, Color("6a6c68"), 14)
+	_solid(Vector3(26.8, 0.3, -27.0), Vector3(0.75, 0.6, 0.75))
+	for k in range(5):
+		var sack := Vector3(26.25 + (k % 2) * 0.05, 0.16 + int(k / 2) * 0.27, -24.9 + (k % 2) * 0.55)
+		batch.ellipsoid(mats["cloth"], sack, Vector3(0.24, 0.15, 0.32), _vary(Color("7a6a4a"), 0.04), Basis(Vector3.UP, random.randf_range(-0.3, 0.3)), 10, 6)
+	_solid(Vector3(26.3, 0.35, -24.6), Vector3(0.6, 0.7, 1.2))
+	# Tack hung on the stalls, buckets, a pitchfork and a rake against the posts.
+	_part("cloth", Vector3(32.4, 1.47, -20.0), Vector3(0.55, 0.14, 0.5), Color("3a2418"))
+	_part("cloth", Vector3(32.4, 1.25, -20.0), Vector3(0.6, 0.4, 0.04), Color("3a2418"), Vector3(0, 0, 4))
+	for k in range(3):
+		_part("cloth", Vector3(31.13, 2.0 - k * 0.12, -16.1 + k * 0.03), Vector3(0.02, 0.06, 0.5 - k * 0.1), Color("2a1a12"))
+	for spot in [Vector3(34.5, 0, -17.3), Vector3(34.4, 0, -25.0), Vector3(34.6, 0, -13.4)]:
+		var at: Vector3 = spot
+		batch.cylinder(mats["metal"], at, 0.15, 0.18, 0.3, Color("4a4c48"), 12)
+		batch.cylinder(mats["metal"], at + Vector3(0, 0.29, 0), 0.18, 0.18, 0.015, Color("2a2c28"), 12, Basis.IDENTITY, false)
+	for tool in [[Vector3(27.15, 0, -23.75), "fork"], [Vector3(30.85, 0, -16.25), "rake"]]:
+		var foot: Vector3 = tool[0]
+		var top := foot + Vector3(0.05, 1.55, 0.18)
+		_beam(Transform3D.IDENTITY, "furniture_wood", foot + Vector3(0, 0.3, 0), top, Vector2(0.03, 0.03), Color("6a5236"))
+		var head := foot + Vector3(-0.01, 0.3, -0.03)
+		_part("metal", head, Vector3(0.28 if tool[1] == "rake" else 0.2, 0.03, 0.03), iron)
+		for k in range(4 if tool[1] == "fork" else 8):
+			var x := -0.09 + k * (0.06 if tool[1] == "fork" else 0.035)
+			_beam(Transform3D.IDENTITY, "metal", head + Vector3(x, 0, 0), head + Vector3(x, -0.28 if tool[1] == "fork" else -0.08, -0.02), Vector2(0.01, 0.01), iron)
+	for k in range(14):
+		var at := Vector3(random.randf_range(27.2, 30.8), 0.02, random.randf_range(-27.5, -12.6))
+		batch.ellipsoid(mats["straw"], at, Vector3(random.randf_range(0.2, 0.6), 0.04, random.randf_range(0.15, 0.45)), _vary(Color("5b4d2c"), 0.04), Basis(Vector3.UP, random.randf() * TAU), 9, 4)
+	for k in range(6):
+		var at := Vector3(31.1, 2.83, random.randf_range(-27.0, -13.0))
+		batch.ellipsoid(mats["straw"], at, Vector3(0.12, random.randf_range(0.12, 0.28), random.randf_range(0.3, 0.6)), _vary(Color("5b4d2c"), 0.04), Basis.IDENTITY, 9, 5)
+	# Hay hoist under the south gable: the beam, a pulley, a rope with its hook, the loft door.
+	var z1 := BARN.end.y
+	_part("plank_v", Vector3(29.0, 6.75, z1 + 0.6), Vector3(0.2, 0.2, 1.4), timber)
+	batch.cylinder(mats["metal"], Vector3(28.96, 6.5, z1 + 1.15), 0.12, 0.12, 0.08, iron, 14, Basis(Vector3.BACK, -PI / 2))
+	_part("plain", Vector3(29.0, 5.45, z1 + 1.27), Vector3(0.025, 2.1, 0.025), Color("6a5a3e"))
+	_beam(Transform3D.IDENTITY, "metal", Vector3(29.0, 4.4, z1 + 1.27), Vector3(29.0, 4.28, z1 + 1.2), Vector2(0.03, 0.03), iron)
+	_part("plank_v", Vector3(29.0, 5.3, z1 + 0.09), Vector3(1.4, 1.5, 0.05), Color("2f201b"))
+	for tilt in [-45.0, 45.0]:
+		_part("siding", Vector3(29.0, 5.3, z1 + 0.125), Vector3(1.9, 0.12, 0.03), Color("493a31"), Vector3(0, 0, tilt))
+	_shared_dice()
+
+## Guest cabin: a fire in the stove, the kettle on it, logs beside it, candles on the table.
+func _dress_guest() -> void:
+	_chunk("Guest")
+	_own_dice(30723)
+	var stove := Vector3(-26.6, 0, 20.6)
+	_part("metal", stove + Vector3(-0.305, 0.38, 0), Vector3(0.012, 0.3, 0.32), Color("2a2826"))
+	var before := glow_key
+	glow_key = "steady"
+	_glow_box(stove + Vector3(-0.31, 0.36, 0), Vector3(0.006, 0.2, 0.24), Color("ff7a2a"), 5.5)
+	glow_key = before
+	for k in range(4):
+		_part("metal", stove + Vector3(-0.318, 0.36, -0.09 + k * 0.06), Vector3(0.008, 0.22, 0.012), Color("161514"))
+	_light(stove + Vector3(-0.6, 0.45, 0), Color("ff8a3a"), 1.3, 4.2, false, 0.35, 0.0, 22.0)
+	flickers[flickers.size() - 1]["wired"] = false
+	batch.cylinder(mats["chrome"], stove + Vector3(0.05, 0.9, 0.1), 0.1, 0.08, 0.16, Color("3a3d3c"), 14)
+	_beam(Transform3D.IDENTITY, "chrome", stove + Vector3(-0.04, 1.0, 0.1), stove + Vector3(-0.13, 1.06, 0.1), Vector2(0.02, 0.02), Color("3a3d3c"))
+	for k in range(5):
+		batch.cylinder(mats["plank_v"], stove + Vector3(-0.2, 0.06 + int(k / 3) * 0.11, 0.55 + (k % 3) * 0.12), 0.055, 0.05, 0.55, Color("3b2f24"), 7, Basis(Vector3.BACK, PI / 2))
+	_candles(Vector3(-30.2, 0.76, 22.6), 2, 0.06, 0.5)
+	_front(Vector3(-33.6, 1.0, 21.2), Vector3(0.55, 2.0, 1.4), Vector3(1, 0, 0), "doors", Color("3d3227"))
+	_shared_dice()
+
+## Tool shed: tools on the wall, a ladder, paint tins.
+func _dress_shed() -> void:
+	_chunk("Shed")
+	_own_dice(30729)
+	var iron := Color("1b1b1a")
+	var wall := SHED.position.x + 0.07
+	_beam(Transform3D.IDENTITY, "furniture_wood", Vector3(wall, 0.9, 22.5), Vector3(wall, 1.6, 22.5), Vector2(0.03, 0.03), Color("6a5236"))
+	_part("metal", Vector3(wall, 1.62, 22.5), Vector3(0.02, 0.12, 0.2), iron)
+	_part("chrome", Vector3(wall + 0.01, 1.4, 24.85), Vector3(0.006, 0.18, 0.5), Color("8e918f"))
+	_part("furniture_wood", Vector3(wall + 0.02, 1.4, 25.15), Vector3(0.03, 0.12, 0.1), Color("5a3a22"))
+	batch.cylinder(mats["cloth"], Vector3(wall + 0.06, 1.15, 22.95), 0.14, 0.14, 0.06, Color("7a6a4a"), 12, Basis(Vector3.BACK, PI / 2))
+	for side in [-1.0, 1.0]:
+		_beam(Transform3D.IDENTITY, "furniture_wood", Vector3(29.25, 0, 22.4 + side * 0.2), Vector3(29.4, 2.1, 22.45 + side * 0.2), Vector2(0.05, 0.03), Color("4a3a2a"))
+	for k in range(6):
+		_part("furniture_wood", Vector3(29.27 + k * 0.022, 0.3 + k * 0.32, 22.45), Vector3(0.03, 0.03, 0.4), Color("4a3a2a"))
+	for k in range(3):
+		batch.cylinder(mats["paint"], Vector3(25.45 + k * 0.22, 0, 22.35), 0.09, 0.09, 0.2, [Color("6a6a5a"), Color("3a4a6a"), Color("6a2a20")][k], 12)
+	_shared_dice()
 
 # ---------------------------------------------------------------- stations
 
@@ -2142,36 +2928,223 @@ func _build_barn() -> void:
 	_station("ammo", "MUNITION", "60", Vector3(23.62, 0, -14.0), 0.0, Color("84d4c2"))
 	_crate(Vector3(23.7, 0, -12.7), Vector3(0.9, 0.9, 0.9), Color("4f4636"), 0.1)
 	_barrel(Vector3(25.0, 0, -12.6))
-	_bulb(Vector3(mid_x, 3.2, -20), 3.4, 13.0, 0.15, 3.84, true)
-	_bulb(Vector3(mid_x, 3.2, -14.6), 2.2, 7.0, 0.3, 6.9)
+	_fixture("enamel", Vector3(mid_x, 3.2, -20), 3.4, 13.0, 0.15, 3.84, true)
+	_fixture("lantern", Vector3(mid_x, 3.2, -14.6), 2.2, 7.0, 0.3, 6.9)
 	_wall_lamp(Vector3(mid_x, 3.85, z1 + 0.2), Vector3(0, 0, 1), Color("ffc27c"), 1.7, 9.5, 0.3)
 	_wall_lamp(Vector3(mid_x, 3.85, z0 - 0.2), Vector3(0, 0, -1), Color("d8e3ff"), 1.2, 8.0, 0.45)
 	_wall_lamp(Vector3(x0 - 0.2, 2.65, -21.5), Vector3(-1, 0, 0), Color("ffc27c"), 0.9, 6.0, 0.2)
+	_dress_barn()
 	_clear_air(Vector3(mid_x, 2.5, -20), Vector3(11.6, 5.0, 15.6))
 
-## Crashed or parked pickup; its nose points along local -z.
+## A box from `a` to `b` in the frame (a strut, a pillar, a rail); `size` is its cross
+## section, x across and y up as far as the direction allows.
+func _beam(frame: Transform3D, material: String, a: Vector3, b: Vector3, size: Vector2, color: Color, up: Vector3 = Vector3.UP) -> void:
+	var along := b - a
+	if absf(along.normalized().dot(up)) > 0.98:
+		up = Vector3.BACK
+	var turn := Basis.looking_at(along, up)
+	batch.box(mats[material], frame * ((a + b) * 0.5), Vector3(size.x, size.y, along.length()), color, frame.basis * turn)
+
+## A wheel with its axle along local x: the tyre, the rim with its hub and nuts and, for
+## tractors, the lugs of the tread. `steer` turns it about the upright.
+func _wheel(frame: Transform3D, at: Vector3, radius: float, width: float, rim: Color, steer: float = 0.0, lugs: int = 0) -> void:
+	var hub := frame * Transform3D(Basis(Vector3.UP, steer), at)
+	var axle := hub.basis * Basis(Vector3.BACK, -PI / 2)
+	var rubber := Color("161616")
+	batch.cylinder(mats["rubber"], hub * Vector3(-width * 0.5, 0, 0), radius * 0.96, radius * 0.96, width, rubber, 20, axle)
+	batch.cylinder(mats["rubber"], hub * Vector3(-width * 0.42, 0, 0), radius, radius, width * 0.84, rubber, 20, axle, false)
+	for face in [-1.0, 1.0]:
+		var side: float = face
+		var wall := Vector3(side * width * 0.5, 0, 0)
+		var outward := axle if side > 0 else hub.basis * Basis(Vector3.BACK, PI / 2)
+		batch.cylinder(mats["rubber"], hub * wall, radius * 0.86, radius * 0.66, 0.012, Color("1d1d1c"), 18, outward)
+		batch.cylinder(mats["chrome"], hub * (wall - Vector3(side * 0.02, 0, 0)), radius * 0.6, radius * 0.56, 0.035, rim, 18, outward)
+		batch.cylinder(mats["chrome"], hub * (wall + Vector3(side * 0.01, 0, 0)), radius * 0.22, radius * 0.17, 0.035, rim.lightened(0.15), 12, outward)
+		for nut in range(5):
+			var angle := TAU * nut / 5.0
+			var spot := wall + Vector3(side * 0.03, sin(angle) * radius * 0.32, cos(angle) * radius * 0.32)
+			batch.box(mats["chrome"], hub * spot, Vector3(0.025, 0.03, 0.03), Color("9a9c98"), hub.basis)
+	for lug in range(lugs):
+		var angle := TAU * lug / float(lugs)
+		for half in [-1.0, 1.0]:
+			var spin := Basis(Vector3.RIGHT, angle)
+			var spot: Vector3 = spin * Vector3(half * width * 0.24, radius + 0.025, 0)
+			batch.box(mats["rubber"], hub * spot, Vector3(width * 0.5, 0.06, 0.09), rubber, hub.basis * spin * Basis(Vector3.UP, half * 0.55))
+
+## Arched lip of a wheel arch on the side `x` of a body, around a wheel at `centre` (y, z).
+func _arch(frame: Transform3D, material: String, x: float, centre: Vector2, radius: float, color: Color) -> void:
+	for i in range(8):
+		var a := deg_to_rad(8.0 + i * 164.0 / 7.0)
+		var local := Vector3(x, centre.x + sin(a) * radius, centre.y - cos(a) * radius)
+		_placed(frame, material, local, Vector3(0.07, 0.045, radius * 0.42), color, Vector3(rad_to_deg(a) - 90.0, 0, 0))
+
+## Pickup truck with its bonnet towards local -z, wheels on the ground at `pos`. A wreck
+## stands on blocks without wheels and with its bonnet up; otherwise it is the truck that
+## came off the road: nose bent, the driver's door open, the windscreen cracked.
 func _pickup(pos: Vector3, yaw: float, paint: Color, wreck: bool) -> void:
+	# The boxes of the old truck rolled seven dice for their paint; they are still rolled,
+	# so that everything built after a truck keeps its looks.
+	for i in range(7):
+		random.randf()
+	_own_dice(int(pos.x * 131.0 + pos.z * 17.0) + (5 if wreck else 0))
 	var truck := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(truck, "metal", Vector3(0, 0.55, 0), Vector3(1.9, 0.26, 5.0), Color("191a1a"))
-	_placed(truck, "metal", Vector3(0, 1.0, -2.0), Vector3(1.86, 0.6, 1.5), _vary(paint, 0.02))
-	_placed(truck, "metal", Vector3(0, 1.0, -0.6), Vector3(1.9, 0.62, 1.5), _vary(paint, 0.02))
-	_placed(truck, "metal", Vector3(0, 1.62, -0.55), Vector3(1.74, 0.66, 1.3), _vary(paint, 0.02))
-	_placed(truck, "plain", Vector3(0, 1.62, -1.21), Vector3(1.6, 0.5, 0.02), Color("07090b"), Vector3(-14, 0, 0))
-	_placed(truck, "plain", Vector3(0.88, 1.62, -0.55), Vector3(0.02, 0.44, 1.1), Color("07090b"))
-	_placed(truck, "metal", Vector3(0, 0.82, 1.45), Vector3(1.9, 0.1, 2.45), Color("2a2b29"))
-	for x in [-0.93, 0.93]:
-		_placed(truck, "metal", Vector3(x, 1.12, 1.45), Vector3(0.06, 0.55, 2.45), _vary(paint, 0.02))
-	_placed(truck, "metal", Vector3(0, 0.9, 2.78), Vector3(1.9, 0.08, 0.6), _vary(paint, 0.02), Vector3(62, 0, 0))
-	_placed(truck, "metal", Vector3(0, 0.62, -2.78), Vector3(1.95, 0.2, 0.12), Color("5d5f5d"))
+	var coat := _vary(paint, 0.012)
+	var faded := coat.lightened(0.06)
+	var dark := Color("141516")
+	var chrome := Color("8e918f")
+	var black := Color("1a1b1c")
+	# Frame, axles, tank and exhaust underneath.
+	for x in [-0.46, 0.46]:
+		_placed(truck, "metal", Vector3(x, 0.44, -0.15), Vector3(0.09, 0.16, 4.95), dark)
+	for z in [-1.75, 1.55]:
+		batch.cylinder(mats["metal"], truck * Vector3(-0.72, 0.4, z), 0.045, 0.045, 1.44, dark, 8, truck.basis * Basis(Vector3.BACK, -PI / 2))
+	batch.ellipsoid(mats["metal"], truck * Vector3(0.1, 0.4, 1.55), Vector3(0.17, 0.15, 0.15), dark)
+	_placed(truck, "metal", Vector3(-0.62, 0.55, 0.75), Vector3(0.32, 0.22, 0.75), Color("232421"))
+	batch.cylinder(mats["metal"], truck * Vector3(0.36, 0.33, -0.9), 0.035, 0.035, 3.45, Color("2c2722"), 8, truck.basis * Basis(Vector3.RIGHT, PI / 2))
+	# Front clip: fenders over the front wheels, the valance below the grille.
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.89
+		_placed(truck, "paint", Vector3(x, 0.98, -2.0), Vector3(0.1, 0.24, 1.42), coat)
+		_placed(truck, "paint", Vector3(x, 0.68, -2.47), Vector3(0.1, 0.36, 0.5), coat)
+		_placed(truck, "paint", Vector3(x, 0.71, -1.27), Vector3(0.1, 0.32, 0.06), coat)
+		_arch(truck, "paint", side * 0.93, Vector2(0.4, -1.75), 0.47, coat.darkened(0.08))
+		_arch(truck, "paint", side * 0.93, Vector2(0.4, 1.55), 0.47, coat.darkened(0.08))
+	_placed(truck, "paint", Vector3(0, 0.63, -2.68), Vector3(1.7, 0.18, 0.1), coat.darkened(0.05))
+	# Grille: a chrome surround, dark slots, three bars; round headlamps beside it.
+	var nose := -2.74
+	_placed(truck, "plain", Vector3(0, 0.93, nose + 0.03), Vector3(1.62, 0.3, 0.05), Color("08090a"))
+	for y in [0.79, 1.07]:
+		_placed(truck, "chrome", Vector3(0, y, nose), Vector3(1.66, 0.035, 0.04), chrome)
+	for x in [-0.83, -0.42, 0.42, 0.83]:
+		_placed(truck, "chrome", Vector3(x, 0.93, nose), Vector3(0.035, 0.3, 0.04), chrome)
+	for y in [0.86, 0.93, 1.0]:
+		_placed(truck, "chrome", Vector3(0, y, nose - 0.005), Vector3(0.82, 0.018, 0.03), chrome.darkened(0.1))
+	var forward := truck.basis * Basis(Vector3.RIGHT, -PI / 2)
+	for side in [-1.0, 1.0]:
+		var lamp := Vector3(side * 0.62, 0.98, nose + 0.02)
+		batch.cylinder(mats["chrome"], truck * lamp, 0.115, 0.11, 0.05, chrome, 16, forward)
+		var lens := Color("cfd2c8") if side < 0 else Color("1f2224")
+		batch.cylinder(mats["chrome"], truck * (lamp + Vector3(0, 0, -0.045)), 0.09, 0.085, 0.012, lens, 16, forward)
+		_placed(truck, "plain", Vector3(side * 0.62, 0.745, nose - 0.012), Vector3(0.14, 0.05, 0.03), Color("7a4410"))
+	# Bumper with its wrap-round ends; on the truck that crashed it is bent back on one side.
+	var bent := 0.0 if wreck else 7.0
+	_placed(truck, "chrome", Vector3(0.05, 0.66, nose - 0.11), Vector3(1.9, 0.16, 0.1), chrome, Vector3(0, bent, 0))
+	for side in [-1.0, 1.0]:
+		_placed(truck, "chrome", Vector3(side * 0.98, 0.66, nose - 0.02 + (0.12 if side > 0 and not wreck else 0.0)), Vector3(0.1, 0.16, 0.24), chrome, Vector3(0, side * 20.0, 0))
+	_placed(truck, "plain", Vector3(0.0, 0.66, nose - 0.17), Vector3(0.34, 0.11, 0.01), Color("bdb8a4"), Vector3(0, bent, 0))
+	# Bonnet: up on the wreck, so the engine shows; buckled on the crashed truck.
 	if wreck:
-		# Jacked up on blocks with the bonnet open.
-		_placed(truck, "metal", Vector3(0, 1.75, -1.75), Vector3(1.8, 0.05, 1.4), _vary(paint, 0.02), Vector3(48, 0, 0))
-		for block in [Vector3(-0.8, 0.11, -1.85), Vector3(0.8, 0.11, -1.85), Vector3(-0.8, 0.11, 1.6), Vector3(0.8, 0.11, 1.6)]:
-			_placed(truck, "stone", block, Vector3(0.4, 0.62, 0.3), Color("4d4c48"))
+		var hinge := Vector3(0, 1.1, -1.32)
+		var lift := deg_to_rad(52)
+		_placed(truck, "paint", hinge + Vector3(0, 0.71 * sin(lift), -0.71 * cos(lift)), Vector3(1.66, 0.05, 1.42), faded, Vector3(52, 0, 0))
+		_beam(truck, "metal", Vector3(0.7, 0.98, -2.55), hinge + Vector3(0.7, 1.3 * sin(lift), -1.3 * cos(lift)), Vector2(0.02, 0.02), dark)
+		_placed(truck, "metal", Vector3(0, 0.82, -1.95), Vector3(0.62, 0.42, 0.8), Color("2a2b29"))
+		for x in [-0.2, 0.2]:
+			_placed(truck, "paint", Vector3(x, 1.06, -1.95), Vector3(0.16, 0.08, 0.72), Color("6a2a1c"))
+		batch.cylinder(mats["chrome"], truck * Vector3(0, 1.08, -1.95), 0.2, 0.2, 0.08, Color("5a5d5a"), 16, truck.basis)
+		_placed(truck, "metal", Vector3(0, 0.9, -2.58), Vector3(1.3, 0.44, 0.08), Color("191a1a"))
+		_placed(truck, "plain", Vector3(0.58, 0.92, -2.25), Vector3(0.24, 0.2, 0.18), Color("101112"))
+		_hose(truck * Vector3(0.18, 1.0, -2.5), truck * Vector3(0.2, 0.95, -2.2), 0.03, Color("101010"), 0.06)
+		_hose(truck * Vector3(-0.3, 0.75, -2.5), truck * Vector3(-0.25, 0.7, -2.15), 0.03, Color("101010"), 0.05)
 	else:
-		_placed(truck, "metal", Vector3(-1.45, 1.05, -0.75), Vector3(0.05, 1.15, 1.05), _vary(paint, 0.02), Vector3(0, -58, 0))
-		for wheel in [Vector3(-0.98, 0.42, -1.85), Vector3(0.7, 0.42, -1.85), Vector3(-0.98, 0.42, 1.6), Vector3(0.7, 0.42, 1.6)]:
-			batch.cylinder(mats["plain"], truck * wheel, 0.42, 0.42, 0.28, Color("0b0b0b"), 12, truck.basis * Basis(Vector3.BACK, -PI / 2))
+		_placed(truck, "paint", Vector3(0, 1.1, -1.66), Vector3(1.66, 0.05, 0.72), coat)
+		_placed(truck, "paint", Vector3(0.02, 1.16, -2.24), Vector3(1.62, 0.05, 0.5), coat, Vector3(-12, 3, 2))
+		_placed(truck, "paint", Vector3(0.05, 1.13, -2.6), Vector3(1.56, 0.05, 0.3), coat.darkened(0.04), Vector3(16, 4, -2))
+	# Cab: doors, cowl, back wall, pillars and roof; glass between.
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.9
+		if side < 0 and not wreck:
+			continue
+		_placed(truck, "paint", Vector3(x, 0.84, -0.55), Vector3(0.08, 0.58, 1.44), coat)
+		_placed(truck, "plain", Vector3(x + side * 0.041, 0.84, -1.24), Vector3(0.004, 0.56, 0.008), Color("08090a"))
+		_placed(truck, "chrome", Vector3(x + side * 0.05, 1.04, -0.02), Vector3(0.02, 0.025, 0.12), chrome)
+		_placed(truck, "car_glass", Vector3(x, 1.38, -0.45), Vector3(0.012, 0.46, 1.1), Color.WHITE)
+	if not wreck:
+		# The driver's door stands open on its hinges at the front of the cab.
+		var door := Transform3D(truck.basis * Basis(Vector3.UP, deg_to_rad(-62)), truck * Vector3(-0.9, 0, -1.25))
+		_placed(door, "paint", Vector3(0, 0.84, 0.72), Vector3(0.08, 0.58, 1.44), coat)
+		_placed(door, "car_glass", Vector3(0, 1.38, 0.82), Vector3(0.012, 0.46, 1.0), Color.WHITE)
+		_beam(door, "paint", Vector3(0, 1.13, 0.06), Vector3(0, 1.62, 0.36), Vector2(0.05, 0.05), coat)
+		_placed(door, "paint", Vector3(0, 1.63, 0.9), Vector3(0.05, 0.05, 1.08), coat)
+		_placed(door, "paint", Vector3(0, 1.38, 1.42), Vector3(0.05, 0.5, 0.05), coat)
+		_placed(door, "cloth", Vector3(0.05, 0.86, 0.72), Vector3(0.02, 0.5, 1.3), Color("3a3530"))
+	_placed(truck, "paint", Vector3(0, 1.12, -1.17), Vector3(1.8, 0.05, 0.28), coat)
+	_placed(truck, "paint", Vector3(0, 0.955, 0.17), Vector3(1.86, 0.81, 0.06), coat)
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.87
+		_beam(truck, "paint", Vector3(x, 1.13, -1.27), Vector3(side * 0.82, 1.65, -0.9), Vector2(0.06, 0.06), coat)
+		_placed(truck, "paint", Vector3(side * 0.85, 1.39, 0.15), Vector3(0.12, 0.55, 0.07), coat)
+	_placed(truck, "paint", Vector3(0, 1.39, 0.17), Vector3(1.6, 0.06, 0.06), coat, Vector3(0, 0, 0))
+	_placed(truck, "paint", Vector3(0, 1.645, 0.17), Vector3(1.8, 0.06, 0.07), coat)
+	_placed(truck, "car_glass", Vector3(0, 1.52, 0.17), Vector3(1.56, 0.2, 0.012), Color.WHITE)
+	_placed(truck, "paint", Vector3(0, 1.69, -0.37), Vector3(1.72, 0.06, 1.12), faded)
+	var shield_low := Vector3(0, 1.14, -1.24)
+	var shield_high := Vector3(0, 1.64, -0.9)
+	_beam(truck, "car_glass", shield_low, shield_high, Vector2(1.62, 0.012), Color.WHITE, Vector3.UP)
+	if not wreck:
+		# Cracks running out from where a head struck the windscreen.
+		var strike := shield_low.lerp(shield_high, 0.55) + Vector3(-0.38, 0, 0)
+		for i in range(9):
+			var angle := TAU * i / 9.0 + random.randf_range(-0.2, 0.2)
+			var reach := random.randf_range(0.18, 0.42)
+			var tip := strike + Vector3(cos(angle) * reach, sin(angle) * reach * 0.55, sin(angle) * reach * 0.38)
+			_beam(truck, "plain", strike + Vector3(0, 0.003, -0.006), tip + Vector3(0, 0.003, -0.006), Vector2(0.003, 0.003), Color("4d5457"))
+	# Inside: bench seat, dashboard, steering wheel, mirrors outside.
+	_placed(truck, "cloth", Vector3(0, 0.82, -0.2), Vector3(1.6, 0.18, 0.52), Color("3e3328"))
+	_placed(truck, "cloth", Vector3(0, 1.14, 0.05), Vector3(1.6, 0.5, 0.13), Color("3a2f25"), Vector3(-10, 0, 0))
+	_placed(truck, "plain", Vector3(0, 1.04, -1.08), Vector3(1.7, 0.2, 0.3), black)
+	_placed(truck, "plain", Vector3(-0.42, 1.12, -0.95), Vector3(0.36, 0.1, 0.05), Color("2a2b27"))
+	var wheel_at := Vector3(-0.42, 1.24, -0.82)
+	var tilt := Basis(Vector3.RIGHT, deg_to_rad(-62))
+	for i in range(12):
+		var angle := TAU * i / 12.0
+		var spot := wheel_at + tilt * Vector3(cos(angle) * 0.18, 0, sin(angle) * 0.18)
+		batch.box(mats["plain"], truck * spot, Vector3(0.1, 0.025, 0.025), black, truck.basis * tilt * Basis(Vector3.UP, -angle + PI / 2))
+	_beam(truck, "plain", wheel_at, Vector3(-0.42, 1.05, -1.05), Vector2(0.04, 0.04), black)
+	for side in [-1.0, 1.0]:
+		_beam(truck, "chrome", Vector3(side * 0.9, 1.22, -1.15), Vector3(side * 1.08, 1.32, -1.12), Vector2(0.02, 0.02), chrome)
+		_placed(truck, "plain", Vector3(side * 1.1, 1.36, -1.12), Vector3(0.05, 0.22, 0.14), black)
+	# Bed: floor, sides with rail caps, wheel tubs, front wall, tailgate, lamps, bumper.
+	_placed(truck, "metal", Vector3(0, 0.84, 1.36), Vector3(1.7, 0.04, 2.14), Color("2b2a27"))
+	for side in [-1.0, 1.0]:
+		var x: float = side * 0.9
+		_placed(truck, "paint", Vector3(x, 1.1, 1.35), Vector3(0.08, 0.5, 2.18), coat)
+		_placed(truck, "paint", Vector3(x, 0.7, 0.67), Vector3(0.08, 0.3, 0.78), coat)
+		_placed(truck, "paint", Vector3(x, 0.7, 2.27), Vector3(0.08, 0.3, 0.36), coat)
+		_placed(truck, "paint", Vector3(side * 0.88, 1.365, 1.35), Vector3(0.14, 0.03, 2.2), faded)
+		_placed(truck, "metal", Vector3(side * 0.72, 0.96, 1.55), Vector3(0.26, 0.24, 0.92), coat.darkened(0.2))
+		_placed(truck, "plain", Vector3(side * 0.86, 1.1, 2.465), Vector3(0.12, 0.22, 0.04), Color("4a0f0c"))
+	_placed(truck, "paint", Vector3(0, 1.1, 0.28), Vector3(1.72, 0.5, 0.06), coat)
+	if wreck:
+		_placed(truck, "paint", Vector3(0, 1.1, 2.45), Vector3(1.7, 0.48, 0.06), coat)
+		_placed(truck, "chrome", Vector3(0, 1.26, 2.485), Vector3(0.22, 0.04, 0.02), chrome)
+	else:
+		var drop := deg_to_rad(68)
+		_placed(truck, "paint", Vector3(0, 0.86 + 0.24 * cos(drop), 2.45 + 0.24 * sin(drop)), Vector3(1.7, 0.48, 0.06), coat, Vector3(68, 0, 0))
+		for side in [-1.0, 1.0]:
+			_beam(truck, "metal", Vector3(side * 0.82, 1.3, 2.42), Vector3(side * 0.82, 0.86 + 0.46 * cos(drop), 2.45 + 0.46 * sin(drop)), Vector2(0.01, 0.01), dark)
+	_placed(truck, "chrome", Vector3(0, 0.66, 2.56), Vector3(1.88, 0.13, 0.12), chrome.darkened(0.15))
+	# What lies in the bed.
+	if wreck:
+		_placed(truck, "metal", Vector3(0.35, 0.97, 0.9), Vector3(0.6, 0.22, 0.3), Color("5a1f1a"), Vector3(0, 12, 0))
+		_placed(truck, "furniture_wood", Vector3(-0.3, 0.93, 1.6), Vector3(0.9, 0.14, 0.32), Color("4a3a2a"), Vector3(0, -24, 0))
+	else:
+		_wheel(Transform3D(truck.basis * Basis(Vector3.BACK, PI / 2), truck * Vector3(0.2, 0.98, 1.65)), Vector3.ZERO, 0.38, 0.22, Color("50534f"))
+		_placed(truck, "paint", Vector3(-0.52, 1.08, 0.75), Vector3(0.18, 0.44, 0.34), Color("3f4a2c"), Vector3(0, 18, 0))
+		_placed(truck, "cloth", Vector3(-0.3, 0.92, 2.0), Vector3(1.0, 0.12, 0.7), Color("2c3a33"), Vector3(4, -20, 6))
+	# Wheels, or the blocks it stands on.
+	if wreck:
+		for spot in [Vector3(-0.46, 0.11, -1.75), Vector3(0.46, 0.11, -1.75), Vector3(-0.46, 0.11, 1.55), Vector3(0.46, 0.11, 1.55)]:
+			_placed(truck, "concrete", spot, Vector3(0.39, 0.62, 0.2), Color("6e6c66"), Vector3(0, random.randf_range(-6, 6), 0))
+		for spot in [Vector3(-0.8, 0.4, -1.75), Vector3(0.8, 0.4, -1.75), Vector3(-0.8, 0.4, 1.55), Vector3(0.8, 0.4, 1.55)]:
+			var at: Vector3 = spot
+			batch.cylinder(mats["metal"], truck * (at - Vector3(0.03, 0, 0)), 0.17, 0.17, 0.06, Color("4a3b30"), 14, truck.basis * Basis(Vector3.BACK, -PI / 2))
+	else:
+		_wheel(truck, Vector3(-0.83, 0.4, -1.75), 0.4, 0.24, Color("767974"), deg_to_rad(24))
+		_wheel(truck, Vector3(0.83, 0.4, -1.75), 0.4, 0.24, Color("767974"), deg_to_rad(24))
+		_wheel(truck, Vector3(-0.83, 0.4, 1.55), 0.4, 0.24, Color("767974"))
+		_wheel(truck, Vector3(0.83, 0.4, 1.55), 0.4, 0.24, Color("767974"))
+	_shared_dice()
 	_solid(truck * Vector3(0, 0.95, 0), Vector3(2.0, 1.9, 5.3), true, yaw)
 
 ## Workshop in the north-west with an open front to the south and a side door.
@@ -2183,7 +3156,7 @@ func _build_garage() -> void:
 	var x1 := GARAGE.end.x
 	var z0 := GARAGE.position.y
 	var z1 := GARAGE.end.y
-	_part("stone", Vector3(-31, 0.01, -22.3), Vector3(9.9, 0.02, 7.6), Color("3d3d3a"))
+	_part("concrete_floor", Vector3(-31, 0.01, -22.3), Vector3(9.9, 0.02, 7.6), Color("5a5853"))
 	var slope := func(s: float) -> float: return 2.9 + 0.6 * s / 7.0
 	_plank_wall(Vector2(x0, z0), Vector2(x1, z0), 0, 2.9, 0.1, [[2.0, 3.4, 1.1, 2.1], [6.6, 8.0, 1.1, 2.1]], tin, "metal", Callable(), 0.45)
 	_plank_wall(Vector2(x0, z0), Vector2(x0, z1), 0, 2.9, 0.1, [], tin, "metal", slope, 0.45)
@@ -2208,9 +3181,10 @@ func _build_garage() -> void:
 	_solid(Vector3(-33.05, 0.45, -25.4), Vector3(0.8, 0.9, 0.8))
 	_barrel(Vector3(-26.55, 0, -25.4), Color("2f4a4a"))
 	_barrel(Vector3(-26.55, 0, -24.65), Color("5a3a2a"))
-	_bulb(Vector3(-29.5, 2.45, -22.5), 2.2, 10.0, 0.12, 3.2, true)
+	_fixture("enamel", Vector3(-29.5, 2.45, -22.5), 2.2, 10.0, 0.12, 3.2, true)
 	_wall_lamp(Vector3(-31, 3.2, z1 + 0.2), Vector3(0, 0, 1), Color("d8e3ff"), 1.2, 8.5, 0.4)
 	lettering("WERKSTATT", Vector3(-28.5, 3.32, z1 + 0.12), 30, Color("b9a36f"))
+	_dress_garage()
 	_clear_air(Vector3(-31, 1.6, -22.5), Vector3(9.6, 3.0, 6.6))
 	# Diesel tank on a steel stand beside the workshop.
 	var tank := Vector3(-23.3, 0, -25.0)
@@ -2263,10 +3237,11 @@ func _build_guest_cabin() -> void:
 	_chair(Vector3(-31.1, 0, 22.6), PI / 2, wood)
 	_prop("metal", Vector3(-26.6, 0.45, 20.6), Vector3(0.6, 0.9, 0.6), Color("1f1e1d"))
 	batch.cylinder(mats["metal"], Vector3(-26.6, 0.9, 20.6), 0.07, 0.07, 4.2, Color("1b1b1a"), 6)
-	_prop("siding", Vector3(-33.6, 1.0, 21.2), Vector3(0.55, 2.0, 1.4), Color("3d3227"))
-	_rug(Vector3(-30.2, 0, 24.2), Vector2(2.6, 1.8), Color("3a2c2a"))
-	_bulb(Vector3(-30.0, 2.25, 23.4), 2.6, 6.5, 0.15, 2.8)
+	_prop("furniture_wood", Vector3(-33.6, 1.0, 21.2), Vector3(0.55, 2.0, 1.4), Color("3d3227"))
+	_persian_rug(Vector3(-30.2, 0, 24.2), Vector2(2.6, 1.8), "rug_red")
+	_fixture("lantern", Vector3(-30.0, 2.25, 23.4), 2.6, 6.5, 0.15, 2.8)
 	_wall_lamp(Vector3(x1 + 0.2, 2.5, 25.0), Vector3(1, 0, 0), Color("ffc27c"), 1.2, 7.0, 0.25)
+	_dress_guest()
 	_clear_air(Vector3(-30, 1.4, 23.25), Vector3(7.6, 2.7, 6.1))
 
 ## Tool shed in the south-east with its door towards the house.
@@ -2288,8 +3263,9 @@ func _build_shed() -> void:
 	for i in range(3):
 		_part("plank_v", Vector3(29.3, 0.8, 22.9 + i * 0.35), Vector3(0.04, 1.6, 0.04), Color("3a2e23"), Vector3(0, 0, -9))
 		_part("metal", Vector3(29.18, 0.08, 22.9 + i * 0.35), Vector3(0.05, 0.2, 0.24), Color("3a3d3c"))
-	_bulb(Vector3(27.2, 1.95, 23.7), 1.5, 4.5, 0.3, 2.4)
+	_fixture("enamel", Vector3(27.2, 1.95, 23.7), 1.5, 4.5, 0.3, 2.4)
 	_wall_lamp(Vector3(27.5, 2.5, z0 - 0.17), Vector3(0, 0, -1), Color("ffc27c"), 1.0, 6.5, 0.3)
+	_dress_shed()
 	_clear_air(Vector3(27.25, 1.2, 23.8), Vector3(4.2, 2.3, 3.3))
 	_woodpile(Vector3(30.5, 0, 23.8), 0.0, 6, 4)
 	batch.cylinder(mats["plank_v"], Vector3(24.0, 0, 20.4), 0.32, 0.3, 0.5, Color("3b2f24"), 9)
@@ -2338,30 +3314,36 @@ func _fence(from: Vector2, to: Vector2, standing: bool = true) -> void:
 	var centre := (from + to) * 0.5
 	_rail_solid(Vector3(centre.x, 0.65, centre.y), Vector3(length, 1.3, 0.14) if along_x else Vector3(0.14, 1.3, length))
 
+## A dead tree in the yard. It is planted as a model in _build_forest; the branches of
+## the old drawn one still roll their dice, so that everything after it stays as it was.
 func _dead_tree(pos: Vector3, height: float) -> void:
-	_yard_chunk(pos)
-	var bark := _vary(Color("211d19"), 0.02)
-	var lean := Basis.from_euler(Vector3(deg_to_rad(random.randf_range(-6, 6)), random.randf() * TAU, deg_to_rad(random.randf_range(-6, 6))))
-	batch.cylinder(mats["plank_v"], pos, 0.34, 0.11, height, bark, 8, lean)
-	for i in range(8):
-		var start := pos + lean * Vector3(0, height * random.randf_range(0.42, 0.97), 0)
-		var yaw := random.randf() * TAU
-		var tilt := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, deg_to_rad(random.randf_range(38, 72)))
-		var length := random.randf_range(1.3, 3.0)
-		batch.cylinder(mats["plank_v"], start, 0.085, 0.03, length, bark, 5, tilt, false)
-		var tip := start + tilt * Vector3(0, length * 0.62, 0)
-		for twig in range(2):
-			var twig_tilt := Basis(Vector3.UP, yaw + random.randf_range(-1.1, 1.1)) * Basis(Vector3.RIGHT, deg_to_rad(random.randf_range(20, 60)))
-			batch.cylinder(mats["plank_v"], tip, 0.035, 0.008, length * random.randf_range(0.4, 0.7), bark, 4, twig_tilt, false)
+	_ghost(func() -> void:
+		var bark := _vary(Color("211d19"), 0.02)
+		var lean := Basis.from_euler(Vector3(deg_to_rad(random.randf_range(-6, 6)), random.randf() * TAU, deg_to_rad(random.randf_range(-6, 6))))
+		batch.cylinder(mats["plank_v"], pos, 0.34, 0.11, height, bark, 8, lean)
+		for i in range(8):
+			var start := pos + lean * Vector3(0, height * random.randf_range(0.42, 0.97), 0)
+			var yaw := random.randf() * TAU
+			var tilt := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, deg_to_rad(random.randf_range(38, 72)))
+			var length := random.randf_range(1.3, 3.0)
+			batch.cylinder(mats["plank_v"], start, 0.085, 0.03, length, bark, 5, tilt, false)
+			var tip := start + tilt * Vector3(0, length * 0.62, 0)
+			for twig in range(2):
+				var twig_tilt := Basis(Vector3.UP, yaw + random.randf_range(-1.1, 1.1)) * Basis(Vector3.RIGHT, deg_to_rad(random.randf_range(20, 60)))
+				batch.cylinder(mats["plank_v"], tip, 0.035, 0.008, length * random.randf_range(0.4, 0.7), bark, 4, twig_tilt, false)
+	)
+	yard_trees.append([pos, height, true])
 	_solid(pos + Vector3(0, 1.5, 0), Vector3(0.55, 3.0, 0.55))
 
-## Fir standing inside the yard; it blocks the view and gives cover.
+## A fir in the yard, planted as a model like the dead trees.
 func _conifer(pos: Vector3, height: float) -> void:
-	_yard_chunk(pos)
-	batch.cylinder(mats["plank_v"], pos, 0.28, 0.1, height * 0.85, Color("16120f"), 6)
-	for tier in range(4):
-		var width := height * (0.25 - tier * 0.05)
-		batch.cylinder(mats["plain"], pos + Vector3(0, height * (0.2 + tier * 0.17), 0), width, 0.0, height * 0.36, _vary(Color("0c1711"), 0.01), 7, Basis(Vector3.UP, random.randf() * TAU))
+	_ghost(func() -> void:
+		batch.cylinder(mats["plank_v"], pos, 0.28, 0.1, height * 0.85, Color("16120f"), 6)
+		for tier in range(4):
+			var width := height * (0.25 - tier * 0.05)
+			batch.cylinder(mats["plain"], pos + Vector3(0, height * (0.2 + tier * 0.17), 0), width, 0.0, height * 0.36, _vary(Color("0c1711"), 0.01), 7, Basis(Vector3.UP, random.randf() * TAU))
+	)
+	yard_trees.append([pos, height, false])
 	_solid(pos + Vector3(0, 1.5, 0), Vector3(0.6, 3.0, 0.6))
 
 func _pole(pos: Vector3) -> Vector3:
@@ -2391,28 +3373,94 @@ func _pole_lamp(pos: Vector3, toward: Vector3, color: Color, energy: float, flic
 	_glow_box(pos + Vector3(0, 6.17, 0) + out * 1.15, Vector3(0.2, 0.05, 0.2), color, 5.0)
 	_spot(pos + Vector3(0, 6.1, 0) + out * 1.15, Vector3.DOWN, color, energy * 1.8, 15.0, 66.0, flicker, 1.5, 55.0)
 
+## Old red farm tractor with its bonnet towards local -z: big lugged tyres at the back,
+## rounded bonnet, a roll bar with a canopy, a hitch at the rear.
 func _tractor(pos: Vector3, yaw: float) -> void:
 	_yard_chunk(pos)
+	# The old tractor rolled five dice for its paint; they are still rolled.
+	for i in range(5):
+		random.randf()
+	_own_dice(int(pos.x * 97.0 + pos.z * 13.0))
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	var paint := Color("5a2f25")
-	var axle := frame.basis * Basis(Vector3.BACK, -PI / 2)
-	for x in [-1.0, 0.58]:
-		batch.cylinder(mats["plain"], frame * Vector3(x, 0.72, 0.9), 0.72, 0.72, 0.42, Color("0b0b0b"), 14, axle)
-		batch.cylinder(mats["metal"], frame * Vector3(x - 0.01, 0.72, 0.9), 0.3, 0.3, 0.44, _vary(paint, 0.02), 10, axle)
-	for x in [-0.78, 0.52]:
-		batch.cylinder(mats["plain"], frame * Vector3(x, 0.4, -1.35), 0.4, 0.4, 0.26, Color("0b0b0b"), 12, axle)
-	_placed(frame, "metal", Vector3(0, 0.75, -0.2), Vector3(0.5, 0.3, 3.0), Color("191a1a"))
-	_placed(frame, "metal", Vector3(0, 1.15, -0.75), Vector3(0.7, 0.6, 1.7), _vary(paint, 0.02))
-	_placed(frame, "metal", Vector3(0, 1.12, -1.62), Vector3(0.6, 0.5, 0.05), Color("1b1b1a"))
-	_placed(frame, "cloth", Vector3(0, 1.2, 0.75), Vector3(0.5, 0.1, 0.5), Color("1f1d1b"))
-	_placed(frame, "cloth", Vector3(0, 1.46, 1.02), Vector3(0.5, 0.5, 0.08), Color("1f1d1b"))
-	for x in [-0.82, 0.82]:
-		_placed(frame, "metal", Vector3(x, 1.5, 0.9), Vector3(0.5, 0.08, 1.3), _vary(paint, 0.02))
-		_placed(frame, "metal", Vector3(x * 0.67, 2.0, 1.15), Vector3(0.06, 1.2, 0.06), Color("1b1b1a"))
-	_placed(frame, "metal", Vector3(0, 2.6, 1.15), Vector3(1.16, 0.06, 0.06), Color("1b1b1a"))
-	_placed(frame, "metal", Vector3(0, 1.5, 0.25), Vector3(0.04, 0.5, 0.04), Color("1b1b1a"), Vector3(-25, 0, 0))
-	_placed(frame, "metal", Vector3(0, 1.74, 0.36), Vector3(0.34, 0.03, 0.34), Color("1b1b1a"), Vector3(-25, 0, 0))
-	batch.cylinder(mats["metal"], frame * Vector3(0.25, 1.45, -1.1), 0.04, 0.04, 0.9, Color("1b1b1a"), 6, frame.basis)
+	var paint := Color("6a3226")
+	var dark := Color("191a1a")
+	var iron := Color("2b2a27")
+	var rims := Color("7a3a2c")
+	# Wheels; the front ones are turned a little.
+	_wheel(frame, Vector3(-0.8, 0.72, 0.9), 0.72, 0.4, rims, 0.0, 22)
+	_wheel(frame, Vector3(0.8, 0.72, 0.9), 0.72, 0.4, rims, 0.0, 22)
+	_wheel(frame, Vector3(-0.66, 0.4, -1.35), 0.4, 0.2, rims, deg_to_rad(9), 14)
+	_wheel(frame, Vector3(0.66, 0.4, -1.35), 0.4, 0.2, rims, deg_to_rad(9), 14)
+	batch.cylinder(mats["metal"], frame * Vector3(-0.6, 0.72, 0.9), 0.07, 0.07, 1.2, iron, 10, frame.basis * Basis(Vector3.BACK, -PI / 2))
+	_placed(frame, "metal", Vector3(0, 0.45, -1.35), Vector3(1.2, 0.1, 0.12), iron)
+	# Engine, gearbox and the rounded bonnet over them.
+	_placed(frame, "metal", Vector3(0, 0.74, -0.55), Vector3(0.5, 0.38, 2.3), Color("232421"))
+	_placed(frame, "metal", Vector3(0, 0.82, 0.55), Vector3(0.72, 0.5, 0.7), Color("232421"))
+	_placed(frame, "paint", Vector3(0, 1.1, -0.86), Vector3(0.66, 0.42, 1.66), paint)
+	batch.cylinder(mats["paint"], frame * Vector3(0, 1.24, -1.69), 0.33, 0.33, 1.68, paint, 18, frame.basis * Basis(Vector3.RIGHT, PI / 2))
+	for side in [-1.0, 1.0]:
+		for k in range(5):
+			_placed(frame, "plain", Vector3(side * 0.335, 1.12, -1.45 + k * 0.08), Vector3(0.01, 0.2, 0.035), Color("0c0c0c"))
+	# Grille with its slats, the badge, two lamps, the weights hung on the front.
+	_placed(frame, "plain", Vector3(0, 1.17, -1.72), Vector3(0.58, 0.68, 0.04), Color("0a0a0a"))
+	for k in range(7):
+		_placed(frame, "metal", Vector3(0, 0.9 + k * 0.085, -1.745), Vector3(0.6, 0.02, 0.03), iron)
+	_placed(frame, "chrome", Vector3(0, 1.48, -1.75), Vector3(0.16, 0.06, 0.02), Color("a29a80"))
+	for side in [-1.0, 1.0]:
+		var lamp := Vector3(side * 0.37, 1.32, -1.5)
+		batch.cylinder(mats["chrome"], frame * lamp, 0.075, 0.08, 0.1, dark, 14, frame.basis * Basis(Vector3.RIGHT, -PI / 2))
+		batch.cylinder(mats["chrome"], frame * (lamp + Vector3(0, 0, -0.1)), 0.062, 0.06, 0.01, Color("8f938c"), 14, frame.basis * Basis(Vector3.RIGHT, -PI / 2))
+	for k in range(6):
+		_placed(frame, "metal", Vector3(0, 0.78, -1.84 - k * 0.07), Vector3(0.74, 0.32, 0.06), Color("2d2e2b").lightened(0.03 * (k % 2)))
+	_placed(frame, "metal", Vector3(0, 0.98, -2.0), Vector3(0.12, 0.08, 0.4), iron)
+	# Exhaust stack and the intake with its oil-bath cleaner.
+	batch.cylinder(mats["metal"], frame * Vector3(0.2, 1.5, -1.15), 0.045, 0.05, 1.0, Color("3a2e26"), 10)
+	_placed(frame, "metal", Vector3(0.2, 2.53, -1.14), Vector3(0.11, 0.02, 0.13), Color("2a221d"), Vector3(-25, 0, 0))
+	batch.cylinder(mats["chrome"], frame * Vector3(-0.2, 1.5, -1.0), 0.035, 0.035, 0.5, Color("6e716c"), 10)
+	batch.cylinder(mats["paint"], frame * Vector3(-0.2, 2.0, -1.0), 0.09, 0.08, 0.2, paint.darkened(0.15), 12)
+	# Fuel tank, dash and steering wheel.
+	_placed(frame, "paint", Vector3(0, 1.36, -0.12), Vector3(0.6, 0.3, 0.42), paint)
+	batch.cylinder(mats["chrome"], frame * Vector3(0.12, 1.51, -0.12), 0.05, 0.05, 0.04, Color("6e716c"), 10)
+	_placed(frame, "plain", Vector3(0, 1.4, 0.13), Vector3(0.5, 0.36, 0.1), Color("141414"), Vector3(-12, 0, 0))
+	batch.cylinder(mats["plain"], frame * Vector3(-0.08, 1.52, 0.19), 0.035, 0.035, 0.01, Color("c8c2a8"), 10, frame.basis * Basis(Vector3.RIGHT, PI / 2 - 0.2))
+	var wheel_at := Vector3(0, 1.82, 0.4)
+	_beam(frame, "metal", Vector3(0, 1.45, 0.16), wheel_at, Vector2(0.05, 0.05), dark)
+	var tilt := Basis(Vector3.RIGHT, deg_to_rad(-38))
+	for i in range(14):
+		var angle := TAU * i / 14.0
+		batch.box(mats["plain"], frame * (wheel_at + tilt * Vector3(cos(angle) * 0.21, 0, sin(angle) * 0.21)), Vector3(0.1, 0.025, 0.025), Color("111111"), frame.basis * tilt * Basis(Vector3.UP, -angle + PI / 2))
+	for spoke in [0.0, 2.1, 4.2]:
+		_beam(frame, "plain", wheel_at, wheel_at + tilt * Vector3(cos(spoke) * 0.2, 0, sin(spoke) * 0.2), Vector2(0.02, 0.012), Color("111111"))
+	# Platform, steps, the pan seat on its spring.
+	_placed(frame, "metal", Vector3(0, 1.0, 0.62), Vector3(1.1, 0.04, 0.72), Color("262724"))
+	for side in [-1.0, 1.0]:
+		_placed(frame, "metal", Vector3(side * 0.5, 0.55, 0.2), Vector3(0.24, 0.03, 0.18), Color("262724"))
+		_beam(frame, "metal", Vector3(side * 0.42, 0.55, 0.2), Vector3(side * 0.42, 0.98, 0.3), Vector2(0.03, 0.03), Color("262724"))
+	_beam(frame, "metal", Vector3(0, 1.0, 0.8), Vector3(0, 1.38, 0.92), Vector2(0.06, 0.04), dark)
+	_placed(frame, "cloth", Vector3(0, 1.42, 0.95), Vector3(0.5, 0.08, 0.44), Color("1c1b19"), Vector3(-6, 0, 0))
+	_placed(frame, "cloth", Vector3(0, 1.66, 1.16), Vector3(0.48, 0.4, 0.08), Color("1c1b19"), Vector3(12, 0, 0))
+	# Fenders curved over the big wheels, with a lamp on each.
+	for side in [-1.0, 1.0]:
+		for k in range(9):
+			var a := deg_to_rad(18.0 + k * 144.0 / 8.0)
+			var local := Vector3(side * 0.8, 0.72 + sin(a) * 0.8, 0.9 - cos(a) * 0.8)
+			_placed(frame, "paint", local, Vector3(0.5, 0.03, 0.31), paint, Vector3(rad_to_deg(a) - 90.0, 0, 0))
+		_placed(frame, "paint", Vector3(side * 0.56, 1.05, 0.9), Vector3(0.03, 0.62, 1.1), paint.darkened(0.12))
+		_placed(frame, "plain", Vector3(side * 0.95, 1.58, 1.15), Vector3(0.08, 0.1, 0.06), Color("4a100c"))
+	# Roll bar and its canopy.
+	for side in [-1.0, 1.0]:
+		_beam(frame, "metal", Vector3(side * 0.56, 1.3, 1.36), Vector3(side * 0.56, 2.58, 1.3), Vector2(0.07, 0.07), dark)
+	_placed(frame, "metal", Vector3(0, 2.6, 1.3), Vector3(1.2, 0.07, 0.07), dark)
+	_placed(frame, "paint", Vector3(0, 2.66, 0.85), Vector3(1.3, 0.04, 1.2), paint.darkened(0.05), Vector3(-4, 0, 1.5))
+	for side in [-1.0, 1.0]:
+		_beam(frame, "metal", Vector3(side * 0.56, 2.6, 1.3), Vector3(side * 0.6, 2.63, 0.3), Vector2(0.03, 0.03), dark)
+	# Three-point hitch and the drawbar.
+	for side in [-1.0, 1.0]:
+		_beam(frame, "metal", Vector3(side * 0.28, 0.62, 1.15), Vector3(side * 0.38, 0.48, 1.85), Vector2(0.06, 0.08), iron)
+		_beam(frame, "metal", Vector3(side * 0.3, 1.12, 1.15), Vector3(side * 0.33, 0.6, 1.5), Vector2(0.04, 0.04), iron)
+	_beam(frame, "metal", Vector3(0, 1.05, 1.18), Vector3(0, 0.95, 1.8), Vector2(0.05, 0.05), iron)
+	_placed(frame, "metal", Vector3(0, 0.5, 1.45), Vector3(0.14, 0.06, 0.6), iron)
+	_shared_dice()
 	_solid(frame * Vector3(0, 1.0, -0.2), Vector3(2.1, 2.0, 3.6), true, yaw)
 
 func _trailer(pos: Vector3, yaw: float) -> void:
@@ -2424,12 +3472,13 @@ func _trailer(pos: Vector3, yaw: float) -> void:
 		_placed(frame, "siding", Vector3(x, 1.1, 0), Vector3(0.05, 0.4, 3.6), Color("463d30"))
 	_placed(frame, "siding", Vector3(0, 1.1, -1.78), Vector3(2.0, 0.4, 0.05), Color("463d30"))
 	_placed(frame, "metal", Vector3(0, 0.7, -2.4), Vector3(0.1, 0.1, 1.4), Color("191a1a"))
-	for x in [-1.24, 1.0]:
-		batch.cylinder(mats["plain"], frame * Vector3(x, 0.42, 0.5), 0.42, 0.42, 0.24, Color("0b0b0b"), 12, axle)
+	for x in [-1.12, 1.12]:
+		_wheel(frame, Vector3(x, 0.42, 0.5), 0.42, 0.24, Color("5a3a2c"))
+	batch.cylinder(mats["metal"], frame * Vector3(-1.0, 0.42, 0.5), 0.04, 0.04, 2.0, Color("191a1a"), 8, axle)
 	for i in range(6):
 		var bale := frame * Vector3(-0.47 + (i % 2) * 0.94, 0.92, -1.1 + floori(i * 0.5) * 1.22)
-		batch.box(mats["cloth"], bale + Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035), frame.basis * Basis(Vector3.UP, random.randf_range(-0.08, 0.08)))
-	batch.box(mats["cloth"], frame * Vector3(0.1, 2.0, -0.3), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035), frame.basis * Basis(Vector3.UP, 0.5))
+		batch.box(mats["straw"], bale + Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035), frame.basis * Basis(Vector3.UP, random.randf_range(-0.08, 0.08)))
+	batch.box(mats["straw"], frame * Vector3(0.1, 2.0, -0.3), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035), frame.basis * Basis(Vector3.UP, 0.5))
 	_solid(frame * Vector3(0, 1.0, 0), Vector3(2.2, 2.0, 3.7), true, yaw)
 
 func _build_yard() -> void:
@@ -4665,18 +5714,12 @@ func _build_forest() -> void:
 	trunk_material.albedo_color = Color("16120f")
 	trunk_material.roughness = 1.0
 	trunk.material = trunk_material
-	var cone := CylinderMesh.new()
-	cone.top_radius = 0.0
-	cone.bottom_radius = 1.0
-	cone.height = 1.0
-	cone.radial_segments = 7
-	cone.rings = 1
-	var needle_material := StandardMaterial3D.new()
-	needle_material.albedo_color = Color("0c1711")
-	needle_material.roughness = 1.0
-	cone.material = needle_material
+	var cone := _pine_skirt()
 	var trunks: Array[Transform3D] = []
 	var cones: Array[Transform3D] = []
+	# Stand-ins for the model trees where they are too far away to be told apart.
+	var far_trunks: Array[Transform3D] = []
+	var far_cones: Array[Transform3D] = []
 	var clearing := YARD.grow(3.5)
 	# Near the yard a share of the trees are models; each kind: its meshes (each with where
 	# it sits inside its file, brought to the common height), and the places it is planted
@@ -4704,9 +5747,22 @@ func _build_forest() -> void:
 		var fit := Transform3D(Basis.from_scale(Vector3.ONE * (TREE_MODEL_HEIGHT / top)), Vector3.ZERO)
 		for entry in meshes:
 			entry[1] = fit * (entry[1] as Transform3D)
-		kinds.append([meshes, null, []])
+		kinds.append([meshes, path, []])
 	var chooser := RandomNumberGenerator.new()
 	chooser.seed = 1907
+	# The trees of the yard: dead ones become dead models, firs living ones.
+	var yard_dice := RandomNumberGenerator.new()
+	yard_dice.seed = 2213
+	for tree in yard_trees:
+		var fitting: Array = []
+		for index in range(kinds.size()):
+			if String(kinds[index][1]).contains("DeadTree") == bool(tree[2]):
+				fitting.append(index)
+		if fitting.is_empty():
+			continue
+		var pick: int = fitting[yard_dice.randi() % fitting.size()]
+		var grown: float = float(tree[1]) * (1.25 if bool(tree[2]) else 1.0)
+		(kinds[pick][2] as Array).append(Transform3D(Basis(Vector3.UP, yard_dice.randf() * TAU).scaled(Vector3.ONE * (grown / TREE_MODEL_HEIGHT)), tree[0]))
 	var near := YARD.grow(3.5 + TREE_MODEL_REACH)
 	for i in range(1050):
 		var pos := Vector3(random.randf_range(-128, 128), 0, random.randf_range(-124, 132))
@@ -4723,33 +5779,54 @@ func _build_forest() -> void:
 		if not kinds.is_empty() and near.has_point(Vector2(pos.x, pos.z)) and chooser.randf() < TREE_MODEL_SHARE:
 			model = chooser.randi() % kinds.size()
 			(kinds[model][2] as Array).append(Transform3D(Basis(Vector3.UP, chooser.randf() * TAU).scaled(Vector3.ONE * (height / TREE_MODEL_HEIGHT)), pos))
+		var trunk_at := Transform3D(Basis.from_scale(Vector3(1.0, height * 0.85, 1.0)), pos + Vector3(0, height * 0.42, 0))
+		if model < 0:
+			trunks.append(trunk_at)
 		else:
-			trunks.append(Transform3D(Basis.from_scale(Vector3(1.0, height * 0.85, 1.0)), pos + Vector3(0, height * 0.42, 0)))
+			far_trunks.append(trunk_at)
 		for tier in range(4):
 			var width := height * (0.25 - tier * 0.05)
 			var turn := random.randf() * TAU
+			var tier_at := Transform3D(Basis(Vector3.UP, turn).scaled(Vector3(width, height * 0.36, width)), pos + Vector3(0, height * (0.38 + tier * 0.17), 0))
 			if model < 0:
-				cones.append(Transform3D(Basis(Vector3.UP, turn).scaled(Vector3(width, height * 0.36, width)), pos + Vector3(0, height * (0.38 + tier * 0.17), 0)))
+				cones.append(tier_at)
+			else:
+				far_cones.append(tier_at)
 	for kind in kinds:
 		var places: Array = kind[2]
 		if places.is_empty():
 			continue
-		for entry in kind[0]:
-			var many := MultiMesh.new()
-			many.transform_format = MultiMesh.TRANSFORM_3D
-			many.mesh = entry[0]
-			many.instance_count = places.size()
-			for i in range(places.size()):
-				many.set_instance_transform(i, (places[i] as Transform3D) * (entry[1] as Transform3D))
-			var grove := MultiMeshInstance3D.new()
-			grove.name = "ModelTrees"
-			grove.multimesh = many
-			grove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			add_child(grove)
+		# In groves of 40 m, so that those behind the viewer are not drawn.
+		var groves: Dictionary = {}
+		for place in places:
+			var at: Vector3 = (place as Transform3D).origin
+			var key := Vector2i(floori(at.x / 40.0), floori(at.z / 40.0))
+			if not groves.has(key):
+				groves[key] = []
+			(groves[key] as Array).append(place)
+		for key in groves:
+			var trees: Array = groves[key]
+			for entry in kind[0]:
+				var many := MultiMesh.new()
+				many.transform_format = MultiMesh.TRANSFORM_3D
+				many.mesh = entry[0]
+				many.instance_count = trees.size()
+				for i in range(trees.size()):
+					many.set_instance_transform(i, (trees[i] as Transform3D) * (entry[1] as Transform3D))
+				var grove := MultiMeshInstance3D.new()
+				grove.name = "ModelTrees"
+				grove.multimesh = many
+				grove.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				# Out in the fog the stand-ins take over (except in the yard itself).
+				if not YARD.has_point(Vector2((float(key.x) + 0.5) * 40.0, (float(key.y) + 0.5) * 40.0)):
+					grove.visibility_range_end = TREE_MODEL_FAR
+				add_child(grove)
 		model_trees += places.size()
 		tree_kinds += 1
-	for group in [[trunk, trunks, "Trunks"], [cone, cones, "Needles"]]:
+	for group in [[trunk, trunks, "Trunks", 0.0], [cone, cones, "Needles", 0.0], [trunk, far_trunks, "FarTrunks", TREE_MODEL_FAR], [cone, far_cones, "FarNeedles", TREE_MODEL_FAR]]:
 		var transforms: Array = group[1]
+		if transforms.is_empty():
+			continue
 		var multimesh := MultiMesh.new()
 		multimesh.transform_format = MultiMesh.TRANSFORM_3D
 		multimesh.mesh = group[0]
@@ -4759,8 +5836,60 @@ func _build_forest() -> void:
 		var instance := MultiMeshInstance3D.new()
 		instance.name = group[2]
 		instance.multimesh = multimesh
+		instance.visibility_range_begin = group[3]
 		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(instance)
+
+## One tier of a fir far out in the forest, in the frame of a unit cone (tip at y 0.5,
+## foot a ring of radius 1 at y -0.5): branches of uneven length hang from it, lighter
+## at their tips, and its underside is closed and dark.
+func _pine_skirt() -> ArrayMesh:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 5113
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var spokes := 16
+	var tip := Vector3(0, 0.5, 0)
+	var mids: Array[Vector3] = []
+	var ends: Array[Vector3] = []
+	for i in range(spokes):
+		var angle := TAU * (i + dice.randf_range(-0.2, 0.2)) / spokes
+		var reach := (1.0 if i % 2 == 0 else 0.74) * dice.randf_range(0.88, 1.08)
+		var around := Vector3(cos(angle), 0, sin(angle))
+		mids.append(around * reach * 0.52 + Vector3(0, 0.02, 0))
+		ends.append(around * reach + Vector3(0, -0.5 + (1.0 - reach) * 0.35 + dice.randf_range(-0.04, 0.04), 0))
+	var inner := Color("182a1b")
+	var middle := Color("12201a")
+	var outer := Color("21352a")
+	var under := Color("060b08")
+	var add := func(point: Vector3, colour: Color, normal: Vector3) -> void:
+		tool.set_color(colour)
+		tool.set_normal(normal)
+		tool.add_vertex(point)
+	for i in range(spokes):
+		var j := (i + 1) % spokes
+		var lean_i := (Vector3(mids[i].x, 0, mids[i].z).normalized() + Vector3(0, 0.7, 0)).normalized()
+		var lean_j := (Vector3(mids[j].x, 0, mids[j].z).normalized() + Vector3(0, 0.7, 0)).normalized()
+		# Triangles wind clockwise as seen from outside.
+		add.call(tip, inner, Vector3.UP)
+		add.call(mids[i], middle, lean_i)
+		add.call(mids[j], middle, lean_j)
+		add.call(mids[i], middle, lean_i)
+		add.call(ends[i], outer, lean_i)
+		add.call(ends[j], outer, lean_j)
+		add.call(mids[i], middle, lean_i)
+		add.call(ends[j], outer, lean_j)
+		add.call(mids[j], middle, lean_j)
+		add.call(Vector3(0, -0.32, 0), under, Vector3.DOWN)
+		add.call(ends[j], under, Vector3.DOWN)
+		add.call(ends[i], under, Vector3.DOWN)
+	var paint := StandardMaterial3D.new()
+	paint.vertex_color_use_as_albedo = true
+	paint.vertex_color_is_srgb = true
+	paint.roughness = 0.95
+	paint.cull_mode = BaseMaterial3D.CULL_DISABLED
+	tool.set_material(paint)
+	return tool.commit()
 
 ## A copy of a tree's mesh as it stands in the forest at night: the files are painted for
 ## daylight, so every surface is drawn darker; leaves that are cut out of a texture are cut
@@ -4804,21 +5933,40 @@ func _build_grass() -> void:
 	var shader := Shader.new()
 	shader.code = """
 shader_type spatial;
-render_mode cull_disabled, specular_disabled;
-uniform vec3 root_color : source_color = vec3(0.022, 0.03, 0.016);
-uniform vec3 tip_color : source_color = vec3(0.105, 0.125, 0.06);
+render_mode cull_disabled, diffuse_burley;
+uniform vec3 root_color : source_color = vec3(0.035, 0.042, 0.024);
+uniform vec3 tip_color : source_color = vec3(0.2, 0.225, 0.11);
+uniform vec3 olive_color : source_color = vec3(0.24, 0.235, 0.12);
+uniform vec3 dry_color : source_color = vec3(0.34, 0.3, 0.17);
 varying float blade_height;
+varying vec2 tone;
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 void vertex() {
 	blade_height = UV.y;
 	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	vec2 tuft = MODEL_MATRIX[3].xz;
+	// Each tuft has its own green; dead, straw-coloured ones gather in patches.
+	float patch = sin(tuft.x * 0.21 + sin(tuft.y * 0.17) * 2.0) * 0.5 + 0.5;
+	tone = vec2(hash(tuft), smoothstep(0.55, 0.95, patch * 0.7 + hash(tuft + 3.1) * 0.5));
 	float gust = sin(TIME * 1.5 + world.x * 0.33 + world.z * 0.27) * 0.6 + sin(TIME * 3.1 + world.x * 1.3 + world.z * 0.9) * 0.25;
 	VERTEX.x += gust * 0.11 * blade_height;
 	VERTEX.z += gust * 0.05 * blade_height;
 	NORMAL = vec3(0.0, 1.0, 0.0);
 }
 void fragment() {
-	ALBEDO = mix(root_color, tip_color, blade_height);
-	ROUGHNESS = 1.0;
+	// Both faces of a blade are lit as the ground under it: undo the turn of the
+	// normal for the back face.
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
+	vec3 tip = mix(mix(tip_color, olive_color, tone.x), dry_color, tone.y);
+	ALBEDO = mix(root_color, tip, smoothstep(0.0, 0.85, blade_height)) * (0.85 + 0.3 * tone.x);
+	// Wet blades: a little sheen, and light from behind shines through them.
+	ROUGHNESS = 0.8;
+	SPECULAR = 0.12;
+	BACKLIGHT = tip * 0.35 * blade_height;
 }
 """
 	var material := ShaderMaterial.new()

@@ -1,5 +1,34 @@
 [
   {
+    "version": "0.73",
+    "title": "Der Hof im Regen",
+    "sections": [
+      {
+        "title": "Mission 1: Haus",
+        "items": [
+          "Neue Oberflächen für das ganze Gehöft: verwitterte Bretterfassade mit abblätternder Farbe, innen geölte Holzvertäfelung, abgetretene Dielen, Feldsteinmauern, rostiges Blech; das Holz glänzt im Licht der Taschenlampe nur noch leicht.",
+          "Die Dächer sind aus einzelnen Schindeln gelegt: ausgeblichen, dunkel ersetzt, verrutscht, manche fehlen, auf den alten wächst Moos.",
+          "Statt nackter Glühbirnen hängen echte Lampen: Emaille-Pendel, Milchglaskugeln, Deckenleuchten, Laternen, Stoffschirme, ein Kerzenleuchter über dem Esstisch und eine Leuchtstoffröhre in der Werkstatt.",
+          "Neue Lichtquellen: Wandleuchten, eine Stehlampe, Nachttisch- und Tischlampen, eine Petroleumlampe und Kerzen, die auch bei Stromausfall weiterbrennen; im Ofen der Gästehütte brennt ein Feuer.",
+          "Perserteppiche in Halle, Stube, Esszimmer, Schlafzimmern und Gästehütte; Ölgemälde an den Wänden, ein Geweih über dem Kamin.",
+          "Neue Möbel: Sofas mit gerollten Armlehnen und Kissen, Betten mit Kopfteil, Quilt und Kissen, Sprossenstühle, gedrechselte Tische, Nachttische; Schränke, Kommoden, Küche und Vitrine haben Türen, Schubladen und Griffe.",
+          "Mehr Hausrat: Pfannen über der Kücheninsel, Wasserkessel auf dem Herd, Garderobe, Fußmatte, Holzkorb am Kamin, das Haus steht auf einem Feldsteinsockel und hat Dachrinnen mit Fallrohren."
+        ]
+      },
+      {
+        "title": "Mission 1: Hof und Nebengebäude",
+        "items": [
+          "Der Regen ist zu sehen: Wände, Dächer und Wege werden nass, Wasser läuft die Fassaden hinab, Schlamm spritzt an den Wänden hoch, auf Wegen und Wiese stehen Pfützen mit Tropfenringen. Drinnen bleibt alles trocken.",
+          "Die Bäume rund um den Hof sind jetzt alle echte Baummodelle, auch die im Hof; weiter draußen im Nebel stehen schönere Tannen.",
+          "Der Pick-up auf der Straße und das Wrack in der Werkstatt sind echte Fahrzeuge; der verunglückte hat eine eingedrückte Haube und eine gesprungene Scheibe, das Wrack steht mit offener Haube auf Steinen. Der Traktor ist neu gebaut, der Heuwagen hat richtige Räder.",
+          "Die Werkstatt neben der Werkbank: Werkzeug an der Wand, Schraubstock, Gasflaschen, Regal, Kanister, Batterie, Ölflecken, ein Rollbrett und ein Kettenzug über dem Motor; Betonboden.",
+          "Die Scheune hat eine Laterne, Schubkarre, Milchkannen, Futtersäcke, Sattelzeug, Eimer, Heugabel und Rechen, loses Heu und einen Heuaufzug am Giebel; Gästehütte und Schuppen sind ebenfalls eingerichtet.",
+          "Wiese und Gras haben mehr Farbe: grüne, olivfarbene und vertrocknete Büschel statt schwarzer Halme."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.72",
     "title": "Besuch in der Villa",
     "sections": [

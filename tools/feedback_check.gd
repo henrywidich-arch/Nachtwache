@@ -749,9 +749,10 @@ func world_feedback(game: Node3D) -> void:
 	for key: String in ["furniture_wood", "concrete", "concrete_floor", "concrete_steps"]:
 		var paint: StandardMaterial3D = game.cabin.mats[key]
 		materials = materials and paint.albedo_texture.get_width() == 1024 and paint.normal_texture != null and paint.roughness_texture != null
-	for key: String in ["siding", "plank_v", "floor", "ground"]:
-		materials = materials and (game.cabin.mats[key] as StandardMaterial3D).albedo_texture is NoiseTexture2D
-	expect(materials, "Architecture and yard retain their original finish while furniture wood and concrete keep detailed texture maps")
+	for key: String in ["siding", "plank_v", "floor", "stone", "roof", "metal", "ground", "dirt", "straw", "paint"]:
+		var surface := game.cabin.mats[key] as ShaderMaterial
+		materials = materials and surface != null and surface.shader == CabinMap.FARM_SURFACE and (surface.get_shader_parameter("albedo_map") as Texture2D).get_width() == 1024
+	expect(materials, "The farm's walls, floors, roofs, yard and vehicles have detailed weathered surfaces, and furniture wood and concrete keep their texture maps")
 	var wall_paint: StandardMaterial3D = game.cabin.mats.concrete
 	var floor_paint: StandardMaterial3D = game.cabin.mats.concrete_floor
 	var step_paint: StandardMaterial3D = game.cabin.mats.concrete_steps
