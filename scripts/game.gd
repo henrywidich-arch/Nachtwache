@@ -544,6 +544,9 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_figures_check")
+	elif "--villa-pictures" in args:
+		check_mode = true
+		call_deferred("_run_villa_pictures")
 	elif "--hive-check" in args:
 		check_mode = true
 		call_deferred("_run_hive_check")
@@ -2887,6 +2890,85 @@ func _run_ops_check() -> void:
 ## called up and frozen, the four pages of its menu, and the night switched back on.
 ## Pictures of the second mission's map: --hive-check --capture-dir=<folder>, with
 ## --hive-part=<name> only the views whose names begin with that.
+## Pictures of the villa's pictures (VillaPictures) in two nights: every place on the walls
+## seen from where one stands in the room (without a lamp on the camera: as the room's own
+## light shows it), and a contact sheet of them all (villa_bilder_nacht<n>.png).
+##   hid.sh "--villa-pictures" <capture folder>    (--villa-seeds=11,4242 for other nights)
+func _run_villa_pictures() -> void:
+	var folder := _capture_dir()
+	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout
+	var seeds: Array = [11, 4242]
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--villa-seeds="):
+			seeds = Array(arg.trim_prefix("--villa-seeds=").split(",")).map(func(s: String) -> int: return int(s))
+	await tick.call(1.0)
+	profile.mission = 2
+	profile.mode = "story"
+	intro_skipped = true
+	start_run()
+	await tick.call(1.5)
+	hive.set_process(false)
+	hive.set_physics_process(false)
+	for node in enemies.get_children():
+		node.queue_free()
+	alive_count = 0
+	for mate in team:
+		mate.hide()
+		mate.set_physics_process(false)
+	if is_instance_valid(hive.nadja):
+		hive.nadja.hide()
+	hud.play_ui.hide()
+	player.set_physics_process(false)
+	var pictures: VillaPictures = hive_map.pictures
+	var observer := Camera3D.new()
+	observer.fov = 58.0
+	observer.cull_mask = 1
+	add_child(observer)
+	for night_index in range(seeds.size()):
+		pictures.hang(int(seeds[night_index]))
+		await tick.call(0.5)
+		var shots: Array[String] = []
+		for spot: Dictionary in pictures.spots:
+			var entry: Dictionary = pictures.hung.get(str(spot.id), {})
+			if entry.is_empty():
+				continue
+			var node: Node3D = entry.node
+			var size: Vector2 = node.get_meta("size")
+			var out := node.global_transform.basis.z.normalized()
+			var centre := node.global_position
+			# From eye height a few metres off; high pictures from further back.
+			var high_up := centre.y - float(spot.floor) > 4.0
+			var back := 6.0 if high_up else clampf(maxf(size.x, size.y) * 1.7, 2.4, 5.0)
+			var eye := centre + out * back
+			eye.y = centre.y - 0.6 if high_up else float(spot.floor) + 1.7
+			player.global_position = Vector3(eye.x, eye.y - 1.6, eye.z)
+			hive_map.force_zone(str(spot.zone), "show")
+			observer.global_position = eye
+			observer.look_at(centre)
+			observer.current = true
+			await tick.call(0.35)
+			var file := "villa_bild_n%d_%s.png" % [night_index + 1, str(spot.id)]
+			await _capture(folder, file)
+			shots.append(file)
+			print("VILLA_SHOT %s %s %s %s" % [file, str(entry.picture), str(entry.style), str(size)])
+		# The contact sheet of this night.
+		var cell := Vector2i(480, 270)
+		var cols := 5
+		var rows := int(ceil(shots.size() / float(cols)))
+		var sheet := Image.create(cols * cell.x, rows * cell.y, false, Image.FORMAT_RGB8)
+		sheet.fill(Color(0.06, 0.06, 0.06))
+		for k in range(shots.size()):
+			var shot := Image.load_from_file(folder.path_join(shots[k]))
+			if shot == null or shot.is_empty():
+				continue
+			shot.convert(Image.FORMAT_RGB8)
+			shot.resize(cell.x - 6, cell.y - 6, Image.INTERPOLATE_BILINEAR)
+			sheet.blit_rect(shot, Rect2i(Vector2i.ZERO, shot.get_size()), Vector2i((k % cols) * cell.x + 3, (k / cols) * cell.y + 3))
+		sheet.save_png(folder.path_join("villa_bilder_nacht%d.png" % (night_index + 1)))
+		print("VILLA_SHEET %d seed=%d shots=%d" % [night_index + 1, int(seeds[night_index]), shots.size()])
+	player.camera.current = true
+	get_tree().quit()
+
 func _run_hive_check() -> void:
 	var folder := _capture_dir()
 	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout

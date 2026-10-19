@@ -176,7 +176,9 @@ func run(game: Node3D) -> void:
 	game.hive.seed_wanted = 6
 	game.start_run()
 	game.hive.set_process(false)
-	expect(game.hive_map.boys_photo != null and game.hive_map.boys_photo.get_width() > 100, "The supplied photograph is loaded into the villa picture frames")
+	var boys: Dictionary = game.hive_map.pictures.hung.get(VillaPictures.BOYS_SPOT, {}) if game.hive_map.pictures != null else {}
+	var boys_texture: Texture2D = game.hive_map.pictures.texture_of("die_boys") if not boys.is_empty() else null
+	expect(str(boys.get("picture", "")) == "die_boys" and boys_texture != null and boys_texture.get_width() > 100, "The supplied photograph hangs in the villa, in its own frame over the salon's fire")
 	game.net.hosting = true
 	game.hive.caches.begin("landing")
 	var all_personal := true
