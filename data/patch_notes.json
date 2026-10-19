@@ -1,5 +1,25 @@
 [
   {
+    "version": "0.71",
+    "title": "Licht in der Hand",
+    "sections": [
+      {
+        "title": "Im Gefecht",
+        "items": [
+          "Die Waffe in der Hand nimmt Licht und Farbe des Raums an; Taschenlampe und Mündungsfeuer beleuchten Waffe und Hände. Im Dunkeln bleibt nur ein feiner Umriss.",
+          "Nach 6 Sekunden ohne Treffer kommt das Leben langsam zurück, höchstens bis 60.",
+          "Jede Granate hat ihr eigenes Modell in der Hand, und die Anzeige nennt, was du hältst. Die Mine nimmst du mit B in die Hand und legst sie beim Loslassen ab."
+        ]
+      },
+      {
+        "title": "Mission 2",
+        "items": [
+          "Jede Nacht liegen ein paar Granaten, Molotows, Blendgranaten und manchmal eine Heilgranate oder Mine auf kleinen Munitionskisten; sie glitzern leicht und kommen nach dem Sehen auf die Karte."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.70",
     "title": "Bilder für die Villa",
     "sections": [
