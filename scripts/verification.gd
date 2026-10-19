@@ -11320,7 +11320,11 @@ func _squad_levels(game: Node3D) -> void:
 	helper.mates = game.team.duplicate()
 	for mate: Teammate in helper.mates:
 		helper.stats[mate.label] = helper._fresh()
+	# Nobody comes while the squad is watched: no stages (physics), no pressure of the night
+	# (the director's _process sends infected, which knocked companions down before the lift
+	# check now and then), no Prowler.
 	hive.set_physics_process(false)
+	hive.set_process(false)
 	hive.prowl.end()
 	hive.prowl.set_process(false)
 	helper._calm()
@@ -11420,12 +11424,20 @@ func _squad_levels(game: Node3D) -> void:
 		var mid: Vector3 = map.points["lift_%s_mid" % id]
 		var out: Vector2 = HiveCore.OUT[int(HiveLayout.LIFTS[id].door)]
 		var cell := map.nearest_cell(mid + Vector3(out.x, 0, out.y) * 9.0, map.level_of(mid + Vector3(0, 0.3, 0)))
-		# (Companions knocked down earlier in the level are stood up first: this is about boarding.)
+		# (Companions knocked down earlier in the level are stood up first, nobody else is about,
+		# and he sets off only once both stand with him: this is about boarding.)
+		helper._calm()
 		for mate: Teammate in helper.mates:
 			if mate.down:
 				mate.revive(true)
+			mate.order = "follow"
 		helper._put_all(Vector3(cell.x * CabinMap.CELL, mid.y, cell.y * CabinMap.CELL))
-		await helper._wait_for(1.5)
+		var settled := 0.0
+		while settled < 20.0 and not helper.mates.all(func(mate: Teammate) -> bool: return not mate.down and helper._near(mate)):
+			await get_tree().physics_frame
+			settled += get_physics_process_delta_time()
+			helper._watch(get_physics_process_delta_time())
+		await helper._wait_for(0.5)
 		var run: HiveAreaRun = hive.run
 		hive.stage = "c%d_lift" % chain_index
 		run.enter("c%d_lift" % chain_index)
@@ -11498,6 +11510,7 @@ func _squad_levels(game: Node3D) -> void:
 	Engine.time_scale = 1.0
 	helper.queue_free()
 	hive.prowl.set_process(true)
+	hive.set_process(true)
 	hive.set_physics_process(true)
 	player.set_physics_process(true)
 	hive.seed_wanted = -2
