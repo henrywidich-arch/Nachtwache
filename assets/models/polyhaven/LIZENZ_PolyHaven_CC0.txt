@@ -1,0 +1,4 @@
+Die Modelle in diesem Ordner stammen von Poly Haven (https://polyhaven.com/models)
+und stehen unter CC0 1.0 (gemeinfrei): frei nutzbar, auch kommerziell, ohne
+Namensnennung. Jeweils die glTF-Fassung mit 1k-Texturen, unverändert.
+Geladen über https://api.polyhaven.com am 2026-10-19.

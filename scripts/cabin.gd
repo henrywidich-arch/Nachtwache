@@ -443,8 +443,20 @@ func _build_materials() -> void:
 ## noise of the shared materials. Mission two keeps those: it never calls this.
 const FARM_SURFACE := preload("res://scripts/farm_surface.gdshader")
 var farm_materials: Array[ShaderMaterial] = []
+## How large a shadowing lamp is (soft shadows); only the farm sets it.
+var bulb_size := 0.0
+## The farm furnishes with models (assets/models/polyhaven) where mission two keeps boxes.
+var use_models := false
+var model_scenes: Dictionary = {}
+## Lit glass of model lamps on the farm's circuit: [material, energy].
+var lamp_glass: Array = []
+## Their materials as drawn here: painted for daylight, so a little darker (see TREE_TINT).
+var model_paints: Dictionary = {}
+const MODEL_TINT := Color(0.74, 0.72, 0.7)
 
 func _build_farm_materials() -> void:
+	bulb_size = 0.09
+	use_models = true
 	# Insides of the buildings, where no rain gets: [low corner, high corner].
 	var dry := [
 		[Vector3(-HX, -1.0, -HZ), Vector3(HX, UPPER_TOP + 0.1, HZ)],
@@ -828,6 +840,8 @@ func _light(pos: Vector3, color: Color, energy: float, reach: float, shadows: bo
 	lamp.omni_attenuation = 1.3
 	lamp.shadow_enabled = shadows
 	lamp.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
+	# A bulb is not a point: shadows grow soft away from what casts them.
+	lamp.light_size = bulb_size if shadows else 0.0
 	lamp.shadow_bias = 0.08
 	lamp.light_volumetric_fog_energy = fog
 	lamp.distance_fade_enabled = true
@@ -876,9 +890,12 @@ func _bulb(pos: Vector3, energy: float, reach: float, flicker: float, ceiling: f
 
 ## Caged lamp on an outside wall, shining down and outwards; `out` points away from the wall.
 func _wall_lamp(pos: Vector3, out: Vector3, color: Color, energy: float, reach: float, flicker: float) -> SpotLight3D:
-	_part("metal", pos, Vector3(0.2, 0.1, 0.2), Color("1b1b1a"))
-	_part("metal", pos + out * 0.06 + Vector3(0, -0.1, 0), Vector3(0.14, 0.16, 0.14), Color("23221f"))
-	_glow_box(pos + out * 0.08 + Vector3(0, -0.11, 0), Vector3(0.09, 0.11, 0.09), color, 4.5)
+	if use_models:
+		_haven_model("industrial_wall_lamp", pos + Vector3(0, -0.08, 0) - out * 0.1, atan2(out.x, out.z), 1.0, Basis.IDENTITY, {"industrial_wall_lamp_glass": [color, 2.6, true]})
+	else:
+		_part("metal", pos, Vector3(0.2, 0.1, 0.2), Color("1b1b1a"))
+		_part("metal", pos + out * 0.06 + Vector3(0, -0.1, 0), Vector3(0.14, 0.16, 0.14), Color("23221f"))
+		_glow_box(pos + out * 0.08 + Vector3(0, -0.11, 0), Vector3(0.09, 0.11, 0.09), color, 4.5)
 	return _spot(pos + out * 0.3 + Vector3(0, -0.12, 0), Vector3.DOWN + out * 0.55, color, energy * 2.2, reach + 1.5, 74.0, flicker, 1.3, 52.0)
 
 # ---------------------------------------------------------------- lighting
@@ -931,8 +948,28 @@ func _build_environment() -> void:
 	environment.adjustment_enabled = true
 	environment.adjustment_saturation = 0.88
 	environment.adjustment_contrast = 1.06
+	# A filmic curve: the shadows lean cold, the lamplight warm.
+	var grade := Gradient.new()
+	grade.offsets = PackedFloat32Array([0.0, 0.18, 0.55, 1.0])
+	grade.colors = PackedColorArray([Color(0.0, 0.008, 0.02), Color(0.16, 0.18, 0.205), Color(0.56, 0.55, 0.53), Color(1.0, 0.975, 0.93)])
+	var curve := GradientTexture1D.new()
+	curve.gradient = grade
+	curve.width = 256
+	environment.adjustment_color_correction = curve
+	# Light that bounces off what it falls on, and what wet surfaces mirror (both can be
+	# switched off with the 3D resolution, see set_rich_light).
+	environment.ssil_radius = 3.0
+	environment.ssil_intensity = 1.3
+	environment.ssil_sharpness = 0.98
+	environment.ssil_normal_rejection = 1.0
+	environment.ssr_max_steps = 48
+	environment.ssr_fade_in = 0.12
+	environment.ssr_fade_out = 2.0
+	environment.ssr_depth_tolerance = 0.3
+	set_rich_light(true)
 	world.environment = environment
 	add_child(world)
+	_build_lens()
 	moon = DirectionalLight3D.new()
 	moon.name = "Moonlight"
 	moon.light_color = Color(0.56, 0.69, 0.92)
@@ -944,8 +981,43 @@ func _build_environment() -> void:
 	moon.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	moon.directional_shadow_max_distance = 60
 	moon.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	moon.light_angular_distance = 0.5
 	moon.light_volumetric_fog_energy = 0.9
 	add_child(moon)
+
+## Bounced light (SSIL) and reflections (SSR) cost a few milliseconds a frame; the game
+## switches them off with a small 3D resolution (Game.set_render_scale).
+func set_rich_light(on: bool) -> void:
+	environment.ssil_enabled = on
+	environment.ssr_enabled = on
+
+const LENS := """shader_type canvas_item;
+uniform float vignette = 0.38;
+uniform float grain = 0.03;
+void fragment() {
+	vec2 centred = SCREEN_UV - 0.5;
+	float edge = smoothstep(0.32, 0.86, length(centred * vec2(1.0, 0.78))) * vignette;
+	float noise = fract(sin(dot(floor(FRAGCOORD.xy) + floor(TIME * 24.0) * vec2(17.0, 59.0), vec2(12.9898, 78.233))) * 43758.5453);
+	float amount = edge + grain;
+	COLOR = vec4(vec3(noise * grain / max(amount, 0.0001)), amount);
+}
+"""
+
+## A darker rim and fine film grain over the picture, under the HUD and the menus.
+func _build_lens() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "Lens"
+	layer.layer = -5
+	var veil := ColorRect.new()
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var shader := Shader.new()
+	shader.code = LENS
+	var paint := ShaderMaterial.new()
+	paint.shader = shader
+	veil.material = paint
+	layer.add_child(veil)
+	add_child(layer)
 
 # ---------------------------------------------------------------- terrain
 
@@ -1477,6 +1549,14 @@ func _table(pos: Vector3, size: Vector3, color: Color, yaw: float = 0.0) -> void
 
 ## Wooden chair whose seat faces local +z; a fallen one lies on its back.
 func _chair(pos: Vector3, yaw: float, color: Color, fallen: bool = false) -> void:
+	if use_models:
+		if fallen:
+			_haven_model("painted_wooden_chair_01", pos + Vector3(0, 0.3, 0), yaw, 1.0, Basis(Vector3.RIGHT, -PI * 0.5))
+			_solid(pos + Vector3(0, 0.22, 0) + Basis(Vector3.UP, yaw) * Vector3(0, 0, -0.45), Vector3(0.5, 0.44, 1.0), true, yaw)
+		else:
+			_haven_model("painted_wooden_chair_01", pos, yaw)
+			_solid(pos + Vector3(0, 0.5, 0), Vector3(0.46, 1.0, 0.46), true, yaw)
+		return
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
 	if fallen:
 		frame = Transform3D(Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, -PI * 0.5), pos + Vector3(0, 0.22, 0))
@@ -2058,9 +2138,11 @@ func _build_ground_floor() -> void:
 	# --- Lounge: sofas around the fireplace, books, a piano.
 	_build_fireplace(5.1)
 	_persian_rug(Vector3(10.3, 0, 5.1), Vector2(5.4, 4.6), "rug_blue", PI / 2)
-	_sofa(Vector3(8.9, 0, 5.1), PI / 2, Color("3c3f33"), 2.2)
+	_ghost(func() -> void: _sofa(Vector3(8.9, 0, 5.1), PI / 2, Color("3c3f33"), 2.2))
+	_haven_model("painted_wooden_sofa", Vector3(8.9, 0, 5.1), PI / 2, 0.9)
 	_sofa(Vector3(10.4, 0, 1.9), 0.0, Color("3a3d35"), 2.0)
-	_sofa(Vector3(10.0, 0, 7.7), PI, Color("453a30"), 1.0)
+	_ghost(func() -> void: _sofa(Vector3(10.0, 0, 7.7), PI, Color("453a30"), 1.0))
+	_haven_model("ArmChair_01", Vector3(10.0, 0, 7.7), PI)
 	_table(Vector3(10.6, 0, 5.1), Vector3(0.7, 0.42, 1.2), Color("3f3327"))
 	_shelf(Vector3(5.3, 0, 7.0), PI / 2, 2.6, 0.4, 2.2, 5, Color("3f352a"), 0.85)
 	_prop("furniture_wood", Vector3(5.42, 0.62, -0.8), Vector3(0.65, 1.25, 1.6), Color("1f1915"))
@@ -2097,11 +2179,14 @@ func _build_ground_floor() -> void:
 	_chair(Vector3(-9.2, 0, 6.8), PI + 0.3, wood)
 	for i in range(4):
 		var plate := Vector3(-9.4 + random.randf_range(-0.3, 0.3), 0.785, 3.3 + i * 0.85)
-		batch.cylinder(mats["chrome"], plate, 0.1, 0.13, 0.018, _vary(Color("8a8676"), 0.04), 18)
-	_prop("furniture_wood", Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7), Color("3f3327"))
+		batch.cylinder(mats["plain"], plate, 0.1, 0.13, 0.018, _vary(Color("b5ae9a"), 0.04), 18)
+	_ghost(func() -> void: _part("furniture_wood", Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7), Color("3f3327")))
+	_solid(Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7))
+	_haven_model("painted_wooden_cabinet", Vector3(-12.53, 0, 4.0), PI / 2)
 	_shelf(Vector3(-12.0, 0, -0.68), 0.0, 1.6, 0.42, 2.1, 4, Color("3f352a"), 0.6)
 	_prop("furniture_wood", Vector3(-5.37, 1.0, 7.2), Vector3(0.5, 2.0, 1.5), Color("3d3227"))
-	_fixture("candles", Vector3(-9.4, 2.35, 4.6), 2.2, 9.0, 0.1, CEILING, true)
+	_ghost(func() -> void: _fixture("candles", Vector3(-9.4, 2.35, 4.6), 2.2, 9.0, 0.1, CEILING, true))
+	_haven_model("Chandelier_01", Vector3(-9.4, CEILING, 4.6), 0.3, 1.05, Basis.IDENTITY, {"lamps_classic_chandelier_1": [Color("ffc483"), 1.6, true]})
 	# --- Supply room: shelves, crates and barrels around the two stations.
 	_shelf(Vector3(6.7, 0, -8.63), 0.0, 2.2, 0.42, 2.1, 4, Color("3f352a"), 0.85)
 	_shelf(Vector3(10.6, 0, -8.63), 0.0, 1.6, 0.42, 2.1, 4, Color("3f352a"), 0.85)
@@ -2296,17 +2381,54 @@ func _candles(pos: Vector3, count: int, spread: float, energy: float = 0.7) -> v
 
 ## Paraffin lamp with a glass chimney, also off the farm's circuit.
 func _oil_lamp(pos: Vector3, energy: float = 0.9) -> void:
-	var brass := Color("7a5c2c")
-	batch.cylinder(mats["chrome"], pos, 0.08, 0.06, 0.03, brass, 12)
-	batch.ellipsoid(mats["chrome"], pos + Vector3(0, 0.09, 0), Vector3(0.075, 0.065, 0.075), brass, Basis.IDENTITY, 12, 8)
-	batch.cylinder(mats["chrome"], pos + Vector3(0, 0.15, 0), 0.035, 0.035, 0.03, brass, 10)
-	batch.cylinder(mats["glass"], pos + Vector3(0, 0.18, 0), 0.04, 0.03, 0.2, Color.WHITE, 12)
-	var before := glow_key
-	glow_key = "steady"
-	_glow_egg(pos + Vector3(0, 0.23, 0), Vector3(0.012, 0.03, 0.012), Color("ffbe6a"), 6.8)
-	glow_key = before
+	if use_models:
+		_haven_model("vintage_oil_lamp", pos, random.randf() * TAU, 0.55, Basis.IDENTITY, {"vintage_oil_lamp_flame": [Color("ffb055"), 6.0, false], "vintage_oil_lamp_glass": [Color("ffcf8a"), 0.6, false]})
+	else:
+		var brass := Color("7a5c2c")
+		batch.cylinder(mats["chrome"], pos, 0.08, 0.06, 0.03, brass, 12)
+		batch.ellipsoid(mats["chrome"], pos + Vector3(0, 0.09, 0), Vector3(0.075, 0.065, 0.075), brass, Basis.IDENTITY, 12, 8)
+		batch.cylinder(mats["chrome"], pos + Vector3(0, 0.15, 0), 0.035, 0.035, 0.03, brass, 10)
+		batch.cylinder(mats["glass"], pos + Vector3(0, 0.18, 0), 0.04, 0.03, 0.2, Color.WHITE, 12)
+		var before := glow_key
+		glow_key = "steady"
+		_glow_egg(pos + Vector3(0, 0.23, 0), Vector3(0.012, 0.03, 0.012), Color("ffbe6a"), 6.8)
+		glow_key = before
 	_light(pos + Vector3(0, 0.3, 0), Color("ffa04f"), energy, 4.4, false, 0.22, 0.0, 22.0)
 	flickers[flickers.size() - 1]["wired"] = false
+
+## Places a model from assets/models/polyhaven (its front is local +z, its foot at the
+## origin). `glow` names surfaces that shine: material name -> [colour, energy, wired].
+func _haven_model(id: String, pos: Vector3, yaw: float, size: float = 1.0, tilt: Basis = Basis.IDENTITY, glow: Dictionary = {}) -> Node3D:
+	if not model_scenes.has(id):
+		model_scenes[id] = load("res://assets/models/polyhaven/%s/%s_1k.gltf" % [id, id])
+	var piece: Node3D = (model_scenes[id] as PackedScene).instantiate()
+	piece.name = id
+	piece.transform = Transform3D(Basis(Vector3.UP, yaw) * tilt * Basis.from_scale(Vector3.ONE * size), pos)
+	for part in piece.find_children("*", "MeshInstance3D", true, false):
+		var mesh := part as MeshInstance3D
+		for surface in range(mesh.mesh.get_surface_count()):
+			var paint := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
+			if paint == null:
+				continue
+			if not glow.has(paint.resource_name):
+				if not model_paints.has(paint):
+					var dim := paint.duplicate() as BaseMaterial3D
+					dim.albedo_color = paint.albedo_color * MODEL_TINT
+					model_paints[paint] = dim
+				mesh.set_surface_override_material(surface, model_paints[paint])
+				continue
+			var lit: Array = glow[paint.resource_name]
+			var own := paint.duplicate() as BaseMaterial3D
+			own.emission_enabled = true
+			own.emission = lit[0]
+			own.emission_energy_multiplier = float(lit[1])
+			if own.albedo_texture != null:
+				own.emission_texture = own.albedo_texture
+			mesh.set_surface_override_material(surface, own)
+			if bool(lit[2]):
+				lamp_glass.append([own, float(lit[1])])
+	add_child(piece)
+	return piece
 
 ## A rug with a picture on it (rug_red, rug_blue in assets/surfaces/farm), fringes at its
 ## ends. `size` is across (x) and along (z) before `yaw` turns it.
@@ -2421,11 +2543,16 @@ func _front(centre: Vector3, size: Vector3, out: Vector3, layout: String, color:
 	_part("furniture_wood", Vector3(centre.x, low + 0.045, centre.z) + out * 0.012, (across * (width + 0.01) + Vector3(0, 0.09, 0)).abs() + out.abs() * (depth + 0.024), color.darkened(0.3))
 
 ## Small bedside cupboard with a drawer.
-func _nightstand(pos: Vector3, out: Vector3, color: Color) -> void:
+func _nightstand(pos: Vector3, out: Vector3, color: Color) -> float:
+	if use_models:
+		_haven_model("painted_wooden_nightstand", pos, atan2(out.x, out.z))
+		_solid(pos + Vector3(0, 0.31, 0), Vector3(0.5, 0.62, 0.5), true)
+		return 0.62
 	var size := Vector3(0.45, 0.55, 0.4) if absf(out.z) > 0.5 else Vector3(0.4, 0.55, 0.45)
 	_part("furniture_wood", pos + Vector3(0, size.y * 0.5, 0), size, color)
 	_front(pos + Vector3(0, size.y * 0.5, 0), size, out, "drawers", color)
 	_solid(pos + Vector3(0, size.y * 0.5, 0), size, true)
+	return size.y
 
 ## What makes the rooms of the ground floor lived in: lamps on the walls and tables,
 ## candles that burn through a blackout, fronts on the cupboards, pictures, a kitchen with
@@ -2458,15 +2585,12 @@ func _dress_ground_floor() -> void:
 	_candles(Vector3(12.1, 1.49, 5.95), 2, 0.07, 0.5)
 	_part("furniture_wood", Vector3(12.12, 1.6, 5.1), Vector3(0.12, 0.22, 0.3), Color("2a1f17"))
 	_part("plain", Vector3(12.055, 1.62, 5.1), Vector3(0.005, 0.12, 0.12), Color("c9c1a6"))
-	_part("furniture_wood", Vector3(12.13, 2.45, 5.1), Vector3(0.04, 0.32, 0.24), Color("2a1f17"))
-	for side in [-1.0, 1.0]:
-		var base := Vector3(12.08, 2.5, 5.1 + side * 0.05)
-		var tine := base
-		for k in range(4):
-			var next := tine + Vector3(-0.06, 0.12, side * 0.1)
-			_beam(Transform3D.IDENTITY, "plain", tine, next, Vector2(0.03 - k * 0.005, 0.03 - k * 0.005), Color("c8b998"))
-			_beam(Transform3D.IDENTITY, "plain", next, next + Vector3(-0.08, 0.1, side * 0.01), Vector2(0.015, 0.015), Color("c8b998"))
-			tine = next
+	_haven_model("bull_head", Vector3(12.15 - 0.17 * 1.5, 2.05, 5.1), -PI / 2, 1.5)
+	# A rocking chair by the fire with a small table beside the armchair.
+	_haven_model("Rockingchair_01", Vector3(12.15, 0, 2.75), -0.64)
+	_solid(Vector3(12.15, 0.5, 2.75), Vector3(0.7, 1.0, 0.8), true, -0.64)
+	_haven_model("WoodenTable_02", Vector3(10.78, 0, 8.3), 0.4, 1.25)
+	_candles(Vector3(10.78, 0.525, 8.3), 1, 0.0, 0.35)
 	_oil_painting(Vector3(11.5, 1.9, -2.91), Vector3(0, 0, 1), Vector2(1.3, 0.95), "painting_moon")
 	batch.cylinder(mats["straw"], Vector3(12.35, 0, 6.85), 0.26, 0.3, 0.38, Color("5b4d2c"), 14)
 	for k in range(4):
@@ -2484,7 +2608,7 @@ func _dress_ground_floor() -> void:
 		batch.cylinder(mats["metal"], Vector3(-7.18 + (k % 2) * 0.36, 0.99, -8.66 + int(k / 2) * 0.28), 0.09, 0.09, 0.012, Color("0d0d0d"), 12)
 	batch.cylinder(mats["chrome"], Vector3(-7.18, 1.0, -8.38), 0.1, 0.11, 0.17, Color("3a3d3c"), 14)
 	_beam(Transform3D.IDENTITY, "chrome", Vector3(-7.08, 1.1, -8.38), Vector3(-6.98, 1.16, -8.38), Vector2(0.02, 0.02), Color("3a3d3c"))
-	batch.cylinder(mats["chrome"], Vector3(-6.82, 1.0, -8.66), 0.12, 0.13, 0.13, Color("4a4d4a"), 14)
+	_haven_model("pot_enamel_01", Vector3(-6.82, 1.0, -8.66), 0.6, 1.25)
 	_beam(Transform3D.IDENTITY, "chrome", Vector3(-10.2, 0.96, -8.74), Vector3(-10.2, 1.22, -8.74), Vector2(0.025, 0.025), Color("9a9c98"))
 	_beam(Transform3D.IDENTITY, "chrome", Vector3(-10.2, 1.22, -8.74), Vector3(-10.2, 1.2, -8.54), Vector2(0.022, 0.022), Color("9a9c98"))
 	_front(Vector3(-5.5, 0.9, -8.45), Vector3(0.7, 1.8, 0.72), Vector3(0, 0, 1), "doors", Color("76756a"))
@@ -2511,7 +2635,6 @@ func _dress_ground_floor() -> void:
 	_oil_painting(Vector3(-12.85, 1.85, 4.0), Vector3(1, 0, 0), Vector2(1.2, 0.85), "painting_storm")
 	_brass_sconce(Vector3(-12.85, 1.95, 3.05), Vector3(1, 0, 0), 0.7)
 	_brass_sconce(Vector3(-12.85, 1.95, 4.95), Vector3(1, 0, 0), 0.7)
-	_front(Vector3(-12.57, 0.48, 4.0), Vector3(0.5, 0.95, 1.7), Vector3(1, 0, 0), "chest", wood)
 	_front(Vector3(-5.37, 1.0, 7.2), Vector3(0.5, 2.0, 1.5), Vector3(-1, 0, 0), "glass", Color("3d3227"))
 	# Stair hall: the wardrobe's doors.
 	_front(Vector3(0, 1.0, -3.4), Vector3(2.2, 2.0, 0.55), Vector3(0, 0, -1), "doors", Color("3d3227"))
@@ -2523,22 +2646,23 @@ func _dress_upper_floor() -> void:
 	var floor_y := STOREY
 	var wood := Color("3f3327")
 	# North-west bedroom: a nightstand with its lamp, fronts on wardrobe and dresser.
-	_nightstand(Vector3(-12.55, floor_y, -2.55), Vector3(1, 0, 0), wood)
-	_table_lamp(Vector3(-12.55, floor_y + 0.55, -2.55), Color("6a3a2a"), 0.8)
+	var top := _nightstand(Vector3(-12.55, floor_y, -2.55), Vector3(1, 0, 0), wood)
+	_table_lamp(Vector3(-12.55, floor_y + top, -2.55), Color("6a3a2a"), 0.8)
 	_front(Vector3(-5.4, floor_y + 1.0, -2.6), Vector3(0.55, 2.0, 1.6), Vector3(-1, 0, 0), "doors", Color("3d3227"))
 	_front(Vector3(-12.57, floor_y + 0.5, -3.9), Vector3(0.5, 1.0, 1.3), Vector3(1, 0, 0), "drawers", wood)
 	_candles(Vector3(-12.5, floor_y + 1.05, -3.6), 1, 0.0, 0.35)
 	# Dormitory: a nightstand between the beds, candles on the writing table.
-	_nightstand(Vector3(-12.55, floor_y, 0.85), Vector3(1, 0, 0), wood)
-	_oil_lamp(Vector3(-12.55, floor_y + 0.55, 0.85), 0.7)
+	top = _nightstand(Vector3(-12.55, floor_y, 0.85), Vector3(1, 0, 0), wood)
+	_oil_lamp(Vector3(-12.55, floor_y + top, 0.85), 0.7)
 	_candles(Vector3(-5.9, floor_y + 0.76, 8.35), 2, 0.06, 0.45)
 	# Master bedroom: nightstands with lamps, a painting over the bed, an armchair in the
 	# corner, fronts on wardrobe and dresser.
 	for z in [5.05, 7.35]:
-		_nightstand(Vector3(5.32, floor_y, z), Vector3(1, 0, 0), wood)
-		_table_lamp(Vector3(5.32, floor_y + 0.55, z), Color("c8bfa6"), 0.7)
+		top = _nightstand(Vector3(5.36, floor_y, z), Vector3(1, 0, 0), wood)
+		_table_lamp(Vector3(5.36, floor_y + top, z), Color("c8bfa6"), 0.7)
 	_oil_painting(Vector3(5.09, floor_y + 1.75, 6.2), Vector3(1, 0, 0), Vector2(1.05, 0.72), "painting_lake")
-	_sofa(Vector3(11.75, floor_y, 7.85), -2.3, Color("4a3a30"), 1.0)
+	_ghost(func() -> void: _sofa(Vector3(11.75, floor_y, 7.85), -2.3, Color("4a3a30"), 1.0))
+	_haven_model("ArmChair_01", Vector3(11.75, floor_y, 7.85), -2.3)
 	_front(Vector3(6.2, floor_y + 1.0, -2.6), Vector3(1.8, 2.0, 0.55), Vector3(0, 0, 1), "doors", Color("3d3227"))
 	_front(Vector3(8.8, floor_y + 0.5, 8.55), Vector3(1.2, 1.0, 0.5), Vector3(0, 0, -1), "drawers", wood)
 	_candles(Vector3(8.4, floor_y + 1.05, 8.6), 2, 0.05, 0.35)
@@ -2564,11 +2688,9 @@ func _dress_garage() -> void:
 		batch.cylinder(mats["chrome"], Vector3(-30.15 + k * 0.06, 1.9, board), 0.006, 0.006, 0.12, Color("8e918f"), 6)
 		batch.cylinder(mats["plain"], Vector3(-30.15 + k * 0.06, 2.02, board), 0.014, 0.012, 0.1, [Color("7a1e14"), Color("2c4a7a"), Color("c99a1c"), Color("2a2a28")][k], 8)
 	# Vise and clutter on the bench, a strip light over it.
-	var vise := Vector3(-27.98, 0.98, -25.45)
-	_part("metal", vise + Vector3(0, 0.05, 0), Vector3(0.16, 0.1, 0.24), Color("2b3a4a"))
-	_part("metal", vise + Vector3(0, 0.14, -0.06), Vector3(0.18, 0.1, 0.06), Color("2b3a4a"))
-	_part("metal", vise + Vector3(0, 0.14, 0.07), Vector3(0.18, 0.1, 0.06), Color("2b3a4a"))
-	_beam(Transform3D.IDENTITY, "chrome", vise + Vector3(-0.0, 0.12, 0.1), vise + Vector3(0, 0.12, 0.3), Vector2(0.02, 0.02), Color("8e918f"))
+	_haven_model("bench_vice_01", Vector3(-27.98, 0.98 + 0.09, -25.45), PI / 2)
+	_haven_model("metal_tool_chest", Vector3(-30.6, 0, -25.55), 0.0)
+	_solid(Vector3(-30.6, 0.33, -25.55), Vector3(0.7, 0.66, 0.42))
 	batch.cylinder(mats["paint"], Vector3(-28.9, 0.98, -25.6), 0.06, 0.06, 0.12, Color("6a5a2a"), 10)
 	batch.cylinder(mats["paint"], Vector3(-28.75, 0.98, -25.7), 0.05, 0.05, 0.09, Color("3a5a3a"), 10)
 	_part("cloth", Vector3(-29.15, 0.995, -25.35), Vector3(0.3, 0.02, 0.22), Color("6a4a3a"), Vector3(0, 25, 0))
@@ -2583,11 +2705,14 @@ func _dress_garage() -> void:
 	_hose(Vector3(-27.3, 1.38, -25.62), Vector3(-27.9, 0.99, -25.4), 0.012, Color("2a1a14"), 0.35)
 	_hose(Vector3(-27.57, 1.38, -25.62), Vector3(-27.85, 0.99, -25.5), 0.012, Color("142a14"), 0.3)
 	# Shelving by the front with cans and boxes; jerrycans and a battery.
-	_shelf(Vector3(-26.32, 0, -20.3), -PI / 2, 1.6, 0.42, 2.0, 4, Color("3a3a36"), 0.95)
+	_ghost(func() -> void: _shelf(Vector3(-26.32, 0, -20.3), -PI / 2, 1.6, 0.42, 2.0, 4, Color("3a3a36"), 0.95))
+	_haven_model("steel_frame_shelves_01", Vector3(-26.32, 0, -20.3), -PI / 2, 0.1)
 	for k in range(3):
-		var can := Vector3(-26.45, 0, -24.0 + k * 0.32)
-		_part("paint", can + Vector3(0, 0.25, 0), Vector3(0.17, 0.5, 0.34), [Color("3f4a2c"), Color("6a2a20"), Color("3f4a2c")][k], Vector3(0, random.randf_range(-8, 8), 0))
-		_part("paint", can + Vector3(0, 0.52, 0.1), Vector3(0.05, 0.05, 0.08), Color("2a2a28"))
+		_haven_model("metal_jerrycan_green", Vector3(-26.32, 0, -24.15 + k * 0.24), -PI / 2 + random.randf_range(-0.15, 0.15))
+	_solid(Vector3(-26.32, 0.25, -23.9), Vector3(0.4, 0.5, 0.75))
+	_haven_model("sledgehammer_01", Vector3(-26.2, 0.74, -19.45), 0.3, 1.0, Basis(Vector3.BACK, -0.18))
+	_haven_model("Barrel_02", Vector3(-27.1, 0, -24.5), 0.8)
+	_solid(Vector3(-27.1, 0.44, -24.5), Vector3(0.5, 0.88, 0.5))
 	_part("plain", Vector3(-27.1, 0.11, -23.2), Vector3(0.32, 0.22, 0.18), Color("141414"))
 	for x in [-27.2, -27.0]:
 		batch.cylinder(mats["chrome"], Vector3(x, 0.22, -23.2), 0.015, 0.015, 0.02, Color("8a6a34"), 8)
@@ -2637,9 +2762,11 @@ func _dress_barn() -> void:
 	for k in range(3):
 		_part("cloth", Vector3(31.13, 2.0 - k * 0.12, -16.1 + k * 0.03), Vector3(0.02, 0.06, 0.5 - k * 0.1), Color("2a1a12"))
 	for spot in [Vector3(34.5, 0, -17.3), Vector3(34.4, 0, -25.0), Vector3(34.6, 0, -13.4)]:
-		var at: Vector3 = spot
-		batch.cylinder(mats["metal"], at, 0.15, 0.18, 0.3, Color("4a4c48"), 12)
-		batch.cylinder(mats["metal"], at + Vector3(0, 0.29, 0), 0.18, 0.18, 0.015, Color("2a2c28"), 12, Basis.IDENTITY, false)
+		_haven_model("wooden_bucket_01", spot, random.randf() * TAU, 0.85)
+	for k in range(3):
+		_haven_model("wooden_crate_01", Vector3(26.25, k * 0.35, -23.55), PI / 2 + random.randf_range(-0.08, 0.08))
+	_solid(Vector3(26.25, 0.52, -23.55), Vector3(0.45, 1.05, 0.85))
+	_haven_model("sledgehammer_01", Vector3(27.13, 0.74, -16.12), -0.3, 1.0, Basis(Vector3.RIGHT, 0.16))
 	for tool in [[Vector3(27.15, 0, -23.75), "fork"], [Vector3(30.85, 0, -16.25), "rake"]]:
 		var foot: Vector3 = tool[0]
 		var top := foot + Vector3(0.05, 1.55, 0.18)
@@ -2829,6 +2956,8 @@ func _build_stations() -> void:
 func set_power(on: bool) -> void:
 	powered = on
 	(mats["glow"] as StandardMaterial3D).albedo_color = Color(2.42, 2.42, 2.42) if on else Color(0.1, 0.1, 0.1)
+	for entry in lamp_glass:
+		(entry[0] as BaseMaterial3D).emission_energy_multiplier = float(entry[1]) if on else 0.0
 
 ## Rolls the shop's shutter up or down and switches its lamp and sign.
 func set_shop_open(open: bool, instant: bool = false) -> void:
@@ -3177,7 +3306,7 @@ func _build_garage() -> void:
 	_prop("metal", Vector3(-32.0, 0.95, -25.6), Vector3(0.9, 1.9, 0.5), Color("5a2f28"))
 	_pickup(Vector3(-34.7, 0.2, -23.15), PI, Color("4d5560"), true)
 	for i in range(3):
-		batch.cylinder(mats["plain"], Vector3(-33.05, i * 0.25, -25.4), 0.4, 0.4, 0.24, Color("0d0d0d"), 12)
+		_haven_model("old_tyre", Vector3(-33.05, 0.11 + i * 0.21, -25.4), i * 0.7, 1.3, Basis(Vector3.RIGHT, PI / 2))
 	_solid(Vector3(-33.05, 0.45, -25.4), Vector3(0.8, 0.9, 0.8))
 	_barrel(Vector3(-26.55, 0, -25.4), Color("2f4a4a"))
 	_barrel(Vector3(-26.55, 0, -24.65), Color("5a3a2a"))

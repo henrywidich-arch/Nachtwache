@@ -1,0 +1,159 @@
+{
+  "asset": {
+    "generator": "Khronos glTF Blender I/O v4.2.60",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "bull_head"
+    }
+  ],
+  "materials": [
+    {
+      "doubleSided": true,
+      "name": "bull_head",
+      "normalTexture": {
+        "index": 0
+      },
+      "pbrMetallicRoughness": {
+        "baseColorTexture": {
+          "index": 1
+        },
+        "metallicRoughnessTexture": {
+          "index": 2
+        }
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "mesh.001",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    },
+    {
+      "sampler": 0,
+      "source": 2
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/jpeg",
+      "name": "bull_head_nor_gl",
+      "uri": "textures/bull_head_nor_gl_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "bull_head_diff",
+      "uri": "textures/bull_head_diff_1k.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "bull_head_metal-bull_head_rough",
+      "uri": "textures/bull_head_arm_1k.jpg"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 9322,
+      "max": [
+        0.1584150493144989,
+        0.4326893091201782,
+        0.11054600775241852
+      ],
+      "min": [
+        -0.147944837808609,
+        -0.00031755436793901026,
+        -0.17020313441753387
+      ],
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 9322,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 9322,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 51444,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteLength": 111864,
+      "byteOffset": 0,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 111864,
+      "byteOffset": 111864,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 74576,
+      "byteOffset": 223728,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteLength": 102888,
+      "byteOffset": 298304,
+      "target": 34963
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 401192,
+      "uri": "bull_head.bin"
+    }
+  ]
+}

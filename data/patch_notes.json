@@ -1,5 +1,27 @@
 [
   {
+    "version": "0.74",
+    "title": "Echte Möbel, echtes Licht",
+    "sections": [
+      {
+        "title": "Mission 1: Einrichtung",
+        "items": [
+          "Echte Modelle von Poly Haven im Haus: ein Tagesbett und ein Polstersessel in der Stube, ein Schaukelstuhl am Kamin mit Beistelltisch, weiß lackierte Stühle, Nachttische, eine Anrichte, ein Kronleuchter mit leuchtenden Schirmen über dem Esstisch, Petroleumlampen, ein Emailletopf und ein Stierkopf über dem Kamin.",
+          "In Werkstatt und Scheune: Schraubstock, Werkzeugkiste, Stahlregal, Benzinkanister, alte Reifen, ein Plastikfass, Vorschlaghämmer, Holzeimer und Gemüsekisten; an den Außenwänden hängen Industrielampen mit Glas, die bei Stromausfall ausgehen."
+        ]
+      },
+      {
+        "title": "Mission 1: Licht",
+        "items": [
+          "Licht prallt von den Flächen ab und färbt den Raum (SSIL), nasse Wege, Pfützen und Dächer spiegeln Lampen und Scheinwerfer (SSR).",
+          "Lampenschatten werden mit dem Abstand weich, auch der Mond wirft weichere Schatten.",
+          "Eine filmische Farbgebung mit kühlen Schatten und warmem Lampenlicht, dazu eine leichte Vignette und feines Filmkorn.",
+          "Mit einer kleineren 3D-Auflösung im Menü schalten sich das zurückgeworfene Licht und die Spiegelungen ab, für schwächere Rechner."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.73",
     "title": "Der Hof im Regen",
     "sections": [

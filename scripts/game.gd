@@ -2236,6 +2236,9 @@ func set_render_scale(value: float, keep: bool = true) -> void:
 	var view := get_viewport()
 	view.scaling_3d_scale = render_scale
 	view.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR if render_scale > 0.99 else Viewport.SCALING_3D_MODE_FSR
+	# Bounced light and reflections on the farm only at the larger sizes.
+	if is_instance_valid(farm):
+		farm.set_rich_light(render_scale >= default_render_scale() * 0.8 - 0.01)
 	if keep and profile.stored:
 		var settings := ConfigFile.new()
 		settings.load("user://nachtwache.cfg")
