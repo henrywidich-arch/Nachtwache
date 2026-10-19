@@ -1,5 +1,46 @@
 [
   {
+    "version": "0.70",
+    "title": "Bilder für die Villa",
+    "sections": [
+      {
+        "title": "Mission 2",
+        "items": [
+          "In der Villa hängen jetzt Henrys 30 Bilder, jedes in einem eigenen Rahmen, der genau zu seinem Format passt: verzierter Goldrahmen, dunkles Nussholz, schmaler Galerierahmen mit Passepartout oder Messing.",
+          "Jede Nacht hängt eine andere Auswahl, keins doppelt; im Koop sehen beide dieselben Bilder.",
+          "Das Foto der Jungs hängt in seinem eigenen Goldrahmen über dem Kamin im Salon."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.69",
+    "title": "Hornisse und Wirbel",
+    "sections": [
+      {
+        "title": "Waffen",
+        "items": [
+          "HORNISSE MP-9: Maschinenpistole mit 1200 Schuss pro Minute, Sekundärwaffe ab Runde 3, mit Rotpunkt und Schalldämpfer.",
+          "WIRBEL W-45: Sturmgewehr mit einer Trommel, die sich bei jedem Schuss weiterdreht und im Dauerfeuer wirbelt; ab Runde 3, mit Rotpunkt, Zielfernrohr und Schalldämpfer.",
+          "Beide Waffen werfen leere Hülsen aus, die auf dem Boden klimpern."
+        ]
+      },
+      {
+        "title": "Mission 2",
+        "items": [
+          "Gartenlabor mit Henrys Baum und treibenden Sporen, Kryoarchiv mit einem Schläfer in den Kapseln."
+        ]
+      },
+      {
+        "title": "Behoben",
+        "items": [
+          "Der Leech verlangsamt wieder.",
+          "Das Hack-Modul lässt sich an der Kellertür wieder anbringen."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.68",
     "title": "Zusammen durch die Nacht",
     "sections": [
