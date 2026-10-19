@@ -1,5 +1,25 @@
 [
   {
+    "version": "0.72",
+    "title": "Besuch in der Villa",
+    "sections": [
+      {
+        "title": "Figuren",
+        "items": [
+          "Zwei neue Figuren, STRANDTYP und ROLLKRAGEN: als eigener Skin unter KARRIERE → SKINS (der Koop-Partner sieht ihn) und als stille Begleiter.",
+          "In Mission 2 stehen beide oben auf der Galerie der Villa, schauen sich um, drehen sich zu dir und schlendern ab und zu weiter."
+        ]
+      },
+      {
+        "title": "Grafik",
+        "items": [
+          "Die WIRBEL ist schärfer: eigene feine Textur für die Trommel, rundere Patronen, schärfere Waffentexturen von der Seite; Kantenglättung jetzt SMAA statt FXAA.",
+          "Im Kryoarchiv sind jede Nacht drei oder vier Kapseln am Mittelgang klar und beleuchtet."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.71",
     "title": "Licht in der Hand",
     "sections": [
