@@ -121,6 +121,10 @@ func _ready() -> void:
 	_commit()
 	build_times["commit"] = Time.get_ticks_msec() - mark
 	_after_build()
+	# This night's pictures on the villa's walls (from the night's seed: the same on both sides
+	# of a co-op night).
+	if pictures != null:
+		pictures.hang(int(night.get("seed", 0)))
 	build_times["all"] = Time.get_ticks_msec() - began
 
 func _build_styles() -> void:
@@ -201,47 +205,27 @@ func _against(room_id: String, side: int, a: float, id: String, options: Diction
 	var deep_half := bounds.size.z * factor * 0.5
 	return _model(id, _face_point(room, side, a, 0.0, -(deep_half + gap)), _model_yaw(side), options)
 
-var boys_photo: Texture2D
 var interaction_devices: Dictionary = {}
-## A picture in its frame on a wall of a room: `wide` metres, its middle `high` above the floor.
-func _painting(room_id: String, side: int, a: float, wide: float = 1.3, high: float = 2.1, id: String = "fancy_picture_frame_01") -> void:
+## The pictures on the villa's walls (VillaPictures): their places, and what hangs there in
+## this night.
+var pictures: VillaPictures
+## A place for a picture on a wall of a room: at most `wide` metres wide (and a little more
+## than that tall), its middle `high` above the floor. What hangs there is chosen every night
+## (VillaPictures.hang), each in a frame made for it (VillaFrames). `spot` names the place;
+## the one over the salon's fire is Noah's photograph's.
+func _painting(room_id: String, side: int, a: float, wide: float = 1.3, high: float = 2.1, spot: String = "", off: float = 0.01) -> void:
 	var room: Dictionary = room_of[room_id]
-	var size := _model_size(id)
-	var tall := wide * size.y / maxf(0.001, size.x)
-	_model(id, _face_point(room, side, a, high - tall * 0.5, -0.045), _model_yaw(side), {"width": wide, "solid": false, "far": 40.0})
-	# A personal photograph in the villa's existing frames, with a dark mount so its
-	# original proportions and the whole image are preserved in portrait frames too.
-	if not ResourceLoader.exists("res://assets/dieBoys.webp"):
-		return
-	if boys_photo == null:
-		boys_photo = load("res://assets/dieBoys.webp") as Texture2D
-		if boys_photo == null:
-			return
-	var inner := Vector2(wide * 0.78, tall * 0.78)
-	var matte := MeshInstance3D.new()
-	var panel := QuadMesh.new()
-	panel.size = inner
-	matte.mesh = panel
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color("10120f")
-	dark.roughness = 1.0
-	matte.material_override = dark
-	add_child(matte)
-	matte.position = _face_point(room, side, a, high, -0.155)
-	matte.rotation.y = _model_yaw(side)
-	var photo := MeshInstance3D.new()
-	var print_mesh := QuadMesh.new()
-	var ratio := float(boys_photo.get_width()) / float(boys_photo.get_height())
-	print_mesh.size = Vector2(minf(inner.x, inner.y * ratio), minf(inner.y, inner.x / ratio))
-	photo.mesh = print_mesh
-	var paper := StandardMaterial3D.new()
-	paper.albedo_texture = boys_photo
-	paper.roughness = 0.95
-	photo.material_override = paper
-	photo.name = "DieBoysPhoto"
-	add_child(photo)
-	photo.position = _face_point(room, side, a, high, -0.16)
-	photo.rotation.y = _model_yaw(side)
+	if pictures == null:
+		pictures = VillaPictures.new(self)
+		add_child(pictures)
+	var side_name: String = ["n", "o", "s", "w"][side]
+	pictures.spots.append({
+		"id": spot if spot != "" else "%s_%s_%d" % [room_id, side_name, roundi(a * 10.0)],
+		# (The back of the frame `off` in front of the face of the wall: a centimetre, or more
+		# where something stands out of the wall there.)
+		"at": _face_point(room, side, a, high, -off), "yaw": _model_yaw(side),
+		"wide": wide, "tall": minf(wide * 1.3, high * 2.0 - 0.4), "zone": str(room.zone), "floor": float(room.y), "off": off
+	})
 
 ## A stone plinth with something on it (a bust, a vase, a statue).
 func _plinth(pos: Vector3, tall: float, id: String, model_tall: float, yaw: float = 0.0, wide: float = 0.5) -> void:
@@ -693,7 +677,7 @@ func _villa_hall() -> void:
 		_against("hall", EAST if side > 0 else WEST, 15.0, "ClassicConsole_01", {"solid": true})
 		_model("antique_ceramic_vase_01", _face_point(hall, EAST if side > 0 else WEST, 15.0, 0.95, -0.34), 0.0, {"height": 0.55, "solid": false, "far": 30.0})
 		_plinth(Vector3(side * 2.4, 0, 9.0), 1.2, "marble_bust_01", 0.75, 0.0)
-		_painting("hall", EAST if side > 0 else WEST, 15.0, 2.0, 2.6)
+		# (No picture over the console: the flight up to the gallery runs in front of it.)
 	_carpet(Vector3(0, 0, 15.2), Vector2(2.4, 12.6), Color(0.42, 0.08, 0.08))
 	_painting("hall", NORTH, 0.0, 2.6, 6.4)
 	_light(Vector3(0, 3.4, 9.6), Color("ffd7a3"), 1.2, 7.0, false, 0.0, 0.3, LAMP_FADE)
@@ -715,7 +699,8 @@ func _villa_rooms() -> void:
 	_against("salon", NORTH, -11.0, "ClassicConsole_01")
 	_model("brass_candleholders", _face_point(salon, NORTH, -11.0, 0.95, -0.34), 0.0, {"width": 0.8, "solid": false, "far": 30.0})
 	_painting("salon", NORTH, -11.0, 1.6, 2.5)
-	_painting("salon", WEST, 16.0, 1.5, 3.2, "fancy_picture_frame_02")
+	# (On the chimney breast over the fire, which stands 0.2 m out of the wall.)
+	_painting("salon", WEST, 16.0, 1.5, 3.2, VillaPictures.BOYS_SPOT, 0.21)
 	_painting("salon", EAST, 13.0, 2.0, 2.4)
 	# --- the gallery of pictures
 	for at in [9.5, 12.5, 20.5, 22.6]:

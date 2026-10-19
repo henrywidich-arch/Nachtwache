@@ -1,28 +1,41 @@
 [
   {
+    "version": "0.70",
+    "title": "Bilder für die Villa",
+    "sections": [
+      {
+        "title": "Mission 2",
+        "items": [
+          "In der Villa hängen jetzt Henrys 30 Bilder, jedes in einem eigenen Rahmen, der genau zu seinem Format passt: verzierter Goldrahmen, dunkles Nussholz, schmaler Galerierahmen mit Passepartout oder Messing.",
+          "Jede Nacht hängt eine andere Auswahl, keins doppelt; im Koop sehen beide dieselben Bilder.",
+          "Das Foto der Jungs hängt in seinem eigenen Goldrahmen über dem Kamin im Salon."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.69",
     "title": "Hornisse und Wirbel",
     "sections": [
       {
         "title": "Waffen",
         "items": [
-          "HORNISSE MP-9: Maschinenpistole im Pistolenformat mit 1200 Schuss pro Minute, 30er-Magazin, Rotpunkt und Schalldämpfer; ab Runde 3 unter den Pistolen.",
-          "WIRBEL W-45: Sturmgewehr mit 45-Schuss-Trommel obenauf, die sich bei jedem Schuss weiterdreht; ab Runde 3.",
-          "Leere Hülsen fliegen bei HORNISSE und WIRBEL aus dem Auswurf, klimpern auf dem Boden und verschwinden nach ein paar Sekunden - auch beim Koop-Partner.",
-          "Der Schlitten der HORNISSE läuft bei jedem Schuss zurück und bleibt nach dem letzten offen, bis nachgeladen ist."
+          "HORNISSE MP-9: Maschinenpistole mit 1200 Schuss pro Minute, Sekundärwaffe ab Runde 3, mit Rotpunkt und Schalldämpfer.",
+          "WIRBEL W-45: Sturmgewehr mit einer Trommel, die sich bei jedem Schuss weiterdreht und im Dauerfeuer wirbelt; ab Runde 3, mit Rotpunkt, Zielfernrohr und Schalldämpfer.",
+          "Beide Waffen werfen leere Hülsen aus, die auf dem Boden klimpern."
         ]
       },
       {
         "title": "Mission 2",
         "items": [
-          "Ein Baum im Gartenlabor und ein Schläfer in den Kälteschlafkapseln des Kryoarchivs; Sporen treiben durch die Luft.",
-          "Das Hack-Modul an der Kellertür lässt sich wieder anbringen."
+          "Gartenlabor mit Henrys Baum und treibenden Sporen, Kryoarchiv mit einem Schläfer in den Kapseln."
         ]
       },
       {
-        "title": "Korrekturen",
+        "title": "Behoben",
         "items": [
-          "Ein Leech bremst dich wieder, solange er an dir hängt."
+          "Der Leech verlangsamt wieder.",
+          "Das Hack-Modul lässt sich an der Kellertür wieder anbringen."
         ]
       }
     ]
