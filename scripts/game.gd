@@ -2872,6 +2872,10 @@ func _run_ops_check() -> void:
 	await _capture(folder, "ops_07_leaving.png")
 	await tick.call(1.2)
 	await _capture(folder, "ops_08_gone.png")
+	# (--skin-pick=<look>: the page with that look picked.)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--skin-pick="):
+			hud.skin_pick = arg.trim_prefix("--skin-pick=")
 	hud.show_menu("skins")
 	await tick.call(0.4)
 	await _capture(folder, "ops_09_skins.png")
@@ -3029,6 +3033,9 @@ func _run_areas_check() -> void:
 		var views: Array = []
 		for view: Array in info.get("views", []):
 			views.append([str(view[0]), origin + (view[1] as Vector3), origin + (view[2] as Vector3)])
+		# (A piece may name one more view of its own: "kapsel" in the cryo archive.)
+		if (piece.get("points", {}) as Dictionary).has("kapsel_auge"):
+			views.append(["kapsel", piece.points.kapsel_auge, piece.points.kapsel_ziel])
 		if str(piece.kind) == "transition":
 			var from: Vector3 = map.points.get("%s_in" % piece.id, Vector3.INF)
 			var to: Vector3 = map.points.get("%s_out" % piece.id, Vector3.INF)

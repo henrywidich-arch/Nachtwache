@@ -21,9 +21,22 @@ const SLEEPER_LEAN := 0.03
 const SLEEPER_FLOAT := 0.08
 ## Seen through the frost he is a cold shape: his colours darkened and turned blue.
 const SLEEPER_TINT := Color(0.16, 0.22, 0.28)
+## A few pods (the user: "in ganz wenigen ... besser sehen") have clear glass, hardly
+## frosted, and a light below and above him: there he is plainly seen, face and pose,
+## turned to the lane. Only in the two rows along the middle lane, which the squad walks
+## down; how many and which ones the night's dice say (without taking a throw from the
+## map's own dice, so that nothing else of the hall moves).
+const CLEAR_ROWS := [12.5, 23.5]
+const CLEAR_COUNT := Vector2i(3, 4)
+## Behind clear glass his own colours, only a little cooled.
+const CLEAR_TINT := Color(0.86, 0.93, 1.0)
 
-## Where the sleepers stand (filled by _pod, drawn by _sleepers).
+## Where the sleepers stand (filled by _pod, drawn by _sleepers), and those behind clear
+## glass.
 var sleepers: Array[Transform3D] = []
+var clear_sleepers: Array[Transform3D] = []
+## The pods with clear glass this night (their places in the hall, local).
+var clear_pods: Array[Vector3] = []
 
 func info() -> Dictionary:
 	return {
@@ -69,6 +82,8 @@ func lay() -> void:
 	# --- the pods
 	m._chunk("Kit", false)
 	var own := ResourceLoader.exists(SLEEPER)
+	if own:
+		_choose_clear()
 	for x in ROWS:
 		var z := POD_FROM
 		while z <= POD_TO + 0.01:
@@ -76,6 +91,12 @@ func lay() -> void:
 			z += POD_STEP
 	if own:
 		_sleepers()
+		# (Where the picture check looks into the first of them: --areas-check, view "kapsel".)
+		if not clear_pods.is_empty():
+			var first: Vector3 = clear_pods[0]
+			var lane := 1.0 if first.x < 18.0 else -1.0
+			point("kapsel_auge", first + Vector3(lane * 2.3, 1.75, 0.6))
+			point("kapsel_ziel", first + Vector3(0, 1.45, 0))
 	for x in [11.0, 25.0]:
 		block("plate", Vector3(x, 0.02, (POD_FROM + POD_TO) * 0.5), Vector3(4.2, 0.04, POD_TO - POD_FROM + 1.6), Color(0.2, 0.22, 0.25), false)
 		m._pipe(p(x, 3.6, POD_FROM - 0.8), p(x, 3.6, POD_TO + 0.8), 0.16, Color("6d8ea8"), 8, "steel")
@@ -93,21 +114,46 @@ func lay() -> void:
 	point("goal", Vector3(18.0, 0, 22.0))
 	point("middle", Vector3(18.0, 0, 22.0))
 
+## Which pods have clear glass this night: CLEAR_COUNT of those in CLEAR_ROWS, from dice of
+## their own that start from the map's seed.
+func _choose_clear() -> void:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = hash([m.random.seed, "kryo_klar"])
+	var places: Array[Vector3] = []
+	for x in CLEAR_ROWS:
+		var z := POD_FROM
+		while z <= POD_TO + 0.01:
+			places.append(Vector3(float(x), 0.0, z))
+			z += POD_STEP
+	var count := dice.randi_range(CLEAR_COUNT.x, CLEAR_COUNT.y)
+	while clear_pods.size() < count and not places.is_empty():
+		clear_pods.append(places.pop_at(dice.randi_range(0, places.size() - 1)))
+
 ## A cryo pod: a frosted capsule on its base that glows pale cyan from inside, with the
-## dark shape of somebody in it, and a ring of light at its foot.
+## dark shape of somebody in it, and a ring of light at its foot. A clear one (clear_pods)
+## always has him in it, turned to the lane, behind glass that is hardly frosted, with a
+## light at his feet and one over his head.
 func _pod(at: Vector3, own: bool = false) -> void:
 	var base := p(at.x, at.y + 0.3, at.z)
+	var clear := own and clear_pods.has(at)
 	m.batch.cylinder(m.mats["steel"], base - Vector3(0, 0.3, 0), 0.66, 0.62, 0.3, Color("2a3036"), 12)
 	m.batch.cylinder(m.mats["steel"], base, 0.62, 0.62, 0.3, Color("39424a"), 12)
 	m._glow_box(base + Vector3(0, 0.31, 0), Vector3(0.9, 0.025, 0.9), Color("8fe6ff"), 5.0)
 	# Who sleeps in it: his sleeper, turned any way, a little off upright and afloat - or
 	# nobody (EMPTY). Without his model: a shape against the frost.
 	if own:
-		if m.random.randf() >= EMPTY:
+		# (The same throws for a clear pod as for any other, so that the dice of the map
+		# go on as they always did.)
+		if m.random.randf() >= EMPTY or clear:
 			var turn := Basis(Vector3.UP, m.random.randf() * TAU)
 			var tilt := Basis(Vector3(m.random.randf_range(-1.0, 1.0), 0, m.random.randf_range(-1.0, 1.0)).normalized(), m.random.randf_range(0.0, SLEEPER_LEAN))
 			var lift := m.random.randf_range(0.02, SLEEPER_FLOAT)
-			sleepers.append(Transform3D(tilt * turn, base + Vector3(0, 0.3 + lift, 0)))
+			if clear:
+				# Face to the lane (the model looks along its +z).
+				var lane := Basis(Vector3.UP, PI * 0.5 if at.x < 18.0 else -PI * 0.5)
+				clear_sleepers.append(Transform3D(tilt * lane, base + Vector3(0, 0.3 + lift, 0)))
+			else:
+				sleepers.append(Transform3D(tilt * turn, base + Vector3(0, 0.3 + lift, 0)))
 	else:
 		var dark := Color("0b1418")
 		var lean := m.random.randf_range(-0.12, 0.12)
@@ -115,16 +161,26 @@ func _pod(at: Vector3, own: bool = false) -> void:
 		m.batch.box(m.mats["plain"], base + Vector3(0, 1.32, 0), Vector3(0.36, 0.62, 0.2), dark, turn * Basis(Vector3.FORWARD, lean))
 		m.batch.ellipsoid(m.mats["plain"], base + Vector3(lean * -0.6, 1.8, 0), Vector3(0.11, 0.14, 0.12), dark, Basis.IDENTITY, 8, 5)
 		m.batch.box(m.mats["plain"], base + Vector3(0, 0.72, 0), Vector3(0.3, 0.62, 0.16), dark, turn)
-	m.batch.cylinder(frost(Color(0.5, 0.85, 1.0), 0.4, 1.7), base + Vector3(0, 0.3, 0), 0.5, 0.5, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
+	if clear:
+		m.batch.cylinder(frost(Color(0.5, 0.85, 1.0), 0.06, 1.2), base + Vector3(0, 0.3, 0), 0.5, 0.5, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
+		light(Vector3(at.x, 0.75, at.z), Color("b8ecff"), 0.9, 1.6, 0.0, 0.0)
+		light(Vector3(at.x, 2.45, at.z), Color("e2f6ff"), 0.7, 1.6, 0.0, 0.0)
+	else:
+		m.batch.cylinder(frost(Color(0.5, 0.85, 1.0), 0.4, 1.7), base + Vector3(0, 0.3, 0), 0.5, 0.5, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
 	m.batch.cylinder(m.mats["pane"], base + Vector3(0, 0.3, 0), 0.53, 0.53, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
 	m.batch.cylinder(m.mats["steel"], base + Vector3(0, 2.2, 0), 0.62, 0.55, 0.3, Color("39424a"), 12)
 	m.batch.cylinder(m.mats["steel"], base + Vector3(0, 2.5, 0), 0.3, 0.22, 0.25, Color("2a3036"), 8)
 	m._round_solid(base - Vector3(0, 0.3, 0), 0.62, 2.8)
 
 ## All the sleepers at once: one MultiMesh of his model, its colours cold and dark behind
-## the frost. (No shadows: the pods glow from inside, and the glass would catch them.)
+## the frost, and one more of the few behind clear glass in their own colours. (No
+## shadows: the pods glow from inside, and the glass would catch them.)
 func _sleepers() -> void:
-	if sleepers.is_empty():
+	_sleeper_batch(sleepers, "Sleepers", SLEEPER_TINT, 0.9)
+	_sleeper_batch(clear_sleepers, "SleepersClear", CLEAR_TINT, 0.7)
+
+func _sleeper_batch(places: Array[Transform3D], title: String, tint: Color, roughness: float) -> void:
+	if places.is_empty():
 		return
 	var scene := load(SLEEPER) as PackedScene
 	var probe := scene.instantiate()
@@ -142,19 +198,19 @@ func _sleepers() -> void:
 	var many := MultiMesh.new()
 	many.transform_format = MultiMesh.TRANSFORM_3D
 	many.mesh = mesh
-	many.instance_count = sleepers.size()
-	for i in range(sleepers.size()):
-		var place: Transform3D = sleepers[i]
+	many.instance_count = places.size()
+	for i in range(places.size()):
+		var place: Transform3D = places[i]
 		many.set_instance_transform(i, Transform3D(place.basis.scaled(Vector3.ONE * fit), place.origin + place.basis * foot))
 	var all := MultiMeshInstance3D.new()
-	all.name = "Sleepers"
+	all.name = title
 	all.multimesh = many
 	all.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	all.visibility_range_end = 60.0
 	if skin != null:
 		var cold := skin.duplicate() as BaseMaterial3D
-		cold.albedo_color = SLEEPER_TINT
-		cold.roughness = 0.9
+		cold.albedo_color = tint
+		cold.roughness = roughness
 		all.material_override = cold
 	m.add_child(all)
 

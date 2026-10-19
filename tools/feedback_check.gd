@@ -158,7 +158,7 @@ func run(game: Node3D) -> void:
 	hud.show_menu("skins")
 	await frames()
 	var preview: WeaponShow = hud.modal.find_child("SkinPreview", true, false)
-	expect(preview != null and preview.shown.begins_with("skin_") and preview.models[preview.shown] is SoldierVisual and hud.modal.find_children("*", "Button", true, false).size() <= 12, "Skins show one real character preview and a compact list instead of a grid of repeated actions")
+	expect(preview != null and preview.shown.begins_with("skin_") and preview.models[preview.shown] is SoldierVisual and hud.modal.find_children("*", "Button", true, false).size() <= Profile.SKINS.size() + 3, "Skins show one real character preview and a compact list (one line per skin, wear, companion, back) instead of a grid of repeated actions")
 	hud.show_menu("changelog")
 	var notes_script = load("res://scripts/patch_notes.gd")
 	var releases: Array = notes_script.history()

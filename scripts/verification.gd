@@ -1230,6 +1230,7 @@ func run(game: Node3D) -> void:
 	await _wish(game)
 	await _operators(game)
 	await _figures(game)
+	await _dudes(game)
 	await _sandbox(game)
 	await _hive(game)
 	await _areas(game)
@@ -10528,6 +10529,12 @@ func _areas(game: Node3D) -> void:
 	probe.night = HiveLayout.showcase()
 	probe._ready()
 	MeshBatch.watching = false
+	# The cryo archive: a few pods of clear glass along the middle lane, the sleeper in
+	# each plainly seen (his own colours, turned to the lane); the rest stay frosted.
+	var clear_ones := probe.find_child("SleepersClear", true, false) as MultiMeshInstance3D
+	var frosted_ones := probe.find_child("Sleepers", true, false) as MultiMeshInstance3D
+	var seen_clear: bool = clear_ones != null and frosted_ones != null and clear_ones.multimesh.instance_count >= 3 and clear_ones.multimesh.instance_count <= 4 and frosted_ones.multimesh.instance_count > 20 and (clear_ones.material_override as BaseMaterial3D).albedo_color.v > 0.8 and (frosted_ones.material_override as BaseMaterial3D).albedo_color.v < 0.4
+	expect(seen_clear, "In the cryo archive three or four pods along the middle lane have clear glass, the sleeper in them plainly seen; the others stay frosted (%s clear)" % (str(clear_ones.multimesh.instance_count) if clear_ones != null else "none"))
 	var in_doorways: Array = probe.doorway_faults(MeshBatch.watched)
 	MeshBatch.watched.clear()
 	var small: Array = probe.snags().filter(func(entry: Dictionary) -> bool: return (entry.at as Vector3).x > HiveLayout.WEST)
@@ -10991,6 +10998,106 @@ func _areas(game: Node3D) -> void:
 ## The figures of 2026-10-16: four more looks of the plain infected (the administration,
 ## the laboratories, a soldier), the Prowler once it has fed, and the infected sharks of the
 ## flooded laboratory with their test pool.
+## The user's two plain men: a skin for the player, a look for the squad (silent), and the
+## two guests who wander about the villa's gallery (VillaGuests).
+func _dudes(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var profile: Profile = game.profile
+	var kept_mission: int = profile.mission
+	var kept_squad: Array = profile.squad.duplicate()
+	var kept_skin: String = profile.skin
+	# --- the looks: open from the start, for the player and the squad; the guests unarmed
+	var looks := true
+	for id in ["dude_shorts", "dude_turtleneck"]:
+		looks = looks and Profile.SKINS.has(id) and bool(Profile.SKINS[id].bot) and profile.unlocked(id) and SoldierVisual.LOOKS.has(id) and str(SoldierVisual.LOOKS[id].weapon) == "rifle"
+		looks = looks and Radio.bark(id, "kill").is_empty() and Radio.bark(id, "reload").is_empty() and not Radio.NAMES.has(id)
+	for id in ["guest_shorts", "guest_turtleneck"]:
+		looks = looks and SoldierVisual.LOOKS.has(id) and str(SoldierVisual.LOOKS[id].weapon) == "" and not Profile.SKINS.has(id)
+	looks = looks and SoldierVisual.LOOKS.guest_shorts.scene == SoldierVisual.LOOKS.dude_shorts.scene
+	profile.wear("dude_turtleneck")
+	var worn: bool = profile.skin == "dude_turtleneck" and str(profile.kept().skin) == "dude_turtleneck"
+	# The co-op partner is shown in this look (NetLink._skin takes what Profile.SKINS knows).
+	game.net._skin("dude_shorts")
+	var partner: bool = game.net.partner_skin == "dude_shorts"
+	game.net.partner_skin = "main"
+	expect(looks and worn and partner, "The two plain men are skins from the start - for the player, seen by a co-op partner, and for the squad, where they have no lines - and unarmed guests")
+	# --- the squad in their looks, on the second mission: they come along and keep quiet
+	profile.squad = ["dude_shorts", "dude_turtleneck"]
+	profile.mission = 2
+	game.return_to_menu()
+	await frames(2)
+	game.team_enabled = true
+	game.start_run()
+	await frames(3)
+	var map := game.cabin as HiveMap
+	if map == null:
+		expect(false, "The second mission starts with the plain men in the squad")
+		profile.mission = kept_mission
+		profile.squad = kept_squad
+		profile.skin = kept_skin
+		return
+	var squad: bool = game.team.size() == 2
+	var silent := true
+	for mate: Teammate in game.team:
+		squad = squad and mate.look in ["dude_shorts", "dude_turtleneck"] and mate.visual != null and mate.visual.skeleton.get_bone_count() == 22 and mate.label in ["STRANDTYP", "ROLLKRAGEN"]
+		for cue in ["kill", "reload", "rescue", "order_follow", "m2_villa"]:
+			silent = silent and not game.bark(mate, mate.look, cue)
+	expect(squad and silent and game.hive.on, "With the plain men as the squad the second mission starts, and they say nothing")
+	# --- the guests on the gallery
+	var guests := map.find_child("VillaGuests", true, false) as VillaGuests
+	var two: bool = guests != null and guests.guests.size() == 2
+	var bodiless := true
+	if guests != null:
+		bodiless = guests.find_children("*", "CollisionObject3D", true, false).is_empty()
+		for guest in guests.guests:
+			var body: SoldierVisual = guest.body
+			two = two and body.look in ["guest_shorts", "guest_turtleneck"] and is_equal_approx(body.global_position.y, HiveMap.STOREY_VILLA)
+		for mate in game.survivors:
+			bodiless = bodiless and not (mate is SoldierVisual)
+	# Four minutes on the gallery (the survivor down in the hall, out of their notice): they
+	# walk from place to place now and then, stand far more than they walk, never go near
+	# the shut doors or the stairs, and stay apart.
+	player.global_position = Vector3(0, 0.05, 20.0)
+	var moved := 0
+	var walking := 0
+	var standing := 0
+	var clear := true
+	var apart := true
+	if two:
+		var before: Array = [guests.guests[0].body.position, guests.guests[1].body.position]
+		for i in range(2400):
+			guests._process(0.1)
+			for k in range(2):
+				var body: SoldierVisual = guests.guests[k].body
+				var at := body.position
+				if int(guests.guests[k].target) != int(guests.guests[k].spot):
+					walking += 1
+				else:
+					standing += 1
+				clear = clear and absf(at.x) < 2.3 and at.z > 9.0 and at.z < 11.0 and absf(absf(at.x) - 3.2) > 0.85
+				if at.distance_to(before[k]) > 0.5:
+					moved += 1
+					before[k] = at
+			apart = apart and guests.guests[0].body.position.distance_to(guests.guests[1].body.position) > 0.6
+	# The survivor comes up to one of them: he turns to him.
+	var turned := false
+	if two:
+		var guest: Dictionary = guests.guests[0]
+		guest.target = guest.spot
+		var body: SoldierVisual = guest.body
+		player.global_position = body.global_position + Vector3(2.0, 0.0, 0.0)
+		for i in range(30):
+			guests._process(0.1)
+		var to: Vector3 = player.global_position - body.global_position
+		turned = absf(angle_difference(body.rotation.y, atan2(-to.x, -to.z))) < 0.15
+	expect(two and bodiless and moved >= 4 and standing > 3 * walking and clear and apart and turned, "Two guests wander about the villa's gallery: mostly they stand, now and then they walk to another place between the shut doors, apart, without a body to bump into or shoot, and turn to the survivor when he comes near (moved %d times, %d standing to %d walking; %s)" % [moved, standing, walking, str([two, bodiless, clear, apart, turned])])
+	game.return_to_menu()
+	await frames(2)
+	game.team_enabled = false
+	profile.mission = kept_mission
+	profile.squad = kept_squad
+	profile.skin = kept_skin
+
 func _figures(game: Node3D) -> void:
 	var player: Survivor = game.player
 	var room: Sandbox = game.sandbox
