@@ -8054,7 +8054,12 @@ func _operators(game: Node3D) -> void:
 	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	game._say("round_clear")
-	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and honest_again and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel"), "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's (honest %s, taken %s, fake %s, again %s, hive %s)" % [honest, taken, bool(said.fake), honest_again, game.hive.on])
+	# Every line of command loses a letter then, a short one ("Clear.") too - it came
+	# through whole before, so now and then the check above found nothing lost.
+	var every_lost := true
+	for variant: Variant in Radio.LINES["round_clear"][1]:
+		every_lost = every_lost and Radio.garbled(str(variant)).contains("#")
+	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and honest_again and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel") and every_lost, "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's (honest %s, taken %s, fake %s, again %s, hive %s, every line %s)" % [honest, taken, bool(said.fake), honest_again, game.hive.on, every_lost])
 	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	# --- two versions of the game cannot play together, and both are told so
