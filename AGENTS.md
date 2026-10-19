@@ -20,6 +20,7 @@ Do this automatically as part of the authorized implementation. Do not ask the u
 - `Godot --headless --fixed-fps 60 --path . -- --smoke-test --only=hive` checks the classic Mission 2 flow and stations. Use the fixed step here: the dialogue test advances lines per rendered frame and otherwise can outrun its movement and timing conditions headlessly.
 - `Godot --headless --path . -s res://tools/coop_memory_check.gd -- --mission=1 --bots`
 - `Godot --headless --path . -s res://tools/coop_memory_check.gd -- --mission=2`
+- `Godot --headless --path . -s res://tools/bake_hands.gd` bakes the smooth first-person hands and arms into `assets/hands` (needs python3 with numpy and scikit-image). Run it after changing a hand pose or the hand shapes in `weapon_view.gd`; a pose without a bake falls back to the plain pieces.
 - `Godot --path . -- --ui-review-check --no-warm-up` captures real map previews and UI screenshots, then exits. It requires graphics; never run this capture command headless. Screenshots stay in ignored `tools/ui_review/`, map previews in `assets/menu/`.
 
 The in-memory co-op checks run two independent worlds using Godot's actual multiplayer/RPC serialization. They do not replace a real LAN/Internet playtest.

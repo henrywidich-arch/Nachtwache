@@ -1331,7 +1331,7 @@ func _latest(game: Node3D) -> void:
 	for node in (player.weapon.get_node("Mod_reddot") as Node3D).get_children():
 		if node is MeshInstance3D and (node as MeshInstance3D).mesh is QuadMesh:
 			smallest = minf(smallest, ((node as MeshInstance3D).mesh as QuadMesh).size.x)
-	expect(smallest < 0.002 and (WeaponView.materials.dot as StandardMaterial3D).albedo_color.r < 2.0, "The dot of the reflex sight is fine and dim (%.1f mm)" % (smallest * 1000.0))
+	expect(smallest > 0.003 and smallest < 0.008 and (WeaponView.materials.dot_bright as StandardMaterial3D).albedo_color.r >= 1.5, "The dot of the reflex sight is bright and easy to see, small against its lens (%.1f mm)" % (smallest * 1000.0))
 	# --- more calls for the squad
 	var rich := true
 	for cue in ["reload", "kill", "special", "cru", "grenade", "down", "thanks", "rescue", "stalker", "clear", "leech", "order_follow", "order_hold", "order_free", "round", "hurt", "gas", "idle"]:
@@ -1498,7 +1498,7 @@ func _latest(game: Node3D) -> void:
 	var over_irons: Vector3 = WeaponView.VIEWS.rifle.aim
 	var lined: bool = is_equal_approx(over_irons.y, -((m4_gun.mount as Vector3).y + float(m4_gun.irons))) and over_irons.x == 0.0
 	player.fit("rifle", "reddot")
-	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and WeaponView.sight_aim("rifle", "reddot").y < over_irons.y - 0.02
+	var folded: bool = irons != null and not irons.visible and (m4.get_node("Mod_reddot") as Node3D).visible and WeaponView.sight_aim("rifle", "reddot").y <= over_irons.y + 0.0005
 	player.fit("rifle", "reddot")
 	expect(str(Survivor.WEAPONS.rifle.label) == "M4A4" and m4.get_node_or_null("Magazine") != null and m4.get_node_or_null("Support") != null and irons != null and irons.visible and lined and folded and (WeaponView.reload_step("rifle", 0.38).magazine as Vector3).length() > 0.2 and Survivor.ATTACHMENTS.has("rifle"), "The starting rifle is the M4A4: its magazine leaves the gun, the eye looks through its iron sights, and they fold away under a fitted sight")
 	# --- five kinds of dead bodies, and model trees at the edge of the open yard
@@ -7463,7 +7463,7 @@ func _overhaul(game: Node3D) -> void:
 	var gone: bool = game.sell_weapon("ak") and game.buy_weapon("ak") and player.upgrade("ak", "damage") == 0 and player.magazine_of("ak") == 30
 	game.resume_run()
 	expect(benched and raised and worked and paid and own_lines and fitting and gone and game.state == "playing", "The workbench has five lines to choose from (damage, magazine, pockets, reload, steadiness), each for one weapon and each with its price; they go with the weapon")
-	# --- the reflex sight is the holographic sight, on every gun that takes one
+	# --- the reflex sight is a compact round red dot, on every gun that takes one
 	var sights := 0
 	# (Since v0.68 the sidearms take the reflex sight as well: their mounts are WeaponView.MOD_MOUNTS.)
 	var seated := true
@@ -7488,16 +7488,18 @@ func _overhaul(game: Node3D) -> void:
 			elif mesh.get_surface_override_material(0) == WeaponView.holo_material and mesh.layers == 2:
 				bodies += 1
 		var rail_y: float = (spec.mount as Vector3).y + float(spec.rail)
-		# On the G36 the sight is a little smaller, and the eye that much closer to it.
-		var small: float = WeaponView.holo_size(id)
-		var face_z: float = (spec.mount as Vector3).z + float(spec.optic) + WeaponView.HOLO_BACK
+		var size: float = WeaponView.dot_size(id)
+		var tube_z: float = (spec.mount as Vector3).z + float(spec.optic)
+		var centre: float = (spec.mount as Vector3).y + WeaponView.sight_height(id, "reddot")
 		var eye: Vector3 = WeaponView.sight_aim(id, "reddot")
-		# One body from the model and three panes (glass, ring, dot); the dot sits inside the
-		# tunnel, in the middle of the window; the eye is behind the face that looks at it.
-		seated = seated and bodies == 1 and panes == 3 and finest < 0.002 and mark_z < face_z + WeaponView.HOLO_TUNNEL.x * small and mark_z > face_z + WeaponView.HOLO_TUNNEL.y * small
-		seated = seated and is_equal_approx(-eye.y, rail_y + WeaponView.HOLO_AXIS * small) and is_equal_approx(-eye.z, face_z + WeaponView.HOLO_EYE * small) and rail_y + (WeaponView.HOLO_AXIS - WeaponView.HOLO_GLASS.y * 0.5) * small > (spec.mount as Vector3).y + float(spec.irons)
+		# One body and three panes (lens, glow, dot); the dot sits on the lens near the front of
+		# the tube; the eye is behind the tube on its axis; the tube stands on the rail, and its
+		# lens is clear above iron sights that stay up.
+		seated = seated and bodies == 1 and panes == 3 and absf(mark_z - (tube_z - WeaponView.DOT_LENGTH * size * 0.2)) < 0.002
+		seated = seated and is_equal_approx(-eye.y, centre) and is_equal_approx(-eye.z, tube_z + WeaponView.DOT_LENGTH * size * 0.5 + WeaponView.DOT_EYE * size)
+		seated = seated and (bool(spec.get("folding", false)) or centre - WeaponView.DOT_RADIUS * size > (spec.mount as Vector3).y + float(spec.irons)) and centre - (WeaponView.DOT_RADIUS + WeaponView.DOT_WALL) * size >= rail_y - 0.0005
 		sights += 1
-	expect(sights == 12 and seated and WeaponView.holo_size("g36") < 0.9 and WeaponView.holo_size("rifle") == 1.0 and ResourceLoader.exists(WeaponView.HOLO_SCENE) and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is the holographic sight on all twelve guns that take one: its window stands clear above the iron sights, with the dot inside its tunnel")
+	expect(sights == 12 and seated and WeaponView.dot_size("revolver") < 1.0 and WeaponView.dot_size("rifle") == 1.0 and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is a compact round red dot on all twelve guns that take one: it stands on the rail, its lens clear above the iron sights, the dot in the middle")
 	# --- the lobby says what the router said
 	var link: NetLink = game.net
 	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")

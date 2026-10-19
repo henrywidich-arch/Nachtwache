@@ -8,7 +8,9 @@ extends Node3D
 ## villa). Besides:
 ## - a faint rim from beyond the weapon, so that its outline still reads in the dark;
 ## - the flashlight's beam, bounced back from what it falls on (the lamp itself does not
-##   light the view: it sits right beside the weapon and would burn it white);
+##   light the view: it sits right beside the weapon and would burn it white). That light
+##   comes from the lit spot ahead, soft and without a gleam (a wall gives no highlight),
+##   and the farther the spot, the less of it; into the open nothing comes back;
 ## - the flash of a shot on the weapon and the hands (flash_light(), on each muzzle flash).
 ## Every light here lights the view only and casts no shadow. The lamps of the level are
 ## gathered once, and each new one as it is added; they are looked at five times a second.
@@ -34,6 +36,12 @@ const FLASH := 1.6
 const FLASH_RANGE := 0.9
 ## A lamp counts this far beyond its own range (the light it throws onto the walls).
 const REACH := 1.25
+## The flashlight's light coming back: its strength from a wall right ahead, how far the
+## lit spot may be before nothing returns, and how near the weapon its source is drawn.
+const BEAM_BACK := 0.38
+const BEAM_FAR := 9.0
+const BEAM_NEAR := 1.1
+const BEAM_SOURCE_MAX := 3.5
 
 var player: Node3D
 var bounce: OmniLight3D
@@ -89,8 +97,9 @@ func _ready() -> void:
 	eye_fill.position = Vector3(0.0, 0.1, 0.1)
 	eye_fill.light_specular = 0.2
 	add_child(eye_fill)
-	spill = view_light("Spill", 0.0, 1.3, Color("e6ecd8"))
-	spill.position = Vector3(0.05, -0.25, -0.9)
+	spill = view_light("Spill", 0.0, 2.4, Color("e6ecd8"))
+	spill.position = Vector3(0.0, -0.05, -BEAM_NEAR)
+	spill.light_specular = 0.06
 	add_child(spill)
 
 ## The lamps of the level; after that, each new one as it is added.
@@ -131,14 +140,22 @@ func update(delta: float, eye: Vector3, flashlight: SpotLight3D, ambient: Color)
 	rim.light_energy = lerpf(rim.light_energy, RIM * (1.0 - lit) + TOP * lit, k)
 	rim.light_color = rim.light_color.lerp(Color(0.72, 0.8, 0.95).lerp(target_color.lightened(0.25), lit), k)
 	eye_fill.light_color = bounce.light_color
-	# The beam comes back from what it falls on: the nearer, the more.
+	# The beam comes back from what it falls on: from there, the nearer the more, and
+	# nothing from the open.
 	var beam := 0.0
 	if flashlight != null and flashlight.is_visible_in_tree():
 		var from := flashlight.global_position
 		var ahead := -flashlight.global_basis.z
-		var hit := player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + ahead * 12.0, 1))
-		var gap: float = 12.0 if hit.is_empty() else from.distance_to(hit.position)
-		beam = clampf(1.0 - gap / 12.0, 0.0, 1.0) * 0.4 + 0.1
+		var hit := player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + ahead * BEAM_FAR, 1))
+		if not hit.is_empty():
+			var gap := from.distance_to(hit.position)
+			var fade := clampf(1.0 - gap / BEAM_FAR, 0.0, 1.0)
+			beam = BEAM_BACK * fade * fade
+			# Where the light comes from, seen from the eye: along the beam, not nearer than
+			# BEAM_NEAR (it would gleam on the weapon) nor farther than it can reach it.
+			var source := clampf(gap, BEAM_NEAR, BEAM_SOURCE_MAX)
+			spill.position = spill.position.lerp(Vector3(0.0, -0.05, -source), minf(1.0, delta * 6.0))
+			spill.omni_range = source + 1.3
 	spill.light_energy = lerpf(spill.light_energy, beam, minf(1.0, delta * 8.0))
 
 ## How the lamps near the eye light the place: their colour, weighted by how much of each

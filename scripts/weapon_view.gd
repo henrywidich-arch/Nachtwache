@@ -144,6 +144,16 @@ const HOLO_EYE := 0.096
 ## with: darker, and a shade cooler against the warm light on the weapon (see _gun_mods).
 const HOLO_METAL := 0.15
 const HOLO_PAINT := Color(0.3, 0.32, 0.36)
+## The red dot (see _gun_mods): a short round tube on a low mount, sized for a rifle (the
+## sidearms and the HORNISSE carry a smaller one, dot_size). DOT_RADIUS is its lens,
+## DOT_WALL the tube's wall, DOT_AXIS how high the middle of the lens stands over the rail
+## at the least (more where iron sights stand that must stay below the lens), DOT_EYE how
+## far behind the tube's rear face the eye is when aiming.
+const DOT_RADIUS := 0.0158
+const DOT_WALL := 0.0028
+const DOT_LENGTH := 0.03
+const DOT_AXIS := 0.03
+const DOT_EYE := 0.125
 ## The mark in its window was drawn for a glass this far from the eye; it keeps the size
 ## it had to the eye (see _gun_mods).
 const MARK_EYE := 0.165
@@ -151,9 +161,12 @@ const MARK_EYE := 0.165
 const SCOPE_EYE := 0.07
 ## How far a suppressor moves the muzzle forward.
 const SILENCER_LENGTH := 0.15
-const GLOVE := Color("272a29")
-const GLOVE_PAD := Color("2e3130")
-const SLEEVE := Color("343b2c")
+const GLOVE := Color("2a2c2b")
+const GLOVE_PAD := Color("323534")
+## The hard guard over the knuckles and the tab of the glove's cuff.
+const KNUCKLE := Color("1c1e1e")
+const SLEEVE := Color("3a412f")
+const SLEEVE_CUFF := Color("2c3125")
 
 ## Hip and aimed positions are in camera space; angles are degrees.
 const VIEWS := {
@@ -365,32 +378,187 @@ static func shared(key: String, world: bool = false) -> StandardMaterial3D:
 		result.metallic = 0.35
 	elif key == "polymer":
 		result.roughness = 0.62
+	elif key in ["glove", "sleeve", "pad"]:
+		# Leather on the gloves, twill on the sleeves, laid on in the weapon's own space so
+		# that they move with it (assets/surfaces/farm, tools/make_farm_surfaces.py).
+		var cloth := "fabric" if key == "sleeve" else "glove"
+		var base := "res://assets/surfaces/farm/" + cloth
+		result.albedo_texture = load(base + "_albedo.jpg")
+		result.normal_enabled = true
+		result.normal_texture = load(base + "_normal.jpg")
+		result.roughness_texture = load(base + "_roughness.jpg")
+		result.roughness = 1.0
+		result.uv1_triplanar = true
+		result.uv1_triplanar_sharpness = 4.0
+		result.uv1_scale = Vector3.ONE * (9.0 if key == "sleeve" else (22.0 if key == "glove" else 12.0))
+		result.normal_scale = 0.8 if key == "sleeve" else 0.6
+		if key == "pad":
+			# Moulded rubber: smoother and a little glossy.
+			result.roughness = 0.62
+			result.normal_scale = 0.3
 	if not world:
 		tune(result)
 	materials[slot] = result
 	return result
 
+## The hands and arms are noted as shapes on their batch: when it is committed, a smooth
+## surface baked from exactly those shapes takes their place (assets/hands, made by
+## tools/bake_hands.gd); a pose without one is drawn in the plain pieces. With
+## `smooth_hands` off they are drawn in pieces straight away; while `dumping`, every set
+## of shapes is kept in `dumped` for the bake.
+static var smooth_hands := true
+static var dumping := false
+static var dumped: Array = []
+const HAND_FOLDER := "res://assets/hands/"
+
+static func _shape(batch: MeshBatch, shape: Array) -> void:
+	if smooth_hands:
+		if not MeshBatch.shape_maker.is_valid():
+			MeshBatch.shape_maker = WeaponView._make_shapes
+		batch.shapes.append(shape)
+	else:
+		_draw_shape(batch, shape)
+
+static func _draw_shape(batch: MeshBatch, shape: Array) -> void:
+	var key: String = shape[1]
+	var color: Color = shape[2]
+	match String(shape[0]):
+		"cone":
+			var from: Vector3 = shape[3]
+			var span: Vector3 = (shape[4] as Vector3) - from
+			batch.cylinder(shared(key), from, shape[5], shape[6], span.length(), color, shape[7], Basis(Quaternion(Vector3.UP, span.normalized())))
+			batch.ellipsoid(shared(key), from, Vector3.ONE * float(shape[5]), color, Basis.IDENTITY, shape[7], 5)
+		"tube":
+			batch.cylinder(shared(key), shape[3], shape[4], shape[5], shape[6], color, shape[7], shape[8], shape[9])
+		"egg":
+			batch.ellipsoid(shared(key), shape[3], shape[4], color, shape[5], shape[6], shape[7])
+		"block":
+			batch.box(shared(key), shape[3], shape[4], color, shape[5])
+
+## The shapes as the bake reads them: everything a round cone, an ellipsoid or a box.
+static func _shape_data(shape: Array) -> Dictionary:
+	var colour: Color = shape[2]
+	var data := {"k": shape[1], "c": [colour.r, colour.g, colour.b]}
+	var flat := func(v: Vector3) -> Array: return [v.x, v.y, v.z]
+	var frame := func(b: Basis) -> Array: return [b.x.x, b.x.y, b.x.z, b.y.x, b.y.y, b.y.z, b.z.x, b.z.y, b.z.z]
+	match String(shape[0]):
+		"cone":
+			data.merge({"t": "cone", "a": flat.call(shape[3]), "b": flat.call(shape[4]), "r0": shape[5], "r1": shape[6]})
+		"tube":
+			var turn: Basis = shape[8]
+			var widen := (turn.x.length() + turn.z.length()) * 0.5
+			var top: Vector3 = (shape[3] as Vector3) + turn.y * float(shape[6])
+			data.merge({"t": "cone", "a": flat.call(shape[3]), "b": flat.call(top), "r0": float(shape[4]) * widen, "r1": float(shape[5]) * widen})
+		"egg":
+			data.merge({"t": "egg", "center": flat.call(shape[3]), "radii": flat.call(shape[4]), "basis": frame.call(shape[5])})
+		"block":
+			data.merge({"t": "block", "center": flat.call(shape[3]), "size": flat.call(shape[4]), "basis": frame.call(shape[5])})
+	return data
+
+## MeshBatch.shape_maker: the baked surface for these shapes, or the pieces.
+static func _make_shapes(batch: MeshBatch, parent: Node3D, prefix: String) -> Array:
+	var data: Array = []
+	for shape: Array in batch.shapes:
+		data.append(_shape_data(shape))
+	var text := JSON.stringify(data)
+	var key := text.md5_text().substr(0, 16)
+	if dumping:
+		dumped.append({"key": key, "shapes": data})
+	var path := HAND_FOLDER + key + ".res"
+	if ResourceLoader.exists(path):
+		var mesh := load(path) as ArrayMesh
+		var instance := MeshInstance3D.new()
+		instance.name = prefix + "Smooth"
+		instance.mesh = mesh
+		for surface in range(mesh.get_surface_count()):
+			instance.set_surface_override_material(surface, shared(mesh.surface_get_name(surface)))
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		parent.add_child(instance)
+		return [instance]
+	for shape: Array in batch.shapes:
+		_draw_shape(batch, shape)
+	return []
+
 ## Tapered limb segment between two points, with a rounded joint at its start.
 static func _segment(batch: MeshBatch, key: String, from: Vector3, to: Vector3, start_radius: float, end_radius: float, color: Color, sides: int = 8) -> void:
-	var span := to - from
-	batch.cylinder(shared(key), from, start_radius, end_radius, span.length(), color, sides, Basis(Quaternion(Vector3.UP, span.normalized())))
-	batch.ellipsoid(shared(key), from, Vector3.ONE * start_radius, color, Basis.IDENTITY, sides, 5)
+	_shape(batch, ["cone", key, color, from, to, start_radius, end_radius, sides])
 
+static func _egg(batch: MeshBatch, key: String, center: Vector3, radii: Vector3, color: Color, turn: Basis = Basis.IDENTITY, segments: int = 10, rings: int = 6) -> void:
+	_shape(batch, ["egg", key, color, center, radii, turn, segments, rings])
+
+static func _tube(batch: MeshBatch, key: String, base: Vector3, r0: float, r1: float, tall: float, color: Color, sides: int, turn: Basis, capped: bool = false) -> void:
+	_shape(batch, ["tube", key, color, base, r0, r1, tall, sides, turn, capped])
+
+## A finger in three joints from the knuckle over `joint` to the tip, its middle joint a
+## little proud of the line, a padded tip.
 static func _finger(batch: MeshBatch, knuckle: Vector3, joint: Vector3, tip: Vector3) -> void:
-	_segment(batch, "glove", knuckle, joint, 0.0108, 0.0098, GLOVE)
-	_segment(batch, "glove", joint, tip, 0.0098, 0.0086, GLOVE)
-	batch.ellipsoid(shared("glove"), tip, Vector3.ONE * 0.0088, GLOVE, Basis.IDENTITY, 8, 5)
-	batch.ellipsoid(shared("glove"), knuckle, Vector3(0.0125, 0.012, 0.0125), GLOVE_PAD, Basis.IDENTITY, 8, 5)
+	var line := (tip - joint)
+	var mid := joint + line * 0.52 + (joint - knuckle).normalized() * line.length() * 0.12
+	_segment(batch, "glove", knuckle, joint, 0.0112, 0.0102, GLOVE, 10)
+	_segment(batch, "glove", joint, mid, 0.0104, 0.0095, GLOVE, 10)
+	_segment(batch, "glove", mid, tip, 0.0097, 0.0088, GLOVE, 10)
+	_egg(batch, "glove", tip, Vector3.ONE * 0.0092, GLOVE, Basis.IDENTITY, 10, 6)
+	_egg(batch, "glove", knuckle, Vector3(0.0128, 0.0122, 0.0128), GLOVE_PAD, Basis.IDENTITY, 10, 6)
 
-static func _forearm(batch: MeshBatch, palm: Vector3, wrist: Vector3, reach: Vector3) -> void:
-	_segment(batch, "glove", palm, wrist, 0.03, 0.033, GLOVE)
-	_segment(batch, "glove", wrist, wrist + reach * 0.09, 0.037, 0.039, GLOVE_PAD)
-	_segment(batch, "sleeve", wrist + reach * 0.07, wrist + reach, 0.04, 0.052, SLEEVE, 10)
+## Small numbers that are the same every time for the same place (folds of a sleeve).
+static func _jitter(at: Vector3, salt: float) -> float:
+	var v := sin(at.dot(Vector3(127.1, 311.7, 74.7)) + salt * 17.13) * 43758.5453
+	return (v - floor(v)) * 2.0 - 1.0
+
+## The glove's cuff with its strap, then the sleeve up to the elbow: a ribbed cuff, an
+## oval forearm in uneven pieces with folds round it and a seam underneath. `watch`: a
+## wristwatch on the sleeve's cuff (the support hand's).
+static func _forearm(batch: MeshBatch, palm: Vector3, wrist: Vector3, reach: Vector3, watch: bool = false) -> void:
+	var axis := reach.normalized()
+	var across := axis.cross(Vector3.UP).normalized()
+	if across.length() < 0.5:
+		across = Vector3.RIGHT
+	var lift := across.cross(axis).normalized()
+	_segment(batch, "glove", palm, wrist, 0.03, 0.034, GLOVE, 12)
+	_segment(batch, "glove", wrist - axis * 0.004, wrist + reach * 0.075, 0.038, 0.041, GLOVE_PAD, 14)
+	# The strap that closes the cuff, across its back.
+	_shape(batch, ["block", "pad", KNUCKLE, wrist + reach * 0.04 + lift * 0.039, Vector3(0.026, 0.006, 0.05), Basis(across, lift, -axis)])
+	var start := wrist + reach * 0.07
+	# (On past the edge of the picture: seen down the arm, its end must never show.)
+	var length := reach.length() * 1.35
+	# Ribbed cuff of the sleeve.
+	for k in range(3):
+		_tube(batch, "sleeve", start + axis * (k * 0.008), 0.0465, 0.0465, 0.007, SLEEVE_CUFF, 16, Basis(across, axis, lift), false)
+	if watch:
+		var band := start + axis * 0.03
+		batch.cylinder(shared("polymer"), band, 0.0495, 0.0495, 0.016, Color("161616"), 16, Basis(across, axis, lift), false)
+		var case := band + axis * 0.008 + lift * 0.048
+		batch.cylinder(shared("polymer"), case, 0.0125, 0.012, 0.008, Color("1e1f1f"), 14, Basis(across, lift, -axis))
+		batch.cylinder(shared("steel"), case + lift * 0.008, 0.0098, 0.0098, 0.0012, Color("10181a"), 14, Basis(across, lift, -axis))
+	# The sleeve: oval, a little wider towards the elbow, in pieces that are not quite in line.
+	var pieces := 5
+	var from := start + axis * 0.024
+	var radius := 0.045
+	for k in range(pieces):
+		var t := float(k + 1) / pieces
+		var to := start + axis * (0.024 + (length - 0.024) * t) + (across * _jitter(start, k) + lift * _jitter(start, k + 9.0)) * 0.0025
+		var next := lerpf(0.045, 0.057, t) * (1.0 + _jitter(start, k + 3.0) * 0.04)
+		var span := to - from
+		var dir := span.normalized()
+		var side := dir.cross(Vector3.UP).normalized()
+		var up := side.cross(dir).normalized()
+		_tube(batch, "sleeve", from, radius, next, span.length(), SLEEVE.lightened(_jitter(start, k + 5.0) * 0.03), 16, Basis(side * 1.1, dir, up * 0.92), false)
+		_egg(batch, "sleeve", from, Vector3(radius * 1.1, radius, radius * 0.92), SLEEVE, Basis(side, up, -dir), 14, 6)
+		from = to
+		radius = next
+	# Folds where the sleeve gathers above the wrist and at the crook of the arm.
+	for t: float in [0.09, 0.16, 0.25, 0.44, 0.58]:
+		var at := start + axis * (0.024 + (length - 0.024) * t)
+		var r := lerpf(0.045, 0.057, t) * 1.045
+		var tilt := Basis(across, deg_to_rad(_jitter(at, 1.0) * 18.0)) * Basis(lift, deg_to_rad(_jitter(at, 2.0) * 10.0))
+		_tube(batch, "sleeve", at, r, r * 0.99, 0.009, SLEEVE.darkened(0.06), 16, tilt * Basis(across * 1.08, axis, lift * 0.9), false)
+	# The seam down the underside.
+	_segment(batch, "sleeve", start + axis * 0.03 - lift * 0.0425, start + axis * length - lift * 0.054, 0.0022, 0.0022, SLEEVE_CUFF, 4)
 
 ## Gloved hand gripping a post-shaped grip around `grip`. `side` is +1 for the right hand.
 static func _grip_hand(batch: MeshBatch, grip: Vector3, side: float, trigger_finger: bool, reach: Vector3) -> void:
 	# Back of the hand lies along the outside of the grip.
-	batch.ellipsoid(shared("glove"), grip + Vector3(side * 0.03, -0.004, 0.008), Vector3(0.017, 0.045, 0.04), GLOVE, Basis.from_euler(Vector3(0.12, 0, side * -0.1)), 10, 6)
+	_egg(batch, "glove", grip + Vector3(side * 0.03, -0.004, 0.008), Vector3(0.017, 0.045, 0.04), GLOVE, Basis.from_euler(Vector3(0.12, 0, side * -0.1)), 10, 6)
 	for finger in range(4):
 		var drop := 0.03 - finger * 0.021
 		var knuckle := grip + Vector3(side * 0.028, drop, -0.024)
@@ -406,12 +574,17 @@ static func _grip_hand(batch: MeshBatch, grip: Vector3, side: float, trigger_fin
 	var thumb_tip := grip + Vector3(side * -0.02, 0.04, 0.008)
 	_segment(batch, "glove", thumb_base, thumb_joint, 0.0125, 0.011, GLOVE)
 	_segment(batch, "glove", thumb_joint, thumb_tip, 0.011, 0.0095, GLOVE)
-	batch.ellipsoid(shared("glove"), thumb_tip, Vector3.ONE * 0.0098, GLOVE, Basis.IDENTITY, 8, 5)
-	_forearm(batch, grip + Vector3(side * 0.031, -0.02, 0.03), grip + Vector3(side * 0.036, -0.048, 0.052), reach)
+	_egg(batch, "glove", thumb_tip, Vector3.ONE * 0.0098, GLOVE, Basis.IDENTITY, 8, 5)
+	# The ball of the thumb, and the hard guard over the knuckles.
+	_egg(batch, "glove", grip + Vector3(side * 0.018, 0.026, 0.03), Vector3(0.016, 0.02, 0.02), GLOVE, Basis.from_euler(Vector3(0.3, 0, side * 0.2)), 10, 6)
+	_egg(batch, "pad", grip + Vector3(side * 0.041, -0.001, -0.02), Vector3(0.0075, 0.046, 0.016), KNUCKLE, Basis.from_euler(Vector3(0.1, side * 0.25, 0)), 12, 6)
+	for finger in range(4):
+		_egg(batch, "pad", grip + Vector3(side * 0.044, 0.03 - finger * 0.021, -0.02), Vector3(0.006, 0.008, 0.009), KNUCKLE.lightened(0.04), Basis.IDENTITY, 8, 5)
+	_forearm(batch, grip + Vector3(side * 0.031, -0.02, 0.03), grip + Vector3(side * 0.036, -0.048, 0.052), reach, side < 0.0)
 
 ## Support hand cradling a round handguard from below.
 static func _cradle_hand(batch: MeshBatch, grip: Vector3, reach: Vector3) -> void:
-	batch.ellipsoid(shared("glove"), grip + Vector3(-0.004, -0.042, 0.0), Vector3(0.04, 0.014, 0.046), GLOVE, Basis.from_euler(Vector3(0, 0, 0.12)), 10, 6)
+	_egg(batch, "glove", grip + Vector3(-0.004, -0.042, 0.0), Vector3(0.04, 0.014, 0.046), GLOVE, Basis.from_euler(Vector3(0, 0, 0.12)), 10, 6)
 	for finger in range(4):
 		var along := -0.036 + finger * 0.023
 		_finger(batch, grip + Vector3(0.032, -0.034, along), grip + Vector3(0.043, -0.004, along - 0.003), grip + Vector3(0.03, 0.022, along - 0.004))
@@ -419,8 +592,9 @@ static func _cradle_hand(batch: MeshBatch, grip: Vector3, reach: Vector3) -> voi
 	var thumb_tip := grip + Vector3(-0.034, 0.02, -0.02)
 	_segment(batch, "glove", grip + Vector3(-0.034, -0.03, 0.018), thumb_joint, 0.0125, 0.011, GLOVE)
 	_segment(batch, "glove", thumb_joint, thumb_tip, 0.011, 0.0095, GLOVE)
-	batch.ellipsoid(shared("glove"), thumb_tip, Vector3.ONE * 0.0098, GLOVE, Basis.IDENTITY, 8, 5)
-	_forearm(batch, grip + Vector3(-0.006, -0.046, 0.036), grip + Vector3(-0.018, -0.052, 0.07), reach)
+	_egg(batch, "glove", thumb_tip, Vector3.ONE * 0.0098, GLOVE, Basis.IDENTITY, 8, 5)
+	_egg(batch, "pad", grip + Vector3(0.036, -0.052, 0.0), Vector3(0.014, 0.0075, 0.046), KNUCKLE, Basis.from_euler(Vector3(0, 0, 0.5)), 12, 6)
+	_forearm(batch, grip + Vector3(-0.006, -0.046, 0.036), grip + Vector3(-0.018, -0.052, 0.07), reach, true)
 
 static func _finish(view: Node3D, batch: MeshBatch) -> void:
 	for mesh in batch.commit(view, "Part", false):
@@ -931,6 +1105,30 @@ static func _view_quad(parent: Node3D, at: Vector3, size: Vector2, material: Mat
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(node)
 
+## A round lens: faintly tinted glass in a disc that ends at its rim.
+static func _view_disc(key: String, color: Color) -> StandardMaterial3D:
+	if materials.has(key):
+		return materials[key]
+	var result := StandardMaterial3D.new()
+	result.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	result.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	result.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	result.cull_mode = BaseMaterial3D.CULL_DISABLED
+	result.albedo_color = color
+	var edge := Gradient.new()
+	edge.colors = PackedColorArray([Color(1, 1, 1, 0.6), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	edge.offsets = PackedFloat32Array([0.0, 0.96, 0.99])
+	var disc := GradientTexture2D.new()
+	disc.gradient = edge
+	disc.fill = GradientTexture2D.FILL_RADIAL
+	disc.fill_from = Vector2(0.5, 0.5)
+	disc.fill_to = Vector2(0.5, 0.0)
+	disc.width = 96
+	disc.height = 96
+	result.albedo_texture = disc
+	materials[key] = tune(result)
+	return result
+
 ## A thin glowing ring for the reflex sight.
 static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 	if materials.has(key):
@@ -959,8 +1157,12 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 ## brings its height with it (its window stands well above any iron sights); the telescopic
 ## sight is set just clear of them, so that they do not stand in the picture.
 const MOD_MOUNTS := {
-	"pistol": {"mount": Vector3.ZERO, "rail": 0.035, "optic": -0.03, "irons": 0.035, "holo": 0.45, "muzzle": Vector3(0, 0.005, -0.1035)},
-	"revolver": {"mount": Vector3.ZERO, "rail": 0.05, "optic": -0.05, "irons": 0.05, "holo": 0.45, "muzzle": Vector3(0, 0.011, -0.161)},
+	"pistol": {"mount": Vector3.ZERO, "rail": 0.0122, "optic": -0.02, "irons": 0.027, "holo": 0.45, "muzzle": Vector3(0, 0.005, -0.1035)},
+	# (Measured on the models with rays from above: the revolver's frame is flat on top over
+	# the cylinder at 3.25 cm, from 1 cm before to 5 cm behind the middle of its grip, its
+	# rear sight 3.7 cm high; the pistol's slide is flat at 1.2 cm from 5 cm before to 1 cm
+	# behind it, its front sight 2.7 cm high.)
+	"revolver": {"mount": Vector3.ZERO, "rail": 0.0325, "optic": 0.02, "irons": 0.0372, "holo": 0.45, "muzzle": Vector3(0, 0.011, -0.161)},
 	"usp": {"mount": Vector3.ZERO, "rail": 0.05, "optic": -0.04, "irons": 0.05, "holo": 0.45, "muzzle": Vector3(0, 0.015, -0.145)},
 	"g18": {"mount": Vector3.ZERO, "rail": 0.045, "optic": -0.04, "irons": 0.045, "holo": 0.45, "muzzle": Vector3(0, 0.01, -0.13)},
 	"deagle": {"mount": Vector3.ZERO, "rail": 0.06, "optic": -0.05, "irons": 0.06, "holo": 0.5, "muzzle": Vector3(0, 0.025, -0.185)}
@@ -972,7 +1174,15 @@ static func mod_mount(id: String) -> Dictionary:
 static func sight_height(id: String, sight: String) -> float:
 	var gun: Dictionary = mod_mount(id)
 	if sight == "reddot":
-		return float(gun.rail) + HOLO_AXIS * holo_size(id)
+		var size := dot_size(id)
+		var low := DOT_AXIS * size
+		if not gun.get("folding", false):
+			low = maxf(low, float(gun.irons) - float(gun.rail) + (DOT_RADIUS + 0.003) * size)
+		else:
+			# Over iron sights that fold away it stands at their height, as a red dot on a riser
+			# does (the eye where it was over the irons).
+			low = maxf(low, float(gun.irons) - float(gun.rail))
+		return float(gun.rail) + low
 	# Iron sights that fold away leave nothing for a sight to clear.
 	var clear := (0.0 if gun.get("folding", false) else maxf(float(gun.irons) - float(gun.rail), 0.0)) + 0.006
 	return float(gun.rail) + clear + 0.0195
@@ -981,6 +1191,10 @@ static func sight_height(id: String, sight: String) -> float:
 static func holo_size(id: String) -> float:
 	return float(mod_mount(id).get("holo", 1.0))
 
+## How big the red dot is on a gun: smaller on the sidearms and the machine pistol.
+static func dot_size(id: String) -> float:
+	return 0.72 if MOD_MOUNTS.has(id) or id == "hornet" else 1.0
+
 ## Where the weapon sits when the eye is behind a fitted sight.
 static func sight_aim(id: String, sight: String) -> Vector3:
 	var gun: Dictionary = mod_mount(id)
@@ -988,7 +1202,8 @@ static func sight_aim(id: String, sight: String) -> Vector3:
 	var along := mount.z + float(gun.optic)
 	if sight == "reddot":
 		# A smaller sight is looked through from closer by: the picture stays the same.
-		return Vector3(0.0, -(mount.y + sight_height(id, sight)), -HOLO_EYE * holo_size(id) - (along + HOLO_BACK))
+		var size := dot_size(id)
+		return Vector3(0.0, -(mount.y + sight_height(id, sight)), -DOT_EYE * size - (along + DOT_LENGTH * size * 0.5))
 	return Vector3(0.0, -(mount.y + sight_height(id, sight)), -SCOPE_EYE - (along + 0.066))
 
 ## The parts the shop sells for a gun, each under a node of its own.
@@ -1001,40 +1216,54 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 	var metal := Color("23262a")
 	var steel := shared("steel")
 	var ahead := Basis(Quaternion(Vector3.UP, Vector3.FORWARD))
-	# --- Reflex sight: the holographic sight, clamped to the rail. A dot in a ring sits in
-	# the middle of its window.
+	# --- Red dot: a short round tube of black anodised aluminium on a low mount, a clear
+	# round lens, a bright dot with a soft glow in its middle. Where iron sights stand
+	# (not folding ones) the mount lifts it until they are below the lens.
 	var reflex := Node3D.new()
 	reflex.name = "Mod_reddot"
 	view.add_child(reflex)
-	var dot := mount.y + sight_height(id, "reddot")
-	var face := z + HOLO_BACK
-	var holo := (load(HOLO_SCENE) as PackedScene).instantiate() as Node3D
-	var small := holo_size(id)
-	holo.position = Vector3(0, rail, face)
-	holo.scale = Vector3.ONE * small
-	reflex.add_child(holo)
-	for node in holo.find_children("*", "MeshInstance3D", true, false):
-		var mesh := node as MeshInstance3D
-		for surface in range(mesh.mesh.get_surface_count()):
-			if holo_material == null:
-				holo_material = tune(mesh.mesh.surface_get_material(surface).duplicate() as BaseMaterial3D)
-				# Its paint is a matt black anodising, not bare metal: as metal it mirrors the
-				# lamps of the yard and comes out bronze.
-				holo_material.metallic = HOLO_METAL
-				holo_material.albedo_color = HOLO_PAINT
-				holo_material.metallic_specular = 0.25
-			mesh.set_surface_override_material(surface, holo_material)
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var size := dot_size(id)
+	var centre := mount.y + sight_height(id, "reddot")
+	if holo_material == null:
+		var paint := StandardMaterial3D.new()
+		paint.albedo_color = Color(0.085, 0.09, 0.095)
+		paint.roughness = 0.5
+		paint.metallic = 0.35
+		paint.metallic_specular = 0.4
+		holo_material = tune(paint)
+	var inner := DOT_RADIUS * size
+	var outer := inner + DOT_WALL * size
+	var length := DOT_LENGTH * size
+	var body := MeshBatch.new()
+	var hoop := func(radius: float, thick: float, at_z: float, long: float) -> void:
+		var pieces := 28
+		for k in range(pieces):
+			var angle := TAU * k / pieces
+			var mid := radius + thick * 0.5
+			var chord := TAU * mid / pieces * 1.1
+			body.box(holo_material, Vector3(cos(angle) * mid, centre + sin(angle) * mid, at_z), Vector3(chord, thick, long), Color.WHITE, Basis(Vector3.BACK, angle - PI / 2))
+	hoop.call(inner, DOT_WALL * size, z, length)
+	# Lips at both ends, a little proud of the tube.
+	hoop.call(inner - 0.0006 * size, (DOT_WALL + 0.0016) * size, z + length * 0.5 - 0.002 * size, 0.004 * size)
+	hoop.call(inner - 0.0004 * size, (DOT_WALL + 0.0012) * size, z - length * 0.5 + 0.0015 * size, 0.003 * size)
+	# The mount down to the rail with its clamp, and the knob for the brightness.
+	var rail_top := mount.y + float(gun.rail)
+	var stand := centre - outer + 0.001 - rail_top
+	if stand > 0.0:
+		body.box(holo_material, Vector3(0, rail_top + stand * 0.5, z), Vector3(0.017 * size, stand, length * 0.8), Color.WHITE)
+	body.box(holo_material, Vector3(0, rail_top + 0.0035 * size, z), Vector3(0.026 * size, 0.007 * size, length * 0.9), Color.WHITE)
+	body.cylinder(holo_material, Vector3(0.013 * size, rail_top + 0.0035 * size, z), 0.0025 * size, 0.0025 * size, 0.004 * size, Color.WHITE, 8, Basis(Vector3.BACK, -PI / 2))
+	body.cylinder(holo_material, Vector3(outer, centre - inner * 0.35, z - length * 0.1), 0.0055 * size, 0.0055 * size, 0.0035 * size, Color.WHITE, 14, Basis(Vector3.BACK, -PI / 2))
+	for mesh in body.commit(reflex, "Part", false):
 		mesh.layers = 2
-	# The glass stands half way through the tunnel.
-	var glass := face + (HOLO_TUNNEL.x + HOLO_TUNNEL.y) * 0.5 * small
-	_view_quad(reflex, Vector3(0, dot, glass), HOLO_GLASS * small, _view_glow("lens", Color(0.55, 0.75, 0.8, 0.045), false))
-	# The mark is small and dim on purpose: a fine dot that does not cover the target, in a
-	# hair-thin ring that is only just there. It is as big to the eye as it always was,
-	# whatever the distance of this glass.
-	var seen := (HOLO_EYE - (HOLO_TUNNEL.x + HOLO_TUNNEL.y) * 0.5) * small / MARK_EYE
-	_view_quad(reflex, Vector3(0, dot, glass + 0.0002), Vector2(0.0082, 0.0082) * seen, _view_ring("ring", Color(1.0, 0.1, 0.06, 0.22)))
-	_view_quad(reflex, Vector3(0, dot, glass + 0.0003), Vector2(0.0015, 0.0015) * seen, _view_glow("dot", Color(1.35, 0.12, 0.07, 1.0), true))
+		mesh.set_surface_override_material(0, holo_material)
+	# The lens sits near the front; the dot keeps the size it has to the eye, whatever the
+	# distance of the lens: far easier to see than the old fine mark.
+	var lens_z := z - length * 0.2
+	var seen := (DOT_EYE * size + length * 0.7) / MARK_EYE
+	_view_quad(reflex, Vector3(0, centre, lens_z), Vector2(inner, inner) * 2.0, _view_disc("lens_round", Color(0.45, 0.72, 0.78, 0.06)))
+	_view_quad(reflex, Vector3(0, centre, lens_z + 0.0002), Vector2(0.02, 0.02) * seen, _view_glow("dot_halo", Color(1.0, 0.1, 0.05, 0.32), true))
+	_view_quad(reflex, Vector3(0, centre, lens_z + 0.0003), Vector2(0.0055, 0.0055) * seen, _view_glow("dot_bright", Color(1.85, 0.16, 0.08, 1.0), true))
 	# --- Telescopic sight, four times: tube, bell and eyepiece on two rings.
 	var scope := Node3D.new()
 	scope.name = "Mod_scope"

@@ -51,7 +51,10 @@ const GAS_ZONES := {
 	"east": {"label": "OSTSEITE", "rect": Rect2(17, -40, 27, 88)},
 	"west": {"label": "WESTSEITE", "rect": Rect2(-44, -40, 27, 88)}
 }
-const MOONLIGHT := 0.5
+const MOONLIGHT := 0.68
+## Where the moon stands, seen from the farm: high in the north-north-west, over the house.
+const MOON_DIRECTION := Vector3(-0.24, 0.82, -0.52)
+const NIGHT_AMBIENT_ENERGY := 0.42
 ## Colour of the light that is everywhere: the night sky's above the ground, a dim grey
 ## below it.
 const NIGHT_AMBIENT := Color(0.36, 0.47, 0.62)
@@ -905,18 +908,16 @@ func _build_environment() -> void:
 	world.name = "Night"
 	environment = Environment.new()
 	var sky := Sky.new()
-	var sky_material := ProceduralSkyMaterial.new()
-	sky_material.sky_top_color = Color(0.014, 0.02, 0.032)
-	sky_material.sky_horizon_color = Color(0.06, 0.075, 0.095)
-	sky_material.ground_bottom_color = Color(0.01, 0.013, 0.017)
-	sky_material.ground_horizon_color = Color(0.06, 0.075, 0.095)
-	sky_material.sky_curve = 0.08
+	var sky_shader := Shader.new()
+	sky_shader.code = NIGHT_SKY
+	var sky_material := ShaderMaterial.new()
+	sky_material.shader = sky_shader
 	sky.sky_material = sky_material
 	environment.background_mode = Environment.BG_SKY
 	environment.sky = sky
 	environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.ambient_light_color = NIGHT_AMBIENT
-	environment.ambient_light_energy = 0.34
+	environment.ambient_light_energy = NIGHT_AMBIENT_ENERGY
 	environment.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	environment.tonemap_mode = Environment.TONE_MAPPER_ACES
 	environment.tonemap_exposure = 1.10
@@ -974,16 +975,87 @@ func _build_environment() -> void:
 	moon.name = "Moonlight"
 	moon.light_color = Color(0.56, 0.69, 0.92)
 	moon.light_energy = MOONLIGHT
-	moon.rotation_degrees = Vector3(-38, -142, 0)
+	moon.basis = Basis.looking_at(-MOON_DIRECTION.normalized(), Vector3.UP)
 	moon.shadow_enabled = true
 	moon.shadow_bias = 0.05
 	moon.shadow_normal_bias = 1.4
 	moon.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	moon.directional_shadow_max_distance = 60
-	moon.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
+	moon.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY
 	moon.light_angular_distance = 0.5
 	moon.light_volumetric_fog_energy = 0.9
 	add_child(moon)
+
+## The night sky: dark blue towards the top, the moon (the light that lights the farm)
+## with its seas and a halo, ragged rain clouds that leave gaps for it. Nothing in it
+## moves, so its reflections are worked out once.
+const NIGHT_SKY := """shader_type sky;
+uniform vec3 top_color : source_color = vec3(0.014, 0.02, 0.032);
+uniform vec3 horizon_color : source_color = vec3(0.06, 0.075, 0.095);
+uniform vec3 ground_color : source_color = vec3(0.01, 0.013, 0.017);
+uniform vec3 moon_color : source_color = vec3(0.86, 0.9, 1.0);
+uniform float moon_size = 0.04;
+uniform float moon_energy = 26.0;
+
+float hash(vec3 p) {
+	p = fract(p * 0.3183099 + 0.1);
+	p *= 17.0;
+	return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+
+float noise(vec3 x) {
+	vec3 i = floor(x);
+	vec3 f = fract(x);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+}
+
+float fbm(vec3 p) {
+	float sum = 0.0;
+	float amp = 0.5;
+	for (int i = 0; i < 5; i++) {
+		sum += noise(p) * amp;
+		p = p * 2.03 + vec3(1.7, 9.2, 3.1);
+		amp *= 0.5;
+	}
+	return sum;
+}
+
+void sky() {
+	vec3 dir = normalize(EYEDIR);
+	float up = dir.y;
+	vec3 colour = up > 0.0 ? mix(horizon_color, top_color, pow(clamp(up, 0.0, 1.0), 0.45)) : mix(horizon_color, ground_color, pow(clamp(-up, 0.0, 1.0), 0.4));
+	vec3 moon = LIGHT0_ENABLED ? normalize(LIGHT0_DIRECTION) : normalize(vec3(-0.24, 0.82, -0.52));
+	float angle = acos(clamp(dot(dir, moon), -1.0, 1.0));
+	// Clouds over the sky, thinner near the top: a ceiling with holes.
+	vec2 spread = dir.xz / max(up + 0.25, 0.05);
+	float cloud = smoothstep(0.42, 0.72, fbm(vec3(spread * 0.9, 2.0)));
+	cloud *= smoothstep(-0.05, 0.25, up);
+	// The halo around the moon, broad and faint, then tight around the disc.
+	float halo = exp(-angle * 9.0) * 0.6 + exp(-angle * 40.0) * 1.4;
+	// (Bright enough to come through the haze that lies over the sky.)
+	colour += moon_color * halo * 0.45 * (1.0 - cloud * 0.4);
+	// Clouds take the moonlight on their edges near it.
+	vec3 cloud_colour = mix(vec3(0.02, 0.025, 0.03), moon_color * 0.25, clamp(halo * 0.5, 0.0, 1.0));
+	colour = mix(colour, cloud_colour, cloud * 0.85);
+	// The disc: dimmer at its rim, with darker seas.
+	if (angle < moon_size * 1.05) {
+		vec3 side = normalize(cross(moon, vec3(0.0, 1.0, 0.0)));
+		vec3 rise = cross(side, moon);
+		vec2 face = vec2(dot(dir - moon, side), dot(dir - moon, rise)) / moon_size;
+		float r = length(face);
+		float limb = sqrt(clamp(1.0 - r * r, 0.0, 1.0));
+		float seas = smoothstep(0.45, 0.62, fbm(vec3(face * 2.2, 7.0)));
+		float craters = fbm(vec3(face * 9.0, 3.0));
+		vec3 surface = moon_color * (0.55 + 0.45 * limb) * (1.0 - seas * 0.35) * (0.9 + craters * 0.2);
+		float edge = smoothstep(1.0, 0.94, r);
+		float veil = 1.0 - cloud * 0.8;
+		colour = mix(colour, surface * moon_energy * veil, edge);
+	}
+	COLOR = colour;
+}
+"""
 
 ## Bounced light (SSIL) and reflections (SSR) cost a few milliseconds a frame; the game
 ## switches them off with a small 3D resolution (Game.set_render_scale).
@@ -6291,7 +6363,7 @@ func _sink(depth: float) -> void:
 	environment.volumetric_fog_density = lerpf(0.03, 0.012, below)
 	environment.volumetric_fog_emission_energy = lerpf(1.0, 0.15, below)
 	environment.ambient_light_color = DAY_AMBIENT if daylight else NIGHT_AMBIENT.lerp(CELLAR_AMBIENT, below)
-	environment.ambient_light_energy = lerpf(0.95, 0.7, below) if daylight else lerpf(0.34, 0.18, below)
+	environment.ambient_light_energy = lerpf(0.95, 0.7, below) if daylight else lerpf(NIGHT_AMBIENT_ENERGY, 0.18, below)
 	if surfaced:
 		_show_hall()
 

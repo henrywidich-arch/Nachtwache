@@ -1,5 +1,32 @@
 [
   {
+    "version": "0.75",
+    "title": "Mond, Hände und Klettern",
+    "sections": [
+      {
+        "title": "Grafik",
+        "items": [
+          "Der Mond steht sichtbar am Himmel, mit Hof und dunklen Mondmeeren, hoch über dem Hof statt tief im Nordwesten: sein Licht erreicht jetzt auch die Vorderseite des Hauses und die Wege, die ganze Nacht ist etwas heller.",
+          "Arme und Hände in der Ego-Ansicht sind neu: weiche, zusammenhängende Handschuhe mit Lederstruktur, Knöchelschonern und Klettverschluss, Ärmel aus Stoff mit Bündchen, Falten und Naht, eine Armbanduhr am linken Handgelenk.",
+          "Mit eingeschalteter Taschenlampe liegt kein heller Glanzstreifen mehr auf der Waffe: Ihr Licht kommt nur noch weich von der Stelle zurück, auf die der Strahl fällt, um so schwächer, je weiter sie entfernt ist, und gar nicht, wenn er ins Leere leuchtet."
+        ]
+      },
+      {
+        "title": "Waffen",
+        "items": [
+          "Das Rotpunktvisier ist neu: ein kompaktes rundes Gehäuse mit klarem Glas und einem hellen, gut sichtbaren Leuchtpunkt statt des großen Holo-Visiers; bei festen Kimmen steht es so hoch, dass sie unter dem Glas bleiben.",
+          "Am Revolver sitzen Rotpunkt und Zielfernrohr jetzt direkt auf dem Rahmen über der Trommel statt mit Lücke weiter vorn, an der Pistole direkt auf dem Schlitten."
+        ]
+      },
+      {
+        "title": "Bewegung",
+        "items": [
+          "Klettern und Überspringen sind eine einzige flüssige Bewegung: mit dem Schwung des Anlaufs hinauf, über die Kante und mit zunehmender Fallgeschwindigkeit hinunter, und danach läuft man weiter statt abrupt stehen zu bleiben."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.74",
     "title": "Echte Möbel, echtes Licht",
     "sections": [

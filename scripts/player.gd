@@ -124,22 +124,22 @@ const REVOLVER_PARTS := {
 const ATTACHMENTS := {
 	"pistol": PISTOL_PARTS, "usp": PISTOL_PARTS, "g18": PISTOL_PARTS, "deagle": PISTOL_PARTS, "revolver": REVOLVER_PARTS,
 	"rifle": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: heller Leuchtpunkt im klaren Glas statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "badger", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"g36": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring über Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier über Kimme und Korn: heller Leuchtpunkt im klaren Glas, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "g36_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"ump": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: heller Leuchtpunkt, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ump_sil", "flash": 0.32, "quiet": true}, "scale": {"kick": 0.75, "spread": 0.9, "damage": 0.95}}
 	},
 	"ak": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Leuchtpunkt im Ring, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: heller Leuchtpunkt, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
@@ -148,12 +148,12 @@ const ATTACHMENTS := {
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 150, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "hornet_sil", "flash": 0.25, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"wirbel": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier auf der Schiene über der Trommel: Leuchtpunkt im Ring, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier auf der Schiene über der Trommel: heller Leuchtpunkt, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – nur die Trommel tickt noch", "set": {"sound": "wirbel_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"mp7": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Holografisches Visier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "mp7_sil", "flash": 0.3, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	}

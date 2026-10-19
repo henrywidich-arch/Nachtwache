@@ -21,6 +21,10 @@ const FACES := [
 ]
 
 var surfaces: Dictionary = {}
+## Shapes another part of the game draws itself when the batch is committed (the hands of
+## the first-person view: WeaponView._make_shapes). It may also draw them into the batch.
+var shapes: Array = []
+static var shape_maker: Callable
 ## What the batch is called by whoever fills it (a chunk of a map).
 var label := ""
 ## For tools/face_check.gd: while `watching`, every box that is built is noted here as
@@ -155,6 +159,10 @@ func ellipsoid(material: Material, center: Vector3, radii: Vector3, color: Color
 
 func commit(parent: Node3D, prefix: String, shadows: bool = true) -> Array[MeshInstance3D]:
 	var created: Array[MeshInstance3D] = []
+	if not shapes.is_empty() and shape_maker.is_valid():
+		for made: MeshInstance3D in shape_maker.call(self, parent, prefix):
+			created.append(made)
+		shapes = []
 	var index := 0
 	for material in surfaces:
 		var surface: Surface = surfaces[material]

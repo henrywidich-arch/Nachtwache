@@ -418,6 +418,21 @@ def carpaint(rng):
     return save("carpaint", albedo, blur(height, 0.5), 3.0, roughness)
 
 
+def glove(rng):
+    """Synthetic leather of a field glove: a fine pebbled grain, creases where the hand
+    bends, a little wear. Near white: the hands tint it."""
+    cell, d1, d2 = cells(rng, 9000)
+    pebble = smooth(0.0, 0.012, d2 - d1) * 0.8 + smooth(0.006, 0.0, d1) * 0.2
+    creases = noise(rng, scale=14, stretch=(1.0, 6.0), beta=1.4)
+    creases = smooth(0.62, 0.72, creases)
+    wear = noise(rng, scale=5, beta=2.2)
+    albedo = np.ones((N, N, 3), np.float32) * (0.8 + 0.1 * pebble[..., None] - 0.12 * creases[..., None])
+    albedo *= (0.9 + 0.15 * wear[..., None])
+    height = pebble * 0.6 - creases * 0.5
+    roughness = 0.62 - pebble * 0.1 + creases * 0.15 + (1 - wear) * 0.08
+    return save("glove", albedo, blur(height, 0.6), 6.0, roughness)
+
+
 def save_picture(name, albedo, height=None, strength=3.0, quality=92):
     os.makedirs(OUT, exist_ok=True)
     albedo = np.clip(albedo, 0, 1)
@@ -640,7 +655,8 @@ def macro(rng):
 SETS = {"siding": siding, "floor": floor, "planks": planks, "stone": stone, "shingle": shingle,
         "metal": metal, "meadow": meadow, "dirt": dirt, "fabric": fabric, "straw": straw, "macro": macro,
         "panel": panel, "carpaint": carpaint, "rug_red": rug_red, "rug_blue": rug_blue,
-        "painting_lake": painting_lake, "painting_moon": painting_moon, "painting_storm": painting_storm}
+        "painting_lake": painting_lake, "painting_moon": painting_moon, "painting_storm": painting_storm,
+        "glove": glove}
 
 
 def main():

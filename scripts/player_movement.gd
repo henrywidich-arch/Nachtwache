@@ -18,6 +18,17 @@ var start := Vector3.ZERO
 var finish := Vector3.ZERO
 var crest := 0.0
 var last_position := Vector3.ZERO
+## The shape of a climb in time (see _begin): how fast it goes forward at its start and
+## end (in shares of the way per share of the time), the share of the way at which the
+## body would touch the edge, and the shares of the time at which it is up, and past the
+## obstacle so that it may come down.
+var lead_in := 0.0
+var lead_out := 1.0
+var touch := 0.0
+var up_at := 0.4
+var down_at := 0.8
+## How fast it runs on after it has come down.
+var carry := Vector3.ZERO
 
 func _init(body: CharacterBody3D) -> void:
 	player = body
@@ -90,7 +101,13 @@ func plan(direction: Vector3) -> Dictionary:
 	var across := Vector3(end.x, high, end.z)
 	if not _clear(feet, up) or not _clear(up, across) or not _clear(across, end):
 		return {}
-	return {"start": feet, "end": end, "crest": high, "seconds": 0.36 + rise * 0.10}
+	# (edge: how far ahead the obstacle begins; depth: how far it reaches beyond that, as far
+	# as is known: to the landing on a broad top, to the far side of a thin rail.)
+	var flat_feet := Vector2(feet.x, feet.z)
+	var edge_at := Vector2(edge.x, edge.z).distance_to(flat_feet)
+	var lands_on_top := absf(end.y - top.position.y) < 0.15
+	return {"start": feet, "end": end, "crest": high, "seconds": 0.36 + rise * 0.18 + Vector2(end.x, end.z).distance_to(flat_feet) * 0.05,
+		"edge": edge_at, "depth": 0.43 if not lands_on_top else -1.0}
 
 func _begin(direction: Vector3) -> bool:
 	var route := plan(direction)
@@ -104,9 +121,45 @@ func _begin(direction: Vector3) -> bool:
 	elapsed = 0.0
 	buffered = 0.0
 	coyote = 0.0
+	# One unbroken movement: forward the whole time, starting with the run the body
+	# brings along; up until just before it would touch the edge, along over the top,
+	# then down, faster and faster, as a fall is.
+	var run := Vector2(player.velocity.x, player.velocity.z).length()
+	var way := Vector2(finish.x - start.x, finish.z - start.z).length()
+	lead_in = clampf(run * duration / maxf(way, 0.01), 0.0, 1.5)
+	lead_out = 1.1
+	var radius := 0.35
+	if player.body_shape.shape is CapsuleShape3D:
+		radius = (player.body_shape.shape as CapsuleShape3D).radius
+	touch = clampf((float(route.edge) - radius - 0.04) / maxf(way, 0.01), 0.0, 0.85)
+	var past := 1.0 if float(route.depth) < 0.0 else clampf((float(route.edge) + float(route.depth) + radius) / maxf(way, 0.01), touch + 0.05, 0.96)
+	up_at = maxf(0.38, _when(touch))
+	down_at = clampf(_when(past), up_at + 0.05, 0.97)
+	var ahead := Vector3(finish.x - start.x, 0, finish.z - start.z).normalized()
+	carry = ahead * clampf(run, 2.0, 4.3) * 0.8
 	player.airborne = true
 	player.velocity = Vector3.ZERO
 	return true
+
+## How far along the way a climb is at a share of its time (a cubic that starts and ends
+## with the speeds lead_in and lead_out).
+func _along(share: float) -> float:
+	var s := clampf(share, 0.0, 1.0)
+	var s2 := s * s
+	var s3 := s2 * s
+	return clampf((s3 - 2.0 * s2 + s) * lead_in + (-2.0 * s3 + 3.0 * s2) + (s3 - s2) * lead_out, 0.0, 1.0)
+
+## The share of the time at which the climb is `part` of the way along.
+func _when(part: float) -> float:
+	var low := 0.0
+	var high := 1.0
+	for i in range(24):
+		var mid := (low + high) * 0.5
+		if _along(mid) < part:
+			low = mid
+		else:
+			high = mid
+	return high
 
 func _advance(delta: float) -> void:
 	var shift := player.global_position - last_position
@@ -120,23 +173,32 @@ func _advance(delta: float) -> void:
 	crest += shift.y
 	elapsed = minf(duration, elapsed + delta)
 	var share := elapsed / duration
-	var up := Vector3(start.x, crest, start.z)
-	var across := Vector3(finish.x, crest, finish.z)
-	var next: Vector3
-	if share < 0.38:
-		next = start.lerp(up, smoothstep(0.0, 0.38, share))
-	elif share < 0.82:
-		next = up.lerp(across, smoothstep(0.38, 0.82, share))
+	# Forward: never more than to the edge before the body is up.
+	var along := _along(share)
+	if share < up_at:
+		along = minf(along, touch)
+	var height: float
+	if share < up_at:
+		# Up, quickly at first and slowing as it gets there.
+		height = lerpf(start.y, crest, sin(share / up_at * PI * 0.5))
+	elif share < down_at:
+		height = crest
 	else:
-		next = across.lerp(finish, smoothstep(0.82, 1.0, share))
+		var fall := (share - down_at) / maxf(1.0 - down_at, 0.001)
+		height = lerpf(crest, finish.y, fall * fall)
+	var next := Vector3(lerpf(start.x, finish.x, along), height, lerpf(start.z, finish.z, along))
 	var motion := next - player.global_position
 	player.velocity = motion / maxf(delta, 0.001)
 	# Recheck the actual motion: a body entering the route interrupts the climb safely.
 	var collision := player.move_and_collide(motion)
 	last_position = player.global_position
-	if collision != null or elapsed >= duration:
+	if collision != null:
 		duration = 0.0
 		player.velocity = Vector3.ZERO
+	elif elapsed >= duration:
+		# Down and running on, not stopped dead.
+		duration = 0.0
+		player.velocity = carry
 
 func step(delta: float, direction: Vector3, speed: float, blocked: bool) -> bool:
 	pose = move_toward(pose, 1.0 if active() else 0.0, delta * 9.0)
