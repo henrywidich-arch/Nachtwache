@@ -138,3 +138,96 @@ func _grab(folder: String, file: String) -> void:
 	await game.get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	game.get_viewport().get_texture().get_image().save_png(folder.path_join(file))
+
+## --finds-check --capture-dir=<folder>: the throwables to be found in a night of play
+## (seed 4242): each from a step and a half away, looked at (its prompt on the screen), and
+## the map in the corner once they have been seen.
+func run_finds(owner_game: Node3D, folder: String) -> void:
+	game = owner_game
+	await _wait(1.0)
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.hive.seed_wanted = 4242
+	game.start_run()
+	_quiet()
+	game.hive.set_process(false)
+	for id in game.hive_map.areas:
+		game.hive_map.unlock(str(id), true)
+	await _wait(1.5)
+	var finds: Array = game.hive.finds.finds
+	print("FINDS count=%d %s" % [finds.size(), str(finds.map(func(f: Dictionary) -> String: return "%s@%s" % [f.kind, f.at]))])
+	var k := 0
+	for find: Dictionary in finds:
+		var at: Vector3 = find.at
+		var away := Vector3(sin(float(find.yaw)), 0, cos(float(find.yaw))) * 1.6
+		# (From the side that is free: the one farther from the nearest wall.)
+		var best := away
+		var best_room := -1.0
+		for turn in range(8):
+			var try := away.rotated(Vector3.UP, turn * PI * 0.25)
+			var eye := at + try + Vector3(0, 1.62, 0)
+			var hit: Dictionary = game.player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(at + Vector3(0, 0.6, 0), eye, 1))
+			var room: float = 9.0 if hit.is_empty() else (hit.position as Vector3).distance_to(at)
+			if room > best_room:
+				best_room = room
+				best = try
+		game._place_player(at + best + Vector3(0, 0.05, 0), 0.0)
+		await _wait(0.4)
+		game.player.camera.look_at(at + Vector3(0, 0.45, 0))
+		await _wait(0.5)
+		find.seen = true
+		print("FIND %d %s prompt=%s" % [k, find.kind, game.interaction_prompt()])
+		await game._capture(folder, "fund_%d_%s.png" % [k, find.kind])
+		k += 1
+	print("FINDS_COMPLETE")
+	game.get_tree().quit()
+
+## --throw-anim: the throwables in the hand one after the other, for a recording with the
+## movie writer (--write-movie x.avi --fixed-fps 60): key 4 takes each in the hand, the
+## trigger throws it; then G and B the old way (held, let go). A MARK line names the frame
+## each part begins with.
+func run_throws(owner_game: Node3D) -> void:
+	game = owner_game
+	await _wait(1.0)
+	game.profile.mission = 1
+	game.start_run()
+	_quiet()
+	game.cabin.set_daylight(true)
+	var player: Survivor = game.player
+	game._place_player((game.cabin.points.yard_south as Vector3) + Vector3(0, 0.05, 0), 180.0, -8.0)
+	for kind in Survivor.THROWABLES:
+		player.items[kind] = 2
+	player.last_throw = "grenade"
+	await _steps(40)
+	for kind in Survivor.THROWABLES:
+		print("MARK %s frame=%d" % [kind, Engine.get_frames_drawn()])
+		player.select_throwable()
+		while player.throw_kind != kind:
+			player.select_throwable()
+		await _steps(45)
+		Input.action_press("fire")
+		await _steps(2)
+		Input.action_release("fire")
+		await _steps(60)
+	# (The mine set down last still keeps the hands busy a moment: throw_cooldown.)
+	await _steps(40)
+	print("MARK key_g frame=%d" % Engine.get_frames_drawn())
+	Input.action_press("throw_grenade")
+	player.ready_throw("grenade")
+	await _steps(30)
+	Input.action_release("throw_grenade")
+	await _steps(60)
+	await _steps(40)
+	print("MARK key_b frame=%d" % Engine.get_frames_drawn())
+	Input.action_press("place_claymore")
+	player.ready_throw("claymore")
+	await _steps(30)
+	Input.action_release("place_claymore")
+	await _steps(60)
+	print("MARK end frame=%d" % Engine.get_frames_drawn())
+	print("THROWS_COMPLETE items=%s" % str(player.items))
+	game.get_tree().quit()
+
+func _steps(count: int) -> void:
+	for i in range(count):
+		await game.get_tree().physics_frame

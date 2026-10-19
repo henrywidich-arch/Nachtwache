@@ -908,7 +908,11 @@ func _process(delta: float) -> void:
 		(vest_icons.get_child(i) as Control).visible = i < player.plate_level
 	var low: bool = player.health <= 30
 	health_label.modulate = DANGER if low else Color.WHITE
-	(health_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = DANGER if low else MINT
+	# (While it comes back by itself the bar breathes, a little lighter.)
+	var fill: Color = DANGER if low else MINT
+	if player.regenerating:
+		fill = fill.lerp(Color.WHITE, 0.18 + 0.12 * sin(Time.get_ticks_msec() * 0.006))
+	(health_bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = fill
 	if player.is_akimbo():
 		var hands: Array = player.dual_rounds()
 		ammo_label.text = "%02d · %02d" % [int(hands[0]), int(hands[1])]
@@ -919,6 +923,11 @@ func _process(delta: float) -> void:
 		ammo_label.add_theme_font_size_override("font_size", ammo_size)
 	ammo_label.modulate = DANGER if player.ammo <= player.magazine_size() / 5 else Color.WHITE
 	reserve_label.text = "/ ∞" if player.infinite_ammo() else "/ %d" % player.reserve
+	# With a throwable in the hand: how many of it, and what it is.
+	if player.throw_kind != "" and player.items.has(player.throw_kind):
+		ammo_label.text = "%d" % int(player.items[player.throw_kind])
+		ammo_label.modulate = AMBER
+		reserve_label.text = str(Survivor.GOODS[player.throw_kind].label)
 	rifle_label.text = ""
 	interaction_label.text = game.interaction_prompt()
 	var held: float = game.interaction_progress()

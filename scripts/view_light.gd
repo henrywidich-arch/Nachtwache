@@ -155,7 +155,8 @@ func _look(eye: Vector3, ambient: Color) -> void:
 		if not is_instance_valid(light):
 			gone += 1
 			continue
-		if not light.is_visible_in_tree():
+		# (A map taken out of the world keeps its lamps; they light nothing there.)
+		if not light.is_inside_tree() or not light.is_visible_in_tree():
 			continue
 		var reach := 0.0
 		if light is OmniLight3D:
@@ -185,7 +186,7 @@ func _look(eye: Vector3, ambient: Color) -> void:
 	# Under the open sky the sun (or the moon) comes back from the ground as well.
 	var open_sky := false
 	for sky: Variant in skies:
-		if not is_instance_valid(sky) or not (sky as Light3D).is_visible_in_tree() or (sky as Light3D).light_energy <= 0.0:
+		if not is_instance_valid(sky) or not (sky as Light3D).is_inside_tree() or not (sky as Light3D).is_visible_in_tree() or (sky as Light3D).light_energy <= 0.0:
 			continue
 		if not open_sky:
 			open_sky = player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(eye, eye + Vector3.UP * 40.0, 1)).is_empty()
