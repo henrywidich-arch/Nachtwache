@@ -9,7 +9,8 @@
 #   blender --background --factory-startup --python tools/blender_make_wirbel.py -- [--round 5] [--tex 2048]
 #           [--out assets/models/wirbel.glb] [--blend <file>] [--render <folder> --prefix runde1]
 #
-# --round: how far the polish goes (the five review rounds; the game uses the last).
+# --round: how far the polish goes (the five review rounds, and 6: the sharpening after the
+# game; the game uses the last).
 # --render: fixed views of the finished, baked model (studio light and dark in-game light).
 #
 # Modelling space: x = right, y = forward (muzzle), z = up, metres, origin in the middle of
@@ -28,7 +29,7 @@ def arg(name, default=None):
 
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROUND = int(arg("--round", "5"))
+ROUND = int(arg("--round", "6"))
 TEX = int(arg("--tex", "2048"))
 OUT = os.path.abspath(arg("--out", os.path.join(HERE, "..", "assets", "models", "wirbel.glb")))
 BLEND = arg("--blend")
@@ -373,7 +374,10 @@ def make_materials():
         grip = material("grip", (0.06, 0.063, 0.047) if ROUND == 2 else (0.048, 0.05, 0.038), 0.8, 0.0, wear=0.3 * wear, grime=0.9, bump=0.55 if ROUND == 2 else 0.9, bump_scale=1400.0 if ROUND == 2 else 2200.0, stipple=True, worn=(0.18, 0.18, 0.15))
         dark = material("dark", (0.008, 0.008, 0.008), 0.8, 0.3)
         blued = material("blued", (0.03, 0.033, 0.04), 0.38, 0.9, wear=0.8 * wear, grime=0.5)
-        brass = material("brass", (0.58, 0.42, 0.17), 0.3, 1.0, wear=0.4 * wear, grime=0.6, worn=(0.8, 0.65, 0.35))
+        # (From round 6 the brass is lighter and cleaner. Polished smooth, as first tried, it
+        # only mirrored the dark of the night in the game and the rounds vanished: a satin
+        # finish keeps a highlight from the lamp on every round.)
+        brass = material("brass", (0.58, 0.42, 0.17) if ROUND < 6 else (0.68, 0.5, 0.21), 0.3 if ROUND < 6 else 0.36, 1.0, wear=0.4 * wear, grime=0.6 if ROUND < 6 else 0.3, worn=(0.8, 0.65, 0.35))
         accent = material("accent", (0.72, 0.22, 0.04), 0.5, 0.0, wear=0.5 * wear, grime=0.5, worn=(0.4, 0.38, 0.35))
         rubber = material("rubber", (0.025, 0.025, 0.024), 0.9, 0.0, grime=0.5)
         if ROUND == 4:
@@ -381,7 +385,7 @@ def make_materials():
         elif ROUND >= 5:
             accent = material("accent", (0.7, 0.2, 0.03), 0.5, 0.0, wear=0.8 * wear, grime=0.6, worn=(0.3, 0.3, 0.28))
     marking = material("marking", (0.2, 0.2, 0.19), 0.55, 0.6) if ROUND >= 3 else steel
-    copper = material("copper", (0.55, 0.26, 0.14), 0.32, 1.0, wear=0.3, grime=0.5, worn=(0.8, 0.5, 0.35)) if ROUND >= 4 else brass
+    copper = material("copper", (0.55, 0.26, 0.14), 0.32 if ROUND < 6 else 0.36, 1.0, wear=0.3, grime=0.5 if ROUND < 6 else 0.25, worn=(0.8, 0.5, 0.35)) if ROUND >= 4 else brass
     return {"steel": steel, "polymer": polymer, "grip": grip, "dark": dark, "blued": blued, "brass": brass, "accent": accent, "rubber": rubber, "marking": marking, "copper": copper}
 
 
@@ -643,11 +647,18 @@ def build(m):
                     y = DRUM_Y[0] + 0.017 + i * 0.0555
                     # (Round 5: ten sides instead of fourteen - round 4's drum alone had 10,000
                     # triangles; at the size it is seen, ten are as round.)
-                    n = 14 if ROUND == 4 else 10
-                    drum.append(cylinder("Case", (p.x, y, DRUM_Z + p.z), (p.x, y + 0.033, DRUM_Z + p.z), 0.0046, m["brass"], n))
-                    drum.append(cone("Shoulder", (p.x, y + 0.033, DRUM_Z + p.z), (p.x, y + 0.037, DRUM_Z + p.z), 0.0046, 0.0031, m["brass"], n))
-                    drum.append(cylinder("Neck", (p.x, y + 0.037, DRUM_Z + p.z), (p.x, y + 0.042, DRUM_Z + p.z), 0.0031, m["brass"], n))
-                    drum.append(cone("Bullet", (p.x, y + 0.042, DRUM_Z + p.z), (p.x, y + 0.0525, DRUM_Z + p.z), 0.0029, 0.0007, m["copper"], n))
+                    # (Round 6, after the user found the rounds blurry in the game: sixteen
+                    # sides and shaded smooth - before, their ten flat sides flickered as
+                    # the drum turned and their long faces caught the light in bands.)
+                    n = 14 if ROUND == 4 else (10 if ROUND == 5 else 16)
+                    pieces = [cylinder("Case", (p.x, y, DRUM_Z + p.z), (p.x, y + 0.033, DRUM_Z + p.z), 0.0046, m["brass"], n),
+                              cone("Shoulder", (p.x, y + 0.033, DRUM_Z + p.z), (p.x, y + 0.037, DRUM_Z + p.z), 0.0046, 0.0031, m["brass"], n),
+                              cylinder("Neck", (p.x, y + 0.037, DRUM_Z + p.z), (p.x, y + 0.042, DRUM_Z + p.z), 0.0031, m["brass"], n),
+                              cone("Bullet", (p.x, y + 0.042, DRUM_Z + p.z), (p.x, y + 0.0525, DRUM_Z + p.z), 0.0029, 0.0007, m["copper"], n)]
+                    for piece in pieces:
+                        if ROUND >= 6:
+                            smooth(piece, 50.0)
+                        drum.append(piece)
             else:
                 drum.append(cylinder("Round", (p.x, DRUM_Y[0] + 0.016, DRUM_Z + p.z), (p.x, DRUM_Y[1] - 0.016, DRUM_Z + p.z), 0.0045, m["brass"], 12))
     smooth(core, 35)
@@ -745,7 +756,7 @@ def engrave_left(text, at, size, material):
 
 
 # ------------------------------------------------------------------ bake
-def bake(objs):
+def bake(objs, prefix="wirbel"):
     scene = bpy.context.scene
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
@@ -753,7 +764,7 @@ def bake(objs):
     scene.render.bake.margin = 6
     images = {}
     for key, colour_space in (("base", "sRGB"), ("rough", "Non-Color"), ("metal", "Non-Color"), ("normal", "Non-Color")):
-        img = bpy.data.images.new("wirbel_" + key, TEX, TEX, alpha=False, float_buffer=False)
+        img = bpy.data.images.new(prefix + "_" + key, TEX, TEX, alpha=False, float_buffer=False)
         img.colorspace_settings.name = colour_space
         images[key] = img
     mats = set()
@@ -762,8 +773,10 @@ def bake(objs):
             mats.add(slot.material)
     targets = {}
     for mat in mats:
-        node = mat.node_tree.nodes.new("ShaderNodeTexImage")
-        node.name = "BAKE"
+        node = mat.node_tree.nodes.get("BAKE")
+        if node is None:
+            node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+            node.name = "BAKE"
         targets[mat] = node
     bpy.ops.object.select_all(action="DESELECT")
     for o in objs:
@@ -787,20 +800,24 @@ def bake(objs):
             nt.links.new(nt.nodes[name].outputs[int(index)], emit.inputs["Color"])
             nt.links.new(emit.outputs[0], nt.nodes["Material Output"].inputs["Surface"])
         run("EMIT", images[key])
+    # The surfaces back on their shaders, for a second set baked from the same materials.
+    for mat in mats:
+        nt = mat.node_tree
+        nt.links.new(nt.nodes["Principled BSDF"].outputs[0], nt.nodes["Material Output"].inputs["Surface"])
     import numpy
     rough = numpy.array(images["rough"].pixels[:], dtype=numpy.float32)
     metal = numpy.array(images["metal"].pixels[:], dtype=numpy.float32)
     orm = numpy.ones_like(rough)
     orm[1::4] = rough[0::4]
     orm[2::4] = metal[0::4]
-    images["orm"] = bpy.data.images.new("wirbel_orm", TEX, TEX, alpha=False)
+    images["orm"] = bpy.data.images.new(prefix + "_orm", TEX, TEX, alpha=False)
     images["orm"].colorspace_settings.name = "Non-Color"
     images["orm"].pixels = orm.tolist()
     return images
 
 
-def final_material(images):
-    mat = bpy.data.materials.new("wirbel")
+def final_material(images, name="wirbel"):
+    mat = bpy.data.materials.new(name)
     mat.use_nodes = True
     nt = mat.node_tree
     bsdf = nt.nodes["Principled BSDF"]
@@ -929,23 +946,28 @@ def main():
         bpy.ops.object.select_all(action="DESELECT")
         o.select_set(True)
         bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
-    bpy.ops.object.select_all(action="DESELECT")
-    for o in parts:
-        o.select_set(True)
-    bpy.context.view_layer.objects.active = body
-    bpy.ops.object.mode_set(mode="EDIT")
-    bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60.0), island_margin=0.004, scale_to_bounds=False)
-    bpy.ops.object.mode_set(mode="OBJECT")
-    for o in parts:
-        for slot in o.material_slots:
-            if slot.material is None:
-                slot.material = bpy.data.materials["steel"]
-    images = bake(list(parts))
-    final = final_material(images)
-    for o in parts:
-        o.data.materials.clear()
-        o.data.materials.append(final)
+    # (From round 6, after the user found the drum and its rounds blurry in the game: the
+    # drum is unwrapped and baked into a texture set of its own, as big as the one of the
+    # whole rest of the rifle - six times the texels on it. Before, it had a sixth of one.)
+    groups = [[o for o in parts if o is not magazine], [magazine]] if ROUND >= 6 else [list(parts)]
+    for group, prefix in zip(groups, ("wirbel", "wirbel_drum")):
+        bpy.ops.object.select_all(action="DESELECT")
+        for o in group:
+            o.select_set(True)
+        bpy.context.view_layer.objects.active = group[0]
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="SELECT")
+        bpy.ops.uv.smart_project(angle_limit=math.radians(60.0), island_margin=0.004 if len(group) > 1 else 0.003, scale_to_bounds=False)
+        bpy.ops.object.mode_set(mode="OBJECT")
+        for o in group:
+            for slot in o.material_slots:
+                if slot.material is None:
+                    slot.material = bpy.data.materials["steel"]
+        images = bake(group, prefix)
+        final = final_material(images, prefix)
+        for o in group:
+            o.data.materials.clear()
+            o.data.materials.append(final)
     # The moving parts turn and run about their own places.
     place_origin(magazine, (0.0, (DRUM_Y[0] + DRUM_Y[1]) * 0.5, DRUM_Z))
     place_origin(bolt, BOLT_REST)

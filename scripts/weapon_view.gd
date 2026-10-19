@@ -342,6 +342,9 @@ static var shotgun_materials: Dictionary = {}
 static var grain: NoiseTexture2D
 
 static func tune(target: BaseMaterial3D) -> BaseMaterial3D:
+	# (Seen at a slant, as the long faces of a turning drum are, a texture stays sharp only
+	# with anisotropic filtering: plain mipmaps blurred them to mush.)
+	target.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 	target.use_fov_override = true
 	target.fov_override = VIEW_FOV
 	target.use_z_clip_scale = true
