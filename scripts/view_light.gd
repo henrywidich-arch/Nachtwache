@@ -145,8 +145,10 @@ func update(delta: float, eye: Vector3, flashlight: SpotLight3D, ambient: Color)
 ## arrives, and the room's own ambient light under it.
 func _look(eye: Vector3, ambient: Color) -> void:
 	if not pending.is_empty():
-		for node in pending:
-			_take(node)
+		# (One that was freed again before the look is handed to nobody.)
+		for node: Variant in pending:
+			if is_instance_valid(node):
+				_take(node)
 		pending.clear()
 	var sum := Color(0, 0, 0)
 	var weight := 0.0
