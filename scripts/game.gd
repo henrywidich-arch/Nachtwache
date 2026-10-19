@@ -544,6 +544,9 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_figures_check")
+	elif "--ego-check" in args:
+		check_mode = true
+		call_deferred("_run_ego_check")
 	elif "--hive-check" in args:
 		check_mode = true
 		call_deferred("_run_hive_check")
@@ -2883,6 +2886,12 @@ func _run_ops_check() -> void:
 ## called up and frozen, the four pages of its menu, and the night switched back on.
 ## Pictures of the second mission's map: --hive-check --capture-dir=<folder>, with
 ## --hive-part=<name> only the views whose names begin with that.
+## Pictures of the weapon in the hands in many places (tools/ego_light_check.gd).
+func _run_ego_check() -> void:
+	var runner: Node = load("res://tools/ego_light_check.gd").new()
+	add_child(runner)
+	await runner.run(self, _capture_dir())
+
 func _run_hive_check() -> void:
 	var folder := _capture_dir()
 	var tick := func(seconds: float) -> Signal: return get_tree().create_timer(seconds).timeout

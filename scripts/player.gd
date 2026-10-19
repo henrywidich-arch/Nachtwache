@@ -223,6 +223,9 @@ var weapon: Node3D
 var flash: Node3D
 var flash_light: OmniLight3D
 var flash_mesh: MeshInstance3D
+## The light of the weapon in the hands: the room's colour coming back, a rim in the dark,
+## the flashlight's bounce (view_light.gd).
+var view_light: ViewLight
 var left_flash: Node3D
 var left_flash_left := 0.0
 var flashlight: SpotLight3D
@@ -474,15 +477,12 @@ func _ready() -> void:
 	# The beam sits just beside the weapon, so it must not light the viewmodel itself.
 	flashlight.light_cull_mask = 1
 	camera.add_child(flashlight)
-	var fill := OmniLight3D.new()
-	fill.name = "ViewmodelFill"
-	fill.position = Vector3(-0.1, 0.12, 0.05)
-	fill.light_color = Color("aebdd0")
-	fill.light_energy = 0.9
-	fill.omni_range = 2.0
-	fill.light_cull_mask = 2
-	fill.light_volumetric_fog_energy = 0.0
-	camera.add_child(fill)
+	# (Until v0.69 one cold fill lit the view everywhere, as bright in the dark yard as in a
+	# lit hall: view_light.gd lights it by the place instead.)
+	view_light = ViewLight.new()
+	view_light.name = "ViewLight"
+	view_light.player = self
+	camera.add_child(view_light)
 
 func _build_weapon() -> void:
 	weapon_models["rifle"] = WeaponView.build_gun("rifle")
@@ -518,6 +518,8 @@ func _build_weapon() -> void:
 	flash.add_child(flash_light)
 	flash_mesh = WeaponView.build_flash()
 	flash.add_child(flash_mesh)
+	# The flash lights the weapon and the hands too (the light above lights only the world).
+	flash.add_child(ViewLight.flash_light())
 	flash.visible = false
 	weapon.add_child(flash)
 	flash.position = WeaponView.VIEWS["rifle"].muzzle
@@ -1260,6 +1262,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	buff_left = maxf(0.0, buff_left - delta)
+	if view_light != null:
+		var env := get_world_3d().environment
+		var ambient := Color(env.ambient_light_color * env.ambient_light_energy, 1.0) if env != null else Color(0.08, 0.08, 0.09)
+		view_light.update(delta, camera.global_position, flashlight, ambient)
 	shot_cooldown = maxf(0, shot_cooldown - delta)
 	dual_cooldowns = Vector2(maxf(0.0, dual_cooldowns.x - delta), maxf(0.0, dual_cooldowns.y - delta))
 	dual_kick = Vector2(maxf(0.0, dual_kick.x - delta * 9.0), maxf(0.0, dual_kick.y - delta * 9.0))
@@ -1967,6 +1973,9 @@ func shoot(hand: int = 1) -> void:
 	(shot_flash.get_child(1) as MeshInstance3D).rotation.z = randf() * TAU
 	(shot_flash.get_child(1) as MeshInstance3D).scale = Vector3.ONE * randf_range(0.75, 1.3) * blaze
 	(shot_flash.get_child(0) as OmniLight3D).light_energy = 3.5 * blaze
+	var on_view := shot_flash.get_node_or_null("ViewFlash") as OmniLight3D
+	if on_view != null:
+		on_view.light_energy = ViewLight.FLASH * blaze
 	var punch: float = data.get("punch", 1.0)
 	recoil = punch
 	if dual:
