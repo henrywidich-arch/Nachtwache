@@ -90,7 +90,7 @@ func _ready() -> void:
 	eye_fill.light_specular = 0.2
 	add_child(eye_fill)
 	spill = view_light("Spill", 0.0, 1.3, Color("e6ecd8"))
-	spill.position = Vector3(0.05, -0.08, -0.75)
+	spill.position = Vector3(0.05, -0.25, -0.9)
 	add_child(spill)
 
 ## The lamps of the level; after that, each new one as it is added.
@@ -138,7 +138,7 @@ func update(delta: float, eye: Vector3, flashlight: SpotLight3D, ambient: Color)
 		var ahead := -flashlight.global_basis.z
 		var hit := player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, from + ahead * 12.0, 1))
 		var gap: float = 12.0 if hit.is_empty() else from.distance_to(hit.position)
-		beam = clampf(1.0 - gap / 12.0, 0.0, 1.0) * 0.55 + 0.12
+		beam = clampf(1.0 - gap / 12.0, 0.0, 1.0) * 0.4 + 0.1
 	spill.light_energy = lerpf(spill.light_energy, beam, minf(1.0, delta * 8.0))
 
 ## How the lamps near the eye light the place: their colour, weighted by how much of each

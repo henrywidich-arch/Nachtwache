@@ -40,6 +40,8 @@ func run(owner_game: Node3D, folder: String) -> void:
 	if only in ["", "hive"]:
 		game.profile.mission = 2
 		game.intro_skipped = true
+		# (A night of play, with areas of the random part in its seams; a check gets the classic one.)
+		game.hive.seed_wanted = 4242
 		game.start_run()
 		_quiet()
 		game.hive.set_process(false)
