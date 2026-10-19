@@ -1234,6 +1234,7 @@ func run(game: Node3D) -> void:
 	await _hive(game)
 	await _areas(game)
 	await _squad_levels(game)
+	await _villa_pictures(game)
 	await _voices(game)
 	game.sounds.stop_all()
 	await wait(0.2)
@@ -11553,3 +11554,110 @@ func _walk_body(body: CharacterBody3D, route: PackedVector3Array, helped: bool) 
 		if still > 1.0:
 			return false
 	return true
+
+# ---------------------------------------------------------------- the villa's pictures
+
+## His pictures on the villa's walls (after v0.69): every place on a wall has a picture in a
+## frame made for it, none twice in a night, Noah's photograph over the salon's fire; another
+## night hangs others, the same night the same (also on the other side of a co-op night); the
+## frames lie flat on their walls and nothing stands in front of them.
+func _villa_pictures(game: Node3D) -> void:
+	var profile: Profile = game.profile
+	var kept_mission: int = profile.mission
+	var kept_mode: String = profile.mode
+	profile.mode = "story"
+	profile.mission = 2
+	game.intro_skipped = true
+	game.start_run()
+	await frames(4)
+	var map := game.cabin as HiveMap
+	var pictures: VillaPictures = map.pictures
+	var ids: Array = pictures.spots.map(func(spot: Dictionary) -> String: return str(spot.id))
+	# --- the choice, from the seeds of many nights
+	var faults: Array[String] = []
+	var sets := {}
+	for night_seed in range(1, 61):
+		var chosen := VillaPictures.choose(ids, night_seed)
+		var again := VillaPictures.choose(ids, night_seed)
+		if str(chosen) != str(again):
+			faults.append("%d: another choice the second time" % night_seed)
+		if chosen.size() != ids.size():
+			faults.append("%d: %d of %d places" % [night_seed, chosen.size(), ids.size()])
+		var seen := {}
+		for spot_id in chosen:
+			if seen.has(chosen[spot_id]):
+				faults.append("%d: %s twice" % [night_seed, str(chosen[spot_id])])
+			seen[chosen[spot_id]] = true
+		if str(chosen.get(VillaPictures.BOYS_SPOT, "")) != "die_boys":
+			faults.append("%d: not the boys over the fire" % night_seed)
+		var others: Array = chosen.values()
+		others.sort()
+		sets[str(others)] = true
+	expect(ids.size() >= 15 and VillaPictures.available().size() == VillaPictures.CATALOG.size() and faults.is_empty() and sets.size() >= 55, "Every night hangs a picture in every one of the villa's %d places, no picture twice, Noah's photograph over the salon's fire - and others from night to night (%d different choices in 60 nights), the same again for the same night (as a guest of a co-op night builds it)%s" % [ids.size(), sets.size(), "" if faults.is_empty() else " - " + ", ".join(PackedStringArray(faults.slice(0, 4)))])
+	# --- what hangs: in a frame of its own proportions, within its place
+	var framed: Array[String] = []
+	var wrong: Array[String] = []
+	for spot: Dictionary in pictures.spots:
+		var entry: Dictionary = pictures.hung.get(str(spot.id), {})
+		if entry.is_empty() or not is_instance_valid(entry.node):
+			wrong.append("%s: empty" % str(spot.id))
+			continue
+		var node: Node3D = entry.node
+		var texture := pictures.texture_of(str(entry.picture))
+		var picture: Vector2 = node.get_meta("picture")
+		var size: Vector2 = node.get_meta("size")
+		var ratio := float(texture.get_width()) / float(texture.get_height())
+		var canvas := node.get_node_or_null("Leinwand") as MeshInstance3D
+		var frame := node.get_node_or_null("Rahmen") as MeshInstance3D
+		if canvas == null or frame == null or (frame.mesh as ArrayMesh).get_surface_count() < 2:
+			wrong.append("%s: no frame or no canvas" % str(spot.id))
+		elif absf(picture.x / picture.y - ratio) > 0.01 * ratio or size.x > float(spot.wide) + 0.001 or size.y > float(spot.tall) + 0.001:
+			wrong.append("%s: %s in %.2f x %.2f" % [str(spot.id), str(size), float(spot.wide), float(spot.tall)])
+		else:
+			framed.append(str(entry.style))
+	var styles := {}
+	for style in framed:
+		styles[style] = true
+	expect(wrong.is_empty() and framed.size() == pictures.spots.size() and styles.size() >= 3, "Every picture hangs in a frame made for it - in its own proportions, within its place on the wall - in a style that suits it (%s)%s" % [", ".join(PackedStringArray(styles.keys())), "" if wrong.is_empty() else " - " + ", ".join(PackedStringArray(wrong.slice(0, 4)))])
+	# --- flat on the wall, nothing in front of it
+	await frames(3)
+	var space := map.get_world_3d().direct_space_state
+	var off_wall: Array[String] = []
+	for spot: Dictionary in pictures.spots:
+		var entry: Dictionary = pictures.hung.get(str(spot.id), {})
+		if entry.is_empty():
+			continue
+		var node: Node3D = entry.node
+		var size: Vector2 = node.get_meta("size")
+		var out := node.global_transform.basis.z.normalized()
+		var right := node.global_transform.basis.x.normalized()
+		for corner in [Vector2(-0.45, -0.45), Vector2(0.45, -0.45), Vector2(-0.45, 0.45), Vector2(0.45, 0.45), Vector2.ZERO]:
+			var on_face: Vector3 = node.global_position + right * corner.x * size.x + Vector3.UP * corner.y * size.y
+			var hit := space.intersect_ray(PhysicsRayQueryParameters3D.create(on_face + out * 0.6, on_face - out * 0.3, 1))
+			# (The wall's face lies a centimetre behind the frame's back; nothing solid in front.)
+			var gap: float = (hit.position as Vector3).distance_to(on_face) * (1.0 if out.dot(on_face - (hit.position as Vector3)) > 0.0 else -1.0) if not hit.is_empty() else INF
+			if hit.is_empty() or gap < -0.001 or gap > float(spot.get("off", 0.01)) + 0.04:
+				off_wall.append("%s (%s)" % [str(spot.id), "no wall" if hit.is_empty() else "%.3f m" % gap])
+				break
+	expect(off_wall.is_empty(), "Every frame lies flat against its wall (a centimetre off it, or off the chimney breast it hangs on), with nothing standing in front of it%s" % ("" if off_wall.is_empty() else " - not: " + ", ".join(PackedStringArray(off_wall.slice(0, 5)))))
+	# --- another night, other pictures; the same night again, the same
+	var first := {}
+	for spot_id in pictures.hung:
+		first[spot_id] = pictures.hung[spot_id].picture
+	pictures.hang(424242)
+	await frames(2)
+	var changed := 0
+	for spot_id in pictures.hung:
+		if str(pictures.hung[spot_id].picture) != str(first.get(spot_id, "")):
+			changed += 1
+	var night_seed := int(map.night.get("seed", 0))
+	pictures.hang(night_seed)
+	await frames(2)
+	var back := true
+	for spot_id in first:
+		back = back and str(pictures.hung.get(spot_id, {}).get("picture", "")) == str(first[spot_id])
+	expect(changed >= pictures.spots.size() / 2 and back, "Another night hangs other pictures (%d of %d places changed) and takes the old ones down; this night again hangs the same" % [changed, pictures.spots.size()])
+	game.return_to_menu()
+	await frames(2)
+	profile.mission = kept_mission
+	profile.mode = kept_mode
