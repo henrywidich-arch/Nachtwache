@@ -3,7 +3,7 @@ extends Node
 ## farm at night and by day, in the villa, the station, the old facility and two areas of
 ## the random part. Each place three times: as it is, with the flashlight on, and in the
 ## frame of a shot (its flash). Started by game.gd with --ego-check --capture-dir=<folder>
-## [--ego-tag=<prefix>] [--ego-only=farm|hive] [--ego-fps]: --ego-fps takes no pictures but
+## [--ego-tag=<prefix>] [--ego-only=farm|hive] [--ego-weapon=<id>] [--ego-fps]: --ego-fps takes no pictures but
 ## prints the frame time of every place (vsync off), standing and firing.
 var game: Node3D
 
@@ -76,6 +76,10 @@ func _wait(seconds: float) -> Signal:
 func _quiet() -> void:
 	game.set_process(false)
 	game.preparation_left = 9999.0
+	# --ego-weapon=<id>: that weapon in the hands instead of the starting one.
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--ego-weapon=") and Survivor.WEAPONS.has(arg.trim_prefix("--ego-weapon=")):
+			game.player.unlock(arg.trim_prefix("--ego-weapon="))
 	for node in game.enemies.get_children():
 		node.queue_free()
 	game.alive_count = 0
