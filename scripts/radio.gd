@@ -430,17 +430,24 @@ static func pick(cue: String) -> Dictionary:
 	return {"speaker": speaker, "name": str(NAMES[speaker]), "text": garbled(str(variants[index])) if fake else str(variants[index]), "sound": _sound(speaker, cue, index), "fake": fake}
 
 ## A subtitle that came through a channel somebody sits on: one or two of its letters are
-## lost, never the first of a word.
+## lost, never the first of a word - away from the line's ends where it is long enough,
+## anywhere in a short one ("Clear." used to come through whole).
 static func garbled(text: String) -> String:
 	var out := text
-	var lost := 0
-	for attempt in range(40):
-		if lost >= 1 + (1 if text.length() > 60 else 0):
+	for lost in range(1 + (1 if text.length() > 60 else 0)):
+		var inner: Array = []
+		var anywhere: Array = []
+		for at in range(1, out.length()):
+			if out[at].to_upper() == out[at].to_lower() or out[at - 1] == " ":
+				continue
+			anywhere.append(at)
+			if at >= 6 and at <= out.length() - 5:
+				inner.append(at)
+		var pool: Array = inner if not inner.is_empty() else anywhere
+		if pool.is_empty():
 			break
-		var at := randi_range(6, maxi(7, out.length() - 5))
-		if at < out.length() and out[at] != " " and out[at] != "#" and out[at - 1] != " ":
-			out = out.substr(0, at) + "#" + out.substr(at + 1)
-			lost += 1
+		var at: int = pool[randi() % pool.size()]
+		out = out.substr(0, at) + "#" + out.substr(at + 1)
 	return out
 
 ## The same for a call of somebody nearby; empty when this speaker has nothing to say.

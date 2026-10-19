@@ -1235,6 +1235,7 @@ func run(game: Node3D) -> void:
 	await _hive(game)
 	await _areas(game)
 	await _squad_levels(game)
+	await _fp_feel(game)
 	await _villa_pictures(game)
 	await _voices(game)
 	game.sounds.stop_all()
@@ -8019,6 +8020,13 @@ func _operators(game: Node3D) -> void:
 	book.record("normal", {"victory": false, "score": 10, "seconds": 60, "kills": 3, "havoc": 1})
 	expect(locked and book.unlocked("havoc") and not book.unlocked("ghost") and int(book.totals.havoc) == 1 and book.progress("ghost").contains("0 / 1"), "An operator's look is a skin for whoever has driven him off once")
 	# --- once Nadja is out, the voice of command is not Coleman's
+	# (On the farm: a block before may have left the second mission running, whose director
+	# has the radio then and whose channel is taken until the station - the check failed so
+	# now and then in a full run.)
+	if game.hive.on:
+		game.profile.mission = 1
+		game.start_run()
+		await frames(3)
 	var story: StoryDirector = game.story
 	var was_on: bool = story.enabled
 	var was_at: String = story.stage
@@ -8047,7 +8055,12 @@ func _operators(game: Node3D) -> void:
 	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	game._say("round_clear")
-	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and honest_again and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel"), "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's")
+	# Every line of command loses a letter then, a short one ("Clear.") too - it came
+	# through whole before, so now and then the check above found nothing lost.
+	var every_lost := true
+	for variant: Variant in Radio.LINES["round_clear"][1]:
+		every_lost = every_lost and Radio.garbled(str(variant)).contains("#")
+	expect(honest and taken and bool(said.fake) and str(said.sound) != "" and not bool(nadja_line.fake) and honest_again and is_equal_approx(float(game.sounds.FAKE_PITCH), 0.955) and Radio.LINES.has("nadja_channel") and every_lost, "From the moment Nadja is out of her cell the lines of command come over a taken-over channel: lower, breaking up, a letter lost here and there - and only command's (honest %s, taken %s, fake %s, again %s, hive %s, every line %s)" % [honest, taken, bool(said.fake), honest_again, game.hive.on, every_lost])
 	game.radio_queue.clear()
 	game.radio_busy = 0.0
 	# --- two versions of the game cannot play together, and both are told so
@@ -11674,6 +11687,158 @@ func _walk_body(body: CharacterBody3D, route: PackedVector3Array, helped: bool) 
 		if still > 1.0:
 			return false
 	return true
+
+## What came with fp-feel: health that comes back by itself, the throwable seen in the hand
+## (the right one, its name where the ammunition is), and throwables to be found in the
+## second mission.
+func _fp_feel(game: Node3D) -> void:
+	var player: Survivor = game.player
+	game.profile.mission = 1
+	game.profile.mode = "story"
+	game.team_enabled = false
+	game.start_run()
+	game.set_process(false)
+	game.mission.plain()
+	game.preparation_left = 9999.0
+	await frames(3)
+	# --- health comes back after REGEN_DELAY seconds without a hit, up to REGEN_CAP
+	player.health = 41.0
+	player.receive_damage(1.0)
+	var hit_at: float = player.health
+	await frames(int(Survivor.REGEN_DELAY * 60.0) - 30)
+	var waited: bool = is_equal_approx(player.health, hit_at) and not player.regenerating
+	await frames(90)
+	var rising: bool = player.health > hit_at + Survivor.REGEN_RATE * 0.5 and player.regenerating
+	# (A hit stops it at once.)
+	var before_hit: float = player.health
+	player.receive_damage(2.0)
+	await frames(30)
+	var stopped: bool = is_equal_approx(player.health, before_hit - 2.0) and not player.regenerating
+	player.health = Survivor.REGEN_CAP - 1.0
+	player.regen_wait = 0.0
+	await frames(60)
+	var capped: bool = is_equal_approx(player.health, Survivor.REGEN_CAP) and not player.regenerating
+	# (Not while down.)
+	player.health = 20.0
+	player.regen_wait = 0.0
+	player.down = true
+	await frames(60)
+	var not_down: bool = is_equal_approx(player.health, 20.0)
+	player.down = false
+	player.health = 100.0
+	await frames(2)
+	var full_stays: bool = is_equal_approx(player.health, 100.0) and not player.regenerating
+	expect(waited and rising and stopped and capped and not_down and full_stays and Survivor.REGEN_CAP < 100.0, "After %d s without a hit health comes back, %.1f a second up to %d - a hit stops it at once, and it does not while down" % [int(Survivor.REGEN_DELAY), Survivor.REGEN_RATE, int(Survivor.REGEN_CAP)])
+	# --- the throwable in the hand: each its own, the one chosen, its name where the ammunition is
+	for kind in Survivor.THROWABLES:
+		player.items[kind] = 1
+	player.throw_kind = ""
+	player.throw_in_hand = false
+	player.last_throw = "grenade"
+	var shapes := {}
+	var right := true
+	for k in range(Survivor.THROWABLES.size()):
+		player.select_throwable()
+		await frames(3)
+		var held := str(player.throw_kind)
+		var model: Node3D = player.throw_model
+		var prop: Node3D = model.get_node_or_null("Prop") if model != null else null
+		game.hud._process(0.05)
+		right = right and model != null and model.visible and str(model.get_meta("kind", "")) == held and prop != null and prop.get_child_count() >= 2 and game.hud.reserve_label.text == str(Survivor.GOODS[held].label) and game.hud.ammo_label.text == "1" and not player.weapon.visible
+		# (What a model is made of tells them apart.)
+		var made: Array = []
+		for part in prop.get_children():
+			made.append("%s:%s" % [(part as MeshInstance3D).mesh.get_class(), str(((part as MeshInstance3D).material_override as StandardMaterial3D).albedo_color.to_html(false))])
+		shapes[held] = ",".join(PackedStringArray(made))
+	var each_own: bool = shapes.size() == Survivor.THROWABLES.size()
+	for a: String in shapes:
+		for b: String in shapes:
+			each_own = each_own and (a == b or shapes[a] != shapes[b])
+	# A weapon's key puts it away again.
+	player._select_slot(1)
+	await frames(3)
+	var away: bool = player.throw_kind == "" and player.weapon.visible
+	# The mine's key (B) takes it in the hand too before it is set down.
+	player.ready_throw("claymore")
+	await frames(3)
+	var mine_held: bool = player.throw_kind == "claymore" and player.throw_model != null and str(player.throw_model.get_meta("kind", "")) == "claymore" and player.throw_model.visible
+	player.put_away()
+	await frames(2)
+	expect(right and each_own and away and mine_held, "Key 4 takes the chosen throwable in the hand - each its own model, the one shown being the one chosen, its name and count where the ammunition is shown -, a weapon's key puts it away, and the mine's key shows the mine in the hand first")
+	# --- throwables to be found in the second mission
+	var kept_mission: int = game.profile.mission
+	game.profile.mission = 2
+	game.intro_skipped = true
+	game.hive.seed_wanted = 4242
+	game.start_run()
+	game.set_process(false)
+	await frames(30)
+	var finds: HiveFinds = game.hive.finds
+	var map: Node3D = game.hive.map
+	var one: Array = HiveFinds.deal(map, 1234)
+	var again: Array = HiveFinds.deal(map, 1234)
+	var other: Array = HiveFinds.deal(map, 98765)
+	var same := one.size() == again.size()
+	for i in range(mini(one.size(), again.size())):
+		same = same and (one[i].at as Vector3).is_equal_approx(again[i].at) and str(one[i].kind) == str(again[i].kind)
+	var differs := one.size() != other.size()
+	for i in range(mini(one.size(), other.size())):
+		differs = differs or not (one[i].at as Vector3).is_equal_approx(other[i].at)
+	var spaced := true
+	var kinds := {}
+	for a: Dictionary in one:
+		kinds[str(a.kind)] = true
+		for b: Dictionary in one:
+			if a != b:
+				spaced = spaced and (a.at as Vector3).distance_to(b.at) >= HiveFinds.SPACING
+		for door: Dictionary in map.doors:
+			if Vector2((door.pos as Vector3).x - (a.at as Vector3).x, (door.pos as Vector3).z - (a.at as Vector3).z).length() < 2.2 and int(door.level) == map.level_of((a.at as Vector3) + Vector3(0, 0.3, 0)):
+				spaced = false
+	var handful: bool = one.size() >= 4 and one.size() <= HiveFinds.COUNT and kinds.size() >= 2
+	# The night's finds lie there, glinting; one is taken with [E] while it is aimed at.
+	finds.begin(1234)
+	await frames(30)
+	var laid: bool = finds.finds.size() == one.size()
+	for find: Dictionary in finds.finds:
+		laid = laid and is_instance_valid(find.node) and (find.node as Node3D).get_node_or_null("Glint") != null
+	var first: Dictionary = finds.finds[0]
+	var kind := str(first.kind)
+	player.items[kind] = 0
+	var stand: Vector3 = (first.at as Vector3) + Vector3(sin(float(first.yaw)), 0, cos(float(first.yaw))) * 1.5
+	var free_side := 0.0
+	for turn in range(8):
+		var try: Vector3 = (first.at as Vector3) + Vector3(1.5, 0, 0).rotated(Vector3.UP, turn * PI * 0.25)
+		var gap: Dictionary = player.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create((first.at as Vector3) + Vector3(0, 0.6, 0), try + Vector3(0, 1.6, 0), 1))
+		var room: float = 9.0 if gap.is_empty() else (gap.position as Vector3).distance_to(first.at)
+		if room > free_side:
+			free_side = room
+			stand = try
+	face(game, stand + Vector3(0, 0.05, 0), 0.0)
+	await frames(3)
+	player.camera.look_at((first.at as Vector3) + Vector3(0, 0.45, 0))
+	await frames(10)
+	var asks: bool = game.interaction_prompt().contains(str(Survivor.GOODS[kind].label)) and game.interaction_prompt().contains("[E]") and game.focused_object() == first.node
+	game.interact()
+	await frames(2)
+	var taken: bool = int(player.items[kind]) == 1 and bool(first.taken) and not is_instance_valid(first.node)
+	# Pockets that are full leave a find where it is.
+	var second: Dictionary = finds.finds[1]
+	var kind2 := str(second.kind)
+	player.items[kind2] = int(Survivor.GOODS[kind2].max)
+	second.seen = true
+	var marked: bool = finds.seen_spots().has(second.at) or player.global_position.distance_to(second.at) >= HiveFinds.MARK_REACH
+	face(game, (second.at as Vector3) + Vector3(1.5, 0.05, 0), 0.0)
+	await frames(3)
+	player.camera.look_at((second.at as Vector3) + Vector3(0, 0.45, 0))
+	await frames(5)
+	var full_prompt: String = game.interaction_prompt()
+	finds.use()
+	var left_there: bool = not bool(second.taken) and int(player.items[kind2]) == int(Survivor.GOODS[kind2].max)
+	expect(same and differs and spaced and handful and laid and asks and taken and left_there and marked, "Mission two lays a handful of throwables out each night, the same for the same night and others for another, apart and out of the doorways; each glints, is taken with [E] while aimed at, and stays where it is while the pockets are full (%d finds: %s; prompt %s / %s)" % [one.size(), str(kinds.keys()), str(asks), full_prompt])
+	game.hive.seed_wanted = -2
+	game.profile.mission = kept_mission
+	game.start_run()
+	await frames(3)
 
 # ---------------------------------------------------------------- the villa's pictures
 

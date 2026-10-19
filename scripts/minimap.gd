@@ -21,6 +21,8 @@ const SOLDIER := Color("5fd0f0")
 const FRIEND := Color("7fe3b4")
 const TASK := Color("fff0b8")
 const SIDE := Color("7ff2b8")
+## A throwable to be found (HiveFinds) that has been seen.
+const FIND := Color(1.0, 0.8, 0.42)
 ## The stations of the second mission: nobody's colour, so that nothing hostile is read
 ## into them.
 const STATION := Color("eef1f5")
@@ -160,6 +162,12 @@ func marks() -> Array:
 			var lift := _mark(spot, here, yaw, LIFT, 3.4, "lift", cabin.level_of(spot + Vector3(0, 0.3, 0)) == level)
 			if not lift.rim:
 				out.append(lift)
+	# Throwables that have been seen and still lie there: a small amber dot.
+	if game.hive.on and game.hive.finds != null:
+		for spot: Vector3 in game.hive.finds.seen_spots():
+			var find := _mark(spot, here, yaw, FIND, 2.0, "dot", cabin.level_of(spot + Vector3(0, 0.3, 0)) == level)
+			if not find.rim:
+				out.append(find)
 	for marker in game.markers():
 		# Something of an area's objective that has been seen (a thing to find, a place to
 		# switch on): a small mark in the colour of the tasks, and none at the rim.

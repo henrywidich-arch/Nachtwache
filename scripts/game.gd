@@ -544,6 +544,15 @@ func _ready() -> void:
 		check_mode = true
 		team_enabled = false
 		call_deferred("_run_figures_check")
+	elif "--finds-check" in args:
+		check_mode = true
+		call_deferred("_run_finds_check")
+	elif "--throw-anim" in args:
+		check_mode = true
+		call_deferred("_run_throw_anim")
+	elif "--ego-check" in args:
+		check_mode = true
+		call_deferred("_run_ego_check")
 	elif "--villa-pictures" in args:
 		check_mode = true
 		call_deferred("_run_villa_pictures")
@@ -1879,7 +1888,7 @@ func focused_object() -> Node3D:
 		var objective: Dictionary = hive.coop.nearby_use()
 		if objective.has("node"):
 			return objective.node
-		return hive.caches.focused_object()
+		return hive.side_focus()
 	return mission.focused_object()
 
 func interaction_progress() -> float:
@@ -2890,6 +2899,24 @@ func _run_ops_check() -> void:
 ## called up and frozen, the four pages of its menu, and the night switched back on.
 ## Pictures of the second mission's map: --hive-check --capture-dir=<folder>, with
 ## --hive-part=<name> only the views whose names begin with that.
+## Pictures of the throwables to be found in mission two (tools/ego_light_check.gd).
+func _run_finds_check() -> void:
+	var runner: Node = load("res://tools/ego_light_check.gd").new()
+	add_child(runner)
+	await runner.run_finds(self, _capture_dir())
+
+## The throwables in the hand, recorded (tools/ego_light_check.gd).
+func _run_throw_anim() -> void:
+	var runner: Node = load("res://tools/ego_light_check.gd").new()
+	add_child(runner)
+	await runner.run_throws(self)
+
+## Pictures of the weapon in the hands in many places (tools/ego_light_check.gd).
+func _run_ego_check() -> void:
+	var runner: Node = load("res://tools/ego_light_check.gd").new()
+	add_child(runner)
+	await runner.run(self, _capture_dir())
+
 ## Pictures of the villa's pictures (VillaPictures) in two nights: every place on the walls
 ## seen from where one stands in the room (without a lamp on the camera: as the room's own
 ## light shows it), and a contact sheet of them all (villa_bilder_nacht<n>.png).

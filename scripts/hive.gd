@@ -215,6 +215,8 @@ var prowl: HiveProwler
 var entries: HiveEntries
 ## The weapon caches off the way, and what was found in them (a node of its own).
 var caches: HiveCaches
+## The throwables to be found in a night (hive_finds.gd).
+var finds: HiveFinds
 var board_time := 0.0
 ## The random part of the night after the station (HiveLayout; a node of its own that
 ## runs its stages), the night it is built from, and this night's tables: its order of
@@ -240,6 +242,10 @@ func _ready() -> void:
 	entries = HiveEntries.new()
 	entries.director = self
 	add_child(entries)
+	finds = HiveFinds.new()
+	finds.director = self
+	finds.game = game
+	add_child(finds)
 	caches = HiveCaches.new()
 	caches.director = self
 	add_child(caches)
@@ -320,6 +326,8 @@ func begin() -> void:
 	if not game.net.joined:
 		prowl.begin(from)
 	caches.begin(from)
+	# (The throwables to be found: dealt from the same night as the caches.)
+	finds.begin(caches.night ^ 0x6E4A)
 	var start: Dictionary = checkpoints[from]
 	map.lock_all()
 	for id in start.open:
@@ -362,6 +370,7 @@ func end() -> void:
 	coop.clear()
 	prowl.end()
 	caches.end()
+	finds.end()
 	run.clear_things()
 	_end_intro()
 	for puppet in puppets:
@@ -872,15 +881,17 @@ func prompt() -> String:
 	var nearby: Dictionary = coop.nearby_use()
 	if not nearby.is_empty():
 		return str(nearby.text)
-	# (What the stage wants used comes first; then a weapon cache one stands before.)
-	return caches.prompt()
+	# (What the stage wants used comes first; then a throwable or a weapon cache one stands
+	# before.)
+	var found := finds.prompt()
+	return found if found != "" else caches.prompt()
 
 ## [E] was pressed. True if that was for the mission.
 func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) -> bool:
 	if game.net.joined:
 		var nearby: Dictionary = coop.nearby_use()
 		if nearby.is_empty():
-			return caches.use(true)
+			return _side_use()
 		game.net.request_hive_use(str(nearby.key), nearby.at)
 		return true
 	if who == null:
@@ -893,10 +904,10 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 			at = focused.at
 			requested = key
 		elif key in ["g_item", "g_switch", "g_slot", "g_hack"]:
-			return caches.use(true)
+			return _side_use()
 		var device: Node3D = map.interaction_devices.get(key)
 		if device != null and not game.aims_at_object(device):
-			return caches.use(true)
+			return _side_use()
 	if key in ["g_item", "g_switch"] and requested != "":
 		if who.global_position.distance_to(at) >= 2.9:
 			return false
@@ -905,7 +916,7 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 			game.stats.objectives += 1
 		return used
 	if use_at == Vector3.INF or who.global_position.distance_to(use_at) >= 2.9 or (requested != "" and (key != use_key or at.distance_to(use_at) > 0.2)):
-		return caches.use(true) if who == game.player else false
+		return _side_use() if who == game.player else false
 	use_at = Vector3.INF
 	use_key = ""
 	game.sounds.play_sound("beep")
@@ -922,6 +933,15 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 		_:
 			run.use(key, who)
 	return true
+
+## [E] for what lies off the way: a throwable that is aimed at, else a weapon cache.
+func _side_use() -> bool:
+	return finds.use() or caches.use(true)
+
+## What [E] would be for off the way (for the outline).
+func side_focus() -> Node3D:
+	var found := finds.focused_object()
+	return found if found != null else caches.focused_object()
 
 # ---------------------------------------------------------------- Nadja and the operators
 

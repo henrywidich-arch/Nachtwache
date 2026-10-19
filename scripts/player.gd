@@ -223,10 +223,22 @@ var weapon: Node3D
 var flash: Node3D
 var flash_light: OmniLight3D
 var flash_mesh: MeshInstance3D
+## The light of the weapon in the hands: the room's colour coming back, a rim in the dark,
+## the flashlight's bounce (view_light.gd).
+var view_light: ViewLight
 var left_flash: Node3D
 var left_flash_left := 0.0
 var flashlight: SpotLight3D
 var health := 100.0
+## Health comes back by itself: REGEN_DELAY seconds after the last hit, REGEN_RATE a
+## second, up to REGEN_CAP - no further, so that the dressings, the medkits and the heal
+## fields still matter. Not while down; a hit stops it at once. (Each player his own.)
+const REGEN_DELAY := 6.0
+const REGEN_RATE := 3.5
+const REGEN_CAP := 60.0
+## Seconds until it begins again (set by every hit), and whether it is at work now.
+var regen_wait := 0.0
+var regenerating := false
 var ammo: int:
 	get: return int(inventory[current_weapon].ammo)
 	set(value): _set_loaded(current_weapon, value)
@@ -278,7 +290,7 @@ var throw_model: Node3D
 var throw_recover := 0.0
 const THROW_AIM_AFTER := 0.2
 ## The key that readies and throws each thing.
-const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov", "heal": "throw_heal"}
+const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov", "heal": "throw_heal", "claymore": "place_claymore"}
 ## A blow with the weapon (key V): how far it reaches and how wide (the cosine of half its
 ## angle), what it does, how fast whoever is struck is thrown back and for how long he
 ## reels, and the seconds until the next blow.
@@ -474,15 +486,12 @@ func _ready() -> void:
 	# The beam sits just beside the weapon, so it must not light the viewmodel itself.
 	flashlight.light_cull_mask = 1
 	camera.add_child(flashlight)
-	var fill := OmniLight3D.new()
-	fill.name = "ViewmodelFill"
-	fill.position = Vector3(-0.1, 0.12, 0.05)
-	fill.light_color = Color("aebdd0")
-	fill.light_energy = 0.9
-	fill.omni_range = 2.0
-	fill.light_cull_mask = 2
-	fill.light_volumetric_fog_energy = 0.0
-	camera.add_child(fill)
+	# (Until v0.69 one cold fill lit the view everywhere, as bright in the dark yard as in a
+	# lit hall: view_light.gd lights it by the place instead.)
+	view_light = ViewLight.new()
+	view_light.name = "ViewLight"
+	view_light.player = self
+	camera.add_child(view_light)
 
 func _build_weapon() -> void:
 	weapon_models["rifle"] = WeaponView.build_gun("rifle")
@@ -518,6 +527,8 @@ func _build_weapon() -> void:
 	flash.add_child(flash_light)
 	flash_mesh = WeaponView.build_flash()
 	flash.add_child(flash_mesh)
+	# The flash lights the weapon and the hands too (the light above lights only the world).
+	flash.add_child(ViewLight.flash_light())
 	flash.visible = false
 	weapon.add_child(flash)
 	flash.position = WeaponView.VIEWS["rifle"].muzzle
@@ -728,12 +739,20 @@ func _animate_throw(delta: float) -> void:
 	if throw_kind == "":
 		var recover := 1.0 - throw_recover / THROW_RECOVER
 		throw_model.position = release.lerp(Vector3(0.28, -0.55, -0.4), smoothstep(0.0, 1.0, recover))
-		throw_model.rotation = Vector3(-0.8, 0.1, -0.4).lerp(Vector3(0.4, 0.3, 0.2), recover)
+		throw_model.rotation = Vector3(-0.55, 0.05, -0.15).lerp(Vector3(0.4, 0.3, 0.2), recover)
+	elif throw_swing >= 0.0 and throw_kind == "claymore":
+		# A mine is not thrown: it is set down a step ahead, the hand going down with it.
+		var lower := smoothstep(0.0, 1.0, clampf(1.0 - throw_swing / THROW_SWING, 0.0, 1.0))
+		throw_model.position = ready.lerp(Vector3(0.1, -0.52, -0.72), lower)
+		throw_model.rotation = Vector3(0.15, -0.2, 0.1).lerp(Vector3(0.65, -0.15, 0.05), lower)
 	elif throw_swing >= 0.0:
 		var swing := clampf(1.0 - throw_swing / THROW_SWING, 0.0, 1.0)
-		var windup := Vector3(0.28, 0.02, -0.52)
+		# Drawn back beside the head, then forward and out: the hand turns only a little, so
+		# that the forearm behind it stays low and out of the eye (turned hard, it swept across
+		# the whole picture, its cut end towards the eye).
+		var windup := Vector3(0.3, 0.06, -0.38)
 		throw_model.position = ready.lerp(windup, smoothstep(0.0, 0.45, swing)).lerp(release, smoothstep(0.45, 1.0, swing))
-		throw_model.rotation = Vector3(0.15, -0.2, 0.1).lerp(Vector3(-1.1, 0.1, -0.5), smoothstep(0.45, 1.0, swing))
+		throw_model.rotation = Vector3(0.15, -0.2, 0.1).lerp(Vector3(0.35, -0.35, 0.15), smoothstep(0.0, 0.45, swing)).lerp(Vector3(-0.55, 0.05, -0.15), smoothstep(0.45, 1.0, swing))
 	else:
 		throw_model.position = ready + Vector3(0, sin(bob_time) * 0.004, 0)
 		throw_model.rotation = Vector3(0.15, -0.2, 0.1)
@@ -1253,13 +1272,19 @@ func _unhandled_input(event: InputEvent) -> void:
 		crouch_from_input = crouched
 	if event.is_action_pressed("jump") and not event.is_echo():
 		movement.queue_jump()
-	if event.is_action_pressed("place_claymore"):
-		place_claymore()
+	if event.is_action_pressed("place_claymore") and not event.is_echo():
+		# (Taken in the hand while B is held, set down when it is let go - as with G, T, H, J.)
+		ready_throw("claymore")
 	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 		_cycle(-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
 
 func _physics_process(delta: float) -> void:
 	buff_left = maxf(0.0, buff_left - delta)
+	_regenerate(delta)
+	if view_light != null:
+		var env := get_world_3d().environment
+		var ambient := Color(env.ambient_light_color * env.ambient_light_energy, 1.0) if env != null else Color(0.08, 0.08, 0.09)
+		view_light.update(delta, camera.global_position, flashlight, ambient)
 	shot_cooldown = maxf(0, shot_cooldown - delta)
 	dual_cooldowns = Vector2(maxf(0.0, dual_cooldowns.x - delta), maxf(0.0, dual_cooldowns.y - delta))
 	dual_kick = Vector2(maxf(0.0, dual_kick.x - delta * 9.0), maxf(0.0, dual_kick.y - delta * 9.0))
@@ -1967,6 +1992,9 @@ func shoot(hand: int = 1) -> void:
 	(shot_flash.get_child(1) as MeshInstance3D).rotation.z = randf() * TAU
 	(shot_flash.get_child(1) as MeshInstance3D).scale = Vector3.ONE * randf_range(0.75, 1.3) * blaze
 	(shot_flash.get_child(0) as OmniLight3D).light_energy = 3.5 * blaze
+	var on_view := shot_flash.get_node_or_null("ViewFlash") as OmniLight3D
+	if on_view != null:
+		on_view.light_energy = ViewLight.FLASH * blaze
 	var punch: float = data.get("punch", 1.0)
 	recoil = punch
 	if dual:
@@ -2191,6 +2219,12 @@ func drum_done() -> float:
 ## `kind`: "bullet" and "frag" (the C.R.U.'s), "gas", "acid", "blast" (an explosive of
 ## the survivors), "burst" (any other blast), or "" for a blow. `by`: what kind of enemy
 ## dealt it ("common", "special", "cru"), where that is known.
+func _regenerate(delta: float) -> void:
+	regen_wait = maxf(0.0, regen_wait - delta)
+	regenerating = regen_wait <= 0.0 and not down and controlled and health > 0.0 and health < REGEN_CAP
+	if regenerating:
+		health = minf(REGEN_CAP, health + REGEN_RATE * delta)
+
 func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "", by: String = "") -> void:
 	if not controlled or health <= 0:
 		return
@@ -2213,6 +2247,9 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 		armor -= absorbed / (1.0 + game.skills.value("armour_hold"))
 		amount -= absorbed
 	health = maxf(0, health - (0.0 if spared else amount))
+	if amount > 0.0:
+		regen_wait = REGEN_DELAY
+		regenerating = false
 	hurt_amount = minf(1.0, hurt_amount + 0.45 + amount * 0.02)
 	if kind == "acid":
 		acid_amount = 1.0
