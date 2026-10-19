@@ -208,7 +208,7 @@ func event_feed(game: Node3D) -> void:
 	await frames()
 	var head_event: Control = hud.feed.get_child(0)
 	expect((body_event.get_node("EventIcon") as TextureRect).texture == hud.SYMBOLS.icon("kill") and (head_event.get_node("EventIcon") as TextureRect).texture == hud.SYMBOLS.icon("headshot") and (head_event.get_node("EventText") as Label).text.begins_with("KOPFSCHUSS"), "Real kills create separate target and headshot icons, with the newest event first")
-	expect(hud.feed.anchor_left == 0.0 and hud.feed.anchor_top == 0.0 and hud.feed.get_global_rect().position.is_equal_approx(Vector2(32, 24)) and head_event.global_position.y < body_event.global_position.y and hud.feed.get_global_rect().end.x < hud.radio_panel.global_position.x, "Combat events stack at the top left, apart from the map and radio strip")
+	expect(not hud.feed.visible and head_event.get_index() < body_event.get_index(), "The combat event list at the top left is no longer shown, though its events are still recorded newest first")
 	for i in range(9):
 		hud.kill_feed("TEST %d" % i, 100, false)
 	expect(hud.feed.get_child_count() == 6 and (hud.feed.get_child(0).get_node("EventText") as Label).text.begins_with("TEST 8"), "A burst of kills stays capped at six current events")
@@ -229,9 +229,12 @@ func event_feed(game: Node3D) -> void:
 	hud._process(0.05)
 	await frames()
 	var title: Label = hud.team_rows[0][0]
-	var bar: ProgressBar = hud.team_rows[0][1]
-	var gap := bar.global_position.x - title.get_global_rect().end.x
-	expect(gap >= 0.0 and gap <= 8.0 and title.size.x < 164.0, "The teammate health bar sits immediately beside the name without an empty fixed-width name column")
+	expect(not title.visible and hud.team_rows[0].size() == 1, "A squad member who stands has no row and no health bar")
+	mate.set_down(true)
+	hud._process(0.05)
+	await frames()
+	expect(title.visible and title.text.contains("AM BODEN") and title.get_theme_font_size("font_size") >= 20, "A squad member who is down is named in a line of larger text")
+	mate.set_down(false)
 	game.net.remote = null
 	game.mates.remove_child(mate)
 	mate.queue_free()
@@ -510,17 +513,9 @@ func settings_navigation(game: Node3D) -> void:
 	var back: Button = hud.modal.find_child("BackButton", true, false)
 	var controls: Button = hud.modal.find_child("ControlsButton", true, false)
 	var mouse: HSlider = hud.modal.find_child("MouseSensitivity", true, false)
-	var fps: Button = hud.modal.find_child("FPSCounterButton", true, false)
 	expect(back.custom_minimum_size.y >= 44 and back.get_theme_font_size("font_size") >= 18 and back.icon == hud.SYMBOLS.icon("back"), "Settings use the shared large Back button with its navigation icon")
 	var headings := hud.modal.find_children("*", "Label", true, false).filter(func(node: Label) -> bool: return node.text in ["TON", "BILD", "STEUERUNG"])
-	expect(headings.size() == 3 and headings.all(func(node: Label) -> bool: return node.get_theme_font_size("font_size") >= 20), "Sound, picture and controls section headings are clearly larger")
-	var hidden: bool = not game.show_fps and not hud.fps_label.visible
-	fps.pressed.emit()
-	hud._process(0.01)
-	var enabled: bool = game.show_fps and hud.fps_label.visible and hud.fps_label.text.ends_with(" FPS")
-	fps.pressed.emit()
-	hud._process(0.01)
-	expect(hidden and enabled and not game.show_fps and not hud.fps_label.visible, "The optional FPS counter defaults off and can be enabled and disabled from picture settings")
+	expect(headings.size() == 2 and headings.all(func(node: Label) -> bool: return node.get_theme_font_size("font_size") >= 20) and hud.modal.find_child("GraphicsButton", true, false) != null, "Sound and controls section headings are clearly larger, and graphics has a button of its own")
 	expect(back != null and back.global_position.y < mouse.global_position.y and mouse.global_position.y < controls.global_position.y and controls.get_global_rect().end.y < 680 and controls.icon == hud.SYMBOLS.icon("keyboard") and hud.modal.find_child("ControlsBindings", true, false) == null, "Settings keep sensitivity visible, put Back at the top left, and open bindings through a keyboard button below the slider")
 	var before: float = mouse.value
 	mouse.value = 1.5
@@ -555,12 +550,44 @@ func settings_navigation(game: Node3D) -> void:
 	(hud.modal.find_child("BackButton", true, false) as Button).pressed.emit()
 	(hud.modal.find_child("BackButton", true, false) as Button).pressed.emit()
 	expect(hud.current_menu == "main", "Back returns from Controls to Settings and then the main menu")
+	hud._open_settings("main")
+	(hud.modal.find_child("GraphicsButton", true, false) as Button).pressed.emit()
+	await frames()
+	expect(hud.current_menu == "graphics" and hud.modal.find_child("GraphicsRows", true, false) != null and hud.modal.find_children("*", "TabBar", true, false).is_empty(), "The graphics button opens a page of its own, which has no tabs")
+	var fps: Button = hud.modal.find_child("FPSCounterButton", true, false)
+	var hidden: bool = not game.show_fps and not hud.fps_label.visible
+	fps.pressed.emit()
+	hud._process(0.01)
+	var enabled: bool = game.show_fps and hud.fps_label.visible and hud.fps_label.text.ends_with(" FPS")
+	fps.pressed.emit()
+	hud._process(0.01)
+	expect(hidden and enabled and not game.show_fps and not hud.fps_label.visible, "The optional FPS counter defaults off and can be enabled and disabled from the graphics page")
+	var level_before: int = game.hole_level
+	(hud.modal.find_child("HolesButton", true, false) as Button).pressed.emit()
+	await frames()
+	expect(game.hole_level == (level_before + 1) % BulletHoles.LEVELS.size() and game.holes.limit == int(BulletHoles.LEVELS[game.hole_level][1]) and (hud.modal.find_child("HolesButton", true, false) as Button).text == BulletHoles.LEVELS[game.hole_level][0], "The graphics page steps through how many bullet holes stay")
+	game.set_hole_level(level_before, false)
+	(hud.modal.find_child("BackButton", true, false) as Button).pressed.emit()
+	expect(hud.current_menu == "settings", "Back returns from Graphics to Settings")
 	hud._open_settings("pause")
 	(hud.modal.find_child("ControlsButton", true, false) as Button).pressed.emit()
 	(hud.modal.find_child("BackButton", true, false) as Button).pressed.emit()
 	(hud.modal.find_child("BackButton", true, false) as Button).pressed.emit()
 	expect(hud.current_menu == "pause", "The same controls navigation preserves the pause-menu return path")
 	hud.show_menu("main")
+	var survivor: Survivor = game.player
+	var was_controlled := survivor.controlled
+	survivor.controlled = true
+	survivor.health = 80.0
+	survivor.get_up()
+	var spared := survivor.health
+	survivor.receive_damage(30.0)
+	var warded: bool = survivor.health == spared and is_equal_approx(survivor.ward_left, Survivor.REVIVE_WARD)
+	survivor.ward_left = 0.0
+	survivor.receive_damage(30.0)
+	expect(warded and survivor.health < spared, "Whoever has just been helped up takes no damage for three seconds, and damage works again after that")
+	survivor.health = 100.0
+	survivor.controlled = was_controlled
 
 func arsenal_revision(game: Node3D) -> void:
 	var hud: SurvivalHUD = game.hud

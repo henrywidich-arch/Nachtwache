@@ -1,7 +1,7 @@
 extends SceneTree
 ## Bakes the smooth hands and arms of the first-person view (see WeaponView._make_shapes):
 ##   Godot --headless --path <project> -s res://tools/bake_hands.gd
-## Builds every weapon of the view and every throwing hand, notes the shapes of their hands,
+## Builds every weapon of the view, every throwing hand and every melee weapon, notes the shapes of their hands,
 ## has tools/bake_hands.py melt each set into a surface, and saves it as a mesh in
 ## assets/hands (named after the shapes, so a pose that changes needs a new bake; until
 ## then it is drawn in the plain pieces). Meshes no pose uses any more are removed.
@@ -16,6 +16,10 @@ func _initialize() -> void:
 	for kind in Throwable.KINDS:
 		var hand: Node3D = (load("res://scripts/throw_view.gd") as GDScript).build(String(kind))
 		hand.free()
+	for id in Survivor.MELEE_WEAPONS:
+		if id != "bash":
+			var melee: Node3D = (load("res://scripts/melee_view.gd") as GDScript).build(String(id))
+			melee.free()
 	WeaponView.dumping = false
 	var folder := ProjectSettings.globalize_path("user://hand_bake")
 	DirAccess.make_dir_recursive_absolute(folder)

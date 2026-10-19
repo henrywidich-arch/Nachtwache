@@ -84,6 +84,8 @@ var hud: SurvivalHUD
 var sounds: FieldAudio
 var music: MusicDirector
 var fx: CombatEffects
+## Where bullets struck the walls (BulletHoles).
+var holes: BulletHoles
 ## Empty cases thrown out of the weapons that have them (brass.gd).
 var brass: BrassCasings
 var preview_camera: Camera3D
@@ -107,6 +109,8 @@ var credits := 120
 var income_total := 0
 var score := 0
 var kills := 0
+## What the player did besides kills tonight (Tally): the scoreboard shows it.
+var tally := Tally.blank()
 var elapsed := 0.0
 var preparation_left := 12.0
 var wave_hold := 0.0
@@ -298,6 +302,9 @@ func _ready() -> void:
 	fx.name = "Effects"
 	fx.game = self
 	add_child(fx)
+	holes = BulletHoles.new()
+	holes.game = self
+	add_child(holes)
 	brass = BrassCasings.new()
 	brass.name = "Brass"
 	brass.game = self
@@ -399,6 +406,13 @@ func _ready() -> void:
 		player.sensitivity = float(settings.get_value("controls", "sensitivity", 1.0)) * 0.0022
 		player.set_crouch_mode(bool(settings.get_value("controls", "crouch_toggle", false)))
 		show_fps = bool(settings.get_value("video", "show_fps", false))
+		set_hole_level(int(settings.get_value("video", "holes", BulletHoles.DEFAULT_LEVEL)), false)
+		set_fps_limit(int(settings.get_value("video", "fps_limit", 0)), false)
+		# (Only what was chosen: the project's own edge smoothing stays until then.)
+		if settings.has_section_key("video", "smoothing"):
+			set_smoothing(int(settings.get_value("video", "smoothing", 0)), false)
+		if settings.has_section_key("video", "vsync"):
+			set_vsync(bool(settings.get_value("video", "vsync", true)), false)
 		# (Whoever left the game filling the screen gets it that way again.)
 		if bool(settings.get_value("video", "fullscreen", false)) and DisplayServer.get_name() != "headless" and not check_mode:
 			get_window().mode = Window.MODE_FULLSCREEN
@@ -415,6 +429,10 @@ func _ready() -> void:
 	cabin.thunder.connect(_on_thunder)
 	get_window().focus_exited.connect(_on_focus_lost)
 	var args := OS.get_cmdline_user_args()
+	# --world goes straight into the open world in the making (scenes/world.tscn).
+	if "--world" in args:
+		get_tree().change_scene_to_file.call_deferred("res://scenes/world.tscn")
+		return
 	if "--no-team" in args:
 		team_enabled = false
 	# --scale=0.5 draws the 3D picture at half size for this start; nothing is saved.
@@ -553,6 +571,14 @@ func _ready() -> void:
 	elif "--ego-check" in args:
 		check_mode = true
 		call_deferred("_run_ego_check")
+	elif "--gore-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_gore_check")
+	elif "--ragdoll-check" in args:
+		check_mode = true
+		team_enabled = false
+		call_deferred("_run_ragdoll_check")
 	elif "--villa-pictures" in args:
 		check_mode = true
 		call_deferred("_run_villa_pictures")
@@ -918,6 +944,8 @@ func start_run(test: bool = false) -> void:
 	income_total = 0
 	score = 0
 	kills = 0
+	tally = Tally.blank()
+	holes.clear()
 	elapsed = 0
 	alive_count = 0
 	# Where the last squad of the night before came in means nothing tonight (and on the
@@ -1542,7 +1570,9 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 			continue
 		var gap := (enemy.global_position + Vector3(0, 0.9, 0)).distance_to(center)
 		if gap < radius:
-			enemy.receive_hit(infected_damage * (1.0 - 0.6 * gap / radius) * (shell_gain if enemy.hardened() else 1.0), (enemy.global_position - center).normalized())
+			# Whom it kills it throws up and away, hardest close to the middle.
+			var throw := clampf(infected_damage / 14.0, 4.0, 8.0) * (1.0 - 0.5 * gap / radius)
+			enemy.hit_hard(infected_damage * (1.0 - 0.6 * gap / radius) * (shell_gain if enemy.hardened() else 1.0), (enemy.global_position - center).normalized(), false, null, throw, 0.45)
 	blasting = false
 
 ## The blast of a grenade or a mine. In a co-op match the host works it out.
@@ -1864,6 +1894,7 @@ func rescued_by(mate: Teammate) -> void:
 	bark(mate, mate.look, "rescue")
 	player.get_up()
 	stats.revives += 1
+	mate.tally.revives += 1
 	hud.kill_feed("%s hilft dir auf" % mate.label, 0, false, true)
 	sounds.play_sound("equip")
 
@@ -1950,6 +1981,7 @@ func help_up(delta: float) -> bool:
 		if fallen.lift(delta):
 			bark(fallen, fallen.look, "thanks")
 			stats.revives += 1
+			tally.revives += 1
 		return true
 	if partner_needs_help():
 		partner_lift += delta
@@ -1958,6 +1990,7 @@ func help_up(delta: float) -> bool:
 			partner_lift = 0.0
 			net.send_revive()
 			stats.revives += 1
+			tally.revives += 1
 		return true
 	return false
 
@@ -2254,6 +2287,49 @@ func next_render_scale() -> void:
 	set_render_scale(float(RENDER_SCALES[(index + 1) % RENDER_SCALES.size()]))
 	hud.show_menu(hud.current_menu)
 
+## What the graphics page offers besides the size of the picture: the frame rates that
+## can be capped to (0: not at all), and the steps of edge smoothing.
+const FPS_LIMITS := [0, 60, 90, 120, 144]
+const SMOOTHING := [["AUS", Viewport.MSAA_DISABLED], ["2×", Viewport.MSAA_2X], ["4×", Viewport.MSAA_4X]]
+var hole_level := BulletHoles.DEFAULT_LEVEL
+
+func vsync_on() -> bool:
+	return DisplayServer.window_get_vsync_mode() != DisplayServer.VSYNC_DISABLED
+
+func set_vsync(on: bool, keep: bool = true) -> void:
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if on else DisplayServer.VSYNC_DISABLED)
+	if keep:
+		keep_setting("video", "vsync", on)
+
+## The frame rate the game is held to: an index into FPS_LIMITS.
+func fps_limit_index() -> int:
+	return maxi(0, FPS_LIMITS.find(Engine.max_fps))
+
+func set_fps_limit(index: int, keep: bool = true) -> void:
+	index = clampi(index, 0, FPS_LIMITS.size() - 1)
+	Engine.max_fps = int(FPS_LIMITS[index])
+	if keep:
+		keep_setting("video", "fps_limit", index)
+
+func smoothing_index() -> int:
+	for i in range(SMOOTHING.size()):
+		if int(SMOOTHING[i][1]) == int(get_viewport().msaa_3d):
+			return i
+	return 0
+
+func set_smoothing(index: int, keep: bool = true) -> void:
+	index = clampi(index, 0, SMOOTHING.size() - 1)
+	get_viewport().msaa_3d = int(SMOOTHING[index][1]) as Viewport.MSAA
+	if keep:
+		keep_setting("video", "smoothing", index)
+
+## How many bullet holes stay (BulletHoles.LEVELS): an index.
+func set_hole_level(index: int, keep: bool = true) -> void:
+	hole_level = clampi(index, 0, BulletHoles.LEVELS.size() - 1)
+	holes.set_limit(int(BulletHoles.LEVELS[hole_level][1]))
+	if keep:
+		keep_setting("video", "holes", hole_level)
+
 ## A radio line that is only worth saying once a night.
 func tell_once(key: String, cue: String, seconds: float = 6.0) -> void:
 	if told.has(key) or net.joined:
@@ -2530,6 +2606,7 @@ func finish(victory: bool) -> void:
 	player.controlled = false
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	hud.play_ui.hide()
+	hud.end_reveal = not check_mode
 	hud.show_menu(state)
 
 func _on_focus_lost() -> void:
@@ -2917,6 +2994,20 @@ func _run_throw_anim() -> void:
 ## Pictures of the weapon in the hands in many places (tools/ego_light_check.gd).
 func _run_ego_check() -> void:
 	var runner: Node = load("res://tools/ego_light_check.gd").new()
+	add_child(runner)
+	await runner.run(self, _capture_dir())
+
+## Pictures of blood and gore by night and day, inside and out (tools/gore_check.gd).
+func _run_gore_check() -> void:
+	var runner: Node = load("res://tools/gore_check.gd").new()
+	add_child(runner)
+	await runner.run(self, _capture_dir())
+
+## Pictures of bodies thrown by a pistol, a sniper rifle, the .50, a grenade and the
+## sledgehammer, on the farm and in the second mission (tools/ragdoll_check.gd):
+## --ragdoll-check --capture-dir=<folder> [--ragdoll-only=farm|hive].
+func _run_ragdoll_check() -> void:
+	var runner: Node = load("res://tools/ragdoll_check.gd").new()
 	add_child(runner)
 	await runner.run(self, _capture_dir())
 

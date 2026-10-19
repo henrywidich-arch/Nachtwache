@@ -248,4 +248,5 @@ func help_from_partner(delta: float) -> void:
 		if node is Teammate and node.down and node.global_position.distance_to(game.net.remote.global_position) < 2.8:
 			if node.lift(delta):
 				game.stats.revives += 1
+				game.net.remote.assisted += 1
 			return

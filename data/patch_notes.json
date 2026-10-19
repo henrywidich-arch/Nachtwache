@@ -1,5 +1,90 @@
 [
   {
+    "version": "0.76",
+    "title": "Neuer Hof, Gore und Scoreboard",
+    "sections": [
+      {
+        "title": "Der Hof",
+        "items": [
+          "Die Wege um das Haus und zu den Scheunen sind jetzt Kieswege, die direkt im Boden liegen: keine einzelnen Vierecke mehr mit sichtbaren Kanten, Höhenstufen und Schatten, die Kurven sind rund und der Rand läuft weich in die Wiese aus.",
+          "Auf den breiteren Wegen haben Räder zwei Spuren in den Kies gedrückt; dort sammelt sich das Regenwasser zuerst.",
+          "Pfützen gehen ohne Bruch über den Wegrand hinweg, statt an der Kante eines Wegstücks abzubrechen.",
+          "Das Gras rund um den Hof ist neu: echte Halmbüschel in vielen Höhen und Farben, am Waldrand hohes Gras mit Samenständen, alles wiegt im Wind und blendet in der Ferne weich aus.",
+          "Neuer Bodenbewuchs: Farne, Unkraut, junge Büsche, Klee, Blumen und Sauerampfer an Gebäuden, Zäunen und Strommasten; unter den Bäumen liegen Laub und trockene Äste. Der Bewuchs ist dunkler und passt zu Nacht, Nebel und Regen.",
+          "Alle Bäume sind neu: Tannen, Kiefern, Birken, Eichen und tote Bäume mit echten Nadeln, Blättern und Rinde statt der alten Klötzchenbäume.",
+          "Mehr Pfützen auf Boden und Wegen, sodass sich nasse und trockenere Stellen deutlicher abwechseln."
+        ]
+      },
+      {
+        "title": "Blut und Gore",
+        "items": [
+          "Blut passt sich Licht und Untergrund an: ein tiefes, dunkles Rot ohne Eigenleuchten, draußen auf dem nassen Boden noch dunkler, sodass es nirgends mehr grell aus dem Dunkel leuchtet.",
+          "Blutspuren glänzen nass und haben einen echten Rand; Spritzer mit Tropfen und Schlieren, Sprühbilder in Schussrichtung und Lachen, die sich langsam unter den Körpern ausbreiten. An Wänden läuft Blut in Rinnsalen herab.",
+          "Blutstropfen fliegen gestreckt in Flugrichtung, Fleischfetzen sind zerrissen statt rund, dazu kommen Knochensplitter."
+        ]
+      },
+      {
+        "title": "Nahkampf",
+        "items": [
+          "Alle Nahkampfwaffen sind neu und detailliert gebaut, mit Gebrauchsspuren und altem Blut: Kampfmesser, Baseballschläger mit Griffband, Machete mit genieteten Griffschalen, Brecheisen mit Klaue, Brechaxt mit Dorn und Vorschlaghammer mit achtkantigem Kopf. Messer, Machete und Brecheisen liegen in der rechten Hand, Schläger, Axt und Hammer in beiden.",
+          "Neues Schlaggefühl: kurz ausholen, dann immer schneller durchziehen; beim Treffer bleibt die Waffe kurz stecken, und das Bild wackelt je nach Wucht. Leichte Waffen sind blitzschnell, schwere holen sichtbar aus und schlagen härter zu. Der Vorschlaghammer ist schneller wieder bereit (1,15 s statt 1,35 s).",
+          "Neue, wuchtige Trefferklänge: dumpfes Krachen mit splitternden Knochen bei schweren Waffen, nasses Schneiden bei Klingen, ein tiefes Rauschen beim Ausholen; Schläge gegen Wände klopfen und stauben.",
+          "Gore je nach Waffe: Klingen schleudern Blut quer zur Schnittrichtung und können Arme oder den Kopf abtrennen, schwere stumpfe Waffen zertrümmern beim Todesschlag den Kopf. Aus nächster Nähe spritzt Blut auf den Bildschirm."
+        ]
+      },
+      {
+        "title": "Treffer und Ragdolls",
+        "items": [
+          "Getötete Infizierte fallen als Ragdoll: Sie stürzen, knicken ein und bleiben so liegen, wie sie gefallen sind, auf dem Hof wie in der Anlage.",
+          "Treffer schleudern Körper je nach Waffe unterschiedlich weit in Schussrichtung: Mit der Pistole sacken sie fast auf der Stelle zusammen, Scharfschützengewehr, Kaliber .50 und Vorschlaghammer werfen sie mehrere Meter zurück, Granaten schleudern sie durch die Luft.",
+          "Abgetrennte Köpfe und Arme bleiben auch am fallenden Körper ab; Hunde und C.R.U.-Soldaten rutschen nach harten Treffern ein Stück weg."
+        ]
+      },
+      {
+        "title": "Scoreboard und Game Over",
+        "items": [
+          "Das Scoreboard (Tab) ist neu gestaltet: eine schlichte Tabelle auf dunklem Grund mit weich ausblendendem Rand, größerer Schrift und mehr Zeilenabstand.",
+          "Neue Werte pro Spieler: Abschüsse, Kopfschüsse, Schaden, Trefferquote, am Boden und aufgeholfen, dazu eine Teamsumme; der Beste jeder Spalte ist hervorgehoben.",
+          "Die Squad-Bots stehen mit „Bot“-Marke im Scoreboard; im Koop gleichen Host und Gast alle Werte ab.",
+          "Neuer Game-Over-Ablauf: Das HUD blendet aus, das Bild wird langsam dunkel, „GAME OVER“ (bei Sieg „EVAKUIERT“) erscheint, dann baut sich das Scoreboard Zeile für Zeile auf. Ein Mausklick überspringt das."
+        ]
+      },
+      {
+        "title": "HUD",
+        "items": [
+          "Die Abschussmeldungen oben links und die Teamgesundheit sind entfernt; liegt ein Teammitglied am Boden, erscheint eine große rote Zeile „NAME · AM BODEN“.",
+          "Die Taschenanzeige (Q/G/T/J) ist schlichter: Symbol, Anzahl, Taste. Die Minimap ist wieder quadratisch, 10 % größer, näher an der Ecke und ohne Rahmen.",
+          "Lebens- und Munitionsanzeige haben mehr Abstand zum Rand, ihre Zahlen sind gleich groß und kleiner, die Balken schmaler.",
+          "Beim Halten von F oder E füllt sich ein Ring unter dem Fadenkreuz statt eines Balkens."
+        ]
+      },
+      {
+        "title": "Menü und Shop",
+        "items": [
+          "Die Buttons haben einen Pinsel-Look mit ausgefransten Enden.",
+          "Neue Grafik-Seite unter Einstellungen: 3D-Auflösung, Vollbild, Kantenglättung, V-Sync, Bildratenbegrenzung, Einschusslöcher und Bildratenanzeige; die Auswahl wird gespeichert.",
+          "Die Waffenvorschau im Shop zeigt nur noch die Waffe ohne Arme und lässt sich mit gedrückter Maustaste drehen; Nahkampfwaffen stehen aufrecht und größer, mit der breiten Seite zum Spieler."
+        ]
+      },
+      {
+        "title": "Spiel",
+        "items": [
+          "Schüsse hinterlassen Einschusslöcher in Wänden und Möbeln. Wie viele bleiben, ist einstellbar (aus, wenige, normal, viele); das älteste verschwindet zuerst.",
+          "Nach dem Aufhelfen bist du drei Sekunden lang unverwundbar."
+        ]
+      },
+      {
+        "title": "Offene Welt (im Aufbau)",
+        "items": [
+          "Neue Karte im Aufbau: eine offene Welt von 3 × 3 km, komplett prozedural erzeugt, mit Hügeln, Bergen und Felsabbrüchen im Nordosten, gewundenen Flüssen, Seen und Wäldern. Noch ohne Gebäude; erreichbar über den Testraum (F1 → WELT) oder mit --world.",
+          "Zu Fuß erkundbar (gehen, rennen, springen), dazu ein Flugmodus (F), eine Karte (M) und vier Tageszeiten zum Durchschalten (T).",
+          "Rund 75.000 Nadel-, Laub- und tote Bäume, die auch in der Ferne stehen bleiben; um dich herum wachsen Gras, Farne, Blumen, Steine, Äste und Laub.",
+          "Das Wasser zeigt den Grund verzerrt, wird mit der Tiefe dunkler und schäumt am Ufer; hinter dem Kartenrand steigt das Land zu Hügeln an, sodass der Horizont geschlossen ist."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.75",
     "title": "Mond, Hände und Klettern",
     "sections": [

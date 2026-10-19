@@ -123,6 +123,8 @@ var order := "follow"
 var hold_point := Vector3.ZERO
 var helping := 0.0
 var kills := 0
+## Everything else it has done tonight, for the scoreboard (Tally).
+var tally := Tally.blank()
 ## Seconds until it may point out another special enemy.
 var spot_wait := 0.0
 ## Carries no weapon and never fights: somebody the squad looks after. Such a one stays
@@ -363,6 +365,7 @@ func _lift_friend(delta: float) -> bool:
 		return false
 	game.bark(self, look, "mate_rescue")
 	game.hud.kill_feed("%s hilft %s auf" % [label, tending.label], 0, false, true)
+	tally.revives += 1
 	tending = null
 	return true
 
@@ -913,10 +916,15 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 				struck[enemy] = entry
 				if pellet < 3:
 					game.fx.blood(endpoint, direction, headshot)
-			elif pellet < 2 and randf() < 0.35:
-				game.fx.dust(endpoint, hit.normal)
+			else:
+				if not body is CharacterBody3D:
+					game.holes.add(hit.position, hit.normal)
+				if pellet < 2 and randf() < 0.35:
+					game.fx.dust(endpoint, hit.normal)
 		if pellet < 4:
 			game.fx.tracer(muzzle, endpoint)
+	# (Counted before the hits land: a body only gives what it had left.)
+	Tally.shot(tally, struck)
 	for enemy in struck:
 		var victim := enemy as Infected
 		var was_alive := not victim.dead
@@ -962,6 +970,7 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, _kind: String = 
 
 func _go_down(from: Vector3) -> void:
 	down = true
+	tally.downs += 1
 	if game.team.has(self):
 		game.squad_downs += 1
 	down_left = DOWN_SECONDS

@@ -250,6 +250,19 @@ const SHAKE_STEP := 0.17
 const SHAKE_FADE := 0.3
 ## A hit that takes this share of the full health in one go tears the body apart.
 const OVERKILL_SHARE := 0.6
+## How fast a killing blow throws the body (m/s; see throw_for): from x for the least of
+## hits up to y for one of z damage or more - a pistol round hardly, a round of the .50
+## several metres. And the share of it that goes upwards when nobody says.
+const THROW := Vector3(1.6, 7.5, 520.0)
+const THROW_LIFT := 0.12
+## A body that does not fall loose (hounds, soldiers) slides on along the ground with this
+## share of the throw, slowed by SLIDE_DRAG m/s². These are too heavy for that.
+const SLIDE_SHARE := 0.5
+const SLIDE_DRAG := 6.0
+const SLIDE_APART := ["prowler", "shark", "crusher"]
+## A killing melee blow throws the body at this share of how hard it shoves, this much upwards.
+const MELEE_THROW := 0.7
+const MELEE_LIFT := 0.22
 ## The Ripper leaps from this far away (metres), the Crusher from here.
 const POUNCE_RANGE := Vector2(3.2, 8.5)
 const LEAP_RANGE := Vector2(5.0, 12.0)
@@ -361,6 +374,14 @@ var held_left := 0.0
 var stagger_cooldown := 0.0
 ## The speed a blow has given the body; it wears off within a step or two.
 var knock := Vector3.ZERO
+## How fast the blow that lands now throws the body should it kill (m/s), and the share
+## of that which goes upwards; set for one blow by whoever strikes (hit_hard), else -1 and
+## reckoned from the damage (throw_for). What the killing blow threw it at, and the speed
+## a body that does not fall loose slides on at.
+var punch := -1.0
+var punch_lift := THROW_LIFT
+var fling := Vector3.ZERO
+var slide := Vector3.ZERO
 ## Seconds it goes on burning, the time to the fire's next bite, and who lit it.
 var burn_left := 0.0
 var burn_tick := 0.0
@@ -753,6 +774,10 @@ func show_cue(action: String, args: Array) -> void:
 			model.set_buffed(false)
 			model.die(str(args[0]))
 			game.fx.death(self, bool(args[1]), args[2] as Vector3, bool(args[3]))
+			# The body falls loose, thrown the way the blow went (args[4]: m/s).
+			var thrown: Vector3 = args[4] if args.size() > 4 else (args[2] as Vector3) * THROW.x
+			if not model.topple(thrown, bool(args[1])) and not kind in SLIDE_APART:
+				slide = Vector3(thrown.x, 0, thrown.z) * SLIDE_SHARE
 			if str(voices.death) != "":
 				game.sounds.play_at(str(voices.death), mouth())
 			_remove_after(6.0 if kind == "striker" else 8.0)
@@ -799,6 +824,8 @@ func _physics_process(delta: float) -> void:
 		if cloud != null:
 			_lift_cloud()
 		_smoulder(delta)
+		if slide != Vector3.ZERO:
+			_slide_on(delta)
 		model.animate(delta, 0.0)
 		return
 	if cloud != null:
@@ -1396,6 +1423,9 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		shed = true
 		cue("shed", [1, burn_tame])
 	if health <= 0.0:
+		# Thrown the way the blow went, as hard as it was, on top of the way it was moving.
+		var speed := punch if punch >= 0.0 else throw_for(amount)
+		fling = Vector3(direction.x, 0, direction.z).normalized() * speed + Vector3.UP * speed * punch_lift + Vector3(velocity.x, 0, velocity.z) * 0.4
 		_die(direction, headshot, source, amount >= max_health * OVERKILL_SHARE)
 		return
 	if not alert:
@@ -1426,6 +1456,19 @@ func _stagger(heavy: bool) -> void:
 	attack_clock = -1.0
 	cooldown = maxf(cooldown, held_left + 0.25)
 
+## How fast a killing blow of `damage` throws the body (see THROW).
+static func throw_for(damage: float) -> float:
+	return THROW.x + (THROW.y - THROW.x) * pow(clampf(damage / THROW.z, 0.0, 1.0), 0.7)
+
+## A hit that, should it kill, throws the body at `speed` m/s (`lift`: the share of that
+## which goes upwards) - whatever the damage says.
+func hit_hard(amount: float, direction: Vector3, headshot: bool, source: Node, speed: float, lift: float = THROW_LIFT) -> void:
+	punch = speed
+	punch_lift = lift
+	receive_hit(amount, direction, headshot, source)
+	punch = -1.0
+	punch_lift = THROW_LIFT
+
 ## A blast of shot from close by: whoever is still standing is thrown back at `speed`. A
 ## shield takes it, the heavy ones give way half as far, and nothing moves the Crusher.
 ## What a body does when it is knocked off balance decides how far it goes.
@@ -1446,7 +1489,8 @@ func shove(direction: Vector3, speed: float, seconds: float, damage: float, sour
 	if dead:
 		return
 	var shielded := blocks(direction)
-	receive_hit(damage, direction, false, source)
+	# A blow that kills throws the body as hard as it shoves, a little upwards.
+	hit_hard(damage, direction, false, source, speed * MELEE_THROW, MELEE_LIFT)
 	if dead or shielded or kind == "stalker" or leap != "":
 		return
 	var back := Vector3(direction.x, 0, direction.z).normalized()
@@ -1559,7 +1603,7 @@ func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: boo
 			cue("dissolve")
 		_:
 			var across := direction.dot(Vector3(-facing().z, 0, facing().x))
-			cue("die", [model.pick_death(_shot_from_behind(direction), headshot, across, overkill), headshot, direction, overkill])
+			cue("die", [model.pick_death(_shot_from_behind(direction), headshot, across, overkill), headshot, direction, overkill, fling])
 			if kind == "striker":
 				cue("shed", [3, burn_tame])
 
@@ -1586,6 +1630,17 @@ func bursts_wet() -> bool:
 
 func _shot_from_behind(direction: Vector3) -> bool:
 	return facing().dot(direction) > 0.2
+
+## A body that does not fall loose slides on after a hard blow, but never through a wall.
+func _slide_on(delta: float) -> void:
+	var step := slide * delta
+	var from := global_position + Vector3.UP * 0.5
+	var ahead := PhysicsRayQueryParameters3D.create(from, from + step + slide.normalized() * 0.35, 1)
+	if not get_world_3d().direct_space_state.intersect_ray(ahead).is_empty():
+		slide = Vector3.ZERO
+		return
+	global_position += step
+	slide = slide.move_toward(Vector3.ZERO, SLIDE_DRAG * delta)
 
 ## Called on host and puppet alike once the body is down for good.
 func _remove_after(seconds: float) -> void:

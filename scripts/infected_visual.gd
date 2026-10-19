@@ -425,6 +425,18 @@ var guard := 0.0
 var guard_speed := 0.0
 ## A blow on the guard: it jolts the arm and the head back, and dies away.
 var guard_jolt := 0.0
+## A dead body that has fallen loose (see topple): its parts, parents first, each
+## {bone, body, offset} with the offset from the part to its bone; the joints between them;
+## the seconds it has lain loose and the seconds it has lain still. The parts are gone
+## once it is frozen where it lies; `loose_body` stays set, so no clip moves it again.
+var loose_body := false
+var limbs: Array = []
+var limb_joints: Array[Joint3D] = []
+var loose_for := 0.0
+var still_for := 0.0
+var fell_from := 0.0
+## Bones torn off (sever): their parts are gone, and nothing loose drives them again.
+var cut_bones: Array[int] = []
 
 func _ready() -> void:
 	config = KINDS[kind]
@@ -1198,6 +1210,9 @@ func animate(delta: float, speed: float) -> void:
 		if busy_left <= 0.0:
 			state = "move"
 			gait = ""
+	if loose_body:
+		_lie_loose(delta)
+		return
 	if state == "move" and not dying:
 		_stride(speed, delta)
 	player.advance(delta)
@@ -1499,9 +1514,277 @@ func sever(part: String) -> Node3D:
 	marker.position = skeleton.get_bone_rest(bone).origin
 	stump.add_child(marker)
 	skeleton.set_bone_pose_scale(bone, Vector3.ONE * 0.001)
+	cut_bones.append(bone)
+	# A body that already lies loose loses the parts of what is gone.
+	for limb in limbs.duplicate():
+		if _below_cut(int(limb.bone)):
+			_drop_limb(limb)
 	if part == "head":
 		eyes.hide()
 	return marker
+
+# ---------------------------------------------------------------- falling loose
+
+## At most this many dead bodies lie loose at once; one more freezes the oldest that has
+## lain loose for RAGDOLL_SETTLE seconds, or else falls by its clip.
+const RAGDOLL_MOST := 10
+const RAGDOLL_SETTLE := 1.0
+## Seconds a loose body is worked out before it is frozen where it lies; it is frozen
+## sooner once no part of it has moved faster than x m/s for y seconds.
+const RAGDOLL_SECONDS := 4.0
+const RAGDOLL_STILL := Vector2(0.2, 0.5)
+## A loose body has come apart when a part lies this far (a share of the figure's height)
+## further from the pelvis than it began, or once it has fallen this many metres below where
+## it died (out of the world): it falls by its clip instead.
+const RAGDOLL_TEAR := 0.35
+const RAGDOLL_DROP := 12.0
+## What each part weighs (kg), and how thick it is (radius, as a share of the figure's height).
+const LIMB_MASS := {"pelvis": 14.0, "chest": 16.0, "head": 5.0, "upper": 2.5, "fore": 1.8, "thigh": 8.0, "shin": 4.5}
+const LIMB_RADIUS := {"pelvis": 0.07, "chest": 0.075, "head": 0.055, "upper": 0.03, "fore": 0.026, "thigh": 0.045, "shin": 0.034}
+## How far elbows and knees bend (radians from straight), and the joints of the trunk, the
+## neck, the shoulders and the hips (swing, twist).
+const LIMB_BEND := 2.4
+## How fast the trunk starts to tip over the way the body is thrown (rad/s, and more the
+## harder it is thrown).
+const LIMB_TIP := 1.6
+## Which way a hinge's angle runs, as the physics engine counts it, against the way the
+## limb bends about the hinge's axis.
+const HINGE_SENSE := -1.0
+const LIMB_CONES := {"waist": Vector2(0.45, 0.35), "neck": Vector2(0.7, 0.6), "shoulder": Vector2(1.4, 0.7), "hip": Vector2(1.1, 0.3)}
+## Every body that lies loose right now, oldest first.
+static var loose: Array = []
+static var limb_surface: PhysicsMaterial
+
+## The dead body falls loose: from the pose it has now, a ragdoll of capsules takes over its
+## bones and is flung at `fling` (m/s, world space). The part that was hit - the head for a
+## headshot, else the chest - takes the most of it, so the body turns as it goes. Severed
+## parts stay gone. False for a body without such a skeleton (hounds, soldiers) or while
+## too many lie loose that have only just fallen: that one falls by its clip.
+func topple(fling: Vector3, headshot: bool = false) -> bool:
+	if rig.is_empty() or not rig.has("pelvis") or skeleton == null or loose_body or dissolving or not is_inside_tree():
+		return false
+	loose = loose.filter(func(other: Variant) -> bool: return is_instance_valid(other) and (other as InfectedVisual).is_inside_tree() and not (other as InfectedVisual).limbs.is_empty())
+	if loose.size() >= RAGDOLL_MOST:
+		var oldest: InfectedVisual = loose[0]
+		if oldest.loose_for < RAGDOLL_SETTLE:
+			return false
+		oldest._freeze()
+	if limb_surface == null:
+		limb_surface = PhysicsMaterial.new()
+		limb_surface.friction = 0.9
+		limb_surface.bounce = 0.05
+	var size := float(config.height)
+	var side := global_basis.x.normalized()
+	var spine: Array = rig.spine
+	var waist: int = spine[spine.size() / 2].index
+	var pelvis_at := _bone_at(rig.pelvis.index)
+	var waist_at := _bone_at(waist)
+	var neck_at := _bone_at(rig.neck.index)
+	var head_at := _bone_at(rig.head.index)
+	var upright := (neck_at - waist_at).normalized()
+	if waist_at.distance_to(pelvis_at) < 0.04 * size:
+		waist_at = pelvis_at + upright * 0.1 * size
+	var crown := (head_at - neck_at).normalized() if head_at.distance_to(neck_at) > 0.01 else upright
+	var pelvis := _limb("pelvis", rig.pelvis.index, pelvis_at, waist_at, side, size)
+	var chest := _limb("chest", waist, waist_at, neck_at, side, size)
+	var head := _limb("head", rig.head.index, head_at, head_at + crown * 0.15 * size, side, size)
+	_cone(pelvis, chest, waist_at, upright, side, LIMB_CONES.waist)
+	_cone(chest, head, head_at, crown, side, LIMB_CONES.neck)
+	for i in range(2):
+		var arm: Dictionary = rig.arms[i]
+		var shoulder := _bone_at(arm.upper.index)
+		var elbow := _bone_at(arm.fore.index)
+		var wrist := _bone_at(arm.hand.index)
+		var upper := _limb("upper", arm.upper.index, shoulder, elbow, side, size)
+		var fore := _limb("fore", arm.fore.index, elbow, wrist + (wrist - elbow) * 0.3, side, size)
+		_cone(chest, upper, shoulder, (elbow - shoulder).normalized(), side, LIMB_CONES.shoulder)
+		_hinge(upper, fore, elbow, (elbow - shoulder).normalized(), (wrist - elbow).normalized(), side)
+	for i in range(2):
+		var leg: Dictionary = rig.legs[i]
+		var hip := _bone_at(leg.thigh.index)
+		var knee := _bone_at(leg.shin.index)
+		var ankle := _bone_at(leg.foot.index)
+		var thigh := _limb("thigh", leg.thigh.index, hip, knee, side, size)
+		var shin := _limb("shin", leg.shin.index, knee, ankle, side, size)
+		_cone(pelvis, thigh, hip, (knee - hip).normalized(), side, LIMB_CONES.hip)
+		_hinge(thigh, shin, knee, (knee - hip).normalized(), (ankle - knee).normalized(), -side)
+	if limbs.is_empty():
+		return false
+	var struck: Dictionary = head if headshot and not head.is_empty() else chest
+	# The trunk tips over the way it is thrown, so that no body stays kneeling upright.
+	var way := Vector3(fling.x, 0, fling.z)
+	var tip := Vector3.UP.cross(way.normalized()) * (LIMB_TIP + way.length() * 0.25) if way.length() > 0.05 else Vector3.ZERO
+	for limb in limbs:
+		var body: RigidBody3D = limb.body
+		body.linear_velocity = fling * (1.6 if limb == struck else 0.85)
+		if limb == pelvis or limb == chest:
+			body.angular_velocity = tip
+	loose_body = true
+	loose_for = 0.0
+	still_for = 0.0
+	fell_from = global_position.y
+	loose.append(self)
+	return true
+
+func _bone_at(bone: int) -> Vector3:
+	return skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin
+
+## True for a bone that is torn off or hangs on one that is.
+func _below_cut(bone: int) -> bool:
+	while bone >= 0:
+		if cut_bones.has(bone):
+			return true
+		bone = skeleton.get_bone_parent(bone)
+	return false
+
+## One part of a loose body: a capsule from `from` to `to` that drives `bone`. Nothing
+## collides with it but the world, and it with nothing else; empty for a severed part.
+func _limb(key: String, bone: int, from: Vector3, to: Vector3, side: Vector3, size: float) -> Dictionary:
+	if _below_cut(bone):
+		return {}
+	var radius := float(LIMB_RADIUS[key]) * size
+	var along := to - from
+	var up := along.normalized() if along.length() > 0.001 else Vector3.UP
+	var across := side - up * side.dot(up)
+	across = across.normalized() if across.length() > 0.05 else up.cross(Vector3.FORWARD if absf(up.z) < 0.9 else Vector3.RIGHT).normalized()
+	var body := RigidBody3D.new()
+	body.top_level = true
+	body.collision_layer = 0
+	body.collision_mask = 1 | 16
+	body.mass = float(LIMB_MASS[key])
+	body.physics_material_override = limb_surface
+	body.linear_damp = 0.1
+	body.angular_damp = 2.5
+	# (Thrown hard, a thin limb would pass through a floor and tear the body apart.)
+	body.continuous_cd = true
+	var capsule := CapsuleShape3D.new()
+	capsule.radius = radius
+	capsule.height = maxf(along.length() + radius, radius * 2.0 + 0.01)
+	var shape := CollisionShape3D.new()
+	shape.shape = capsule
+	body.add_child(shape)
+	add_child(body)
+	body.global_transform = Transform3D(Basis(across, up, across.cross(up)), (from + to) * 0.5)
+	var limb := {"bone": bone, "body": body, "joints": [], "offset": body.global_transform.affine_inverse() * (skeleton.global_transform * skeleton.get_bone_global_pose(bone))}
+	if not limbs.is_empty():
+		limb["reach"] = (limbs[0].body as RigidBody3D).global_position.distance_to(body.global_position)
+	limbs.append(limb)
+	return limb
+
+func _join(joint: Joint3D, a: Dictionary, b: Dictionary, frame: Transform3D) -> void:
+	add_child(joint)
+	joint.top_level = true
+	joint.global_transform = frame
+	joint.node_a = joint.get_path_to(a.body)
+	joint.node_b = joint.get_path_to(b.body)
+	limb_joints.append(joint)
+	(a.joints as Array).append(joint)
+	(b.joints as Array).append(joint)
+
+## A ball joint (shoulder, hip, waist, neck) at `at`, twisting about `axis`, the way the
+## child part points.
+func _cone(a: Dictionary, b: Dictionary, at: Vector3, axis: Vector3, side: Vector3, spans: Vector2) -> void:
+	if a.is_empty() or b.is_empty():
+		return
+	var across := side - axis * side.dot(axis)
+	across = across.normalized() if across.length() > 0.05 else axis.cross(Vector3.UP).normalized()
+	var joint := ConeTwistJoint3D.new()
+	joint.set_param(ConeTwistJoint3D.PARAM_SWING_SPAN, spans.x)
+	joint.set_param(ConeTwistJoint3D.PARAM_TWIST_SPAN, spans.y)
+	_join(joint, a, b, Transform3D(Basis(axis, across, axis.cross(across)), at))
+
+## An elbow or a knee at `at`: it bends about `axis` - from straight (the parent's way,
+## `upper`) as far as LIMB_BEND, never the wrong way - from however it is bent now (`lower`).
+func _hinge(a: Dictionary, b: Dictionary, at: Vector3, upper: Vector3, lower: Vector3, axis: Vector3) -> void:
+	if a.is_empty() or b.is_empty():
+		return
+	var ahead := lower - axis * lower.dot(axis)
+	ahead = ahead.normalized() if ahead.length() > 0.05 else upper
+	# How far it is bent now (positive: the way it bends), how far it may still straighten
+	# and how far it may still fold.
+	var bent := atan2(axis.dot(upper.cross(lower)), upper.dot(lower))
+	var straighten := minf(0.0, -bent - 0.05)
+	var fold := maxf(0.05, LIMB_BEND - bent)
+	var joint := HingeJoint3D.new()
+	joint.set_flag(HingeJoint3D.FLAG_USE_LIMIT, true)
+	joint.set_param(HingeJoint3D.PARAM_LIMIT_LOWER, straighten if HINGE_SENSE > 0.0 else -fold)
+	joint.set_param(HingeJoint3D.PARAM_LIMIT_UPPER, fold if HINGE_SENSE > 0.0 else -straighten)
+	_join(joint, a, b, Transform3D(Basis(ahead, axis.cross(ahead), axis), at))
+
+## Takes one part of a loose body away, with its joints (a limb torn off as it lies).
+func _drop_limb(limb: Dictionary) -> void:
+	for joint in limb.joints:
+		if is_instance_valid(joint):
+			limb_joints.erase(joint)
+			(joint as Node).queue_free()
+	(limb.body as Node).queue_free()
+	limbs.erase(limb)
+
+## Sets every driven bone where its part lies, parents first, and keeps the infected's own
+## place over the pelvis, so whatever hangs on it (flames, the hit zone) goes along.
+func _drive() -> void:
+	var host := get_parent() as Node3D
+	if host is Infected and not limbs.is_empty():
+		var hips: Vector3 = (limbs[0].body as RigidBody3D).global_position
+		host.global_position = Vector3(hips.x, host.global_position.y, hips.z)
+	var to_skeleton := skeleton.global_transform.affine_inverse()
+	for limb in limbs:
+		var bone: int = limb.bone
+		var target: Transform3D = to_skeleton * (limb.body as RigidBody3D).global_transform * (limb.offset as Transform3D)
+		var parent := skeleton.get_bone_parent(bone)
+		if parent >= 0:
+			target = skeleton.get_bone_global_pose(parent).affine_inverse() * target
+		skeleton.set_bone_pose_position(bone, target.origin)
+		skeleton.set_bone_pose_rotation(bone, target.basis.get_rotation_quaternion())
+
+func _lie_loose(delta: float) -> void:
+	if limbs.is_empty():
+		return
+	loose_for += delta
+	if _torn():
+		_give_up()
+		return
+	_drive()
+	var fastest := 0.0
+	for limb in limbs:
+		fastest = maxf(fastest, (limb.body as RigidBody3D).linear_velocity.length())
+	still_for = still_for + delta if fastest < RAGDOLL_STILL.x else 0.0
+	if loose_for > RAGDOLL_SECONDS or (loose_for > 1.5 and still_for > RAGDOLL_STILL.y):
+		_freeze()
+
+## True once the loose body has come apart (a part far from where its joints hold it) or
+## has dropped out of the world: then it is better to let it fall by its clip.
+func _torn() -> bool:
+	var hips := (limbs[0].body as RigidBody3D).global_position
+	if not hips.is_finite() or hips.y < fell_from - RAGDOLL_DROP:
+		return true
+	var size := float(config.height)
+	for limb in limbs:
+		var at := (limb.body as RigidBody3D).global_position
+		if not at.is_finite() or (limb.has("reach") and hips.distance_to(at) > float(limb.reach) + RAGDOLL_TEAR * size):
+			return true
+	return false
+
+## A body that came apart: the parts go, and it falls by its death clip where it is.
+func _give_up() -> void:
+	_freeze()
+	loose_body = false
+	player.advance(0.0)
+
+## Leaves the body lying as it is: the parts go, the bones stay where they put them.
+func _freeze() -> void:
+	if limbs.is_empty():
+		return
+	if is_inside_tree():
+		_drive()
+	for joint in limb_joints:
+		if is_instance_valid(joint):
+			joint.queue_free()
+	limb_joints.clear()
+	for limb in limbs:
+		(limb.body as Node).queue_free()
+	limbs.clear()
+	loose.erase(self)
 
 func pick_attack() -> String:
 	return (moves.attacks as Array).pick_random()

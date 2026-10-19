@@ -16,6 +16,19 @@ uniform sampler2D albedo_b : source_color, filter_linear_mipmap_anisotropic, rep
 uniform sampler2D normal_b : hint_normal, filter_linear_mipmap, repeat_enable;
 uniform sampler2D roughness_b : hint_default_white, filter_linear_mipmap, repeat_enable;
 uniform sampler2D macro_map : filter_linear_mipmap, repeat_enable;
+// The paths of the yard, painted into the ground seen from above: R how much path (soft
+// at its edges), G the ruts that wheels have pressed into it. They are gravel; water
+// gathers in the ruts and the hollows.
+uniform sampler2D path_map : hint_default_black, filter_linear, repeat_disable;
+uniform sampler2D albedo_c : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
+uniform sampler2D normal_c : hint_normal, filter_linear_mipmap, repeat_enable;
+uniform sampler2D roughness_c : hint_default_white, filter_linear_mipmap, repeat_enable;
+uniform vec2 path_origin = vec2(0.0);
+uniform vec2 path_size = vec2(1.0);
+uniform float paths = 0.0;
+uniform float metres_c = 1.6;
+uniform float brightness_c = 4.2;
+uniform float path_puddles = 0.9;
 
 uniform float metres = 1.5;
 uniform float brightness = 1.0;
@@ -173,6 +186,29 @@ void fragment() {
 			}
 		}
 	}
+	// The gravel of the paths: its edge frays into the meadow along slow blotches and
+	// the grain of the stones, so that no line shows where the path ends.
+	float path = 0.0;
+	float rut = 0.0;
+	if (paths > 0.0 && !dry && n.y > 0.9) {
+		vec2 plan = (world_pos.xz - path_origin) / path_size;
+		if (all(greaterThan(plan, vec2(0.0))) && all(lessThan(plan, vec2(1.0)))) {
+			vec2 painted = texture(path_map, plan).rg;
+			vec2 pc = world_pos.xz / metres_c;
+			vec4 stones = texture(albedo_c, pc);
+			float fray = (macro.r - 0.5) * 0.5 + (dot(stones.rgb, vec3(0.33)) - 0.3) * 0.6;
+			path = smoothstep(0.25, 0.75, painted.r + fray * (1.0 - painted.r) * 1.4);
+			rut = painted.g * path;
+			if (path > 0.001) {
+				// Light shows in the ruts and at the edges, dark bare soil.
+				vec3 gravel = stones.rgb * brightness_c / brightness;
+				gravel = mix(gravel, gravel * vec3(0.62, 0.55, 0.48), rut * 0.7);
+				albedo.rgb = mix(albedo.rgb, gravel, path);
+				bump = mix(bump, texture(normal_c, pc).rgb, path);
+				rough = mix(rough, texture(roughness_c, pc).r, path);
+			}
+		}
+	}
 
 	vec3 tint = COLOR.rgb;
 	float tint_lum = dot(tint, vec3(0.2126, 0.7152, 0.0722));
@@ -208,9 +244,12 @@ void fragment() {
 		base *= mix(1.0, mix(1.0, 0.42, porosity), wet_here);
 		rough = mix(rough, 0.2, wet_here * wet_gloss);
 		if (puddles > 0.0 && up > 0.9) {
-			float lie = macro.r * 0.65 + macro.b * 0.25 + (1.0 - albedo.r) * 0.2;
-			float pool = smoothstep(0.6, 0.66, lie + (puddles - 1.0) * 0.25) * wet;
-			float edge = smoothstep(0.52, 0.6, lie + (puddles - 1.0) * 0.25) * wet;
+			// Puddles gather more on the paths, most in their ruts; the amount changes
+			// smoothly with the path, so a puddle never stops at its edge.
+			float gather = mix(puddles, path_puddles, path) + rut * 0.35;
+			float lie = macro.r * 0.65 + macro.b * 0.25 + (1.0 - albedo.r) * 0.2 * (1.0 - path) + rut * 0.08;
+			float pool = smoothstep(0.6, 0.66, lie + (gather - 1.0) * 0.25) * wet;
+			float edge = smoothstep(0.52, 0.6, lie + (gather - 1.0) * 0.25) * wet;
 			base *= mix(1.0, 0.7, edge);
 			base = mix(base, base * 0.35 + vec3(0.004, 0.005, 0.007), pool);
 			rough = mix(rough, 0.04, max(pool, edge * 0.5));

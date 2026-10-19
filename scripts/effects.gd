@@ -3,7 +3,7 @@ extends Node3D
 ## Short-lived combat visuals and hazards: blood and gore, impacts, tracers, explosions,
 ## gibs, the Striker's explosive growths and the Crusher's acid cloud.
 
-const MAX_DECALS := 150
+const MAX_DECALS := 190
 const GROWTH_RADIUS := 3.1
 const ACID_RADIUS := 4.3
 const ACID_SECONDS := 9.0
@@ -11,6 +11,18 @@ const ACID_DENSITY := 0.42
 const ACID_GLOW := 1.6
 const BLOOD := Color(0.26, 0.012, 0.01, 0.95)
 const BLOOD_DARK := Color(0.16, 0.006, 0.006, 0.95)
+## Blood on a surface: its colour is in its picture, near black where it lies thick and a
+## dull dark red where it was thrown thin (sRGB). It reads as wet by its gloss and the
+## relief of its edges (its own roughness and normal maps), never by a bright colour.
+const BLOOD_THIN := Color(0.24, 0.034, 0.028)
+const BLOOD_THICK := Color(0.072, 0.009, 0.008)
+## How many pictures there are of each kind of blood mark. splat: a hit's splash with drops
+## and streaks around it; spray: drops flung one way (along the picture's x), stretched the
+## faster they flew; run: a splash on a wall with drips running down (along the picture's
+## z); pool: a ragged pool; drip: one rivulet.
+const BLOOD_KINDS := {"splat": 3, "spray": 3, "run": 2, "pool": 2, "drip": 1}
+## Out in the rain on wet ground blood is darker, as the ground itself is.
+const BLOOD_WET_SHADE := 0.74
 ## What the second exploding infected is full of: the colour of blood orange, on the floor
 ## and in the air. Its puddle: how wide it gets (metres), how long it lies before it
 ## dries away, how long that takes, and how much it glows in the dark.
@@ -41,6 +53,8 @@ var ring_texture: GradientTexture2D
 ## Torn clouds for fire and smoke: a round sprite reads as a ball, a ragged one as a blast.
 var puff_textures: Array[ImageTexture] = []
 var splat_textures: Array[ImageTexture] = []
+## The pictures of blood marks by kind: lists of [colour, relief, gloss].
+var blood_maps: Dictionary = {}
 ## The second exploder's puddle (a picture of its own, with the colour in it, so that it
 ## can glow), the puddles that lie about, and the drops and the haze of its burst.
 var puddle_texture: ImageTexture
@@ -50,6 +64,8 @@ var ooze_mist: QuadMesh
 var drop_mesh: SphereMesh
 var mist_mesh: QuadMesh
 var gib_mesh: SphereMesh
+## Torn scraps of flesh: lumps pulled out of shape, no two alike.
+var gib_meshes: Array[ArrayMesh] = []
 var gib_materials: Array[StandardMaterial3D] = []
 var growth_mesh: SphereMesh
 var acid_tick := 0.0
@@ -70,11 +86,21 @@ func _ready() -> void:
 	# a texture comes or goes, which stalls the game for a moment. One hidden decal per
 	# texture, far below the map, keeps the atlas the same for the whole session.
 	puddle_texture = _puddle_texture()
-	var marks: Array = [soft_texture, puddle_texture]
-	marks.append_array(splat_textures)
-	for texture in marks:
+	var marks: Array = [[soft_texture], [puddle_texture]]
+	for texture in splat_textures:
+		marks.append([texture])
+	for kind in BLOOD_KINDS:
+		blood_maps[kind] = []
+		for variant in range(int(BLOOD_KINDS[kind])):
+			var maps := _blood_picture(String(kind), variant)
+			blood_maps[kind].append(maps)
+			marks.append(maps)
+	for pictures: Array in marks:
 		var anchor := Decal.new()
-		anchor.texture_albedo = texture
+		anchor.texture_albedo = pictures[0]
+		if pictures.size() > 1:
+			anchor.texture_normal = pictures[1]
+			anchor.texture_orm = pictures[2]
 		anchor.size = Vector3(0.1, 0.1, 0.1)
 		anchor.position = Vector3(0, -60, 0)
 		add_child(anchor)
@@ -83,10 +109,14 @@ func _ready() -> void:
 	gib_mesh.height = 1.0
 	gib_mesh.radial_segments = 7
 	gib_mesh.rings = 4
-	for color in [Color("4a0d0b"), Color("6b2f28"), Color("2e0807"), Color("7a1512"), Color("5a4a40")]:
+	for variant in range(5):
+		gib_meshes.append(_torn_lump(variant))
+	# Torn flesh, dark and wet, a lump of fat and a splinter of bone.
+	for color in [Color("3a0907"), Color("4f1d18"), Color("230504"), Color("5a0f0c"), Color("6e5f52"), Color("8f8574")]:
 		var flesh := StandardMaterial3D.new()
 		flesh.albedo_color = color
-		flesh.roughness = 0.35
+		flesh.roughness = 0.5 if color.v > 0.4 else 0.22
+		flesh.metallic_specular = 0.6
 		gib_materials.append(flesh)
 	growth_mesh = SphereMesh.new()
 	growth_mesh.radius = 0.15
@@ -98,15 +128,19 @@ func _ready() -> void:
 	drop_mesh.height = 1.0
 	drop_mesh.radial_segments = 5
 	drop_mesh.rings = 3
-	var blood_material := StandardMaterial3D.new()
-	blood_material.albedo_color = Color("7a0c0a")
-	blood_material.roughness = 0.3
-	blood_material.emission_enabled = true
-	blood_material.emission = Color("3a0504")
-	drop_mesh.material = blood_material
-	for i in range(12):
-		blood_pool.append(_burst(drop_mesh, 30, 0.6, Vector3(0, -11, 0), 1.8, 5.6, 0.014, 0.045, 48.0))
 	ooze_mesh = drop_mesh.duplicate() as SphereMesh
+	# Drops of blood: dark, without any glow of their own; only a light makes them shine.
+	# Longer than wide, they lie along their way (particle_flag_align_y).
+	var blood_material := StandardMaterial3D.new()
+	blood_material.albedo_color = Color("3c0605")
+	blood_material.roughness = 0.12
+	blood_material.metallic_specular = 0.7
+	drop_mesh.material = blood_material
+	drop_mesh.height = 1.7
+	for i in range(12):
+		var spray := _burst(drop_mesh, 30, 0.6, Vector3(0, -11, 0), 1.8, 5.6, 0.009, 0.03, 48.0)
+		spray.particle_flag_align_y = true
+		blood_pool.append(spray)
 	var ooze_material := StandardMaterial3D.new()
 	ooze_material.albedo_color = Color(OOZE.r, OOZE.g, OOZE.b)
 	ooze_material.roughness = 0.25
@@ -119,7 +153,7 @@ func _ready() -> void:
 	mist_mesh = QuadMesh.new()
 	mist_mesh.size = Vector2(1.0, 1.0)
 	var mist_material := StandardMaterial3D.new()
-	mist_material.albedo_color = Color(0.5, 0.02, 0.02, 0.55)
+	mist_material.albedo_color = Color(0.24, 0.02, 0.018, 0.42)
 	mist_material.albedo_texture = soft_texture
 	mist_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mist_material.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
@@ -233,6 +267,168 @@ func _splat_texture(variant: int) -> ImageTexture:
 			image.set_pixel(x, y, Color(1, 1, 1, mask[y * size + x]))
 	return ImageTexture.create_from_image(image)
 
+## One picture of a blood mark of `kind` (see BLOOD_KINDS): [colour, relief, gloss]. It is
+## drawn as a height field of domed drops and lobes - the thicker, the darker and glossier,
+## with a little rim of relief where the film ends.
+func _blood_picture(kind: String, variant: int) -> Array:
+	var size := 128
+	var height := PackedFloat32Array()
+	height.resize(size * size)
+	# [centre (shares of the picture), radius, axis of its length, length over width, depth]
+	var blobs: Array = []
+	var middle := Vector2(0.5, 0.5)
+	match kind:
+		"splat":
+			var core := 0.13 - variant * 0.02
+			for i in range(6):
+				blobs.append([middle + Vector2.from_angle(random.randf() * TAU) * random.randf_range(0.0, 0.08), random.randf_range(core * 0.55, core), Vector2.from_angle(random.randf() * TAU), random.randf_range(1.0, 1.5), random.randf_range(0.8, 1.0)])
+			for i in range(18 + variant * 10):
+				var way := Vector2.from_angle(random.randf() * TAU)
+				var reach := random.randf_range(0.14, 0.46)
+				var radius := random.randf_range(0.006, 0.03) * (1.2 - reach)
+				# The further a drop flew, the longer it is drawn out along its way.
+				blobs.append([middle + way * reach, radius, way, 1.0 + reach * 1.6, 0.6])
+				if random.randf() < 0.3:
+					# A streak: a thin tail back towards the splash, the drop at its end.
+					for step in range(1, 6):
+						blobs.append([middle + way * (reach - step * 0.012), radius * (0.8 - step * 0.12), way, 1.6, 0.45])
+		"spray":
+			var origin := Vector2(0.1, 0.5)
+			for i in range(4):
+				blobs.append([origin + Vector2(random.randf_range(0.0, 0.08), random.randf_range(-0.04, 0.04)), random.randf_range(0.03, 0.06), Vector2.RIGHT, random.randf_range(1.6, 2.6), 0.85])
+			for i in range(42 + variant * 16):
+				var angle := (random.randf() + random.randf() - 1.0) * (0.35 + variant * 0.1)
+				var way := Vector2.from_angle(angle)
+				var reach := 0.04 + pow(random.randf(), 0.75) * 0.8
+				var radius := lerpf(0.03, 0.008, reach / 0.84) * random.randf_range(0.55, 1.25)
+				var at := origin + way * reach
+				if at.x > 0.97 or absf(at.y - 0.5) > 0.47:
+					continue
+				blobs.append([at, radius, way, 1.1 + reach * 1.8, 0.55])
+				if random.randf() < 0.14:
+					# A fast drop with a short tail behind it.
+					blobs.append([at - way * radius * 2.2, radius * 0.5, way, 2.4, 0.4])
+		"run":
+			var top := Vector2(0.5, 0.26)
+			for i in range(5):
+				blobs.append([top + Vector2(random.randf_range(-0.08, 0.08), random.randf_range(-0.05, 0.05)), random.randf_range(0.06, 0.12), Vector2.from_angle(random.randf() * TAU), random.randf_range(1.0, 1.4), 0.9])
+			for i in range(16):
+				var way := Vector2.from_angle(random.randf() * TAU)
+				var reach := random.randf_range(0.14, 0.32)
+				blobs.append([top + way * reach, random.randf_range(0.006, 0.02), way, 1.0 + reach * 1.6, 0.55])
+			# Drips: from the lower edge of the splash down the wall, thinning, a bead at the end.
+			for i in range(3 + variant * 2):
+				var x := top.x + random.randf_range(-0.12, 0.12)
+				var start := top.y + random.randf_range(0.04, 0.1)
+				var length := random.randf_range(0.18, 0.62)
+				var wide := random.randf_range(0.011, 0.02)
+				var wobble := random.randf() * TAU
+				var steps := int(length / 0.006)
+				for k in range(steps):
+					var t := float(k) / steps
+					blobs.append([Vector2(x + sin(wobble + t * 5.0) * 0.006, start + length * t), wide * (1.0 - t * 0.35), Vector2.DOWN, 1.0, 0.7])
+				blobs.append([Vector2(x + sin(wobble + 5.0) * 0.006, start + length), wide * 1.5, Vector2.DOWN, 1.3, 0.85])
+		"pool":
+			# Lobes that ran their own ways: wide bays, tongues, never a round disc.
+			blobs.append([middle, 0.15, Vector2.RIGHT, 1.2, 1.0])
+			for i in range(11):
+				var way := Vector2.from_angle(random.randf() * TAU)
+				blobs.append([middle + way * random.randf_range(0.06, 0.22), random.randf_range(0.06, 0.16), way, random.randf_range(1.1, 2.0), random.randf_range(0.75, 1.0)])
+			for i in range(10):
+				var way := Vector2.from_angle(random.randf() * TAU)
+				blobs.append([middle + way * random.randf_range(0.33, 0.44), random.randf_range(0.01, 0.03), way, 1.4, 0.6])
+		"drip":
+			for k in range(150):
+				var t := k / 150.0
+				blobs.append([Vector2(0.5 + sin(t * 6.0) * 0.03, 0.06 + t * 0.78), lerpf(0.11, 0.07, t), Vector2.DOWN, 1.0, 0.75])
+			blobs.append([Vector2(0.5 + sin(6.0) * 0.03, 0.86), 0.15, Vector2.DOWN, 1.25, 0.9])
+	for blob: Array in blobs:
+		var centre: Vector2 = (blob[0] as Vector2) * size
+		var radius: float = maxf(0.8, float(blob[1]) * size)
+		var axis: Vector2 = blob[2]
+		var long: float = blob[3]
+		var depth: float = blob[4]
+		var reach := radius * long + 1.0
+		for y in range(maxi(0, int(centre.y - reach)), mini(size, int(centre.y + reach + 2))):
+			for x in range(maxi(0, int(centre.x - reach)), mini(size, int(centre.x + reach + 2))):
+				var gap := Vector2(x + 0.5, y + 0.5) - centre
+				var along := gap.dot(axis) / (radius * long)
+				var across := gap.dot(axis.orthogonal()) / radius
+				var q := along * along + across * across
+				if q < 1.0:
+					var index := y * size + x
+					# Lobes that meet run together into one thicker film.
+					height[index] = maxf(height[index], sqrt(1.0 - q) * depth) + (0.12 * depth * (1.0 - q) if height[index] > 0.0 else 0.0)
+	var noise := FastNoiseLite.new()
+	noise.seed = 3301 + variant * 41 + kind.length() * 7
+	noise.frequency = 0.09
+	var grain := noise.get_image(size, size)
+	var colour := PackedByteArray()
+	var relief := PackedByteArray()
+	var gloss := PackedByteArray()
+	colour.resize(size * size * 4)
+	relief.resize(size * size * 4)
+	gloss.resize(size * size * 4)
+	for y in range(size):
+		for x in range(size):
+			var index := y * size + x
+			var wobble := grain.get_pixel(x, y).r
+			var h := height[index] + (wobble - 0.5) * (0.32 if kind == "pool" else 0.1) * float(height[index] > 0.0)
+			var cover := smoothstep(0.05, 0.16, h)
+			var thick := smoothstep(0.2, 0.85, h)
+			var tint := BLOOD_THIN.lerp(BLOOD_THICK, thick) * (0.88 + 0.24 * wobble)
+			colour[index * 4] = int(clampf(tint.r, 0.0, 1.0) * 255.0)
+			colour[index * 4 + 1] = int(clampf(tint.g, 0.0, 1.0) * 255.0)
+			colour[index * 4 + 2] = int(clampf(tint.b, 0.0, 1.0) * 255.0)
+			colour[index * 4 + 3] = int(cover * 242.0)
+			var left := height[y * size + maxi(0, x - 1)]
+			var right := height[y * size + mini(size - 1, x + 1)]
+			var up := height[maxi(0, y - 1) * size + x]
+			var down := height[mini(size - 1, y + 1) * size + x]
+			var normal := Vector3((left - right) * 2.2, (up - down) * 2.2, 1.0).normalized()
+			relief[index * 4] = int((normal.x * 0.5 + 0.5) * 255.0)
+			relief[index * 4 + 1] = int((normal.y * 0.5 + 0.5) * 255.0)
+			relief[index * 4 + 2] = int((normal.z * 0.5 + 0.5) * 255.0)
+			relief[index * 4 + 3] = 255
+			# Occlusion, roughness, metallic: wet and smooth where it lies thick.
+			gloss[index * 4] = 255
+			gloss[index * 4 + 1] = int(lerpf(0.34, 0.06, thick) * 255.0)
+			gloss[index * 4 + 2] = 0
+			gloss[index * 4 + 3] = 255
+	var maps: Array = []
+	for data in [colour, relief, gloss]:
+		var image := Image.create_from_data(size, size, false, Image.FORMAT_RGBA8, data)
+		image.generate_mipmaps()
+		maps.append(ImageTexture.create_from_image(image))
+	return maps
+
+## A lump of torn flesh about a metre across (scaled down where it is used): a sphere
+## pulled out of shape by noise, ragged and lopsided.
+func _torn_lump(variant: int) -> ArrayMesh:
+	var sphere := SphereMesh.new()
+	sphere.radius = 0.5
+	sphere.height = 1.0
+	sphere.radial_segments = 10
+	sphere.rings = 6
+	var arrays := sphere.get_mesh_arrays()
+	var points: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var noise := FastNoiseLite.new()
+	noise.seed = 61 + variant * 19
+	noise.frequency = 2.2
+	for i in range(points.size()):
+		var at := points[i]
+		# The same point on the seam is moved the same way, so the lump stays closed.
+		var push := 0.62 + 0.55 * noise.get_noise_3dv(at * 1.0) + 0.18 * noise.get_noise_3dv(at * 3.7 + Vector3.ONE * 5.0)
+		points[i] = at * push * Vector3(1.0, 0.8 + variant * 0.06, 1.0)
+	var tool := SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	for index in indices:
+		tool.add_vertex(points[index])
+	tool.index()
+	tool.generate_normals()
+	return tool.commit()
+
 func _burst(mesh: Mesh, amount: int, lifetime: float, gravity: Vector3, slow: float, fast: float, small: float, large: float, spread: float) -> CPUParticles3D:
 	var emitter := CPUParticles3D.new()
 	emitter.mesh = mesh
@@ -320,15 +516,31 @@ func blood(point: Vector3, shot_direction: Vector3, heavy: bool = false) -> void
 	mist.direction = shot_direction
 	mist.restart()
 	mist.emitting = true
-	if heavy or random.randf() < 0.55:
+	var ahead := Vector3(shot_direction.x, 0.0, shot_direction.z)
+	if heavy or random.randf() < 0.6:
+		# The exit spray lands on the floor beyond the wound, flung away from the shooter, and
+		# a few heavier drops fall short of it.
 		var floor_hit := _ray(point, point + Vector3.DOWN * 2.6 + shot_direction * 0.9)
 		if not floor_hit.is_empty():
-			decal(floor_hit.position, random.randf_range(0.35, 0.7) * (1.5 if heavy else 1.0), BLOOD, floor_hit.normal)
+			var spot: Vector3 = floor_hit.position
+			blood_mark(spot, random.randf_range(0.45, 0.8) * (1.5 if heavy else 1.0), floor_hit.normal, "spray", ahead, 1.5)
+			for i in range(1 + int(heavy) + random.randi() % 2):
+				var drop := floor_below(spot - ahead.normalized() * random.randf_range(0.15, 0.6) + Vector3(random.randf_range(-0.2, 0.2), 0.3, random.randf_range(-0.2, 0.2)), 1.5)
+				blood_mark(drop, random.randf_range(0.1, 0.22), Vector3.UP, "splat")
 	if heavy or random.randf() < 0.5:
-		# The exit spray lands on the wall behind.
+		# The exit spray lands on the wall behind: flung across it, or a splash that runs.
 		var wall_hit := _ray(point, point + shot_direction * 3.6 + Vector3.DOWN * 0.3)
 		if not wall_hit.is_empty():
-			decal(wall_hit.position, random.randf_range(0.45, 0.95) * (1.4 if heavy else 1.0), BLOOD, wall_hit.normal)
+			var reach: float = point.distance_to(wall_hit.position)
+			# The further it flew, the wider it spread.
+			var size := random.randf_range(0.45, 0.85) * (1.4 if heavy else 1.0) * (0.8 + reach * 0.15)
+			var upright := absf((wall_hit.normal as Vector3).y) < 0.6
+			if upright and random.randf() < 0.55:
+				var mark := blood_mark(wall_hit.position, size, wall_hit.normal, "run")
+				if heavy and mark != null:
+					drip(mark.global_position + Vector3.DOWN * size * 0.15, wall_hit.normal, random.randf_range(0.35, 0.8))
+			else:
+				blood_mark(wall_hit.position, size, wall_hit.normal, "spray", shot_direction, 1.4)
 
 func dust(point: Vector3, normal: Vector3) -> void:
 	var emitter := dust_pool[dust_next]
@@ -378,13 +590,81 @@ func decal(point: Vector3, size: float, color: Color, normal: Vector3 = Vector3.
 			oldest.queue_free()
 	return mark
 
-## A pool that slowly spreads under a body.
+## A blood mark of `kind` (see BLOOD_KINDS) on the surface at `point` whose normal is
+## `normal`. Sprays are turned to run along `along` (away from the wound) and drawn out by
+## `stretch`; runs and drips are turned so that they run down. Darker out on wet ground in
+## the rain, as the ground is.
+func blood_mark(point: Vector3, size: float, normal: Vector3 = Vector3.UP, kind: String = "splat", along: Vector3 = Vector3.ZERO, stretch: float = 1.0) -> Decal:
+	var pictures: Array = blood_maps[kind]
+	var maps: Array = pictures[random.randi() % pictures.size()]
+	var mark := Decal.new()
+	mark.texture_albedo = maps[0]
+	mark.texture_normal = maps[1]
+	mark.texture_orm = maps[2]
+	var shade := random.randf_range(0.82, 1.05) * _blood_shade(point, normal)
+	mark.modulate = Color(shade, shade, shade, 1.0)
+	mark.size = Vector3(size * stretch, 0.5, size * random.randf_range(0.8, 1.15))
+	mark.cull_mask = 1
+	mark.normal_fade = 0.35
+	mark.upper_fade = 0.02
+	mark.lower_fade = 0.02
+	transient.add_child(mark)
+	var up := normal.normalized() if normal.length() > 0.1 else Vector3.UP
+	var basis := Basis.IDENTITY
+	if kind in ["run", "drip"] and absf(up.y) < 0.9:
+		var down := (Vector3.DOWN - up * up.dot(Vector3.DOWN)).normalized()
+		basis = Basis(up.cross(down), up, down)
+	else:
+		var way := along - up * up.dot(along)
+		if way.length() < 0.05:
+			way = Basis(up, random.randf() * TAU) * (Vector3.RIGHT if absf(up.x) < 0.9 else Vector3.FORWARD)
+			way = (way - up * up.dot(way))
+		way = way.normalized()
+		# (A spray's picture starts at its left edge: it is moved on by half its length.)
+		if kind == "spray":
+			point += way * mark.size.x * 0.4
+		basis = Basis(way, up, way.cross(up))
+	mark.global_transform = Transform3D(basis.orthonormalized(), point + up * 0.08)
+	_keep(mark)
+	return mark
+
+func _keep(mark: Decal) -> void:
+	decals.append(mark)
+	if decals.size() > MAX_DECALS:
+		var oldest: Decal = decals.pop_front()
+		if is_instance_valid(oldest):
+			oldest.queue_free()
+
+## How light blood looks at a place: out in the rain on the wet ground it is darkened as
+## the ground is (and so never stands out from it bright); under a roof it is as it is.
+func _blood_shade(point: Vector3, normal: Vector3) -> float:
+	var map: Node = game.get("cabin") if game != null else null
+	if map == null or not is_instance_valid(map):
+		return 1.0
+	var rain: Node3D = map.get("rain")
+	if rain == null or not rain.visible:
+		return 1.0
+	return BLOOD_WET_SHADE if _ray(point + normal * 0.15, point + Vector3.UP * 30.0).is_empty() else 1.0
+
+## Blood running down a wall from `point` for `length` metres, slowing as it goes.
+func drip(point: Vector3, normal: Vector3, length: float) -> void:
+	var rivulet := blood_mark(point, 0.07, normal, "drip")
+	var top := rivulet.global_position
+	var down := rivulet.global_basis.z.normalized()
+	var width := random.randf_range(0.1, 0.16)
+	var run := func(reach: float) -> void:
+		rivulet.size = Vector3(width, 0.5, reach)
+		rivulet.global_position = top + down * reach * 0.5
+	run.call(0.06)
+	rivulet.create_tween().tween_method(run, 0.06, length, random.randf_range(2.5, 4.5)).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+## A pool that slowly spreads under a body, darkest where it lies deepest.
 func blood_pool_at(point: Vector3, size: float) -> void:
 	var ground := floor_below(point + Vector3.UP * 0.5)
-	var pool := decal(ground, size, BLOOD_DARK)
+	var pool := blood_mark(ground, size, Vector3.UP, "pool")
 	var full := pool.size
-	pool.size = Vector3(full.x * 0.25, full.y, full.z * 0.25)
-	pool.create_tween().tween_property(pool, "size", full, 4.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	pool.size = Vector3(full.x * 0.2, full.y, full.z * 0.2)
+	pool.create_tween().tween_property(pool, "size", full, 7.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 
 func _splat_sound(at: Vector3, kind: String = "splat") -> void:
 	if splat_sound_left <= 0.0:
@@ -401,6 +681,18 @@ func death(enemy: Infected, headshot: bool, direction: Vector3, overkill: bool) 
 	blood(model.head_position() if headshot else chest, direction, true)
 	# Hounds have no arms to lose, and the soldiers' bodies stay in one piece.
 	var two_legged := not (model is RipperVisual) and not (model is CruVisual)
+	# Killed by a heavy blow (Survivor._melee_strike): a sledgehammer or an axe caves the
+	# head in, a blade takes off an arm.
+	var blow: Array = enemy.get_meta("melee_blow", [])
+	if two_legged and blow.size() == 2:
+		var weight: float = blow[0]
+		if weight >= 0.7 and not bool(blow[1]):
+			headshot = true
+			overkill = true
+		elif bool(blow[1]) and weight >= 0.4 and random.randf() < weight + 0.2:
+			if weight >= 0.7 and random.randf() < 0.5:
+				headshot = true
+			overkill = true
 	if two_legged and headshot and (overkill or random.randf() < 0.5):
 		var neck := model.sever("head")
 		_spurt(neck)
@@ -411,11 +703,43 @@ func death(enemy: Infected, headshot: bool, direction: Vector3, overkill: bool) 
 		chunks(chest, 7, 0.7, direction * 3.0 + Vector3.UP * 1.5)
 		for i in range(3):
 			var at := floor_below(chest + Vector3(random.randf_range(-1.2, 1.2), 0, random.randf_range(-1.2, 1.2)) + direction * 0.8)
-			decal(at, random.randf_range(0.6, 1.2), BLOOD)
+			blood_mark(at, random.randf_range(0.6, 1.2), Vector3.UP, "spray", direction, 1.5)
 	# The body hits the floor a moment later and starts to bleed out.
 	var timer := enemy.create_tween()
 	timer.tween_interval(0.85)
 	timer.tween_callback(_body_landed.bind(enemy))
+
+## A blow with a melee weapon lands at `point`, driving along `direction`. `weight`: how
+## heavy it is (0 a knife, 1 the sledgehammer); `edged`: it cuts. A cut throws blood in a
+## sheet across the way of the blade; a heavy blunt blow bursts and spatters, tears loose
+## scraps and paints the survivor who swung it.
+func melee_hit(enemy: Infected, point: Vector3, direction: Vector3, weight: float, edged: bool) -> void:
+	var across := direction.cross(Vector3.UP).normalized()
+	blood(point, direction, weight >= 0.4)
+	if edged:
+		# The sheet along the cut: away from the blade, to the left, as it was swung.
+		for i in range(1 + int(weight * 3.0)):
+			var at := point + across * random.randf_range(-0.25, 0.25) + Vector3.UP * random.randf_range(-0.15, 0.2)
+			blood(at, (direction * 0.4 - across + Vector3.UP * random.randf_range(-0.1, 0.3)).normalized(), true)
+		var gap := floor_below(point + direction * 0.4 - across * 0.4)
+		blood_mark(gap, 0.6 + weight * 0.7, Vector3.UP, "spray", -across + direction * 0.5, 1.7)
+	else:
+		var burst := mist_pool[mist_next]
+		mist_next = (mist_next + 1) % mist_pool.size()
+		burst.global_position = point
+		burst.direction = direction
+		burst.restart()
+		burst.emitting = true
+		if weight >= 0.5:
+			chunks(point, int(weight * 4.0), 0.4 + weight * 0.3, direction * (2.0 + weight * 3.0) + Vector3.UP)
+			for i in range(int(weight * 3.0)):
+				var around := direction.rotated(Vector3.UP, random.randf_range(-0.9, 0.9))
+				blood_mark(floor_below(point + around * random.randf_range(0.6, 1.8)), random.randf_range(0.4, 0.9), Vector3.UP, "spray", around, 1.5)
+	# Close enough, it reaches whoever swung.
+	if weight >= 0.4 and game.player.global_position.distance_to(point) < 2.6:
+		game.hud.splatter(0.18 + weight * 0.3)
+	if weight >= 0.7:
+		_splat_sound(point, "gib")
 
 func _body_landed(enemy: Infected) -> void:
 	if not is_instance_valid(enemy):
@@ -429,6 +753,7 @@ func _body_landed(enemy: Infected) -> void:
 func _spurt(stump: Node3D) -> void:
 	var jet := CPUParticles3D.new()
 	jet.mesh = drop_mesh
+	jet.particle_flag_align_y = true
 	jet.amount = 46
 	jet.lifetime = 0.7
 	jet.explosiveness = 0.0
@@ -439,8 +764,8 @@ func _spurt(stump: Node3D) -> void:
 	jet.gravity = Vector3(0, -11, 0)
 	jet.initial_velocity_min = 2.2
 	jet.initial_velocity_max = 4.6
-	jet.scale_amount_min = 0.014
-	jet.scale_amount_max = 0.04
+	jet.scale_amount_min = 0.01
+	jet.scale_amount_max = 0.03
 	jet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	stump.add_child(jet)
 	var life := jet.create_tween()
@@ -448,7 +773,7 @@ func _spurt(stump: Node3D) -> void:
 	life.tween_callback(func() -> void: jet.emitting = false)
 	life.tween_interval(0.9)
 	life.tween_callback(jet.queue_free)
-	decal(floor_below(stump.global_position), random.randf_range(0.7, 1.1), BLOOD)
+	blood_mark(floor_below(stump.global_position), random.randf_range(0.7, 1.1), Vector3.UP, "splat")
 
 ## A spent shotgun shell flips out of the ejection port and rolls away. `big`: an empty
 ## 40 mm case from the drum of the M32 instead.
@@ -509,11 +834,14 @@ func chunks(center: Vector3, count: int, spread: float, push: Vector3 = Vector3.
 		shape.shape = ball
 		chunk.add_child(shape)
 		var piece := MeshInstance3D.new()
-		piece.mesh = gib_mesh
-		piece.material_override = gib_materials[random.randi() % gib_materials.size()]
-		# Mostly small scraps, now and then a long strip or a heavy lump.
-		var bulk := random.randf_range(0.06, 0.16) * (1.9 if random.randf() < 0.18 else 1.0)
-		piece.scale = Vector3(bulk, bulk * random.randf_range(0.4, 0.8), bulk * random.randf_range(0.7, 2.4))
+		piece.mesh = gib_meshes[random.randi() % gib_meshes.size()]
+		var tissue := random.randi() % gib_materials.size()
+		piece.material_override = gib_materials[tissue]
+		# Mostly small scraps, now and then a long strip or a heavy lump; bone in splinters.
+		var bulk := random.randf_range(0.05, 0.12) * (1.6 if random.randf() < 0.15 else 1.0)
+		piece.scale = Vector3(bulk, bulk * random.randf_range(0.4, 0.8), bulk * random.randf_range(0.7, 2.2))
+		if tissue == gib_materials.size() - 1:
+			piece.scale = Vector3(bulk * 0.3, bulk * 0.3, bulk * random.randf_range(1.2, 2.0))
 		chunk.add_child(piece)
 		transient.add_child(chunk)
 		var direction := Vector3(random.randf_range(-1, 1), random.randf_range(0.2, 1.1), random.randf_range(-1, 1)).normalized()
@@ -530,7 +858,8 @@ func chunks(center: Vector3, count: int, spread: float, push: Vector3 = Vector3.
 func _chunk_landed(chunk: RigidBody3D, audible: bool) -> void:
 	var hit := _ray(chunk.global_position + Vector3.UP * 0.1, chunk.global_position + Vector3.DOWN * 0.6)
 	if not hit.is_empty():
-		decal(hit.position, random.randf_range(0.2, 0.42), BLOOD, hit.normal)
+		# It smears along the way it was going.
+		blood_mark(hit.position, random.randf_range(0.22, 0.45), hit.normal, "spray", chunk.linear_velocity, 1.3)
 		if audible:
 			_splat_sound(hit.position, "gib")
 
@@ -891,28 +1220,28 @@ func charger_burst(center: Vector3) -> void:
 	var cloud := _one_shot(mist_mesh, 22, 1.5, Vector3(0, -0.4, 0), 1.0, 4.5, 1.2, 2.6, 180.0)
 	cloud.color_ramp = _fade()
 	cloud.global_position = center
+	spray.particle_flag_align_y = true
+	globs.particle_flag_align_y = true
 	var ground := floor_below(center)
-	decal(ground, 3.6, BLOOD_DARK)
-	decal(ground, 2.4, BLOOD)
+	blood_pool_at(center, 3.6)
+	blood_mark(ground, 2.6, Vector3.UP, "splat")
 	for i in range(14):
 		var reach := random.randf_range(0.9, 4.6)
 		var around := random.randf() * TAU
-		decal(floor_below(center + Vector3(cos(around), 0, sin(around)) * reach), random.randf_range(0.5, 1.5), BLOOD)
-	# Whatever stands around the blast gets painted.
+		var out := Vector3(cos(around), 0, sin(around))
+		blood_mark(floor_below(center + out * reach), random.randf_range(0.6, 1.6), Vector3.UP, "spray", out, 1.5)
+	# Whatever stands around the blast gets painted, and it runs down the walls.
 	for i in range(12):
 		var angle := TAU * i / 12.0 + random.randf_range(-0.2, 0.2)
 		var out := Vector3(cos(angle), random.randf_range(-0.15, 0.45), sin(angle)).normalized()
 		var hit := _ray(center, center + out * 5.5)
 		if not hit.is_empty() and absf((hit.normal as Vector3).y) < 0.7:
-			decal(hit.position, random.randf_range(0.9, 1.9), BLOOD, hit.normal)
-			# It runs down the wall.
-			var drip := decal((hit.position as Vector3) + Vector3.DOWN * random.randf_range(0.4, 0.8), random.randf_range(0.35, 0.6), BLOOD_DARK, hit.normal)
-			drip.size.z *= 2.4
-			var out_of_wall: Vector3 = hit.normal
-			drip.global_basis = Basis(out_of_wall.cross(Vector3.DOWN), out_of_wall, Vector3.DOWN).orthonormalized()
+			var size := random.randf_range(0.9, 1.9)
+			blood_mark(hit.position, size, hit.normal, "run" if i % 2 == 0 else "spray", out, 1.3)
+			drip((hit.position as Vector3) + Vector3.DOWN * size * 0.1, hit.normal, random.randf_range(0.5, 1.2))
 	var above := _ray(center, center + Vector3.UP * 3.6)
 	if not above.is_empty():
-		decal(above.position, random.randf_range(1.6, 2.4), BLOOD, above.normal)
+		blood_mark(above.position, random.randf_range(1.6, 2.4), above.normal, "splat")
 	game.sounds.play_at("gore_burst", center)
 	var gap: float = game.player.global_position.distance_to(center)
 	if gap < 7.0:

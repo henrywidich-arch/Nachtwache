@@ -1323,9 +1323,13 @@ func _case(prop: Node3D, at: Vector3, yaw: float) -> void:
 ## same marks as every other blood stain of the game.
 func _stain(prop: Node3D, at: Vector3, size: float, variant: int) -> void:
 	var pool := Decal.new()
-	var splats: Array = game.fx.splat_textures
-	pool.texture_albedo = splats[variant % splats.size()]
-	pool.modulate = Color(0.2, 0.008, 0.008, 0.95)
+	var pictures: Array = game.fx.blood_maps["pool"]
+	var maps: Array = pictures[variant % pictures.size()]
+	pool.texture_albedo = maps[0]
+	pool.texture_normal = maps[1]
+	pool.texture_orm = maps[2]
+	# Old by now, and out in the rain: a shade darker than fresh blood.
+	pool.modulate = Color(0.75, 0.75, 0.75, 1.0)
 	# Low: it lies on the ground and around the body, not across its back.
 	pool.size = Vector3(size, 0.2, size)
 	pool.cull_mask = 1

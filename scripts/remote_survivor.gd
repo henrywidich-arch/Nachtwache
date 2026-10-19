@@ -11,6 +11,10 @@ var visual: SoldierVisual
 var name_tag: Label3D
 var health := 100.0
 var kills := 0
+## What the partner's machine reports of his night (Tally), and the squad members he has
+## helped up, which only the host sees happen.
+var tally := Tally.blank()
+var assisted := 0
 var down := false
 ## The Leech hanging on to the partner, as the host sees it.
 var clung_by: Infected

@@ -1209,6 +1209,8 @@ func run(game: Node3D) -> void:
 		follower.rising_left = 0.0
 		follower.receive_damage(999.0)
 	game.player.health = 100
+	# (Helped up a moment ago, he is still warded for a few seconds: that has run out.)
+	game.player.ward_left = 0.0
 	game.player.receive_damage(500.0)
 	expect(game.state == "lose", "With the whole squad down, the survivor's fall ends the night")
 	game.team_enabled = false
@@ -3633,6 +3635,8 @@ func _heal_grenade(game: Node3D) -> void:
 	var warded: bool = is_equal_approx(before - mate.health, 50.0 * Teammate.ARMOUR * HealField.BUFF_WARD) and is_equal_approx(mate.strength(), plain_shot * HealField.BUFF_DAMAGE) and mate.name_tag.text.contains("GESTÄRKT")
 	player.health = 100.0
 	player.armor = 0.0
+	# (Raised by the field, he is also unhurtable for the first seconds: that has run out.)
+	player.ward_left = 0.0
 	player.receive_damage(20.0)
 	game.hud._process(0.05)
 	warded = warded and is_equal_approx(100.0 - player.health, 20.0 * HealField.BUFF_WARD) and is_equal_approx(player._bonus(Survivor.WEAPONS.rifle, foe, false), plain_bonus * HealField.BUFF_DAMAGE) and game.hud.armor_label.text.contains("GESTÄRKT")
@@ -7362,7 +7366,7 @@ func _overhaul(game: Node3D) -> void:
 	var pale := false
 	for mark in map.marks():
 		pale = pale or (is_equal_approx((mark.color as Color).a, Minimap.ELSEWHERE) and (mark.color as Color).is_equal_approx(Color(Minimap.SOLDIER, Minimap.ELSEWHERE)))
-	var corner: bool = map.get_parent() == game.hud.play_ui and map.offset_right == -32.0 and map.offset_top == 22.0 and is_equal_approx(map.offset_right - map.offset_left, Minimap.SIZE)
+	var corner: bool = map.get_parent() == game.hud.play_ui and map.offset_right == -20.0 and map.offset_top == 12.0 and is_equal_approx(map.offset_right - map.offset_left, Minimap.SIZE)
 	expect(drawn and placed and follows and pale and corner and Minimap.COMMON != Minimap.SPECIAL and Minimap.SPECIAL != Minimap.SOLDIER and Minimap.COMMON != Minimap.SOLDIER, "A map in the top right corner: walls of each level, ahead is up; common infected, special ones and soldiers each in a colour of their own, the far ones on its rim, those on another floor pale, the Stalker never")
 	ghost._retire()
 	ghost.queue_free()

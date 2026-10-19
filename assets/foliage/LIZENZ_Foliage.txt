@@ -1,0 +1,4 @@
+grass_cards.png und leaf_litter.png sind mit tools/make_foliage.py aus den Blättern und
+Halmen von Poly Haven (CC0 1.0, https://polyhaven.com/models: grass_medium_02, shrub_02,
+shrub_03; Quellen in assets/models/polyhaven) zusammengesetzt. Frei nutzbar, ohne
+Namensnennung.

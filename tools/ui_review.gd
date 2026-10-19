@@ -59,6 +59,8 @@ func run(owner_game: Node3D) -> void:
 	await capture(directory + "/main.png")
 	game.hud._open_settings("main")
 	await capture(directory + "/settings.png")
+	game.hud.show_menu("graphics")
+	await capture(directory + "/settings_graphics.png")
 	(game.hud.modal.find_child("FPSCounterButton", true, false) as Button).pressed.emit()
 	await capture(directory + "/settings_fps.png")
 	(game.hud.modal.find_child("FPSCounterButton", true, false) as Button).pressed.emit()

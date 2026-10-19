@@ -30,7 +30,7 @@ const MIX := {
 	"striker_attack": [-6.0, 0.08, 0], "striker_death": [-4.0, 0.08, 1], "striker_idle": [-2.0, 0.1, 0],
 	"charger_roar": [-4.0, 0.08, 0], "crusher_pain": [-1.0, 0.06, 1], "crusher_attack": [0.0, 0.06, 1], "crusher_death": [3.0, 0.04, 2],
 	"attack": [-6.0, 0.1, 0], "moan": [-9.0, 0.1, 0], "death_female": [-4.0, 0.08, 1], "pain_female": [-6.0, 0.08, 0],
-	"melee": [-2.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
+	"melee": [0.0, 0.08, 1], "molotov": [1.0, 0.06, 2], "fire": [-7.0, 0.0, 1], "flamer": [-6.0, 0.0, 1],
 	"m14": [0.0, 0.04, 0], "svd": [1.0, 0.04, 1], "fifty": [4.0, 0.03, 2], "nitro": [3.0, 0.04, 2], "syringe": [-4.0, 0.03, 1], "g36": [-2.0, 0.04, 0], "g36_sil": [-4.0, 0.04, 0],
 	"g36_mag_out": [-7.0, 0.04, 1], "g36_mag_in": [-7.0, 0.04, 1], "g36_bolt": [-7.0, 0.04, 1],
 	# The MP7 fires 950 times a minute and its file is a sharp one: at this level its
@@ -76,7 +76,10 @@ const MIX := {
 	# The Crusher's shell (built by tools/make_crusher_sounds.js): the grinding that warns of
 	# it, the blow with which it shuts, its breaking up - all three must carry through gunfire -
 	# and the dull knock a shooter hears in place of the ding when his bullet lands on it.
-	"crusher_shell_tell": [1.0, 0.03, 2], "crusher_shell_on": [3.0, 0.03, 2], "crusher_shell_off": [1.0, 0.04, 2], "hit_shell": [-4.0, 0.07, 1]
+	"crusher_shell_tell": [1.0, 0.03, 2], "crusher_shell_on": [3.0, 0.03, 2], "crusher_shell_off": [1.0, 0.04, 2], "hit_shell": [-4.0, 0.07, 1],
+	# The melee weapons' blows (tools/make_melee_sounds.js): a heavy blunt one is felt as much
+	# as heard, a blade bites and tears; a heavy weapon is heard coming round.
+	"melee_heavy": [3.0, 0.05, 2], "melee_blade": [1.0, 0.06, 2], "swing_heavy": [-7.0, 0.05, 1]
 }
 ## Synthesised stand-ins: [seconds, sample rate]. Sounds without one borrow another's.
 const SPECS := {
@@ -111,7 +114,8 @@ const STAND_INS := {
 	"hit_body": "hit", "hit_head": "hit", "hit_kill": "squish", "boomer_burst": "squish",
 	"ding_glas": "hit", "ding_glas_head": "hit", "ding_glas_kill": "hit", "ding_messing": "hit", "ding_messing_head": "hit", "ding_messing_kill": "hit",
 	"ding_tink": "hit", "ding_tink_head": "hit", "ding_tink_kill": "hit", "ding_spiel": "hit", "ding_spiel_head": "hit", "ding_spiel_kill": "hit",
-	"crusher_shell_tell": "hiss", "crusher_shell_on": "thud", "crusher_shell_off": "pop", "hit_shell": "hit"
+	"crusher_shell_tell": "hiss", "crusher_shell_on": "thud", "crusher_shell_off": "pop", "hit_shell": "hit",
+	"melee_heavy": "thud", "melee_blade": "squish", "swing_heavy": "swipe"
 }
 
 ## What the settings can turn up and down, and how loud each is to begin with (0 to 1):

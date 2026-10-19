@@ -70,11 +70,13 @@ var armor_bar: ProgressBar
 var vest_icons: HBoxContainer
 var scoreboard: Control
 var scoreboard_key := ""
+## Set by Game.finish: the screen that ends the night plays out slowly (EndScreen).
+var end_reveal := false
 var ammo_label: Label
 var reserve_label: Label
 var rifle_label: Label
 var interaction_label: Label
-var hold_bar: ProgressBar
+var hold_bar: HoldRing
 var fps_label: Label
 var banner_label: Label
 var detail_label: Label
@@ -287,10 +289,10 @@ func _build_play_ui() -> void:
 	minimap = Minimap.new()
 	minimap.game = game
 	minimap.font = display
-	_anchored(minimap, Control.PRESET_TOP_RIGHT, -32 - Minimap.SIZE, 22, -32, 22 + Minimap.SIZE)
+	_anchored(minimap, Control.PRESET_TOP_RIGHT, -20 - Minimap.SIZE, 12, -20, 12 + Minimap.SIZE)
 	var intel := VBoxContainer.new()
 	intel.add_theme_constant_override("separation", 5)
-	_anchored(intel, Control.PRESET_TOP_RIGHT, -332, Minimap.SIZE + 30, -32, Minimap.SIZE + 230)
+	_anchored(intel, Control.PRESET_TOP_RIGHT, -320, Minimap.SIZE + 20, -20, Minimap.SIZE + 220)
 	var readouts := HBoxContainer.new()
 	readouts.name = "MapReadouts"
 	readouts.custom_minimum_size.x = Minimap.SIZE
@@ -367,8 +369,11 @@ func _build_play_ui() -> void:
 	detail_label = label("", 17, AMBER)
 	detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_anchored(detail_label, Control.PRESET_CENTER_TOP, -420, 228, 420, 262)
-	# Top left: brief combat and team events, newest first.
+	# Top left used to list brief combat and team events (kills, pickups, orders). It is not
+	# shown any more; the events are still told to it, since they also carry the hit marker,
+	# the kill sound and what the checks read.
 	feed = VBoxContainer.new()
+	feed.visible = false
 	feed.add_theme_constant_override("separation", 5)
 	feed.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_anchored(feed, Control.PRESET_TOP_LEFT, 32, 24, 332, 222)
@@ -376,13 +381,13 @@ func _build_play_ui() -> void:
 	var vitals := VBoxContainer.new()
 	vitals.alignment = BoxContainer.ALIGNMENT_END
 	vitals.add_theme_constant_override("separation", 0)
-	_anchored(vitals, Control.PRESET_BOTTOM_LEFT, 32, -168, 340, -30)
+	_anchored(vitals, Control.PRESET_BOTTOM_LEFT, 56, -190, 340, -52)
 	armor_label = label("", 14, CYAN, true)
 	vitals.add_child(armor_label)
 	armor_label.hide()
 	var health_row := HBoxContainer.new()
 	health_row.add_theme_constant_override("separation", 8)
-	health_label = label("100", 54, IVORY, true)
+	health_label = label("100", 40, IVORY, true)
 	health_row.add_child(health_label)
 	var hp := label("HP", 16, MUTED, true)
 	hp.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -401,11 +406,11 @@ func _build_play_ui() -> void:
 		vest.hide()
 		vest_icons.add_child(vest)
 	vitals.add_child(health_row)
-	health_bar = _bar(MINT, 260, 7)
+	health_bar = _bar(MINT, 190, 5)
 	health_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	vitals.add_child(health_bar)
 	_gap(vitals, 4)
-	armor_bar = _bar(Color("579fef"), 260, 5)
+	armor_bar = _bar(Color("579fef"), 190, 3)
 	armor_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	armor_bar.value = 0
 	vitals.add_child(armor_bar)
@@ -413,12 +418,12 @@ func _build_play_ui() -> void:
 	team_box = VBoxContainer.new()
 	team_box.alignment = BoxContainer.ALIGNMENT_END
 	team_box.add_theme_constant_override("separation", 3)
-	_anchored(team_box, Control.PRESET_BOTTOM_LEFT, 32, -300, 320, -178)
+	_anchored(team_box, Control.PRESET_BOTTOM_LEFT, 56, -322, 460, -200)
 	# Bottom right: the weapon and its ammunition.
 	var weapon_box := VBoxContainer.new()
 	weapon_box.alignment = BoxContainer.ALIGNMENT_END
 	weapon_box.add_theme_constant_override("separation", -8)
-	_anchored(weapon_box, Control.PRESET_BOTTOM_RIGHT, -380, -150, -32, -26)
+	_anchored(weapon_box, Control.PRESET_BOTTOM_RIGHT, -400, -172, -56, -48)
 	rifle_label = label("M4A4", 15, MUTED, true)
 	rifle_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	weapon_box.add_child(rifle_label)
@@ -426,61 +431,53 @@ func _build_play_ui() -> void:
 	var ammo_row := HBoxContainer.new()
 	ammo_row.alignment = BoxContainer.ALIGNMENT_END
 	ammo_row.add_theme_constant_override("separation", 8)
-	ammo_label = label("30", 62, IVORY, true)
+	ammo_label = label("30", 40, IVORY, true)
 	ammo_row.add_child(ammo_label)
-	reserve_label = label("/ 180", 26, MUTED, true)
+	reserve_label = label("/ 180", 22, MUTED, true)
 	reserve_label.size_flags_vertical = Control.SIZE_SHRINK_END
 	ammo_row.add_child(reserve_label)
 	weapon_box.add_child(ammo_row)
 	# Above the weapon: what is in the pockets, one tile per key.
 	var pockets := HBoxContainer.new()
 	pockets.alignment = BoxContainer.ALIGNMENT_END
-	pockets.add_theme_constant_override("separation", 6)
-	_anchored(pockets, Control.PRESET_BOTTOM_RIGHT, -446, -218, -32, -158)
+	pockets.add_theme_constant_override("separation", 12)
+	_anchored(pockets, Control.PRESET_BOTTOM_RIGHT, -466, -232, -56, -170)
 	for entry in TILES:
-		var tile := PanelContainer.new()
-		var plate := _plate(0.6)
-		plate.content_margin_left = 8
-		plate.content_margin_right = 8
-		plate.content_margin_top = 3
-		plate.content_margin_bottom = 3
-		tile.add_theme_stylebox_override("panel", plate)
-		tile.custom_minimum_size = Vector2(60, 56)
+		# Bare: the symbol, how many, and the key under it. No frame, no name.
+		var tile := VBoxContainer.new()
+		tile.custom_minimum_size = Vector2(38, 0)
 		tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var stack := VBoxContainer.new()
-		stack.add_theme_constant_override("separation", -5)
-		tile.add_child(stack)
+		tile.add_theme_constant_override("separation", -3)
 		var glyph := TextureRect.new()
 		glyph.texture = SYMBOLS.icon("use" if str(entry[0]) == "grenade" else str(entry[0]))
 		glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		glyph.custom_minimum_size = Vector2(22, 20)
-		stack.add_child(glyph)
-		stack.add_child(label(game.keys_of(str(entry[1]), 1), 11, AMBER, true))
-		var count := label("0", 24, IVORY, true)
+		tile.add_child(glyph)
+		var count := label("0", 22, IVORY, true)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stack.add_child(count)
-		var caption := label(str(entry[2]), 10, MUTED, true)
-		caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		stack.add_child(caption)
+		tile.add_child(count)
+		var key := label(game.keys_of(str(entry[1]), 1), 11, MUTED, true)
+		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tile.add_child(key)
 		pockets.add_child(tile)
 		tiles[entry[0]] = [tile, count]
 	loadout_box = VBoxContainer.new()
 	loadout_box.alignment = BoxContainer.ALIGNMENT_END
 	loadout_box.add_theme_constant_override("separation", -2)
 	loadout_box.modulate.a = 0.0
-	_anchored(loadout_box, Control.PRESET_BOTTOM_RIGHT, -380, -520, -32, -256)
+	_anchored(loadout_box, Control.PRESET_BOTTOM_RIGHT, -400, -540, -56, -276)
 	# Left of the tiles: mask and adrenaline, when there are any.
 	gear_label = label("", 14, MUTED, true)
 	gear_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_anchored(gear_label, Control.PRESET_BOTTOM_RIGHT, -700, -244, -32, -222)
+	_anchored(gear_label, Control.PRESET_BOTTOM_RIGHT, -720, -262, -56, -240)
 	interaction_label = label("", 19, AMBER, true)
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_anchored(interaction_label, Control.PRESET_CENTER_BOTTOM, -390, -150, 390, -112)
-	# Under it: how far along something is that takes holding [E] (helping somebody up).
-	hold_bar = _bar(AMBER, 240, 6)
+	# Under the crosshair: a ring that fills while something is held (the next round, helping somebody up).
+	hold_bar = HoldRing.new()
 	hold_bar.max_value = 1.0
-	_anchored(hold_bar, Control.PRESET_CENTER_BOTTOM, -120, -108, 120, -102)
+	_anchored(hold_bar, Control.PRESET_CENTER, -32, 46, 32, 110)
 	hold_bar.hide()
 	fps_label = label("", 13, MUTED, true)
 	fps_label.name = "FPSCounter"
@@ -986,27 +983,17 @@ func _process(delta: float) -> void:
 		team_rows.clear()
 		order_marks.clear()
 		for buddy: Dictionary in buddies:
-			var row := HBoxContainer.new()
-			row.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-			row.add_theme_constant_override("separation", 6)
-			var mate_name := label(str(buddy.name), 14, CYAN, true)
-			row.add_child(mate_name)
-			var mate_bar := _bar(CYAN, 96, 5)
-			mate_bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-			row.add_child(mate_bar)
-			team_box.add_child(row)
-			team_rows.append([mate_name, mate_bar])
+			# No bars: a squad member shows here only while he lies down, in a line of his own.
+			var mate_name := label(str(buddy.name), 22, DANGER, true)
+			mate_name.visible = false
+			team_box.add_child(mate_name)
+			team_rows.append([mate_name])
 	for i in range(team_rows.size()):
 		var buddy: Dictionary = buddies[i]
-		var bar := team_rows[i][1] as ProgressBar
-		bar.max_value = float(buddy.max)
-		bar.value = float(buddy.health)
-		(bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color = DANGER if bool(buddy.down) else CYAN
 		var title := team_rows[i][0] as Label
-		title.text = ("✚ " + str(buddy.name) + " · AM BODEN") if bool(buddy.down) else str(buddy.name)
-		title.modulate = DANGER if bool(buddy.down) or float(buddy.health) < float(buddy.max) * 0.3 else Color.WHITE
-		if bool(buddy.down):
-			title.modulate.a = 0.6 + 0.4 * absf(sin(pulse * 5.0))
+		title.visible = bool(buddy.down)
+		title.text = "✚ %s · AM BODEN" % str(buddy.name)
+		title.modulate.a = 0.65 + 0.35 * absf(sin(pulse * 5.0))
 	if is_instance_valid(game.boss) and not game.boss.dead:
 		boss_box.show()
 		# A boss may say itself what its bar shows (the Prowler: what it still takes before it breaks off).
@@ -1079,7 +1066,7 @@ func _flat(fill: Color, edge: Color, left: float = 16.0) -> StyleBoxFlat:
 
 ## A line of the menu: text on the left, a mark in the accent colour when the pointer is
 ## on it. `primary` is the one the eye should find first.
-func _button(text: String, callback: Callable, primary: bool = false) -> Button:
+func _button(text: String, callback: Callable, primary: bool = false, brushed: bool = true) -> Button:
 	var button := Button.new()
 	button.text = text
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
@@ -1087,17 +1074,27 @@ func _button(text: String, callback: Callable, primary: bool = false) -> Button:
 	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	button.add_theme_font_override("font", display)
 	button.add_theme_font_size_override("font_size", 23)
-	button.add_theme_stylebox_override("normal", _flat(AMBER if primary else Color(1, 1, 1, 0.045), AMBER if primary else Color(1, 1, 1, 0.2)))
-	var hover := _flat(Color("ffd98a") if primary else Color(1, 1, 1, 0.12), AMBER)
-	button.add_theme_stylebox_override("hover", hover)
-	button.add_theme_stylebox_override("pressed", hover)
-	button.add_theme_stylebox_override("disabled", _flat(Color(1, 1, 1, 0.02), Color(1, 1, 1, 0.07)))
-	var focus := StyleBoxFlat.new()
-	focus.bg_color = Color(0, 0, 0, 0)
-	focus.border_color = Color(1, 1, 1, 0.55)
-	focus.set_border_width_all(1)
-	focus.set_corner_radius_all(2)
-	button.add_theme_stylebox_override("focus", focus)
+	if brushed:
+		# A stroke of paint (Brush); which of its three pictures is told by the words.
+		var variant := absi(text.hash())
+		button.add_theme_stylebox_override("normal", Brush.style(AMBER if primary else Color(1, 1, 1, 0.1), variant))
+		var lit: StyleBoxTexture = Brush.style(Color("ffd98a") if primary else Color(AMBER.r, AMBER.g, AMBER.b, 0.3), variant)
+		button.add_theme_stylebox_override("hover", lit)
+		button.add_theme_stylebox_override("pressed", lit)
+		button.add_theme_stylebox_override("disabled", Brush.style(Color(1, 1, 1, 0.035), variant))
+		button.add_theme_stylebox_override("focus", Brush.style(Color(1, 1, 1, 0.14), variant))
+	else:
+		button.add_theme_stylebox_override("normal", _flat(AMBER if primary else Color(1, 1, 1, 0.045), AMBER if primary else Color(1, 1, 1, 0.2)))
+		var hover := _flat(Color("ffd98a") if primary else Color(1, 1, 1, 0.12), AMBER)
+		button.add_theme_stylebox_override("hover", hover)
+		button.add_theme_stylebox_override("pressed", hover)
+		button.add_theme_stylebox_override("disabled", _flat(Color(1, 1, 1, 0.02), Color(1, 1, 1, 0.07)))
+		var focus := StyleBoxFlat.new()
+		focus.bg_color = Color(0, 0, 0, 0)
+		focus.border_color = Color(1, 1, 1, 0.55)
+		focus.set_border_width_all(1)
+		focus.set_corner_radius_all(2)
+		button.add_theme_stylebox_override("focus", focus)
 	button.add_theme_color_override("font_color", INK if primary else IVORY)
 	button.add_theme_color_override("font_focus_color", INK if primary else IVORY)
 	button.add_theme_color_override("font_hover_color", INK if primary else AMBER)
@@ -1109,7 +1106,7 @@ func _button(text: String, callback: Callable, primary: bool = false) -> Button:
 
 ## A small button: a tab, a choice, something to step through.
 func _chip(text: String, callback: Callable, active: bool = false, width: float = 150.0) -> Button:
-	var button := _button(text, callback, active)
+	var button := _button(text, callback, active, false)
 	button.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	button.custom_minimum_size = Vector2(width, 40)
 	button.add_theme_font_size_override("font_size", 16)
@@ -1200,7 +1197,7 @@ func _next_company() -> void:
 func _mission_button(number: int, text: String) -> Button:
 	var button := _button(text, _choose_mission.bind(number))
 	if game.profile.mission == number:
-		button.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.13), AMBER))
+		button.add_theme_stylebox_override("normal", Brush.style(Color(AMBER.r, AMBER.g, AMBER.b, 0.22), absi(text.hash())))
 		button.add_theme_color_override("font_color", AMBER)
 		button.add_theme_color_override("font_focus_color", AMBER)
 	return button
@@ -1307,7 +1304,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "skins", "board", "skills", "test"]
+	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "skins", "board", "skills", "test"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -1318,12 +1315,13 @@ func show_menu(mode: String) -> void:
 	texture.fill_to = Vector2.RIGHT
 	background.texture = texture
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	background.visible = mode not in ["win", "lose"]
 	modal.add_child(background)
 	var column := VBoxContainer.new()
 	# The page of abilities and the counters are the tallest of all and start a little higher.
 	column.position = Vector2(84, 30 if mode in ["skills", "shop", "bench", "test"] else 44)
 	column.size = Vector2(900 if wide else 660, 640)
-	column.add_theme_constant_override("separation", 6)
+	column.add_theme_constant_override("separation", 2 if mode in ["main", "pause", "career"] else 6)
 	modal.add_child(column)
 	if mode in ["shop", "bench"]:
 		column.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1344,11 +1342,13 @@ func show_menu(mode: String) -> void:
 		"pause":
 			first = _menu_pause(column)
 		"win", "lose":
-			first = _menu_end(column, mode)
+			first = preload("res://scripts/end_screen.gd").build(self, column, mode)
 		"settings":
 			first = _menu_settings(column)
 		"controls":
 			first = preload("res://scripts/controls_menu.gd").build(self, column)
+		"graphics":
+			first = preload("res://scripts/graphics_menu.gd").build(self, column)
 		"shop", "bench":
 			first = _menu_shop(column, mode)
 		"host":
@@ -1365,10 +1365,6 @@ func show_menu(mode: String) -> void:
 			first = _menu_test(column)
 		"loading":
 			first = _menu_loading(column)
-	if mode in ["win", "lose"]:
-		var result := preload("res://scripts/scoreboard.gd").build(self, 446)
-		result.position = Vector2(750, 250)
-		modal.add_child(result)
 	var version := label("v" + NetLink.VERSION, 12, MUTED, true)
 	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
 	version.position = Vector2(-70, -34)
@@ -1608,11 +1604,20 @@ func _test_world(column: VBoxContainer, room: Sandbox) -> void:
 	if room.visit_id != "":
 		pieces.append(_chip("ZURÜCK ZUM HOF", _test_do.bind("farm"), false, 200))
 	_test_row(column, "MISSION 2  ·  AREALE (ALLEIN BEGEHEN)", pieces)
+	# The open world in the making (scenes/world.tscn): Esc there leads back to the menu.
+	_test_row(column, "NEUE KARTE  ·  IM AUFBAU", [_chip("OFFENE WELT  ·  3 × 3 KM", _open_world, false, 300)])
 	_test_row(column, "AUSPROBIEREN", [
 		_chip("BLENDGRANATE AUF MICH", _test_do.bind("flash"), false, 260),
 		_chip("ECHTE RUNDE %d STARTEN" % room.strength, _test_do.bind("round"), false, 250)])
 	_gap(column, 4)
 	_text(column, "Tageslicht nimmt Nebel, Regen und Gewitter weg – aus ist es die Nacht wie im Einsatz.\nEine echte Runde läuft wie im Endlosmodus, mit Aufträgen; danach wartet der Testraum\nwieder. „Alle entfernen“ auf der Seite GEGNER beendet sie sofort.", 15)
+
+## Leaves the test room for the open world (it has its own scene; Esc there comes back to
+## the main menu).
+func _open_world() -> void:
+	Engine.time_scale = 1.0
+	get_tree().paused = false
+	get_tree().change_scene_to_file("res://scenes/world.tscn")
 
 func _test_tab(tab: String) -> void:
 	game.sandbox.tab = tab
@@ -1717,70 +1722,6 @@ func _open_test_from_pause() -> void:
 	game.open_test()
 
 ## The end of a night of the second mission: how far it went, and where to take it up.
-func _menu_end_villa(column: VBoxContainer, mode: String) -> Control:
-	var place := "   ·   Platz %d der Bestenliste" % game.last_place if game.last_place > 0 else ""
-	if mode == "win":
-		_title(column, "ABSCHNITT\nGESICHERT")
-		_text(column, "Der Frachtaufzug fährt weiter nach unten. Fortsetzung folgt.\nScore %06d   ·   %d Abschüsse   ·   %s\nStufe %s%s" % [game.score, game.kills, game.time_string(), game.rules.label, place])
-	else:
-		_title(column, "EINSATZ\nGESCHEITERT")
-		_text(column, "%s   ·   Score %06d   ·   %d Abschüsse\nStufe %s%s" % [game.hive.title(), game.score, game.kills, game.rules.label, place])
-	var gain: Dictionary = game.last_gain
-	if Skills.IN_SERVICE and not gain.is_empty():
-		var earned := "+%d Erfahrung   ·   Stufe %d" % [int(gain.xp), int(gain.level)]
-		if int(gain.raised) > 0:
-			earned += "   ·   %s je Weg: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
-		column.add_child(label(earned, 16, MINT, true))
-	_gap(column, 10)
-	var again: Button
-	if game.net.joined:
-		again = _button("WARTE AUF DEN HOST …", game.start_run, true)
-		again.disabled = true
-		column.add_child(again)
-	elif mode == "lose" and game.hive.checkpoint != "landing":
-		again = _button("AB KONTROLLPUNKT  ·  %s" % game.hive.stages[game.hive.checkpoint][0], game.retry_checkpoint, true)
-		column.add_child(again)
-		column.add_child(_button("VON VORN", game.start_run))
-	else:
-		again = _button("NOCH EINMAL" if mode == "win" else "ERNEUT VERSUCHEN", game.start_run, true)
-		column.add_child(again)
-	column.add_child(_button("ZUM HAUPTMENÜ", game.return_to_menu))
-	column.add_child(_button("BEENDEN", game.quit_game))
-	return again
-
-func _menu_end(column: VBoxContainer, mode: String) -> Control:
-	if game.hive.on:
-		return _menu_end_villa(column, mode)
-	var rounds: int = game.ROUNDS.size()
-	var told: bool = game.story.enabled
-	var place := "   ·   Platz %d der Bestenliste" % game.last_place if game.last_place > 0 else ""
-	if mode == "win":
-		_title(column, "EVAKU\nIERT")
-		var feat := "Nadja ist ausgeflogen. Helix vertuscht nichts mehr." if told else "Du hast alle %d Runden überstanden." % rounds
-		_text(column, "%s\nScore %06d   ·   %d Abschüsse   ·   %s\nStufe %s%s" % [feat, game.score, game.kills, game.time_string(), game.rules.label, place])
-	else:
-		_title(column, "HAUS\nGEFALLEN")
-		var reached := ("Letzte Runde" if game.story.stage == "evac" else "Runde %d" % game.wave) if told else "Runde %d von %d" % [game.wave, rounds]
-		if game.endless:
-			reached = "Endlos   ·   Runde %d erreicht" % game.wave
-		_text(column, "%s   ·   Score %06d   ·   %d Abschüsse\nStufe %s%s" % [reached, game.score, game.kills, game.rules.label, place])
-	# What the night was worth to the trees of abilities.
-	var gain: Dictionary = game.last_gain
-	if Skills.IN_SERVICE and not gain.is_empty():
-		var earned := "+%d Erfahrung   ·   Stufe %d" % [int(gain.xp), int(gain.level)]
-		if int(gain.raised) > 0:
-			earned += "   ·   %s je Weg: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
-		column.add_child(label(earned, 16, MINT, true))
-	_gap(column, 10)
-	var waiting: bool = game.net.joined
-	# Only the host can start the next match.
-	var again := _button("WARTE AUF DEN HOST …" if waiting else ("NOCH EIN EINSATZ" if mode == "win" else "ERNEUT VERSUCHEN"), game.start_run, true)
-	again.disabled = waiting
-	column.add_child(again)
-	column.add_child(_button("KOOP VERLASSEN" if game.net.active else "ZUM HAUPTMENÜ", game.return_to_menu))
-	column.add_child(_button("BEENDEN", game.quit_game))
-	return again
-
 func _toggle_fps() -> void:
 	game.show_fps = not game.show_fps
 	game.keep_setting("video", "show_fps", game.show_fps)
@@ -1804,21 +1745,6 @@ func _menu_settings(column: VBoxContainer) -> Control:
 		var bus := str(entry[0])
 		_slider(column, str(entry[1]), game.sounds.volume(bus), 0.0, 1.0, percent, func(value: float) -> void: game.set_volume(bus, value))
 	_gap(column, 18)
-	_section(column, "BILD")
-	var picture := HBoxContainer.new()
-	picture.add_theme_constant_override("separation", 8)
-	var scale := _chip("3D-AUFLÖSUNG   %d %%" % int(round(game.render_scale * 100.0)), game.next_render_scale, false, 230)
-	scale.tooltip_text = "Mit wie vielen Bildpunkten das 3D-Bild gerechnet wird. Kleiner läuft schneller, die Anzeigen bleiben scharf."
-	picture.add_child(scale)
-	var full := _chip("VOLLBILD", game.toggle_fullscreen, false, 150)
-	full.tooltip_text = "Vollbild an und aus. Auch mit F11 oder Alt+Enter."
-	picture.add_child(full)
-	var fps := _chip("FPS   ·   AN" if game.show_fps else "FPS   ·   AUS", _toggle_fps, false, 180)
-	fps.name = "FPSCounterButton"
-	fps.tooltip_text = "Bildrate oben rechts anzeigen."
-	picture.add_child(fps)
-	column.add_child(picture)
-	_gap(column, 18)
 	_section(column, "STEUERUNG")
 	var turns := func(value: float) -> String: return "%.2f" % value
 	var steer := func(value: float) -> void:
@@ -1828,7 +1754,7 @@ func _menu_settings(column: VBoxContainer) -> Control:
 	sensitivity.name = "MouseSensitivity"
 	_gap(column, 12)
 	var actions := HBoxContainer.new()
-	actions.add_theme_constant_override("separation", 28)
+	actions.add_theme_constant_override("separation", 18)
 	column.add_child(actions)
 	var controls := _button("STEUERUNG", show_menu.bind("controls"))
 	controls.name = "ControlsButton"
@@ -1836,9 +1762,18 @@ func _menu_settings(column: VBoxContainer) -> Control:
 	controls.expand_icon = true
 	controls.add_theme_constant_override("icon_max_width", 26)
 	controls.add_theme_constant_override("h_separation", 16)
-	controls.custom_minimum_size = Vector2(360, 48)
+	controls.custom_minimum_size = Vector2(290, 48)
 	controls.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	actions.add_child(controls)
+	var graphics := _button("GRAFIK", show_menu.bind("graphics"))
+	graphics.name = "GraphicsButton"
+	graphics.icon = SYMBOLS.icon("settings")
+	graphics.expand_icon = true
+	graphics.add_theme_constant_override("icon_max_width", 26)
+	graphics.add_theme_constant_override("h_separation", 16)
+	graphics.custom_minimum_size = Vector2(290, 48)
+	graphics.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	actions.add_child(graphics)
 	var crouch := HBoxContainer.new()
 	crouch.add_theme_constant_override("separation", 12)
 	crouch.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -2142,7 +2077,8 @@ func _update_scoreboard() -> void:
 		scoreboard.queue_free()
 		scoreboard = null
 	if wanted:
-		scoreboard = preload("res://scripts/scoreboard.gd").build(self, 600)
-		scoreboard.set_anchors_preset(Control.PRESET_CENTER)
-		scoreboard.position = Vector2(-300, -150)
+		scoreboard = preload("res://scripts/scoreboard.gd").build(self, 0)
+		scoreboard.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+		scoreboard.grow_horizontal = Control.GROW_DIRECTION_BOTH
+		scoreboard.grow_vertical = Control.GROW_DIRECTION_BOTH
 		play_ui.add_child(scoreboard)

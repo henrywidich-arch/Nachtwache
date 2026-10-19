@@ -79,6 +79,7 @@ func run_connected(mission: int) -> void:
 	expect(str(other.get("partner_name", "")) == game.net.player_name and game.net.partner_name != "MITSPIELER", "Both lobby identities arrive with anonymous player names")
 	await wallets()
 	await personal_kills()
+	await shared_board()
 	await probe("throw_motion")
 	expect(game.net.remote.visual.throw_left > 0.0, "The guest's throw wind-up plays the third-person throwing animation on the host")
 	if "--bots" in OS.get_cmdline_user_args():
@@ -198,6 +199,29 @@ func personal_kills() -> void:
 	other = await probe("inspect")
 	expect(game.kills == own_before + 1 and game.net.remote.kills == guest_before + 1 and int(other.get("kills", -1)) == guest_before + 1 and int(other.get("partner_kills", -1)) == game.kills, "Host and guest kills are credited separately and agree on both scoreboards")
 
+## The scoreboard lists both players and the bots on both machines: the guest's figures reach the
+## host, and the host's table (with the squad) reaches the guest.
+func shared_board() -> void:
+	await probe("set_tally", {"damage": 777, "headshots": 5})
+	game.tally.damage = 1234
+	await wait(0.7)
+	var rows: Array = preload("res://scripts/scoreboard.gd").players(game.hud)
+	var ids := rows.map(func(row: Dictionary) -> String: return str(row.id))
+	expect(ids.has("host") and ids.has("guest") and ids.size() == 2 + game.team.size(), "The host's scoreboard lists both players and every squad bot (%s)" % str(ids))
+	var guest_row: Dictionary = {}
+	for row: Dictionary in rows:
+		if str(row.id) == "guest":
+			guest_row = row
+	expect(int(guest_row.get("damage", -1)) == 777 and int(guest_row.get("headshots", -1)) == 5, "The guest's own figures reach the host's scoreboard")
+	var other := await probe("inspect")
+	var board: Array = other.get("board", [])
+	var mine_there := false
+	var host_there := false
+	for entry: String in board:
+		mine_there = mine_there or entry.begins_with("guest:L:") and entry.ends_with(":777:5")
+		host_there = host_there or entry.begins_with("host:-:%d:1234:" % game.kills)
+	expect(board.size() == 2 + game.team.size() and mine_there and host_there, "The guest's scoreboard shows the host's table with the squad, and himself as the live local row (%s)" % str(board))
+
 func villa(other: Dictionary) -> void:
 	expect(game.hive.on and bool(other.get("hive", false)) and str(other.get("layout", "")) == game.hive_map.layout_key and int(other.get("saved_mission", 0)) == 1, "The guest loads the host's random mission-two layout without changing its saved mission selection")
 	expect(int(other.get("friends", 0)) > 0 and int(other.get("ai_team", -1)) == 0, "The guest sees authoritative friendly NPCs without running another AI squad")
@@ -302,6 +326,9 @@ func _probe(id: int, action: String, args: Dictionary) -> void:
 				game.hive._end_intro()
 			else:
 				game.story._end_intro(true)
+		"set_tally":
+			game.tally.damage = int(args.damage)
+			game.tally.headshots = int(args.headshots)
 		"hold":
 			Input.action_press("flashlight")
 			await wait(float(args.seconds))
@@ -388,6 +415,7 @@ func snapshot() -> Dictionary:
 	for button in game.hud.modal.find_children("*", "Button", true, false):
 		waits = waits or ((button as Button).text == "WARTE AUF DEN HOST …" and (button as Button).disabled)
 	return {"state": game.state, "wave": game.wave, "hive": game.hive.on, "stage": game.hive.stage,
+		"board": preload("res://scripts/scoreboard.gd").players(game.hud).map(func(row: Dictionary) -> String: return "%s:%s:%d:%d:%d" % [row.id, "L" if row.local else "-", int(row.kills), int(row.damage), int(row.headshots)]),
 		"kills": game.kills, "partner_kills": remote.kills if is_instance_valid(remote) else 0, "scoreboard": game.hud.modal.find_child("Scoreboard", true, false) != null,
 		"down_events": feed_count("downed"),
 		"lobby": game.net.lobby_settings.duplicate(), "help_prompt": help_prompt,

@@ -12,6 +12,10 @@ const FILL := Vector2(0.5, 0.84)
 ## The swing to both sides (radians) and how fast it goes.
 const SWING := 0.5
 const PACE := 0.55
+## How a melee weapon is turned about its length to show its wide side.
+const MELEE_TURN := 0.0
+## How much of the measured size the camera is framed on (less than 1 fills the picture more).
+const MELEE_FRAME := 0.9
 
 var stage: SubViewport
 var pivot: Node3D
@@ -19,10 +23,20 @@ var camera: Camera3D
 var models: Dictionary = {}
 var shown := ""
 var clock := 0.0
+## Dragging turns the weapon by hand: from the first drag it stays as it was turned (until
+## another weapon is shown), and `yaw` and `pitch` are how far.
+const DRAG_PACE := 0.012
+const PITCH_LIMIT := 1.3
+var manual := false
+var dragging := false
+var yaw := 0.0
+var pitch := 0.0
 
 func _ready() -> void:
 	stretch = true
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	mouse_default_cursor_shape = Control.CURSOR_DRAG
+	tooltip_text = "Ziehen, um die Waffe zu drehen"
 	stage = SubViewport.new()
 	stage.own_world_3d = true
 	stage.transparent_bg = true
@@ -76,17 +90,45 @@ func _reframe() -> void:
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or shown == "":
 		return
-	clock += delta
-	pivot.rotation.y = sin(clock * PACE) * SWING
+	if manual:
+		pivot.basis = Basis(Vector3(0, 0, 1), pitch) * Basis(Vector3.UP, yaw)
+	else:
+		clock += delta
+		pivot.basis = Basis(Vector3.UP, sin(clock * PACE) * SWING)
 	if models.get(shown) is SoldierVisual:
 		(models[shown] as SoldierVisual).animate(delta, Vector3.ZERO, false, false)
+
+## Turns the weapon with the mouse: a drag to the sides turns it about, a drag up and down
+## tips it over.
+func _gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+		dragging = (event as InputEventMouseButton).pressed
+		if dragging and not manual:
+			# Takes over from the swing where it stands.
+			manual = true
+			yaw = pivot.rotation.y
+			pitch = 0.0
+		accept_event()
+	elif event is InputEventMouseMotion and dragging:
+		var motion := (event as InputEventMouseMotion).relative
+		yaw += motion.x * DRAG_PACE
+		pitch = clampf(pitch - motion.y * DRAG_PACE, -PITCH_LIMIT, PITCH_LIMIT)
+		accept_event()
+
+## Whatever is shown anew starts by swinging again.
+func _show_anew(key: String) -> void:
+	if key != shown:
+		manual = false
+		dragging = false
+		clock = 0.0
+	shown = key
 
 ## The selected skin uses the same body the co-op partner sees.
 func show_soldier(look: String) -> void:
 	var key := "skin_" + look
 	for other in models:
 		(models[other] as Node3D).visible = other == key
-	shown = key
+	_show_anew(key)
 	if not models.has(key):
 		var model := SoldierVisual.new()
 		model.look = look
@@ -103,20 +145,38 @@ func show_melee(id: String) -> void:
 	var height := 0.8 if id in ["bat", "crowbar", "hammer"] else 0.64
 	for other in models:
 		(models[other] as Node3D).visible = other == key
-	shown = key
+	_show_anew(key)
 	if not models.has(key):
 		var model := Survivor.MELEE_VIEW.build(id)
-		model.rotation.y = PI * 0.5
-		model.position.y = -0.22 if height > 0.7 else -0.16
-		model.set_meta("size", Vector3(0.2, height, 0.32))
+		# Just the weapon: the hands that hold it in the first-person view stay out.
+		var hands := model.get_node_or_null("Hands")
+		if hands != null:
+			model.remove_child(hands)
+			hands.free()
+		# Upright, as it is held, and turned so that its wide side faces the viewer.
+		model.rotation.y = MELEE_TURN
+		# The materials of the view in the hand bend the field of view and the depth; here they
+		# are plain, as on the guns (WeaponView.display).
+		for node in model.find_children("*", "MeshInstance3D", true, false):
+			var mesh := node as MeshInstance3D
+			mesh.layers = 1
+			if mesh.material_override != null:
+				mesh.material_override = WeaponView._plain(mesh.material_override)
+			elif mesh.mesh != null:
+				for surface in range(mesh.mesh.get_surface_count()):
+					mesh.set_surface_override_material(surface, WeaponView._plain(mesh.get_active_material(surface)))
 		pivot.add_child(model)
+		# Measured as it stands, and set down with its middle on the middle of the picture.
+		var box := _measure(model)
+		model.position -= box.get_center()
+		model.set_meta("size", box.size)
 		models[key] = model
-	_frame(Vector3(0.2, height, 0.32))
+	_frame((models[key] as Node3D).get_meta("size", Vector3(0.2, height, 0.32)) * MELEE_FRAME)
 
 func show_weapon(id: String, parts: Array = []) -> void:
 	for other in models:
 		(models[other] as Node3D).visible = other == id
-	shown = id
+	_show_anew(id)
 	if id == "":
 		return
 	if not models.has(id):
@@ -141,6 +201,22 @@ func show_weapon(id: String, parts: Array = []) -> void:
 		if parts.has("akimbo"):
 			extent.z += 0.13
 	_frame(extent)
+
+## The space a model takes up in the showroom, as the camera sees it (what is hidden does not count).
+func _measure(model: Node3D) -> AABB:
+	var inverse := pivot.global_transform.affine_inverse()
+	var box := AABB()
+	var first := true
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		if mesh.mesh == null or not mesh.is_visible_in_tree():
+			continue
+		var part: AABB = (inverse * mesh.global_transform) * mesh.mesh.get_aabb()
+		box = part if first else box.merge(part)
+		first = false
+	if first:
+		return AABB(Vector3(-0.1, -0.3, -0.1), Vector3(0.2, 0.6, 0.2))
+	return box
 
 ## Puts the camera where the weapon fills the picture: beside it, a little above, the
 ## muzzle to the right.

@@ -12,13 +12,15 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.75"
+const VERSION := "0.76"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
 const STATE_INTERVAL := 0.05
 const SNAPSHOT_INTERVAL := 1.0 / 15.0
 const STATUS_INTERVAL := 0.25
+## How often each side tells the other what it has done tonight (the scoreboard).
+const BOARD_INTERVAL := 0.5
 
 signal changed
 
@@ -51,6 +53,9 @@ var player_name := ""
 var partner_name := "MITSPIELER"
 var lobby_settings: Dictionary = {}
 var income_seen := 0
+## The scoreboard rows as the host last sent them (Scoreboard.roster); a guest reads them.
+var roster: Array = []
+var board_left := 0.0
 var teleport_wait := 0.0
 ## This side's version (VERSION; a check can start as another one with --mp-version=).
 var version := VERSION
@@ -352,6 +357,10 @@ func _physics_process(delta: float) -> void:
 		var player: Survivor = game.player
 		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0) | (8 if player.crouched else 0) | (16 if Input.is_action_pressed("interact") and player.controlled and not player.menu_open else 0)
 		_state.rpc_id(partner, player.global_position, player.rotation.y, player.camera.rotation.x, player.velocity, flags, player.health, game.kills)
+	board_left -= delta
+	if board_left <= 0.0:
+		board_left = BOARD_INTERVAL
+		send_board()
 	if not hosting:
 		if not game.hive.on:
 			game.hive.coop.move_friends(delta)
@@ -418,6 +427,7 @@ func _begin(level: String, mode: String = "story", modifiers: bool = false, miss
 	game.mode = mode
 	game.modifiers_on = modifiers
 	game.team_enabled = bots
+	roster = []
 	match_mission = mission
 	match_night = night
 	match_company = company
@@ -582,6 +592,7 @@ func _pickup_gone(id: int) -> void:
 
 func send_finish(victory: bool) -> void:
 	if hosting and partner != 0:
+		send_board()
 		_finish.rpc_id(partner, victory, game.stats, PackedInt32Array([game.kills, remote.kills if is_instance_valid(remote) else 0]))
 
 @rpc("authority", "call_remote", "reliable")
@@ -913,6 +924,25 @@ func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int
 	remote.set_crouched(flags & 8 != 0)
 	remote.health = health
 	remote.kills = maxi(remote.kills, kills)
+
+## The scoreboard: the guest reports his own figures to the host, who knows everybody's and
+## sends the whole table (his own row, the guest's, the squad's) back.
+func send_board() -> void:
+	if partner == 0:
+		return
+	if hosting:
+		_roster.rpc_id(partner, preload("res://scripts/scoreboard.gd").roster(game))
+	else:
+		_tally.rpc_id(partner, game.tally)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _tally(figures: Dictionary) -> void:
+	if hosting and multiplayer.get_remote_sender_id() == partner and is_instance_valid(remote):
+		remote.tally = Tally.clean(figures)
+
+@rpc("authority", "call_remote", "reliable")
+func _roster(rows: Array) -> void:
+	roster = rows
 
 func send_throw() -> void:
 	if partner != 0:

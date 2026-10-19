@@ -433,6 +433,81 @@ def glove(rng):
     return save("glove", albedo, blur(height, 0.6), 6.0, roughness)
 
 
+def cliff(rng):
+    """Bare rock of a cliff: big blocks split by irregular cracks, each a facet that
+    leans its own way, fine grain on them, lighter water streaks and lichen."""
+    grain = norm01(lum(load("concrete_albedo.png")))
+    cell, d1, d2 = cells(rng, 34, aspect=0.75, jitter=1.0)
+    wobble = noise(rng, scale=22, beta=1.5)
+    edge = d2 - d1 + (wobble - 0.5) * 0.035
+    cracks = smooth(0.006, 0.001, edge)
+    chips = smooth(0.03, 0.012, edge) * 0.4
+    y, x = np.mgrid[0:N, 0:N].astype(np.float32) / N
+    lean_x = rng.uniform(-1, 1, cell.max() + 1)[cell]
+    lean_y = rng.uniform(-1, 1, cell.max() + 1)[cell]
+    facet = (x * lean_x + y * lean_y) * 6.0
+    facet = facet - np.floor(facet)
+    facet = blur(facet, 1.0)
+    tone_shift = rng.uniform(0.86, 1.12, cell.max() + 1)[cell]
+    lumps = noise(rng, scale=16, beta=1.6)
+    base = np.array([0.5, 0.48, 0.44]) * tone_shift[..., None]
+    albedo = base * (0.78 + 0.22 * grain[..., None]) * (0.85 + 0.25 * lumps[..., None])
+    streaks = smooth(0.58, 0.82, noise(rng, scale=16, stretch=(1.0, 5.0), beta=1.8))
+    albedo = albedo * (1 - streaks[..., None] * 0.18)
+    lichen = smooth(0.66, 0.82, noise(rng, scale=9, beta=1.8)) * (1 - cracks)
+    albedo = albedo * (1 - lichen[..., None] * 0.5) + np.array([0.57, 0.58, 0.42]) * lichen[..., None] * 0.5
+    albedo *= (1 - cracks[..., None] * 0.38 - chips[..., None] * 0.12)
+    height = facet * 0.35 + lumps * 0.4 + grain * 0.25 - cracks * 1.0 - chips * 0.4
+    roughness = 0.87 + grain * 0.06 - lichen * 0.04
+    return save("cliff", albedo, blur(height, 0.8), 9.0, roughness)
+
+
+def forest_floor(rng):
+    """The floor under trees: dark earth under needles, fallen leaves and twigs, moss."""
+    earth = load("earth_albedo.png") * 0.6
+    needles = np.zeros((N, N), np.float32)
+    strokes(rng, needles, 9000, 22, 0.4, 0.0, np.pi, 1.0, curve=0.2)
+    needles = np.clip(blur(needles, 0.5), 0, 1)
+    leaves = np.zeros((N, N), np.float32)
+    cell, d1, d2 = cells(rng, 900, aspect=1.8)
+    gather = noise(rng, scale=6, beta=2.0)
+    leaf = smooth(0.011, 0.004, d1) * (rng.uniform(0, 1, cell.max() + 1)[cell] < gather * 0.9)
+    leaf_tone = rng.uniform(0, 1, cell.max() + 1)[cell]
+    leaf_colour = np.stack([0.36 + leaf_tone * 0.16, 0.25 + leaf_tone * 0.08, 0.14 + leaf_tone * 0.04], -1)
+    twigs = np.zeros((N, N), np.float32)
+    strokes(rng, twigs, 220, 90, 1.2, 0.0, np.pi, 1.0, curve=0.5)
+    twigs = np.clip(blur(twigs, 0.6), 0, 1)
+    moss = smooth(0.6, 0.78, noise(rng, scale=6, beta=2.0))
+    needle_colour = np.array([0.44, 0.32, 0.2]) * (0.8 + 0.3 * noise(rng, scale=90, beta=0.9)[..., None])
+    albedo = earth * (1 - needles[..., None]) + needle_colour * needles[..., None]
+    albedo = albedo * (1 - leaf[..., None]) + leaf_colour * leaf[..., None]
+    albedo = albedo * (1 - twigs[..., None]) + np.array([0.3, 0.22, 0.15]) * twigs[..., None]
+    albedo = albedo * (1 - moss[..., None] * 0.75) + np.array([0.24, 0.32, 0.12]) * moss[..., None] * 0.75
+    height = needles * 0.3 + leaf * 0.5 + twigs * 0.6 + moss * 0.4
+    roughness = 0.92 - leaf * 0.08
+    return save("forest_floor", albedo, blur(height, 0.5), 6.0, roughness)
+
+
+def field(rng):
+    """Open grassland of the lowland: dry, pale stalks among green, bare soil between."""
+    earth = load("earth_albedo.png") * 0.75
+    dry = np.zeros((N, N), np.float32)
+    for angle in (0.4, 1.9, 3.3):
+        strokes(rng, dry, 2600, 34, 0.7, angle, 0.9, 1.0, curve=0.4)
+    dry = np.clip(blur(dry, 0.5), 0, 1)
+    green = np.zeros((N, N), np.float32)
+    strokes(rng, green, 3200, 24, 0.6, 1.2, 1.4, 1.0, curve=0.5)
+    green = np.clip(blur(green, 0.5), 0, 1)
+    patch = noise(rng, scale=5, beta=2.2)
+    straw = np.array([0.62, 0.55, 0.34]) * (0.8 + 0.3 * noise(rng, scale=60, beta=1.0)[..., None])
+    grass = np.array([0.33, 0.4, 0.18]) * (0.8 + 0.3 * noise(rng, scale=70, beta=1.0)[..., None])
+    albedo = earth * (1 - dry[..., None]) + straw * dry[..., None]
+    albedo = albedo * (1 - green[..., None] * (0.4 + patch[..., None] * 0.6)) + grass * green[..., None] * (0.4 + patch[..., None] * 0.6)
+    height = dry * 0.5 + green * 0.5
+    roughness = 0.93
+    return save("field", albedo, blur(height, 0.5), 5.0, roughness + np.zeros((N, N)))
+
+
 def save_picture(name, albedo, height=None, strength=3.0, quality=92):
     os.makedirs(OUT, exist_ok=True)
     albedo = np.clip(albedo, 0, 1)
@@ -652,11 +727,45 @@ def macro(rng):
     print("macro    512px")
 
 
+def gravel(rng):
+    """A gravel path: small rounded stones of muted greys and browns, packed in damp
+    soil that shows between them, a few bigger ones, and patches of bare earth."""
+    earth = load("earth_albedo.png")
+    soil = earth * 0.62
+    albedo = soil.copy()
+    height = norm01(lum(earth)) * 0.15
+    roughness = np.full((N, N), 0.93)
+    # Three sizes, the large stones first; each stone a round, slightly squashed blob
+    # around its seed, of its own size, so that soil stays between them.
+    for count, keep in ((700, 0.6), (2600, 0.75), (8000, 0.8)):
+        cell, d1, d2 = cells(rng, count)
+        spacing = (1.0 / count) ** 0.5
+        radius = rng.uniform(0.3, 0.48, cell.max() + 1)[cell] * spacing
+        inside = np.clip(1.0 - d1 / radius, 0.0, 1.0)
+        stone = smooth(0.0, 0.18, inside) * (rng.uniform(0, 1, cell.max() + 1) < keep)[cell]
+        dome = np.sqrt(inside)
+        grey = rng.uniform(0.28, 0.56, cell.max() + 1)
+        warm = rng.uniform(0.0, 0.07, cell.max() + 1)
+        colour = np.stack([grey + warm, grey + warm * 0.55, grey - warm * 0.2], -1)[cell]
+        # Lit from above, darker towards their rim; dirt clings to some.
+        colour = colour * (0.62 + 0.45 * dome[..., None])
+        dirty = (rng.uniform(0, 1, cell.max() + 1) < 0.3)[cell]
+        colour = np.where(dirty[..., None], colour * 0.6 + soil * 0.4, colour)
+        on_top = stone * (dome * 0.8 + 0.2 > height)
+        albedo = albedo * (1 - on_top[..., None]) + colour * on_top[..., None]
+        height = np.maximum(height, (0.2 + dome * 0.8) * stone)
+        roughness = roughness * (1 - on_top) + rng.uniform(0.55, 0.78, cell.max() + 1)[cell] * on_top
+    bare = smooth(0.6, 0.78, noise(rng, scale=4, beta=2.4))
+    albedo = albedo * (1 - bare[..., None] * 0.55) + soil * bare[..., None] * 0.55
+    height = height * (1 - bare * 0.45)
+    return save("gravel", albedo, blur(height, 0.6), 7.0, roughness)
+
+
 SETS = {"siding": siding, "floor": floor, "planks": planks, "stone": stone, "shingle": shingle,
         "metal": metal, "meadow": meadow, "dirt": dirt, "fabric": fabric, "straw": straw, "macro": macro,
         "panel": panel, "carpaint": carpaint, "rug_red": rug_red, "rug_blue": rug_blue,
         "painting_lake": painting_lake, "painting_moon": painting_moon, "painting_storm": painting_storm,
-        "glove": glove}
+        "glove": glove, "cliff": cliff, "forest_floor": forest_floor, "field": field, "gravel": gravel}
 
 
 def main():

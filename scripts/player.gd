@@ -265,6 +265,9 @@ var heal_level := 0
 ## Seconds the survivor is still strengthened (a heal field has put him back on his feet):
 ## he takes less and his shots do more, see HealField.
 var buff_left := 0.0
+## Seconds left in which nothing can hurt somebody who has just been helped up.
+const REVIVE_WARD := 3.0
+var ward_left := 0.0
 var armor := 0.0
 ## Level of the ballistic plates, 0 to 3.
 var plate_level := 0
@@ -307,15 +310,34 @@ const MELEE_WEAPONS := {
 	"machete": {"label": "MACHETE", "price": 350, "damage": 105.0, "reach": 2.7, "gap": 0.8, "push": 5.5, "daze": 1.2, "targets": 3},
 	"crowbar": {"label": "BRECHEISEN", "price": 400, "damage": 125.0, "reach": 2.5, "gap": 0.85, "push": 6.0, "daze": 1.2, "targets": 2},
 	"axe": {"label": "BRECHAXT", "price": 650, "damage": 180.0, "reach": 2.4, "gap": 1.1, "push": 8.0, "daze": 1.7, "targets": 1},
-	"hammer": {"label": "VORSCHLAGHAMMER", "price": 800, "damage": 230.0, "reach": 2.7, "gap": 1.35, "push": 10.0, "daze": 2.0, "targets": 1}
+	"hammer": {"label": "VORSCHLAGHAMMER", "price": 800, "damage": 230.0, "reach": 2.7, "gap": 1.15, "push": 10.0, "daze": 2.0, "targets": 1}
+}
+## How each blow moves, in seconds: the weapon is drawn back over `windup`, brought round in
+## `strike` - quick, and quicker towards the end - so that it lands at windup + strike; it
+## follows through for `follow` and is taken back in `recover`. weight: how hard it lands
+## (its sound, the blood, the jolt and the moment it sticks in the blow); edged: it cuts;
+## style: how it is swung (see _melee_keys). The bash lands the moment it is pressed.
+const MELEE_MOTION := {
+	"bash": {"windup": 0.0, "strike": 0.0, "follow": 0.08, "recover": 0.24, "weight": 0.3, "edged": false, "style": "bash"},
+	"knife": {"windup": 0.05, "strike": 0.05, "follow": 0.07, "recover": 0.2, "weight": 0.18, "edged": true, "style": "stab"},
+	"bat": {"windup": 0.14, "strike": 0.07, "follow": 0.13, "recover": 0.3, "weight": 0.55, "edged": false, "style": "swing"},
+	"machete": {"windup": 0.13, "strike": 0.07, "follow": 0.13, "recover": 0.28, "weight": 0.45, "edged": true, "style": "swing"},
+	"crowbar": {"windup": 0.16, "strike": 0.08, "follow": 0.13, "recover": 0.3, "weight": 0.6, "edged": false, "style": "swing"},
+	"axe": {"windup": 0.27, "strike": 0.09, "follow": 0.15, "recover": 0.36, "weight": 0.8, "edged": true, "style": "overhead"},
+	"hammer": {"windup": 0.38, "strike": 0.1, "follow": 0.17, "recover": 0.4, "weight": 1.0, "edged": false, "style": "overhead"}
 }
 const MELEE_VIEW = preload("res://scripts/melee_view.gd")
 var melee_weapon := "bash"
 var melee_owned: Array[String] = ["bash"]
 var melee_model: Node3D
+## The melee weapons in the hands, built once each and kept hidden on the camera.
+var melee_models: Dictionary = {}
 var melee_left := 0.0
 var melee_pending := false
 var melee_kind := "bash"
+## Seconds since the blow began, and how long it still sticks where it landed.
+var melee_time := 0.0
+var melee_stop := 0.0
 ## A blast of shot throws a body back with its full force up to PUSH_NEAR metres and not
 ## at all beyond PUSH_FAR; slower than PUSH_LEAST it moves nobody.
 const PUSH_NEAR := 3.0
@@ -818,24 +840,34 @@ func melee() -> void:
 	if down or melee_cooldown > 0.0 or throw_kind != "" or throw_recover > 0.0:
 		return
 	var blade: Dictionary = MELEE_WEAPONS[melee_weapon]
+	var motion: Dictionary = MELEE_MOTION[melee_weapon]
 	melee_cooldown = float(blade.gap)
-	melee_left = float(blade.gap)
 	melee_kind = melee_weapon
+	melee_time = 0.0
+	melee_stop = 0.0
+	melee_left = float(motion.windup) + float(motion.strike) + float(motion.follow) + float(motion.recover)
 	melee_pending = true
 	melee_pose = 1.0
 	if is_instance_valid(melee_model):
-		camera.remove_child(melee_model)
-		melee_model.queue_free()
+		melee_model.hide()
 	melee_model = null
 	if melee_weapon != "bash":
-		melee_model = MELEE_VIEW.build(melee_weapon)
-		camera.add_child(melee_model)
+		if not is_instance_valid(melee_models.get(melee_weapon)):
+			var built: Node3D = MELEE_VIEW.build(melee_weapon)
+			built.hide()
+			camera.add_child(built)
+			melee_models[melee_weapon] = built
+		melee_model = melee_models[melee_weapon]
 	shot_cooldown = maxf(shot_cooldown, 0.35)
-	game.sounds.play_sound("swipe", -1.0, 0.85)
+	# A light weapon whips out at once; a heavy one is heard when it comes round.
+	if float(motion.windup) < 0.1:
+		game.sounds.play_sound("swipe", -1.0, 0.85)
 	_advance_melee(0.0)
 
+## Seconds from the key to the moment the blow lands.
 func melee_windup(id: String) -> float:
-	return {"bash": 0.0, "knife": 0.09, "bat": 0.2, "machete": 0.2, "crowbar": 0.24, "axe": 0.38, "hammer": 0.52}.get(id, 0.2)
+	var motion: Dictionary = MELEE_MOTION.get(id, MELEE_MOTION.bash)
+	return float(motion.windup) + float(motion.strike)
 
 func _advance_melee(delta: float) -> void:
 	if down or menu_open:
@@ -844,14 +876,27 @@ func _advance_melee(delta: float) -> void:
 	if melee_left <= 0.0:
 		melee_pose = 0.0
 		return
-	var blade: Dictionary = MELEE_WEAPONS[melee_kind]
-	melee_left = maxf(0.0, melee_left - delta)
-	melee_pose = melee_left / float(blade.gap)
-	if melee_pending and float(blade.gap) - melee_left >= melee_windup(melee_kind):
+	var motion: Dictionary = MELEE_MOTION[melee_kind]
+	var before := melee_time
+	# While the blow sticks, time stands still for it; whatever is left of the step goes on.
+	var stuck := minf(melee_stop, delta)
+	melee_stop -= stuck
+	melee_time += delta - stuck
+	melee_pose = maxf(0.001, 1.0 - melee_time / melee_left)
+	if melee_time >= melee_left:
+		melee_pose = 0.0
+		melee_left = 0.0
+	var windup := float(motion.windup)
+	if windup >= 0.1 and before < windup and melee_time >= windup:
+		# Coming round: the rush of air of a heavy weapon.
+		game.sounds.play_sound("swing_heavy" if float(motion.weight) >= 0.7 else "swipe", -1.0, 0.95)
+	if melee_pending and melee_time >= melee_windup(melee_kind):
 		melee_pending = false
-		_melee_strike(blade)
+		_melee_strike(MELEE_WEAPONS[melee_kind])
 
 func _melee_strike(blade: Dictionary) -> void:
+	var motion: Dictionary = MELEE_MOTION[melee_kind]
+	var weight := float(motion.weight)
 	var origin := camera.global_position
 	var ahead := Vector3(-sin(rotation.y), 0, -cos(rotation.y))
 	var space := get_world_3d().direct_space_state
@@ -874,17 +919,84 @@ func _melee_strike(blade: Dictionary) -> void:
 		struck += 1
 		var push := flat.normalized() if flat.length() > 0.05 else ahead
 		var damage: float = float(blade.damage) * game.skills.damage_factor(enemy, false)
+		# How hard the blow was, for the blood if it kills (CombatEffects.death).
+		enemy.set_meta("melee_blow", [weight, bool(motion.edged)])
 		if game.net.joined:
 			game.net.report_shove(enemy, push, damage)
 			enemy.show_cue("hit", [1.0, 0.5])
 		else:
 			enemy.shove(push, float(blade.push), float(blade.daze), damage)
+		enemy.remove_meta("melee_blow")
+		game.fx.melee_hit(enemy, chest.lerp(origin, 0.15), push, weight, bool(motion.edged))
 		if struck >= int(blade.targets):
 			break
 	if struck > 0:
-		game.sounds.play_sound("melee")
+		game.sounds.play_sound("melee_blade" if bool(motion.edged) else ("melee_heavy" if weight >= 0.7 else "melee"), 0.0, randf_range(0.94, 1.04))
 		game.hud.hit_marker(false)
-		trauma = minf(1.0, trauma + 0.2)
+		trauma = minf(1.0, trauma + 0.16 + 0.34 * weight)
+		# The weapon sticks in the blow for a moment.
+		melee_stop = 0.03 + 0.07 * weight
+	else:
+		# Into a wall or a door: a knock and some dust.
+		var wall := space.intersect_ray(PhysicsRayQueryParameters3D.create(origin, origin - camera.global_basis.z * minf(float(blade.reach), 2.0), 1, [get_rid()]))
+		if not wall.is_empty():
+			game.sounds.play_at("thud", wall.position, -4.0 + weight * 4.0, 1.25 - weight * 0.3)
+			game.fx.dust(wall.position, wall.normal)
+			trauma = minf(1.0, trauma + 0.1 + 0.15 * weight)
+			melee_stop = 0.03 + 0.04 * weight
+
+## Where the weapon is at each moment of a blow, in the camera's space: at rest out of the
+## picture, drawn back, where it lands, and followed through. Its +Y is the weapon's length,
+## its -Z the edge.
+func _melee_keys(style: String) -> Array:
+	var aim := func(at: Vector3, along: Vector3, edge: Vector3) -> Transform3D:
+		var y := along.normalized()
+		var z := (-edge - y * y.dot(-edge)).normalized()
+		return Transform3D(Basis(y.cross(z), y, z), at)
+	match style:
+		"stab":
+			return [aim.call(Vector3(0.24, -0.4, -0.26), Vector3(0.1, 0.55, -0.83), Vector3(0, -1, -0.5)),
+				aim.call(Vector3(0.18, -0.15, -0.2), Vector3(0.06, 0.3, -0.95), Vector3(0, -1, -0.3)),
+				aim.call(Vector3(0.1, -0.12, -0.34), Vector3(-0.38, 0.3, -0.87), Vector3(-0.5, -0.8, 0)),
+				aim.call(Vector3(0.1, -0.14, -0.32), Vector3(-0.32, 0.35, -0.88), Vector3(-0.5, -0.8, 0))]
+		"overhead":
+			return [aim.call(Vector3(0.27, -0.45, -0.3), Vector3(0.35, 0.85, 0.35), Vector3(-0.3, 0.35, -0.9)),
+				aim.call(Vector3(0.18, -0.12, -0.26), Vector3(0.35, 0.85, 0.38), Vector3(-0.35, 0.4, -0.85)),
+				aim.call(Vector3(0.07, -0.19, -0.3), Vector3(-0.35, -0.08, -0.93), Vector3(-0.55, -0.83, 0.1)),
+				aim.call(Vector3(0.02, -0.3, -0.33), Vector3(-0.4, -0.6, -0.7), Vector3(-0.45, -0.7, 0.55))]
+		_:
+			return [aim.call(Vector3(0.28, -0.42, -0.3), Vector3(0.35, 0.85, 0.4), Vector3(-0.5, 0.3, -0.8)),
+				aim.call(Vector3(0.2, -0.15, -0.28), Vector3(0.45, 0.75, 0.5), Vector3(-0.5, 0.3, -0.8)),
+				aim.call(Vector3(0.06, -0.19, -0.36), Vector3(-0.8, 0.25, -0.55), Vector3(-0.6, -0.5, 0.2)),
+				aim.call(Vector3(-0.05, -0.3, -0.34), Vector3(-0.85, -0.3, 0.1), Vector3(-0.2, -0.8, 0.5))]
+
+## The weapon's place at `time` into a blow: drawn back with care, brought round faster and
+## faster, followed through, taken back.
+func _melee_view(time: float) -> Transform3D:
+	var motion: Dictionary = MELEE_MOTION[melee_kind]
+	var keys := _melee_keys(str(motion.style))
+	var windup := float(motion.windup)
+	var land := windup + float(motion.strike)
+	var follow := land + float(motion.follow)
+	var blend := func(a: Transform3D, b: Transform3D, k: float) -> Transform3D:
+		return Transform3D(Basis(a.basis.get_rotation_quaternion().slerp(b.basis.get_rotation_quaternion(), k)), a.origin.lerp(b.origin, k))
+	if time < windup:
+		var k := time / windup
+		return blend.call(keys[0], keys[1], k * k * (3.0 - 2.0 * k))
+	if time < land:
+		var k := (time - windup) / maxf(0.001, land - windup)
+		return blend.call(keys[1], keys[2], k * k)
+	if time < follow:
+		var k := (time - land) / maxf(0.001, follow - land)
+		return blend.call(keys[2], keys[3], 1.0 - (1.0 - k) * (1.0 - k))
+	var k := clampf((time - follow) / maxf(0.001, float(motion.recover)), 0.0, 1.0)
+	return blend.call(keys[3], keys[0], k * k * (3.0 - 2.0 * k))
+
+## How far the weapon itself is thrust out in a bash: out at once, held, drawn back.
+func _bash_reach(time: float) -> float:
+	if time < 0.06:
+		return sin(time / 0.06 * PI * 0.5)
+	return clampf(1.0 - (time - 0.06 - 0.06) / 0.24, 0.0, 1.0)
 
 ## Sets a mine down a step ahead, pointing where the survivor faces.
 func place_claymore() -> void:
@@ -1280,6 +1392,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _physics_process(delta: float) -> void:
 	buff_left = maxf(0.0, buff_left - delta)
+	ward_left = maxf(0.0, ward_left - delta)
 	_regenerate(delta)
 	if view_light != null:
 		var env := get_world_3d().environment
@@ -1845,8 +1958,8 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 					back = maxf(0.0, 1.0 - (through - SLIDE_DROP) * reload_of(current_weapon) / SLIDE_HOME)
 		breech.position.z = travel * back
 	# A blow with the weapon: it is thrust forward and across, and comes back.
-	if melee_pose > 0.0:
-		var swing := sin(melee_pose * PI)
+	if melee_pose > 0.0 and melee_kind == "bash":
+		var swing := _bash_reach(melee_time)
 		target += Vector3(-0.08, 0.035, -0.2) * swing
 		angles += Vector3(-0.3, 0.75, 0.55) * swing
 	# The syringe: the weapon is let down for as long as the hands are busy with it.
@@ -1865,15 +1978,20 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 	# Each reload step knocks the weapon for a moment.
 	target += Vector3(0.0, -0.014, 0.008) * jolt
 	angles += Vector3(0.05, 0.0, -0.09) * jolt
-	weapon.position = weapon.position.lerp(target, minf(1, delta * 18))
-	weapon.rotation = weapon.rotation.lerp(angles, minf(1, delta * 16))
+	# (A bash is quick: the weapon follows it closely.)
+	var follow := 40.0 if melee_pose > 0.0 and melee_kind == "bash" else 18.0
+	weapon.position = weapon.position.lerp(target, minf(1, delta * follow))
+	weapon.rotation = weapon.rotation.lerp(angles, minf(1, delta * follow * 0.9))
 	if is_instance_valid(melee_model):
 		melee_model.visible = melee_pose > 0.0 and not down and not menu_open
 		if melee_model.visible:
-			var swing := sin(melee_pose * PI)
 			weapon.hide()
-			melee_model.position = Vector3(0.26 - swing * 0.36, -0.28 + swing * 0.12, -0.38 - swing * 0.22)
-			melee_model.rotation = Vector3(-1.1, 0.2 + swing * 1.0, -0.5 + swing * 1.4)
+			melee_model.transform = _melee_view(melee_time)
+			# The hands turn about the handle so that the arms always come up from below.
+			var hands := melee_model.get_node_or_null("Hands") as Node3D
+			if hands != null:
+				var below := melee_model.basis.inverse() * Vector3(0.35, -0.75, 0.55)
+				hands.rotation.y = lerp_angle(hands.rotation.y, atan2(below.x, below.z) - MELEE_VIEW.reach_angle(melee_kind), minf(1.0, delta * 30.0))
 
 func _update_mist(delta: float) -> void:
 	mist_damage_left = maxf(0, mist_damage_left - delta)
@@ -2095,8 +2213,12 @@ func shoot(hand: int = 1) -> void:
 						game.sounds.play_at("bolt", endpoint, -3.0, randf_range(0.7, 0.9))
 					else:
 						game.fx.blood(endpoint, direction, headshot or pellets > 1)
-			elif marks < 4:
-				game.fx.dust(endpoint, hit.normal)
+			else:
+				# A wall, a floor, a prop: it keeps the hole (a limited number of them).
+				if not target is CharacterBody3D:
+					game.holes.add(hit.position, hit.normal)
+				if marks < 4:
+					game.fx.dust(endpoint, hit.normal)
 			marks += 1
 			var passes := int(data.get("pierce", 0))
 			if passes == 0 and target is Infected and current_weapon in Skills.RIFLES and Skills.kind_of(target as Infected) == "common" and game.skills.value("pierce_common") > 0.0:
@@ -2107,6 +2229,8 @@ func shoot(hand: int = 1) -> void:
 				endpoint = _carry(data, direction, target as Infected, struck, origin, endpoint)
 		if pellet < 8:
 			game.fx.tracer(muzzle, endpoint)
+	# (Counted before the hits land: a body only gives what it had left.)
+	Tally.shot(game.tally, struck)
 	var any_head := false
 	var any_kill := false
 	var any_infected := false
@@ -2132,7 +2256,10 @@ func shoot(hand: int = 1) -> void:
 			# A bullet that went through a shield is not stopped by it a second time.
 			game.blasting = bool(entry.get("through", false))
 			game.piercing = float(data.get("armour", 1.0))
-			(enemy as Infected).receive_hit(entry.damage, entry.direction, entry.headshot)
+			# A kill throws the body the way the shot went: the heavier the round, the further
+			# (a close blast of shot as hard as it shoves).
+			var throw := maxf(Infected.throw_for(float(data.damage) * maxf(1.0, float(entry.get("pellets", 1)))), push * 0.8)
+			(enemy as Infected).hit_hard(entry.damage, entry.direction, entry.headshot, null, throw)
 			game.blasting = false
 			game.piercing = 1.0
 			# (Felled, not merely gone: a Stalker that is shot at vanishes with its health.)
@@ -2226,7 +2353,7 @@ func _regenerate(delta: float) -> void:
 		health = minf(REGEN_CAP, health + REGEN_RATE * delta)
 
 func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "", by: String = "") -> void:
-	if not controlled or health <= 0:
+	if not controlled or health <= 0 or ward_left > 0.0:
 		return
 	amount *= game.skills.harm_factor(kind, by)
 	if buff_left > 0.0:
@@ -2275,6 +2402,7 @@ func receive_damage(amount: float, from: Vector3 = Vector3.INF, kind: String = "
 		elif (game.net.active and game.net.partner != 0) or game.rescuer() != null:
 			go_down()
 		else:
+			game.tally.downs = int(game.tally.downs) + 1
 			game.finish(false)
 
 ## Co-op: out of the fight, but the match goes on while the partner still stands.
@@ -2286,6 +2414,7 @@ func go_down() -> void:
 	if not inventory.has(sidearm) or kind_of(sidearm) != "secondary":
 		sidearm = "pistol"
 	down = true
+	game.tally.downs = int(game.tally.downs) + 1
 	put_away()
 	equip_weapon(sidearm, true)
 	ammo = magazine_size()
@@ -2313,7 +2442,8 @@ func get_up() -> void:
 	down = false
 	health = 50.0
 	hurt_amount = 0.0
-	game.hud.announce("WIEDER AUF DEN BEINEN", "", 2.0)
+	ward_left = REVIVE_WARD
+	game.hud.announce("WIEDER AUF DEN BEINEN", "Drei Sekunden unverwundbar.", 2.5)
 
 ## Camera shake that fades with distance from its source.
 func shake_from(source: Vector3, strength: float, reach: float) -> void:
@@ -2321,6 +2451,7 @@ func shake_from(source: Vector3, strength: float, reach: float) -> void:
 
 func reset_survivor() -> void:
 	movement.reset()
+	ward_left = 0.0
 	throw_recover = 0.0
 	throw_cooldown = 0.0
 	if is_instance_valid(throw_model):

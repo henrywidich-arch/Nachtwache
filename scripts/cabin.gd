@@ -30,12 +30,14 @@ const OUTER_FENCE := false
 ## its foot at the origin; whatever its size, it is fitted to TREE_MODEL_HEIGHT metres),
 ## how far out from the yard such trees stand, which share of the trees there they are,
 ## and how much darker than their daylight paint they are drawn.
-## The first two are the user's own; the others come from the Stylized Nature MegaKit by
-## Quaternius (CC0, see assets/models/trees/LIZENZ_Quaternius_CC0.txt).
+## Built by tools/make_trees.py out of Poly Haven's twig, leaf and bark textures (CC0, see
+## assets/models/forest/LIZENZ_Forest.txt): three firs, two pines, a birch and an oak,
+## and two dead trees (DeadTree: the yard's dead ones are picked by that name).
 const TREE_MODELS := [
-	"res://assets/models/tree1.glb", "res://assets/models/tree2.glb",
-	"res://assets/models/trees/Pine_1.gltf", "res://assets/models/trees/Pine_4.gltf", "res://assets/models/trees/Pine_5.gltf",
-	"res://assets/models/trees/DeadTree_2.gltf", "res://assets/models/trees/DeadTree_4.gltf"
+	"res://assets/models/forest/Fir_1.gltf", "res://assets/models/forest/Fir_2.gltf", "res://assets/models/forest/Fir_3.gltf",
+	"res://assets/models/forest/Pine_A.gltf", "res://assets/models/forest/Pine_B.gltf",
+	"res://assets/models/forest/Birch_A.gltf", "res://assets/models/forest/Oak_B.gltf",
+	"res://assets/models/forest/DeadTree_A.gltf", "res://assets/models/forest/DeadTree_B.gltf"
 ]
 const TREE_MODEL_HEIGHT := 12.0
 const TREE_MODEL_REACH := 52.0
@@ -82,6 +84,10 @@ const GUEST := Rect2(-34, 20, 8, 6.5)
 const SHED := Rect2(25, 22, 4.5, 3.6)
 const GRASS_ORIGIN := Vector2(-62, -58)
 const GRASS_CELLS := 248
+## The map of the yard's paths (see _dirt_path): where it lies, how big, how fine.
+const PATH_ORIGIN := Vector2(-64, -64)
+const PATH_SIZE := Vector2(128, 128)
+const PATH_PIXELS := 1024
 ## The basement. LAB is the main hall of the laboratory and LAB_ROOM the containment room
 ## on its west side (both without their walls); the stairs from the house come down under
 ## the interior staircase, the stairs of the service tunnel end in the bunker in the yard.
@@ -194,6 +200,13 @@ var mats: Dictionary = {}
 var flickers: Array[Dictionary] = []
 var flicker_noise := FastNoiseLite.new()
 var grass_mask := PackedByteArray()
+## Where the forest's trees stand, the fences (from, to) and the poles: what ground cover grows by.
+var forest_trees: Array[Vector3] = []
+var fence_lines: Array = []
+var pole_spots: Array[Vector3] = []
+var grass_clumps := 0
+var foliage_plants := 0
+var path_image: Image
 var environment: Environment
 var moon: DirectionalLight3D
 var rain: GPUParticles3D
@@ -246,6 +259,7 @@ func _ready() -> void:
 				lab_parts.append(instance)
 			if String(id).begins_with("Lab"):
 				hall_parts.append(instance)
+	_finish_paths()
 	_build_forest()
 	_build_grass()
 	_build_gas()
@@ -505,7 +519,7 @@ func _build_farm_materials() -> void:
 	farm.call("stone", "stone", 1.5, 3.4, {"tint_saturation": 0.5, "normal_depth": 1.2})
 	farm.call("roof", "shingle", 2.2, 2.6, {"tint_saturation": 0.6, "splash": 0.0, "wet_gloss": 0.5, "macro_strength": 0.3, "board_shift": 1.0})
 	farm.call("metal", "metal", 1.3, 1.25, {"metallic": 0.45, "roughness_scale": 0.95, "normal_depth": 0.8, "splash": 0.6})
-	farm.call("ground", "meadow", 3.2, 5.2, {"tint_saturation": 0.45, "albedo_b": "dirt", "normal_b": "dirt", "roughness_b": "dirt", "blend_b": 0.65, "metres_b": 2.6, "brightness_b": 3.6, "puddles": 0.6, "wet_gloss": 0.3, "splash": 0.0, "macro_strength": 0.25})
+	farm.call("ground", "meadow", 3.2, 5.2, {"tint_saturation": 0.45, "albedo_b": "dirt", "normal_b": "dirt", "roughness_b": "dirt", "blend_b": 0.65, "metres_b": 2.6, "brightness_b": 3.6, "puddles": 0.95, "path_puddles": 1.1, "wet_gloss": 0.4, "splash": 0.0, "macro_strength": 0.25})
 	farm.call("dirt", "dirt", 2.6, 3.6, {"tint_saturation": 0.5, "puddles": 1.15, "wet_gloss": 0.55, "splash": 0.0, "macro_strength": 0.22})
 	farm.call("cloth", "fabric", 0.55, 0.85, {"normal_depth": 0.7, "splash": 0.0, "wet_gloss": 0.25})
 	# Vehicles: paint over the rusty sheet, chrome, tyres and tinted glass.
@@ -1111,23 +1125,84 @@ func _grass_blocked(point: Vector2) -> bool:
 	var value := grass_mask[z * GRASS_CELLS + x]
 	return value == 2 or (value == 1 and random.randf() < 0.93)
 
-## Worn dirt track along a line of points; grass stays off it.
+## Gravel track along a line of points, painted into the ground (PATH_* and
+## farm_surface.gdshader): its corners rounded, its width breathing a little, two ruts
+## pressed into the wider ones by wheels. Grass stays off it.
 func _dirt_path(route: Array, width: float) -> void:
-	var lift := 0
+	# The dice are thrown as when the track was laid in pieces, so that everything built
+	# after it stays where it was.
+	for i in range(route.size() - 1):
+		var pieces := maxi(1, int(ceil((route[i] as Vector2).distance_to(route[i + 1]) / 2.6)))
+		for piece in range(pieces):
+			random.randf_range(-0.2, 0.2)
+			random.randf_range(-0.2, 0.2)
+			random.randf_range(0.85, 1.15)
+			_vary(Color("3a3024"), 0.03)
+			random.randf_range(-7, 7)
+	var line: Array = route.duplicate()
+	for round in range(3):
+		var softer: Array = [line[0]]
+		for i in range(line.size() - 1):
+			var a: Vector2 = line[i]
+			var b: Vector2 = line[i + 1]
+			softer.append(a.lerp(b, 0.25))
+			softer.append(a.lerp(b, 0.75))
+		softer.append(line[-1])
+		line = softer
+	if path_image == null:
+		path_image = Image.create(PATH_PIXELS, PATH_PIXELS, false, Image.FORMAT_RG8)
+	var per_metre := PATH_PIXELS / PATH_SIZE.x
+	var soft := 0.9
+	var ruts := width >= 2.1
+	for i in range(line.size() - 1):
+		var a: Vector2 = line[i]
+		var b: Vector2 = line[i + 1]
+		var reach := width * 0.5 * 1.15 + soft
+		var low := (Vector2(minf(a.x, b.x), minf(a.y, b.y)) - Vector2.ONE * reach - PATH_ORIGIN) * per_metre
+		var high := (Vector2(maxf(a.x, b.x), maxf(a.y, b.y)) + Vector2.ONE * reach - PATH_ORIGIN) * per_metre
+		var along := b - a
+		var span := maxf(along.length_squared(), 1e-6)
+		for py in range(maxi(int(low.y), 0), mini(int(high.y) + 1, PATH_PIXELS)):
+			for px in range(maxi(int(low.x), 0), mini(int(high.x) + 1, PATH_PIXELS)):
+				var p := PATH_ORIGIN + (Vector2(px, py) + Vector2(0.5, 0.5)) / per_metre
+				var t := clampf((p - a).dot(along) / span, 0.0, 1.0)
+				var nearest := a + along * t
+				var d := p.distance_to(nearest)
+				# The track is not equally wide everywhere.
+				var half := width * 0.5 * (1.0 + 0.12 * sin(nearest.x * 0.37 + nearest.y * 0.23) + 0.06 * sin(nearest.x * 1.3 - nearest.y * 0.9))
+				var cover := clampf((half + soft * 0.5 - d) / soft, 0.0, 1.0)
+				if cover <= 0.0:
+					continue
+				cover = cover * cover * (3.0 - 2.0 * cover)
+				var groove := 0.0
+				if ruts:
+					var off := absf(d - width * 0.27)
+					groove = clampf(1.0 - off / 0.22, 0.0, 1.0) * clampf((half - d) / 0.4, 0.0, 1.0)
+				var was := path_image.get_pixel(px, py)
+				path_image.set_pixel(px, py, Color(maxf(was.r, cover), maxf(was.g, groove), 0))
 	for i in range(route.size() - 1):
 		var a: Vector2 = route[i]
 		var b: Vector2 = route[i + 1]
-		var span := a.distance_to(b)
-		var pieces := maxi(1, int(ceil(span / 2.6)))
-		var heading := rad_to_deg(atan2(-(b.y - a.y), b.x - a.x))
-		for piece in range(pieces):
-			var mid := a.lerp(b, (piece + 0.5) / pieces)
-			lift += 1
-			_part("dirt", Vector3(mid.x + random.randf_range(-0.2, 0.2), 0.004 + (lift % 9) * 0.0012, mid.y + random.randf_range(-0.2, 0.2)), Vector3(span / pieces + 1.3, 0.012, width * random.randf_range(0.85, 1.15)), _vary(Color("3a3024"), 0.03), Vector3(0, heading + random.randf_range(-7, 7), 0))
-		var marks := int(ceil(span / 0.5)) + 1
+		var marks := int(ceil(a.distance_to(b) / 0.5)) + 1
 		for mark in range(marks + 1):
 			var p := a.lerp(b, float(mark) / marks)
 			_mask_rect(Rect2(p - Vector2.ONE * width * 0.42, Vector2.ONE * width * 0.84))
+
+## Hands the painted paths to the ground.
+func _finish_paths() -> void:
+	if path_image == null or not mats.has("ground") or not (mats["ground"] is ShaderMaterial):
+		return
+	var ground := mats["ground"] as ShaderMaterial
+	if ground.shader != FARM_SURFACE:
+		return
+	var base := "res://assets/surfaces/farm/gravel"
+	ground.set_shader_parameter("path_map", ImageTexture.create_from_image(path_image))
+	ground.set_shader_parameter("albedo_c", load(base + "_albedo.jpg"))
+	ground.set_shader_parameter("normal_c", load(base + "_normal.jpg"))
+	ground.set_shader_parameter("roughness_c", load(base + "_roughness.jpg"))
+	ground.set_shader_parameter("path_origin", PATH_ORIGIN)
+	ground.set_shader_parameter("path_size", PATH_SIZE)
+	ground.set_shader_parameter("paths", 1.0)
 
 func _span(x0: float, z0: float, x1: float, z1: float) -> Rect2:
 	return Rect2(x0, z0, x1 - x0, z1 - z0)
@@ -3483,6 +3558,7 @@ func _build_shed() -> void:
 func _fence(from: Vector2, to: Vector2, standing: bool = true) -> void:
 	if standing:
 		_yard_chunk(Vector3((from.x + to.x) * 0.5, 0, (from.y + to.y) * 0.5))
+		fence_lines.append([from, to])
 	var length := from.distance_to(to)
 	var direction := (to - from) / length
 	var along_x := absf(direction.x) > 0.5
@@ -3549,6 +3625,7 @@ func _conifer(pos: Vector3, height: float) -> void:
 
 func _pole(pos: Vector3) -> Vector3:
 	_yard_chunk(pos)
+	pole_spots.append(pos)
 	batch.cylinder(mats["plank_v"], pos, 0.15, 0.11, 8.2, Color("27221d"), 7, Basis(Vector3.BACK, deg_to_rad(random.randf_range(-2.5, 2.5))))
 	_part("siding", pos + Vector3(0, 7.6, 0), Vector3(1.7, 0.12, 0.1), Color("27221d"))
 	for x in [-0.7, 0.7]:
@@ -5975,6 +6052,7 @@ func _build_forest() -> void:
 				near_spawn = true
 		if near_spawn:
 			continue
+		forest_trees.append(pos)
 		var height := random.randf_range(9.0, 18.0)
 		var model := -1
 		if not kinds.is_empty() and near.has_point(Vector2(pos.x, pos.z)) and chooser.randf() < TREE_MODEL_SHARE:
@@ -6111,98 +6189,454 @@ func _night_tree(mesh: Mesh) -> Mesh:
 		own.surface_set_material(surface, paint)
 	return own
 
+## Ground cover of the open ground, all of it dice of its own (so that nothing built after it
+## moves): grass in clumps of crossed cards cut out of photographs (assets/foliage), tall at
+## the forest's edge; ferns, small leafy bushes, weeds, clover and flowers of Poly Haven
+## (CC0) by the buildings, fences, poles and under the trees; fallen leaves and dead
+## branches under the trees. Paths and floors keep it off (grass_mask); the rain's wind
+## moves it and it dwindles with distance (foliage.gdshader). Placement is in 31 m tiles of
+## MultiMeshes, so that what is behind the viewer or far away is not drawn.
 func _build_grass() -> void:
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 7311
+	var patches := FastNoiseLite.new()
+	patches.seed = 31
+	patches.frequency = 0.045
+	patches.fractal_octaves = 2
+	var dryness := FastNoiseLite.new()
+	dryness.seed = 77
+	dryness.frequency = 0.03
+	var solid := _foliage_solids()
+	_grass_clumps(dice, patches, dryness)
+	_foliage_plants(dice, solid, patches)
+	_ground_litter(dice, solid)
+
+## How far a point lies outside the yard (0 inside it).
+func _yard_distance(point: Vector2) -> float:
+	var dx := maxf(maxf(YARD.position.x - point.x, point.x - YARD.end.x), 0.0)
+	var dz := maxf(maxf(YARD.position.y - point.y, point.y - YARD.end.y), 0.0)
+	return Vector2(dx, dz).length()
+
+## True where ground cover may stand: inside the grass' area and off every path and floor.
+func _foliage_free(point: Vector2, strict: bool) -> bool:
+	var x := int(floor((point.x - GRASS_ORIGIN.x) * 2.0))
+	var z := int(floor((point.y - GRASS_ORIGIN.y) * 2.0))
+	if x < 0 or z < 0 or x >= GRASS_CELLS or z >= GRASS_CELLS:
+		return false
+	var value := grass_mask[z * GRASS_CELLS + x]
+	return value == 0 or (not strict and value == 1)
+
+## The ground a plant must not grow through: every obstacle on the ground floor, as cells of
+## the grass' mask.
+func _foliage_solids() -> PackedByteArray:
+	var cells := PackedByteArray()
+	cells.resize(GRASS_CELLS * GRASS_CELLS)
+	for rect in obstacles[0]:
+		var r: Rect2 = rect
+		var x0 := clampi(int(floor((r.position.x - GRASS_ORIGIN.x) * 2.0)), 0, GRASS_CELLS - 1)
+		var x1 := clampi(int(floor((r.end.x - GRASS_ORIGIN.x) * 2.0)), 0, GRASS_CELLS - 1)
+		var z0 := clampi(int(floor((r.position.y - GRASS_ORIGIN.y) * 2.0)), 0, GRASS_CELLS - 1)
+		var z1 := clampi(int(floor((r.end.y - GRASS_ORIGIN.y) * 2.0)), 0, GRASS_CELLS - 1)
+		for z in range(z0, z1 + 1):
+			for x in range(x0, x1 + 1):
+				cells[z * GRASS_CELLS + x] = 1
+	return cells
+
+func _foliage_solid(solid: PackedByteArray, point: Vector2) -> bool:
+	var x := int(floor((point.x - GRASS_ORIGIN.x) * 2.0))
+	var z := int(floor((point.y - GRASS_ORIGIN.y) * 2.0))
+	if x < 0 or z < 0 or x >= GRASS_CELLS or z >= GRASS_CELLS:
+		return true
+	return solid[z * GRASS_CELLS + x] != 0
+
+## Three cards of 0.7 x 1 m crossed at 60 degrees (the low growth has two, crossed square),
+## each in rows so that a blade bends along its whole length. Their picture is a column of the grass atlas (see the shader).
+func _grass_clump_mesh(cards: int = 3, rows: int = 3) -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var uvs := PackedVector2Array()
-	for blade in range(7):
-		var yaw := random.randf() * TAU
-		var across := Vector3(cos(yaw), 0, sin(yaw)) * random.randf_range(0.018, 0.03)
-		var root := Vector3(random.randf_range(-0.16, 0.16), 0, random.randf_range(-0.16, 0.16))
-		var tip := root + Vector3(random.randf_range(-0.18, 0.18), random.randf_range(0.4, 0.85), random.randf_range(-0.18, 0.18))
-		for vertex in [[root - across, 0.0], [root + across, 0.0], [tip, 1.0]]:
-			vertices.append(vertex[0])
-			normals.append(Vector3.UP)
-			uvs.append(Vector2(0.5, vertex[1]))
+	var indices := PackedInt32Array()
+	for card in range(cards):
+		var turn := PI * card / cards
+		var across := Vector3(cos(turn), 0, sin(turn)) * 0.35
+		var base := vertices.size()
+		for row in range(rows + 1):
+			var t := float(row) / rows
+			for side in [-1.0, 1.0]:
+				vertices.append(across * side + Vector3(0, t, 0))
+				normals.append(Vector3.UP)
+				uvs.append(Vector2(0.5 + side * 0.5, 1.0 - t))
+		for row in range(rows):
+			var a := base + row * 2
+			indices.append_array([a, a + 1, a + 2, a + 1, a + 3, a + 2])
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_NORMAL] = normals
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
-	var tuft := ArrayMesh.new()
-	tuft.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	var shader := Shader.new()
-	shader.code = """
-shader_type spatial;
-render_mode cull_disabled, diffuse_burley;
-uniform vec3 root_color : source_color = vec3(0.035, 0.042, 0.024);
-uniform vec3 tip_color : source_color = vec3(0.2, 0.225, 0.11);
-uniform vec3 olive_color : source_color = vec3(0.24, 0.235, 0.12);
-uniform vec3 dry_color : source_color = vec3(0.34, 0.3, 0.17);
-varying float blade_height;
-varying vec2 tone;
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-void vertex() {
-	blade_height = UV.y;
-	vec3 world = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	vec2 tuft = MODEL_MATRIX[3].xz;
-	// Each tuft has its own green; dead, straw-coloured ones gather in patches.
-	float patch = sin(tuft.x * 0.21 + sin(tuft.y * 0.17) * 2.0) * 0.5 + 0.5;
-	tone = vec2(hash(tuft), smoothstep(0.55, 0.95, patch * 0.7 + hash(tuft + 3.1) * 0.5));
-	float gust = sin(TIME * 1.5 + world.x * 0.33 + world.z * 0.27) * 0.6 + sin(TIME * 3.1 + world.x * 1.3 + world.z * 0.9) * 0.25;
-	VERTEX.x += gust * 0.11 * blade_height;
-	VERTEX.z += gust * 0.05 * blade_height;
-	NORMAL = vec3(0.0, 1.0, 0.0);
-}
-void fragment() {
-	// Both faces of a blade are lit as the ground under it: undo the turn of the
-	// normal for the back face.
-	if (!FRONT_FACING) {
-		NORMAL = -NORMAL;
-	}
-	vec3 tip = mix(mix(tip_color, olive_color, tone.x), dry_color, tone.y);
-	ALBEDO = mix(root_color, tip, smoothstep(0.0, 0.85, blade_height)) * (0.85 + 0.3 * tone.x);
-	// Wet blades: a little sheen, and light from behind shines through them.
-	ROUGHNESS = 0.8;
-	SPECULAR = 0.12;
-	BACKLIGHT = tip * 0.35 * blade_height;
-}
-"""
-	var material := ShaderMaterial.new()
-	material.shader = shader
-	tuft.surface_set_material(0, material)
-	# One multimesh per 15.5 m tile, so that tiles out of view or far away are skipped.
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var clump := ArrayMesh.new()
+	clump.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	clump.custom_aabb = AABB(Vector3(-0.7, 0, -0.7), Vector3(1.4, 1.3, 1.4))
+	return clump
+
+func _foliage_paint(texture: String, columns: float, params: Dictionary) -> ShaderMaterial:
+	var paint := ShaderMaterial.new()
+	paint.shader = load("res://scripts/foliage.gdshader")
+	paint.set_shader_parameter("cutout", load(texture))
+	paint.set_shader_parameter("columns", columns)
+	for key in params:
+		paint.set_shader_parameter(key, params[key])
+	return paint
+
+## Sets the places of one kind of ground cover ([transform, custom data] each) into
+## MultiMeshes of `tile` metres, which are drawn out to `reach` metres.
+func _foliage_commit(label: String, mesh: Mesh, paint: Material, places: Array, tile: float, reach: float) -> void:
+	var tiles: Dictionary = {}
+	for place in places:
+		var at: Vector3 = (place[0] as Transform3D).origin
+		var key := Vector2i(floori((at.x - GRASS_ORIGIN.x) / tile), floori((at.z - GRASS_ORIGIN.y) / tile))
+		if not tiles.has(key):
+			tiles[key] = []
+		(tiles[key] as Array).append(place)
+	for key in tiles:
+		var group: Array = tiles[key]
+		var centre := Vector3(GRASS_ORIGIN.x + (key.x + 0.5) * tile, 0, GRASS_ORIGIN.y + (key.y + 0.5) * tile)
+		var many := MultiMesh.new()
+		many.transform_format = MultiMesh.TRANSFORM_3D
+		many.use_custom_data = true
+		many.mesh = mesh
+		many.instance_count = group.size()
+		for i in range(group.size()):
+			var at: Transform3D = group[i][0]
+			at.origin -= centre
+			many.set_instance_transform(i, at)
+			many.set_instance_custom_data(i, group[i][1])
+		var instance := MultiMeshInstance3D.new()
+		instance.name = "%s_%d_%d" % [label, key.x, key.y]
+		instance.multimesh = many
+		instance.material_override = paint
+		instance.position = centre
+		instance.extra_cull_margin = 1.5
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		instance.visibility_range_end = reach
+		add_child(instance)
+
+## One clump of grass at `point`, or null. `edge`: at the forest's edge, where it is tall.
+func _grass_clump_at(point: Vector2, dice: RandomNumberGenerator, patches: FastNoiseLite, dryness: FastNoiseLite, edge: bool, small: bool = false) -> Variant:
+	if not _foliage_free(point, false):
+		return null
+	var masked := grass_mask[int(floor((point.y - GRASS_ORIGIN.y) * 2.0)) * GRASS_CELLS + int(floor((point.x - GRASS_ORIGIN.x) * 2.0))]
+	if masked == 1 and dice.randf() < 0.93:
+		return null
+	var out := _yard_distance(point)
+	var lush := patches.get_noise_2d(point.x, point.y) * 0.5 + 0.5
+	var keep := lerpf(0.6, 1.0, lush)
+	if out > 0.0:
+		keep *= lerpf(0.9, 0.35, clampf(out / 18.0, 0.0, 1.0))
+	if dice.randf() > keep:
+		return null
+	var dry := clampf((dryness.get_noise_2d(point.x, point.y) * 0.5 + 0.5 - 0.5) / 0.25, 0.0, 1.0)
+	var column := 0
+	var roll := dice.randf()
+	var tall_chance := 0.1 + (0.55 if (edge or out > 0.0 and out < 9.0) else 0.0)
+	if roll < tall_chance:
+		column = 2
+	elif dice.randf() < dry * 0.9:
+		column = 3
+	elif dice.randf() > lush:
+		column = 1
+	var grow := dice.randf_range(0.55, 1.15)
+	if small:
+		# The low growth between the clumps, near enough to be seen.
+		column = 3 if column == 3 else (column & 1)
+		grow = dice.randf_range(0.26, 0.5)
+	match column:
+		2:
+			grow *= 1.2
+		3:
+			grow *= 0.9
+	if small:
+		pass
+	elif edge or out > 0.0 and out < 9.0:
+		grow *= 1.3
+	elif YARD.has_point(point):
+		grow *= 0.85
+	var thick := dice.randf_range(0.8, 1.3)
+	var tint := dice.randf()
+	var straw := dry * 0.5 if column < 2 else 0.0
+	var turn := Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3(thick * grow ** 0.5, grow, thick * grow ** 0.5))
+	return [Transform3D(turn, Vector3(point.x, 0, point.y)), Color((column + 0.5) / 4.0, tint, straw, dice.randf())]
+
+func _grass_clumps(dice: RandomNumberGenerator, patches: FastNoiseLite, dryness: FastNoiseLite) -> void:
+	var places: Array = []
 	var tiles := 8
 	var tile_size := GRASS_CELLS * 0.5 / tiles
 	for tile_z in range(tiles):
 		for tile_x in range(tiles):
 			var origin := GRASS_ORIGIN + Vector2(tile_x, tile_z) * tile_size
-			var centre := Vector3(origin.x + tile_size * 0.5, 0, origin.y + tile_size * 0.5)
-			var transforms: Array[Transform3D] = []
-			for i in range(575):
-				var point := origin + Vector2(random.randf(), random.randf()) * tile_size
-				if _grass_blocked(point):
-					continue
-				var grow := random.randf_range(0.6, 1.5)
-				if YARD.has_point(point):
-					grow *= 0.8
-				transforms.append(Transform3D(Basis(Vector3.UP, random.randf() * TAU).scaled(Vector3(grow, grow, grow)), Vector3(point.x, 0, point.y) - centre))
-			var multimesh := MultiMesh.new()
-			multimesh.transform_format = MultiMesh.TRANSFORM_3D
-			multimesh.mesh = tuft
-			multimesh.instance_count = transforms.size()
-			for i in range(transforms.size()):
-				multimesh.set_instance_transform(i, transforms[i])
-			var grass := MultiMeshInstance3D.new()
-			grass.name = "Grass_%d_%d" % [tile_x, tile_z]
-			grass.multimesh = multimesh
-			grass.position = centre
-			grass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			grass.visibility_range_end = 54.0
-			grass.visibility_range_end_margin = 4.0
-			add_child(grass)
+			for i in range(900):
+				var point := origin + Vector2(dice.randf(), dice.randf()) * tile_size
+				var place: Variant = _grass_clump_at(point, dice, patches, dryness, false)
+				if place != null:
+					places.append(place)
+	var low: Array = []
+	for tile_z in range(tiles):
+		for tile_x in range(tiles):
+			var origin := GRASS_ORIGIN + Vector2(tile_x, tile_z) * tile_size
+			for i in range(1500):
+				var point := origin + Vector2(dice.randf(), dice.randf()) * tile_size
+				var place: Variant = _grass_clump_at(point, dice, patches, dryness, false, true)
+				if place != null:
+					low.append(place)
+	var low_paint := _foliage_paint("res://assets/foliage/grass_cards.png", 4.0, {"blades": 1.0, "height": 1.0, "sway": 0.12, "fade_near": 20.0, "fade_far": 30.0, "root_dark": 0.4, "gloss": 0.5})
+	_foliage_commit("LowGrass", _grass_clump_mesh(2, 2), low_paint, low, GRASS_CELLS * 0.5 / 8.0, 32.0)
+	# Along the edge of the forest the grass grows thick and high.
+	var area := Rect2(GRASS_ORIGIN, Vector2.ONE * GRASS_CELLS * 0.5)
+	var band := YARD.grow(9.0)
+	for i in range(int(band.get_area() - YARD.get_area()) * 2):
+		var point := band.position + Vector2(dice.randf(), dice.randf()) * band.size
+		if YARD.has_point(point) or not area.has_point(point):
+			continue
+		var place: Variant = _grass_clump_at(point, dice, patches, dryness, true)
+		if place != null:
+			places.append(place)
+	var paint := _foliage_paint("res://assets/foliage/grass_cards.png", 4.0, {"blades": 1.0, "height": 1.0, "sway": 0.16, "fade_near": 34.0, "fade_far": 54.0, "root_dark": 0.4, "gloss": 0.5})
+	_foliage_commit("Grass", _grass_clump_mesh(), paint, places, GRASS_CELLS * 0.5 / 8.0, 56.0)
+	grass_clumps = places.size()
+
+## The meshes of a Poly Haven plant by their names in its file.
+func _foliage_parts(id: String, names: Array) -> Array:
+	var scene: Node = (load("res://assets/models/polyhaven/%s/%s_1k.gltf" % [id, id]) as PackedScene).instantiate()
+	var found: Array = []
+	for name in names:
+		var part := scene.find_child(name, true, false) as MeshInstance3D
+		found.append(part.mesh if part != null else null)
+	scene.free()
+	return found
+
+func _foliage_plants(dice: RandomNumberGenerator, solid: PackedByteArray, patches: FastNoiseLite) -> void:
+	# kind: [file, parts, size range, how high it is (for the wind), reach, wind]
+	var kinds := {
+		"fern": ["fern_02", ["fern_02_a", "fern_02_d", "fern_02_a", "fern_02_d", "fern_02_b", "fern_02_c"], Vector2(1.5, 2.6), 0.45, 48.0, 0.07],
+		"weed": ["weed_plant_02", ["weed_plant_02_a_LOD0", "weed_plant_02_b_LOD0", "weed_plant_02_c_LOD0", "weed_plant_02_d_LOD0", "weed_plant_02_e_LOD0"], Vector2(2.4, 4.0), 0.06, 34.0, 0.02],
+		"sapling": ["shrub_03", ["shrub_03_a", "shrub_03_b", "shrub_03_c", "shrub_03_d"], Vector2(1.5, 2.8), 0.4, 46.0, 0.08],
+		"bush": ["shrub_02", ["shrub_02_a", "shrub_02_b", "shrub_02_d"], Vector2(0.75, 1.25), 1.1, 62.0, 0.03],
+		"clover": ["celandine_01", ["celandine_01_a_LOD0", "celandine_01_b_LOD0", "celandine_01_e_LOD0"], Vector2(2.2, 3.6), 0.15, 30.0, 0.02],
+		"dandelion": ["dandelion_01", ["dandelion_01_c_LOD0", "dandelion_01_d_LOD0", "dandelion_01_e_LOD0"], Vector2(2.8, 4.2), 0.1, 28.0, 0.03],
+		"sorrel": ["shrub_sorrel_01", ["shrub_sorrel_01_b", "shrub_sorrel_01_d", "shrub_sorrel_01_a"], Vector2(3.0, 5.0), 0.06, 28.0, 0.04]
+	}
+	var store: Dictionary = {}
+	var put := func(kind: String, point: Vector2, shade: float = 1.0) -> void:
+		if not _foliage_free(point, true) or _foliage_solid(solid, point):
+			return
+		var spec: Array = kinds[kind]
+		var parts: Array = spec[1]
+		var which := dice.randi() % parts.size()
+		var size: float = dice.randf_range((spec[2] as Vector2).x, (spec[2] as Vector2).y)
+		var turn := Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3.ONE * size)
+		if kind != "bush":
+			turn = Basis(Vector3.UP, dice.randf() * TAU) * Basis.from_euler(Vector3(dice.randf_range(-0.12, 0.12), 0, dice.randf_range(-0.12, 0.12))).scaled(Vector3.ONE * size)
+		var key := "%s:%d" % [kind, which]
+		if not store.has(key):
+			store[key] = []
+		var dry := clampf((patches.get_noise_2d(point.y * 1.3, point.x * 1.3) - 0.3) * 1.2, 0.0, 0.5) if kind != "fern" else 0.0
+		(store[key] as Array).append([Transform3D(turn, Vector3(point.x, 0, point.y)), Color(0.0, dice.randf() * shade, dry, dice.randf())])
+	var area := Rect2(GRASS_ORIGIN, Vector2.ONE * GRASS_CELLS * 0.5)
+	# Round every tree: ferns and a few saplings, sorrel in the light of its crown.
+	var trees: Array[Vector3] = forest_trees.duplicate()
+	for tree in yard_trees:
+		trees.append(tree[0])
+	for tree in trees:
+		var at := Vector2(tree.x, tree.z)
+		if not area.grow(6.0).has_point(at):
+			continue
+		for i in range(dice.randi_range(1, 4)):
+			var angle := dice.randf() * TAU
+			put.call("fern", at + Vector2(cos(angle), sin(angle)) * dice.randf_range(1.3, 4.2))
+		if dice.randf() < 0.45:
+			var angle := dice.randf() * TAU
+			put.call("sapling", at + Vector2(cos(angle), sin(angle)) * dice.randf_range(2.0, 5.0))
+	# Along the walls of the buildings: weeds, saplings, clover, now and then a bush.
+	for house in [Rect2(-13.3, -9.3, 26.6, 18.6), BARN, GARAGE, GUEST, SHED]:
+		var ring: Rect2 = (house as Rect2).grow(0.9)
+		var length := (ring.size.x + ring.size.y) * 2.0
+		var step := 0.55
+		var walked := 0.0
+		while walked < length:
+			var along := walked
+			var point := ring.position
+			if along < ring.size.x:
+				point += Vector2(along, 0)
+			elif along < ring.size.x + ring.size.y:
+				point += Vector2(ring.size.x, along - ring.size.x)
+			elif along < ring.size.x * 2.0 + ring.size.y:
+				point += Vector2(ring.size.x - (along - ring.size.x - ring.size.y), ring.size.y)
+			else:
+				point += Vector2(0, ring.size.y - (along - ring.size.x * 2.0 - ring.size.y))
+			point += Vector2(dice.randf_range(-0.4, 0.4), dice.randf_range(-0.4, 0.4))
+			var roll := dice.randf()
+			if roll < 0.2:
+				put.call("sapling", point)
+			elif roll < 0.4:
+				put.call("weed", point)
+			elif roll < 0.6:
+				for k in range(3):
+					put.call("clover", point + Vector2(dice.randf_range(-0.45, 0.45), dice.randf_range(-0.45, 0.45)))
+			elif roll < 0.67:
+				put.call("fern", point)
+			elif roll < 0.7:
+				put.call("bush", point + Vector2(dice.randf_range(-0.5, 0.5), dice.randf_range(-0.5, 0.5)))
+			walked += step * dice.randf_range(0.7, 1.6)
+	# Along fences and at the poles.
+	for line in fence_lines:
+		var from: Vector2 = line[0]
+		var to: Vector2 = line[1]
+		var along := (to - from).normalized()
+		var side := Vector2(-along.y, along.x)
+		var length := from.distance_to(to)
+		var walked := 0.0
+		while walked < length:
+			var point := from + along * walked + side * dice.randf_range(-0.9, 0.9)
+			var roll := dice.randf()
+			if roll < 0.3:
+				put.call("weed", point)
+			elif roll < 0.55:
+				put.call("sapling", point)
+			elif roll < 0.8:
+				for k in range(3):
+					put.call("clover", point + Vector2(dice.randf_range(-0.4, 0.4), dice.randf_range(-0.4, 0.4)))
+			else:
+				put.call("sorrel", point)
+			walked += dice.randf_range(0.5, 1.4)
+	for pole in pole_spots:
+		for i in range(5):
+			var angle := dice.randf() * TAU
+			var point := Vector2(pole.x, pole.z) + Vector2(cos(angle), sin(angle)) * dice.randf_range(0.4, 1.2)
+			put.call("weed" if i % 2 == 0 else "sapling", point)
+	# The forest's edge: saplings, ferns and bushes in the tall grass.
+	var band := YARD.grow(14.0)
+	var strip_area := band.get_area() - YARD.get_area()
+	for i in range(int(strip_area * 0.05)):
+		var point := band.position + Vector2(dice.randf(), dice.randf()) * band.size
+		if YARD.has_point(point):
+			continue
+		put.call("sapling" if dice.randf() < 0.55 else "fern", point)
+	var bushes := 0
+	var spots: Array[Vector2] = []
+	for i in range(400):
+		if bushes >= 34:
+			break
+		var point := band.position + Vector2(dice.randf(), dice.randf()) * band.size
+		var out := _yard_distance(point)
+		if out < 0.5 or out > 12.0:
+			continue
+		var crowded := false
+		for other in spots:
+			if other.distance_to(point) < 7.0:
+				crowded = true
+		if crowded:
+			continue
+		spots.append(point)
+		bushes += 1
+		put.call("bush", point)
+	# Over the yard itself: weeds, patches of clover, flowers and sorrel.
+	for i in range(420):
+		var point := YARD.position + Vector2(dice.randf(), dice.randf()) * YARD.size
+		put.call("weed", point, 0.8)
+	for i in range(70):
+		var centre := YARD.position + Vector2(dice.randf(), dice.randf()) * YARD.size
+		var kind: String = ["clover", "clover", "sorrel", "dandelion"][dice.randi() % 4]
+		for k in range(dice.randi_range(3, 8)):
+			put.call(kind, centre + Vector2(dice.randf_range(-1.2, 1.2), dice.randf_range(-1.2, 1.2)))
+	for key in store:
+		var kind := String(key).get_slice(":", 0)
+		var which := int(String(key).get_slice(":", 1))
+		var spec: Array = kinds[kind]
+		var mesh: Mesh = _foliage_parts(spec[0], [(spec[1] as Array)[which]])[0]
+		if mesh == null:
+			continue
+		var folder := "res://assets/models/polyhaven/%s/textures/%s_cutout_1k.png" % [spec[0], spec[0]]
+		var paint := _foliage_paint(folder, 1.0, {"blades": 0.0, "height": float(spec[3]), "sway": float(spec[5]) / float(spec[3]) * 0.5, "fade_near": float(spec[4]) - 18.0, "fade_far": float(spec[4]), "root_dark": 0.55, "gloss": 0.4})
+		_foliage_commit("Plants_" + String(key).replace(":", "_"), mesh, paint, store[key], 31.0, float(spec[4]) + 2.0)
+		foliage_plants += (store[key] as Array).size()
+	_dead_branches(dice, solid, trees)
+
+## Dead branches lie under the trees and along the forest's edge.
+func _dead_branches(dice: RandomNumberGenerator, solid: PackedByteArray, trees: Array[Vector3]) -> void:
+	var names := ["dry_branches_medium_01_a", "dry_branches_medium_01_b", "dry_branches_medium_01_c"]
+	var meshes := _foliage_parts("dry_branches_medium_01", names)
+	var folder := "res://assets/models/polyhaven/dry_branches_medium_01/textures/dry_branches_medium_01_%s_1k.%s"
+	var bark := StandardMaterial3D.new()
+	bark.albedo_texture = load(folder % ["diff", "jpg"])
+	bark.albedo_color = Color(0.5, 0.46, 0.42)
+	bark.normal_enabled = true
+	bark.normal_texture = load(folder % ["nor_gl", "jpg"])
+	bark.roughness = 0.75
+	bark.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var area := Rect2(GRASS_ORIGIN, Vector2.ONE * GRASS_CELLS * 0.5)
+	var store: Array = [[], [], []]
+	for tree in trees:
+		var at := Vector2(tree.x, tree.z)
+		if not area.has_point(at):
+			continue
+		for i in range(dice.randi_range(1, 3)):
+			var angle := dice.randf() * TAU
+			var point := at + Vector2(cos(angle), sin(angle)) * dice.randf_range(1.0, 5.0)
+			if not _foliage_free(point, true) or _foliage_solid(solid, point):
+				continue
+			var size := dice.randf_range(0.7, 1.5)
+			var lie := Basis(Vector3.UP, dice.randf() * TAU) * Basis.from_euler(Vector3(dice.randf_range(-0.06, 0.06), 0, dice.randf_range(-0.06, 0.06))).scaled(Vector3.ONE * size)
+			(store[dice.randi() % 3] as Array).append([Transform3D(lie, Vector3(point.x, 0.07 * size, point.y)), Color(0, 0, 0, 0)])
+	for i in range(3):
+		if meshes[i] != null and not (store[i] as Array).is_empty():
+			_foliage_commit("Branches_%d" % i, meshes[i], bark, store[i], 31.0, 40.0)
+
+## Fallen leaves in patches under the trees, along the walls of the buildings and here and
+## there in the forest's edge.
+func _ground_litter(dice: RandomNumberGenerator, solid: PackedByteArray) -> void:
+	var square := PlaneMesh.new()
+	square.size = Vector2.ONE
+	var paint := ShaderMaterial.new()
+	paint.shader = load("res://scripts/litter.gdshader")
+	paint.set_shader_parameter("litter", load("res://assets/foliage/leaf_litter.png"))
+	var places: Array = []
+	var area := Rect2(GRASS_ORIGIN, Vector2.ONE * GRASS_CELLS * 0.5)
+	var lay := func(point: Vector2, size: float) -> void:
+		if not _foliage_free(point, true):
+			return
+		var turn := Basis(Vector3.UP, dice.randf() * TAU).scaled(Vector3(size, 1.0, size))
+		places.append([Transform3D(turn, Vector3(point.x, 0.02, point.y)), Color(dice.randf(), dice.randf(), dice.randf(), 0.0)])
+	var trees: Array[Vector3] = forest_trees.duplicate()
+	for tree in yard_trees:
+		trees.append(tree[0])
+	for tree in trees:
+		var at := Vector2(tree.x, tree.z)
+		if not area.has_point(at):
+			continue
+		for i in range(7):
+			var angle := dice.randf() * TAU
+			lay.call(at + Vector2(cos(angle), sin(angle)) * dice.randf_range(0.4, 4.5) * dice.randf_range(0.6, 1.0), dice.randf_range(1.5, 2.8))
+	for i in range(360):
+		lay.call(YARD.grow(14.0).position + Vector2(dice.randf(), dice.randf()) * YARD.grow(14.0).size, dice.randf_range(1.2, 2.2))
+	for house in [Rect2(-13.3, -9.3, 26.6, 18.6), BARN, GARAGE, GUEST, SHED]:
+		var ring: Rect2 = (house as Rect2).grow(0.7)
+		for i in range(int(ring.size.x + ring.size.y) * 2):
+			var side := dice.randi() % 4
+			var point := ring.position
+			match side:
+				0:
+					point += Vector2(dice.randf() * ring.size.x, 0)
+				1:
+					point += Vector2(dice.randf() * ring.size.x, ring.size.y)
+				2:
+					point += Vector2(0, dice.randf() * ring.size.y)
+				_:
+					point += Vector2(ring.size.x, dice.randf() * ring.size.y)
+			lay.call(point + Vector2(dice.randf_range(-0.5, 0.5), dice.randf_range(-0.5, 0.5)), dice.randf_range(0.8, 1.6))
+	if places.is_empty():
+		return
+	_foliage_commit("Litter", square, paint, places, 31.0, 46.0)
 
 ## Banks of gas beyond the fence mark the edge of the survivable area: the same pale haze
 ## as the gas in the yard, only thicker, so that the edge can be made out.

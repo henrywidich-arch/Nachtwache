@@ -13,7 +13,7 @@ extends Control
 ## sits on its rim. The Stalker is never shown: nobody is meant to know where it is.
 
 ## Its edge on the screen, and the metres from its middle to that edge.
-const SIZE := 168.0
+const SIZE := 185.0
 const REACH := 26.0
 const COMMON := Color("ff5a4a")
 const SPECIAL := Color("ffc34d")
@@ -41,17 +41,54 @@ void fragment() {
 }
 """
 const PLATE := Color(0.03, 0.045, 0.055, 0.74)
-const EDGE := Color(0.62, 0.7, 0.76, 0.5)
-## How pale somebody on another floor is, and how far from the edge the rim lies.
+## How pale somebody on another floor is, and how far from the edge the rim lies. (Far
+## enough in for the marks on the rim to stay clear of where the picture has faded away.)
 const ELSEWHERE := 0.38
-const RIM := 6.0
-
+const RIM := 10.0
+## The map has no frame: a narrow band along its square edge fades away along a ragged line
+## (noise bends it and eats into it, and it breathes a little), like the edge of an old map.
+const FADE := """shader_type canvas_item;
+uniform float band = 0.1;
+uniform float warp = 0.6;
+uniform float seed = 3.0;
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float vnoise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+float fbm(vec2 p) {
+	float a = 0.5;
+	float sum = 0.0;
+	for (int i = 0; i < 4; i++) {
+		sum += a * vnoise(p);
+		p = p * 2.03 + vec2(17.0, 9.0);
+		a *= 0.5;
+	}
+	return sum;
+}
+void fragment() {
+	float edge = min(min(UV.x, 1.0 - UV.x), min(UV.y, 1.0 - UV.y));
+	float drift = TIME * 0.03;
+	float bend = fbm(UV * 7.0 + vec2(seed, seed * 0.6) + vec2(drift, -drift));
+	float grain = fbm(UV * 30.0 + seed * 1.7);
+	float u = edge / band;
+	u += (bend - 0.5) * warp + (grain - 0.5) * 0.5 * (1.0 - clamp(u, 0.0, 1.0));
+	COLOR.a *= smoothstep(0.0, 1.0, u);
+}
+"""
 var game: Node3D
 var font: Font
 ## The drawing itself, in two children, so that this control clips them: the walls under
 ## their shader, and everything that is marked on them.
 var ground: Control
 var face: Control
+## What they are drawn in: two small views, each shown through its own fading edge.
+var ground_view: SubViewport
+var face_view: SubViewport
 ## One picture of walls for each level of the map, and the locks they were drawn for.
 var plans: Array = []
 var plan_key := ""
@@ -59,8 +96,14 @@ var plan_wait := 0.0
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(SIZE, SIZE)
-	clip_contents = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The walls, on their plate.
+	ground_view = _view(0.11, 0.7, 3.0)
+	var plate := ColorRect.new()
+	plate.color = PLATE
+	plate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ground_view.add_child(plate)
 	ground = Control.new()
 	ground.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -73,15 +116,44 @@ func _ready() -> void:
 	paint.set_shader_parameter("fill", FILL)
 	ground.material = paint
 	ground.draw.connect(_draw_ground)
-	add_child(ground)
+	ground_view.add_child(ground)
+	# What is marked on them.
+	face_view = _view(0.05, 0.5, 8.0)
 	face = Control.new()
 	face.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	face.draw.connect(_draw_face)
-	add_child(face)
+	face_view.add_child(face)
 
-func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, Vector2(SIZE, SIZE)), PLATE)
+## A transparent view of the size of the map, drawn twice as fine, and the picture that shows it
+## through the fading edge: `band` is the width of the fade as a share of the map's width,
+## `warp` how far the noise bends its line.
+func _view(band: float, warp: float, seed: float) -> SubViewport:
+	var view := SubViewport.new()
+	view.size = Vector2i(int(SIZE * 2.0), int(SIZE * 2.0))
+	view.size_2d_override = Vector2i(int(SIZE), int(SIZE))
+	view.size_2d_override_stretch = true
+	view.transparent_bg = true
+	view.disable_3d = true
+	view.gui_disable_input = true
+	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	add_child(view)
+	var shown := TextureRect.new()
+	shown.texture = view.get_texture()
+	shown.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shown.stretch_mode = TextureRect.STRETCH_SCALE
+	shown.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shown.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fade := Shader.new()
+	fade.code = FADE
+	var through := ShaderMaterial.new()
+	through.shader = fade
+	through.set_shader_parameter("band", band)
+	through.set_shader_parameter("warp", warp)
+	through.set_shader_parameter("seed", seed)
+	shown.material = through
+	add_child(shown)
+	return view
 
 func _process(delta: float) -> void:
 	if not is_visible_in_tree() or game == null or game.cabin == null:
@@ -289,5 +361,5 @@ func _draw_face() -> void:
 	if cabin.has_method("level_label"):
 		storey = str(cabin.call("level_label", level))
 	if font != null and storey != "":
-		face.draw_string(font, Vector2(7, SIZE - 7), storey, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.8, 0.84, 0.8))
-	face.draw_rect(Rect2(Vector2(0.5, 0.5), Vector2(SIZE - 1.0, SIZE - 1.0)), EDGE, false, 1.0)
+		face.draw_string(font, Vector2(9, SIZE - 10), storey, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.75, 0.8, 0.84, 0.8))
+

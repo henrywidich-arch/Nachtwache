@@ -322,7 +322,7 @@ func _switch_tree(tree: String) -> void:
 ## A line of the list: its name on the left, its price or its state on the right. It is
 ## picked by a click and by the keys that move through the list.
 func _row(entry: Dictionary) -> Button:
-	var button := hud._button(str(entry.title), _pick.bind(entry))
+	var button := hud._button(str(entry.title), _pick.bind(entry), false, false)
 	button.toggle_mode = true
 	button.button_group = row_group
 	button.custom_minimum_size = Vector2(LIST_WIDTH, 72)

@@ -2,3 +2,9 @@ Die Modelle in diesem Ordner stammen von Poly Haven (https://polyhaven.com/model
 und stehen unter CC0 1.0 (gemeinfrei): frei nutzbar, auch kommerziell, ohne
 Namensnennung. Jeweils die glTF-Fassung mit 1k-Texturen, unverändert.
 Geladen über https://api.polyhaven.com am 2026-10-19.
+
+Bodenbewuchs der Farm (Mission 1), ebenfalls Poly Haven, CC0, geladen am 2026-10-19:
+fern_02, weed_plant_02, shrub_02, shrub_03, shrub_sorrel_01, celandine_01, dandelion_01,
+dry_branches_medium_01 und grass_medium_02 (nur dessen Textur). Neben den Texturen liegt
+je Pflanze eine <name>_cutout_1k.png (Farbe plus Ausschnitt-Alpha, aus dem diff- und dem
+alpha-Bild von tools/make_foliage.py zusammengesetzt).
