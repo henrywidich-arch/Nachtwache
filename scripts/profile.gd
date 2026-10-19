@@ -43,7 +43,11 @@ const SKINS := {
 	# The operators: whoever has driven one of them off may wear his kit.
 	"phantom": {"label": "PHANTOM", "need": "phantom", "count": 1, "note": "Phantom in die Flucht schlagen", "bot": false},
 	"havoc": {"label": "HAVOC", "need": "havoc", "count": 1, "note": "Havoc in die Flucht schlagen", "bot": false},
-	"ghost": {"label": "GHOST", "need": "ghost", "count": 1, "note": "Ghost in die Flucht schlagen", "bot": false}
+	"ghost": {"label": "GHOST", "need": "ghost", "count": 1, "note": "Ghost in die Flucht schlagen", "bot": false},
+	# The user's two plain men: open from the start, for the player and for the squad
+	# (where they keep quiet: they have no lines of their own).
+	"dude_shorts": {"label": "STRANDTYP", "need": "", "count": 0, "note": "von Anfang an  ·  als Begleiter ohne Funksprüche", "bot": true},
+	"dude_turtleneck": {"label": "ROLLKRAGEN", "need": "", "count": 0, "note": "von Anfang an  ·  als Begleiter ohne Funksprüche", "bot": true}
 }
 
 ## Off during automatic checks: nothing is read from or written to the player's file.

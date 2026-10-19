@@ -126,6 +126,26 @@ const LOOKS := {
 			"at": [Vector3(-0.0373, 1.6898, 0.1212), Vector3(0.0422, 1.6911, 0.1197)],
 			"facing": [Vector3(-0.526, -0.329, 0.785), Vector3(0.455, -0.298, 0.839)]}
 	},
+	# The user's two plain men (Meshy, rigged for the game in Nachtwache-Modelle/dudes): a
+	# skin for the player and a look for the squad, with a rifle - and, without one, the two
+	# guests who wander about the villa's gallery (VillaGuests). They have no voice of their
+	# own: the squad's lines are written for its own people, so these two say nothing.
+	"dude_shorts": {
+		"label": "STRANDTYP", "scene": preload("res://assets/models/dude_shorts.glb"), "textures": "res://assets/models/dude_shorts_",
+		"source_height": 1.78, "height": 1.78, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male"
+	},
+	"dude_turtleneck": {
+		"label": "ROLLKRAGEN", "scene": preload("res://assets/models/dude_turtleneck.glb"), "textures": "res://assets/models/dude_turtleneck_",
+		"source_height": 1.8, "height": 1.8, "weapon": "rifle", "shot": "shot", "voice": "bot_hurt_male"
+	},
+	"guest_shorts": {
+		"label": "STRANDTYP", "scene": preload("res://assets/models/dude_shorts.glb"), "textures": "res://assets/models/dude_shorts_",
+		"source_height": 1.78, "height": 1.78, "weapon": "", "shot": "shot", "voice": "bot_hurt_male"
+	},
+	"guest_turtleneck": {
+		"label": "ROLLKRAGEN", "scene": preload("res://assets/models/dude_turtleneck.glb"), "textures": "res://assets/models/dude_turtleneck_",
+		"source_height": 1.8, "height": 1.8, "weapon": "", "shot": "shot", "voice": "bot_hurt_male"
+	},
 	"nadja": {
 		"label": "NADJA", "scene": preload("res://assets/models/nadja.glb"), "textures": "res://assets/models/nadja_",
 		"source_height": 1.68, "height": 1.68, "weapon": "", "shot": "badger", "voice": "bot_hurt_female"

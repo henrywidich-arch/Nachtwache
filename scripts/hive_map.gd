@@ -562,6 +562,8 @@ func _lay_villa() -> void:
 		_pane("galerie", EAST, at, 1.5, 0.9, 3.4, "window")
 	_villa_outside()
 	_villa_hall()
+	# Two guests who wander about the gallery (scripts/villa_guests.gd).
+	add_child(VillaGuests.new())
 	_villa_rooms()
 	_shared_dice()
 	_end_zone()
