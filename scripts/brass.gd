@@ -24,7 +24,7 @@ const TINK_GAP := 0.09
 ## kind is that case stretched.
 const KINDS := {"9mm": [0.0049, 0.0192, 1.0, 0.13], "rifle": [0.0056, 0.039, 1.25, 0.5]}
 ## Shots of a co-op partner that throw a case, by their sound, and the kind of case.
-const SOUNDS := {"hornet": "9mm", "hornet_sil": "9mm", "wirbel": "rifle", "wirbel_sil": "rifle"}
+const SOUNDS := {"hornet": "9mm", "hornet_sil": "9mm", "wirbel": "rifle", "wirbel_sil": "rifle", "falke": "rifle", "falke_sil": "rifle"}
 
 var game: Node3D
 var spots := PackedVector3Array()

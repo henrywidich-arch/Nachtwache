@@ -123,6 +123,8 @@ var order := "follow"
 var hold_point := Vector3.ZERO
 var helping := 0.0
 var kills := 0
+## When this one last put an enemy down (ms): two close together are a multi kill.
+var last_kill_ms := -100000
 ## Everything else it has done tonight, for the scoreboard (Tally).
 var tally := Tally.blank()
 ## Seconds until it may point out another special enemy.
@@ -138,6 +140,12 @@ var damage_factor := 1.0
 var overlooked := 1.0
 ## Something it was sent to see to (MissionDirector._assign_jobs): {task, index, pos, kind}.
 var job: Dictionary = {}
+## A counter it goes to on its own (the second mission: HiveDirector._send_shopping) to
+## take up another weapon there - for its looks: how its weapon fires and what it does stay
+## as they are (SoldierVisual.LOOK_ONLY). Where, what, and how long it tries to get there.
+var errand := Vector3.INF
+var errand_gun := ""
+var errand_left := 0.0
 ## Seconds it still holds its fire on a target it has only just picked.
 var hold_fire := 0.0
 ## How many infected stood close around it when it last looked for a target.
@@ -693,6 +701,18 @@ func _physics_process(delta: float) -> void:
 		away.y = 0.0
 		move = (away.normalized() + Vector3(home.x, 0, home.z).limit_length(1.0) * 0.5).normalized()
 		pace = WALK_SPEED * 1.3
+	elif errand != Vector3.INF and order == "follow" and job.is_empty() and target == null:
+		# Over to a counter, a look at what is there, and back to the survivor's side.
+		goal = errand
+		var gap := goal - global_position
+		travelling = Vector2(gap.x, gap.z).length() > 1.3 or absf(gap.y) > 1.2
+		pace = RUN_SPEED
+		errand_left -= delta
+		if not travelling:
+			take_up(errand_gun)
+		if not travelling or errand_left <= 0.0:
+			errand = Vector3.INF
+			errand_gun = ""
 	elif not job.is_empty() and order != "hold":
 		# Sent to see to something: there it runs, and there it works (or stands guard).
 		goal = job.pos
@@ -827,7 +847,7 @@ func _physics_process(delta: float) -> void:
 		visual.reload(float(gun.reload))
 		game.sounds.play_at("mag_out", eye(), -6.0)
 		if target != null and randf() < 0.45:
-			game.bark(self, look, "reload")
+			game.bark(self, look, "low_ammo" if ammo <= 0 and randf() < 0.3 else "reload")
 	velocity.x = move.x * pace
 	velocity.z = move.z * pace
 	velocity.y = 0.0 if is_on_floor() else velocity.y - delta * GRAVITY
@@ -931,14 +951,28 @@ func _shoot(aim_point: Vector3, moving: bool) -> void:
 		victim.receive_hit(struck[enemy].damage, struck[enemy].direction, struck[enemy].headshot, self)
 		if was_alive and victim.dead:
 			kills += 1
+			# Two down in quick succession: a voice that has a word for that says it.
+			var now_ms := Time.get_ticks_msec()
+			var twice := now_ms - last_kill_ms < 2500
+			last_kill_ms = now_ms
 			# A special infected put down is worth a word more often than one of the many.
 			var big: bool = victim.kind != "mauler" and not victim.spec.get("human", false)
-			if big and randf() < 0.55:
+			if twice and randf() < 0.6 and game.bark(self, look, "multi_kill"):
+				pass
+			elif big and randf() < 0.55:
 				game.bark(self, look, "big_kill")
 			elif randf() < 0.22:
 				game.bark(self, look, "kill")
 	visual.shot()
-	game.sounds.play_at(str(visual.config.shot), muzzle, -7.0 if pellets == 1 else -5.0)
+	game.sounds.play_at(visual.shot_sound, muzzle, -7.0 if pellets == 1 else -5.0)
+
+## Takes up another weapon at a counter: only its looks and its sound (see errand).
+func take_up(id: String) -> void:
+	if unarmed or not visual.swap_weapon(id):
+		return
+	game.sounds.play_at("equip", global_position + Vector3(0, 1.2, 0), -4.0)
+	if game.hud != null:
+		game.hud.kill_feed("%s  ·  nimmt sich %s" % [label, str(Survivor.WEAPONS[id].label) if Survivor.WEAPONS.has(id) else id.to_upper()], 0, false, true)
 
 ## Health that comes back by itself while nothing hits (MEND_AFTER, MEND_RATE, MEND_TOP).
 func mend(delta: float) -> void:

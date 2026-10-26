@@ -304,6 +304,9 @@ const LINES := {
 		"The train has power. Everyone aboard, Fireteam, now.",
 		"Train is up and ready to roll. Do not leave anybody on that platform. Everyone aboard, right now."
 	]],
+	"m2_boss_end": ["coleman", [
+		"Subject Zero is down and the doctor is in custody. The bird is on the roof. Bring her up, Fireteam. It is over."
+	]],
 	"m2_c_havoc": ["havoc", [
 		"New plan! Ghost and I are in, whether you like it or not! You are welcome!",
 		"We are coming too! Ghost does the quiet part, I do the loud part. Perfect team!",
@@ -430,6 +433,24 @@ const LINES := {
 		"The dissection hall. I learned most of what I know here, from the ones who could no longer object.",
 		"Cold, clean, and quiet, the way pathology should be. Pardon the smell... the cellar has never been kind.",
 		"Many people were opened on these tables. Try not to join them."
+	]],
+	"m2_n_boss_dead": ["nadja", [
+		"What have you done? He was perfect. He was the only perfect thing I ever made."
+	]],
+	"m2_n_boss_intro": ["nadja", [
+		"Welcome to Umbra. Nine floors under Helix, and they never once came down here. Meet Subject Zero. My life's work. Wake up, my darling. We have guests."
+	]],
+	"m2_n_boss_near": ["nadja", [
+		"You took the freight lift. Of course you did. Come down, then. Someone is waiting for you."
+	]],
+	"m2_n_boss_phase2": ["nadja", [
+		"Do you feel that? He is learning. Every bullet you fire teaches him something."
+	]],
+	"m2_n_boss_phase3": ["nadja", [
+		"No. No, no, no. Get up! I did not make you to lose to them!"
+	]],
+	"m2_n_caught": ["nadja", [
+		"Careful with those hands. You have no idea what I could have given the world."
 	]],
 	"m2_n_cru": ["nadja", [
 		"Attention, all Containment Response Units. Intruders in the Hive. Whoever brings them to me gets the aerosol, and a bonus you will not forget.",
@@ -956,32 +977,50 @@ const BARKS := {
 		"ghost": [
 			"Big. Quiet now.",
 			"That one will not get up.",
-			"Heavy. Finished."
+			"Heavy. Finished.",
+			"The big one. Gone.",
+			"Heavy. Down."
 		],
 		"havoc": [
 			"Ha! The big fella has left the building!",
 			"That was the big one. I felt that in my leg.",
-			"Bye bye, big boy."
+			"Bye bye, big boy.",
+			"The big one went splat! Best day ever!",
+			"Did you hear that thud? Glorious!"
 		],
 		"phantom": [
 			"Magnificent. Do applaud quietly.",
 			"That was a large one. It did not enjoy the evening, I think.",
-			"Down it goes. The heavy ones always fall so loudly."
+			"Down it goes. The heavy ones always fall so loudly.",
+			"And the large one falls. Applause is optional.",
+			"Big, ugly and finished."
 		],
 		"raven": [
 			"Big and dead.",
 			"That one was loud. Now it is quiet.",
-			"Mutated flesh is still flesh. And now it is on the floor."
+			"Mutated flesh is still flesh. And now it is on the floor.",
+			"Big. Dead. Same thing now.",
+			"It was strong. Not strong enough.",
+			"The monster is quiet.",
+			"That one will haunt nobody."
 		],
 		"scorpion": [
 			"Boom! Down goes the big one!",
 			"Ha! Who is next, ugly?",
-			"Look how big that thing was, and look at it now. Beautiful."
+			"Look how big that thing was, and look at it now. Beautiful.",
+			"Timber! Ha ha!",
+			"The bigger they are, the louder they splat!",
+			"Somebody take a picture, that was huge!",
+			"Down goes the big boy!"
 		],
 		"viper": [
 			"Heavy target down.",
 			"Special neutralized. Reposition.",
-			"That was a big one. Good work, everyone."
+			"That was a big one. Good work, everyone.",
+			"Big one neutralized. Good teamwork.",
+			"Priority target is down.",
+			"The heavy is finished. Reset.",
+			"That thing is dead. Check your ammo."
 		]
 	},
 	"bye": {
@@ -1010,17 +1049,26 @@ const BARKS := {
 		"raven": [
 			"Quiet.",
 			"Nothing breathes here now.",
-			"Done. Check the corners anyway."
+			"Done. Check the corners anyway.",
+			"Nothing moves.",
+			"Clear. For a moment.",
+			"Silence again."
 		],
 		"scorpion": [
 			"Is that it? Shame.",
 			"Ha! The floor is covered. Looks good on it.",
-			"Clear. Somebody wake me when the next lot shows up."
+			"Clear. Somebody wake me when the next lot shows up.",
+			"Clear! Who wants seconds?",
+			"All done! Applause, please!",
+			"That is the last of them. For now!"
 		],
 		"viper": [
 			"Area secure.",
 			"Hostiles eliminated. Stay alert.",
-			"That is all of them. Check ammo, check each other, then we move."
+			"That is all of them. Check ammo, check each other, then we move.",
+			"Area clear. Regroup on me.",
+			"No more movement. Good work.",
+			"Clear. Take a breath."
 		]
 	},
 	"contact": {
@@ -1158,19 +1206,28 @@ const BARKS := {
 			"Down. Come now.",
 			"I am bleeding. Help me.",
 			"Cover me... I need a hand.",
-			"Hit hard. Need a hand."
+			"Hit hard. Need a hand.",
+			"Down. Come quick.",
+			"I cannot get up. Hurry.",
+			"They got me. Help."
 		],
 		"scorpion": [
 			"Ah, damn! I am down!",
 			"Somebody grab me, I am bleeding out here!",
 			"Not like this! Help me up!",
-			"I am down, you hear me? Get over here!"
+			"I am down, you hear me? Get over here!",
+			"I am down! This is so embarrassing!",
+			"Get me up, I still have jokes left!",
+			"Help! Floor is cold!"
 		],
 		"viper": [
 			"Down! Cover and revive me!",
 			"Wounded! Somebody get to me!",
 			"I am down, I repeat, I am down!",
-			"Hit hard, cannot stand. Pull me up!"
+			"Hit hard, cannot stand. Pull me up!",
+			"I am down! Get to me!",
+			"Hit hard! I need a revive!",
+			"Cannot move! Help!"
 		]
 	},
 	"flank": {
@@ -1448,17 +1505,26 @@ const BARKS := {
 		"raven": [
 			"Many. Too many.",
 			"Keep a wall behind you.",
-			"A flood. Fine. I count them as they fall."
+			"A flood. Fine. I count them as they fall.",
+			"A flood of them.",
+			"So many. Good. More targets.",
+			"Back to back. Now."
 		],
 		"scorpion": [
 			"Here they come, all of them! Ha!",
 			"Whole damn crowd! Make some room!",
-			"Okay, now it is a party!"
+			"Okay, now it is a party!",
+			"That is a LOT of zombies!",
+			"Party bus is here!",
+			"Okay, okay, maybe too many!"
 		],
 		"viper": [
 			"Huge pack incoming! Tight formation!",
 			"Heavy pressure ahead. Hold the line, short bursts.",
-			"They are coming in force. Stay together."
+			"They are coming in force. Stay together.",
+			"Big group! Hold the line!",
+			"Mass contact, controlled fire!",
+			"Horde inbound, stay together!"
 		]
 	},
 	"hurt": {
@@ -1484,51 +1550,88 @@ const BARKS := {
 			"Hit.",
 			"Scratch. Keep going.",
 			"Ugh. That one found me.",
-			"Blood. Mine. Fine."
+			"Blood. Mine. Fine.",
+			"Cut. It is nothing.",
+			"Ah. I felt that.",
+			"Blood. Mine, this time.",
+			"They hurt me. They will pay.",
+			"Still standing."
 		],
 		"scorpion": [
 			"Ow! Son of a gun!",
 			"Damn it, that stung!",
 			"Ugh! Tore my jacket!",
-			"Now I am angry!"
+			"Now I am angry!",
+			"Ow! Not the face!",
+			"Hey! That was rude!",
+			"Ah! Okay, now I am angry!",
+			"They bit me! They actually bit me!",
+			"That is gonna leave a mark!"
 		],
 		"viper": [
 			"Hit! Still fighting!",
 			"Taking hits, staying up.",
 			"That hurt. Keep going.",
-			"I am fine. Focus!"
+			"I am fine. Focus!",
+			"I am hit, still in it!",
+			"Took one, keep firing!",
+			"Ah! That one got through!",
+			"Bleeding, but I am fine!",
+			"They are getting through to me!"
 		]
 	},
 	"idle": {
 		"ghost": [
 			"Hm. The silence is thinking.",
 			"I like it when nobody talks.",
-			"Check your corners. Then check them again."
+			"Check your corners. Then check them again.",
+			"I am watching the shadows. So are they.",
+			"Quiet. I prefer it."
 		],
 		"havoc": [
 			"Did you know a wall is just a door you have not made yet?",
 			"Quiet. Too quiet. I am going to start counting the bricks.",
-			"My leg itches. How does a metal leg itch? Do not answer that."
+			"My leg itches. How does a metal leg itch? Do not answer that.",
+			"Anyone want to hear about my favorite explosion? No? Too bad.",
+			"If it is quiet, it means I have not blown anything up yet."
 		],
 		"phantom": [
 			"I trust this peace is not an invitation.",
 			"Do you know, I miss proper tea.",
-			"Silence is only the interval. Enjoy it while it lasts."
+			"Silence is only the interval. Enjoy it while it lasts.",
+			"Helix never paid me enough for this. Nobody could.",
+			"I miss proper coffee. And proper people."
 		],
 		"raven": [
 			"Quiet never lasts.",
 			"Someone is always watching in a place like this.",
-			"Keep your eyes open. Rest later."
+			"Keep your eyes open. Rest later.",
+			"Silence lies.",
+			"I hear them breathing. Out there.",
+			"Sleep is for later. Or never.",
+			"Scorpion, stop humming.",
+			"The dark is patient. So am I."
 		],
 		"scorpion": [
 			"You know what this place needs? A bar.",
 			"I have been shot, bitten and shouted at today. Still better than my last job.",
-			"Hey, anyone have a smoke? No? Figures."
+			"Hey, anyone have a smoke? No? Figures.",
+			"Bullets are like friends. I'm running out of both.",
+			"You think zombies have birthdays?",
+			"When this is over, I want a burger the size of my head.",
+			"I am naming my next shotgun Betty.",
+			"Is it just me, or do they smell worse today?",
+			"Somebody tell a joke. No, not you, Raven."
 		],
 		"viper": [
 			"Stay close. We move out soon.",
 			"Reload what you can, rest what you cannot.",
-			"Keep your voices down and your guns up."
+			"Keep your voices down and your guns up.",
+			"Use the quiet. Reload, regroup.",
+			"Check your corners, then check them again.",
+			"Stay hydrated, stay alive.",
+			"We hold this together. Nobody wanders off.",
+			"Keep your eyes open. They always come back."
 		]
 	},
 	"intro": {
@@ -1553,37 +1656,74 @@ const BARKS := {
 			"Two.",
 			"Quiet.",
 			"Taken.",
-			"Finished."
+			"Finished.",
+			"Silent.",
+			"Erased.",
+			"No more.",
+			"Done."
 		],
 		"havoc": [
 			"Pop!",
 			"Gone!",
 			"Sit down, ugly!",
-			"Bye bye!"
+			"Bye bye!",
+			"Kaboom! Well, more of a pop.",
+			"Down you go, sunshine!",
+			"Ha! Did you see that? Nobody saw that!",
+			"That one is in pieces! Lots of pieces!"
 		],
 		"phantom": [
 			"Gone.",
 			"One less.",
 			"Pardon me.",
-			"Dispatched."
+			"Dispatched.",
+			"Removed.",
+			"Another one, filed away.",
+			"Elegant, if I say so myself.",
+			"Do stay on the floor, there is a dear."
 		],
 		"raven": [
 			"Finished.",
 			"Down for good.",
 			"Cold now.",
-			"Over."
+			"Over.",
+			"Quiet now.",
+			"It stopped.",
+			"Another one for the dark.",
+			"Done with that one.",
+			"It will not get up.",
+			"Less noise now.",
+			"Gone. Like the rest.",
+			"Rest. Finally."
 		],
 		"scorpion": [
 			"Lights out!",
 			"Take that!",
 			"Ha! Not so tough!",
-			"Goodnight, pal."
+			"Goodnight, pal.",
+			"You've been exterminated.",
+			"Sting like a butterfly, kill like a scorpion.",
+			"Zombie? More like zom-bye.",
+			"That one had my name on it. Spelled wrong, but still.",
+			"Right between the eyes. Well, eye. He only had one.",
+			"Ha! Did you see him fold?",
+			"Night night, ugly!",
+			"And THAT is how it is done!",
+			"Bye bye, stinky!"
 		],
 		"viper": [
 			"Neutralized.",
 			"Target eliminated.",
 			"Contact down.",
-			"Moving on."
+			"Moving on.",
+			"Target neutralized. Next.",
+			"Dropped him.",
+			"One more off the board.",
+			"Clean. Keep moving.",
+			"That is a confirmed kill.",
+			"Hostile is done.",
+			"Down and out.",
+			"Good. Who is next?"
 		]
 	},
 	"leader_down": {
@@ -1669,17 +1809,27 @@ const BARKS := {
 		"raven": [
 			"Almost empty.",
 			"Last rounds. Careful.",
-			"I need ammunition soon."
+			"I need ammunition soon.",
+			"Few left. Each one counts.",
+			"Almost empty.",
+			"Ammo is thin."
 		],
 		"scorpion": [
 			"Shells are nearly gone, damn it!",
 			"Running on fumes here!",
-			"Anybody got spare shells? Anybody?"
+			"Anybody got spare shells? Anybody?",
+			"Low on ammo, high on charm.",
+			"My shells are running away from me!",
+			"Almost empty! Somebody throw me a box!",
+			"I am down to harsh language!"
 		],
 		"viper": [
 			"Ammo is nearly gone.",
 			"Magazines running thin. Resupply needed.",
-			"Short on ammunition. I need to conserve."
+			"Short on ammunition. I need to conserve.",
+			"Running dry. Make every shot count.",
+			"Ammo is getting low.",
+			"Low on rounds, conserve fire."
 		]
 	},
 	"m2_a_raven": {
@@ -2412,6 +2562,39 @@ const BARKS := {
 			"Torching them, hold the line."
 		]
 	},
+	"multi_kill": {
+		"ghost": [
+			"Two.",
+			"Both. One breath."
+		],
+		"havoc": [
+			"Two! Two at once! I am a genius!",
+			"Double pop! Somebody write that down!"
+		],
+		"phantom": [
+			"Two at once. Efficient.",
+			"A pair. How tidy."
+		],
+		"raven": [
+			"Two. Together.",
+			"They died in pairs.",
+			"Both of them. Gone.",
+			"Two for the price of one bullet."
+		],
+		"scorpion": [
+			"Combo breaker!",
+			"Two for one! I love a bargain.",
+			"Two birds, one shotgun!",
+			"Double trouble, double dead!",
+			"Ha! Buy one, get one free!"
+		],
+		"viper": [
+			"Two down. Good grouping.",
+			"Double kill. Stay on it.",
+			"Multiple hostiles down.",
+			"That is two at once. Nice."
+		]
+	},
 	"obj_done": {
 		"ghost": [
 			"Open.",
@@ -2775,17 +2958,29 @@ const BARKS := {
 		"raven": [
 			"Precise.",
 			"Better than expected.",
-			"That was clean."
+			"That was clean.",
+			"Clean. I like that.",
+			"Good kill.",
+			"You did not hesitate. Good.",
+			"Again. Exactly like that."
 		],
 		"scorpion": [
 			"Hell of a shot!",
 			"You are making me look bad!",
-			"Ha! Keep that up and I buy the beer!"
+			"Ha! Keep that up and I buy the beer!",
+			"Whoa! Teach me that one!",
+			"Okay, show off!",
+			"That was beautiful, I might cry!",
+			"Right in the noggin!"
 		],
 		"viper": [
 			"Nice work.",
 			"Well done. Keep it up.",
-			"That is how it is done."
+			"That is how it is done.",
+			"Excellent shot.",
+			"That is how we train it.",
+			"Precise. Well done.",
+			"Good eye, leader."
 		]
 	},
 	"push": {
@@ -2815,37 +3010,59 @@ const BARKS := {
 			"Fresh magazine.",
 			"Reload.",
 			"Empty. Covering myself.",
-			"One second."
+			"One second.",
+			"Loading.",
+			"Empty. Covering."
 		],
 		"havoc": [
 			"Mag change! Keep dancing!",
 			"Hold on, hold on, I am almost there!",
 			"Dry! One moment, one moment!",
-			"Give me a second to feed it!"
+			"Give me a second to feed it!",
+			"Reloading! Everybody act natural!",
+			"Out of boom! Getting more boom!"
 		],
 		"phantom": [
 			"Reloading.",
 			"A moment, please. Changing magazines.",
 			"Dry. Give me a breath.",
-			"Fresh magazine. Do not let them near me meanwhile."
+			"Fresh magazine. Do not let them near me meanwhile.",
+			"Reloading. Try not to embarrass yourselves.",
+			"A moment. Even artists need fresh paint."
 		],
 		"raven": [
 			"Changing!",
 			"Mag change!",
 			"Covering fire, I am reloading.",
-			"Empty. Swapping."
+			"Empty. Swapping.",
+			"Reloading. Do not let them close.",
+			"Mag.",
+			"Empty. Covering is your job now.",
+			"Changing. Watch the left.",
+			"Loading. Quiet."
 		],
 		"scorpion": [
 			"Shells in, hold on!",
 			"Reloading, do not die!",
 			"Loading up, keep them busy!",
-			"Hold on, stuffing more shells in!"
+			"Hold on, stuffing more shells in!",
+			"Reloading. Admire me while you wait.",
+			"Feeding the beast!",
+			"Shells in, hold your horses!",
+			"Reload time! Do not die while I am busy!",
+			"Hang on, she is hungry!",
+			"Loading up the good stuff!"
 		],
 		"viper": [
 			"Reload, cover!",
 			"Magazine empty, reloading!",
 			"Switching mags!",
-			"Loading, one moment!"
+			"Loading, one moment!",
+			"Reloading, cover my side!",
+			"Mag change, give me two seconds!",
+			"Topping off!",
+			"Swapping magazines!",
+			"Loading, watch my angle!"
 		]
 	},
 	"rescue": {
@@ -2942,19 +3159,28 @@ const BARKS := {
 			"More.",
 			"Here they come again.",
 			"Reload. They are coming.",
-			"Quiet is over."
+			"Quiet is over.",
+			"Here they are.",
+			"They never learn.",
+			"More. Always more."
 		],
 		"scorpion": [
 			"Another round! Drinks are on them!",
 			"Ha! Fresh meat!",
 			"Here they come, finally!",
-			"Get your guns up, boys!"
+			"Get your guns up, boys!",
+			"Round two! Or three! Whatever, bring it!",
+			"Here comes room service!",
+			"Oh good, more friends!"
 		],
 		"viper": [
 			"Enemy wave inbound. Positions!",
 			"Heads up, more on the way.",
 			"Brace. Here they come.",
-			"Next wave. Hold your lanes."
+			"Next wave. Hold your lanes.",
+			"Contacts inbound, positions!",
+			"Next wave. Stay disciplined.",
+			"They are moving again. Weapons ready."
 		]
 	},
 	"shield": {
@@ -3019,19 +3245,28 @@ const BARKS := {
 			"Mutant coming.",
 			"Big one. Focus.",
 			"Not normal. Kill it.",
-			"Something is wrong with that one."
+			"Something is wrong with that one.",
+			"Something big. Kill it first.",
+			"That one is wrong. Burn it down.",
+			"Mutation. Do not let it reach us."
 		],
 		"scorpion": [
 			"Hey, ugly! Come here!",
 			"Special delivery! Ha!",
 			"Big nasty! Make some room!",
-			"Whoa, now that is a monster!"
+			"Whoa, now that is a monster!",
+			"Oh, that one is ugly ugly!",
+			"Big boy incoming, say hello!",
+			"What is THAT? Shoot it!"
 		],
 		"viper": [
 			"Special, spread out!",
 			"Heavy hostile, concentrate fire!",
 			"Mutant approaching. Stay calm.",
-			"Watch that one, it is not like the rest."
+			"Watch that one, it is not like the rest.",
+			"Heavy target, focus fire!",
+			"Special infected, on my mark!",
+			"Watch it, that one is mutated!"
 		]
 	},
 	"stalker": {

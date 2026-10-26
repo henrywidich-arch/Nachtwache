@@ -1490,7 +1490,30 @@ func _build_prop(item: Dictionary) -> Node3D:
 	# The map gives the way the device looks; the model's screen is on its +Z side.
 	prop.rotation.y = float(item.yaw) + (PI if str(item.kind) == "hack" else 0.0)
 	add_child(prop)
+	_aim_bounds(prop, item)
 	return prop
+
+## What [E] has to be aimed at (InteractionFocus.bounds). The prop of a body or a drive
+## holds only its blinking tag, which the outline leaves out, so on its own it would be a
+## few centimetres on the ground: the body itself is aimed at, and the drive bay of the
+## rack together with a little room in front of it (the rack is solid, so the box
+## reaches out of it towards the player).
+func _aim_bounds(prop: Node3D, item: Dictionary) -> void:
+	match str(item.kind):
+		"corpse", "case":
+			var box := AABB(Vector3(-0.6, 0.0, -0.9), Vector3(1.2, 0.5, 2.2))
+			for i in range(mini(bodies.size(), body_props.size())):
+				if (bodies[i].pos as Vector3).distance_to(item.pos) < 0.05 and is_instance_valid(body_props[i]):
+					var seen: AABB = preload("res://scripts/interaction_focus.gd").bounds(body_props[i])
+					if seen.has_volume():
+						box = prop.global_transform.affine_inverse() * seen
+					break
+			prop.set_meta("interaction_bounds", box)
+		"drive":
+			var bay := Vector3(0, 1.2, -0.7)
+			if int(prop.get_meta("server", -1)) >= 0:
+				bay = Basis(Vector3.UP, -float(item.yaw)) * ((game.cabin.servers[int(prop.get_meta("server"))].bay as Vector3) - (item.pos as Vector3))
+			prop.set_meta("interaction_bounds", AABB(bay + Vector3(-0.35, -0.4, -0.05), Vector3(0.7, 0.8, 0.45)))
 
 ## Creates what is missing, removes what is gone and lets every prop show its state.
 func _sync_props() -> void:

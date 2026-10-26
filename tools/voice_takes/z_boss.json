@@ -1,0 +1,11 @@
+{
+  "line": {
+    "m2_n_boss_near": {"speaker": "nadja", "takes": ["You took the freight lift. Of course you did. Come down, then. Someone is waiting for you."]},
+    "m2_n_boss_intro": {"speaker": "nadja", "takes": ["Welcome to Umbra. Nine floors under Helix, and they never once came down here. Meet Subject Zero. My life's work. Wake up, my darling. We have guests."]},
+    "m2_n_boss_phase2": {"speaker": "nadja", "takes": ["Do you feel that? He is learning. Every bullet you fire teaches him something."]},
+    "m2_n_boss_phase3": {"speaker": "nadja", "takes": ["No. No, no, no. Get up! I did not make you to lose to them!"]},
+    "m2_n_boss_dead": {"speaker": "nadja", "takes": ["What have you done? He was perfect. He was the only perfect thing I ever made."]},
+    "m2_n_caught": {"speaker": "nadja", "takes": ["Careful with those hands. You have no idea what I could have given the world."]},
+    "m2_boss_end": {"speaker": "coleman", "takes": ["Subject Zero is down and the doctor is in custody. The bird is on the roof. Bring her up, Fireteam. It is over."]}
+  }
+}

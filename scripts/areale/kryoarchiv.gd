@@ -28,8 +28,10 @@ const SLEEPER_TINT := Color(0.16, 0.22, 0.28)
 ## map's own dice, so that nothing else of the hall moves).
 const CLEAR_ROWS := [12.5, 23.5]
 const CLEAR_COUNT := Vector2i(3, 4)
-## Behind clear glass his own colours, only a little cooled.
-const CLEAR_TINT := Color(0.86, 0.93, 1.0)
+## Behind clear glass his own colours, a little cooled; the glass is lightly frosted
+## (the user: not quite clear, he is only to be made out), the other pods have 0.4.
+const CLEAR_TINT := Color(0.74, 0.84, 0.94)
+const CLEAR_FROST := 0.24
 
 ## Where the sleepers stand (filled by _pod, drawn by _sleepers), and those behind clear
 ## glass.
@@ -162,7 +164,7 @@ func _pod(at: Vector3, own: bool = false) -> void:
 		m.batch.ellipsoid(m.mats["plain"], base + Vector3(lean * -0.6, 1.8, 0), Vector3(0.11, 0.14, 0.12), dark, Basis.IDENTITY, 8, 5)
 		m.batch.box(m.mats["plain"], base + Vector3(0, 0.72, 0), Vector3(0.3, 0.62, 0.16), dark, turn)
 	if clear:
-		m.batch.cylinder(frost(Color(0.5, 0.85, 1.0), 0.06, 1.2), base + Vector3(0, 0.3, 0), 0.5, 0.5, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
+		m.batch.cylinder(frost(Color(0.5, 0.85, 1.0), CLEAR_FROST, 1.45), base + Vector3(0, 0.3, 0), 0.5, 0.5, 1.9, Color.WHITE, 14, Basis.IDENTITY, false)
 		light(Vector3(at.x, 0.75, at.z), Color("b8ecff"), 0.9, 1.6, 0.0, 0.0)
 		light(Vector3(at.x, 2.45, at.z), Color("e2f6ff"), 0.7, 1.6, 0.0, 0.0)
 	else:

@@ -1,0 +1,19 @@
+{
+  "bark": {
+    "kill": {
+      "scorpion": ["You've been exterminated.", "Sting like a butterfly, kill like a scorpion.", "Zombie? More like zom-bye.", "That one had my name on it. Spelled wrong, but still.", "Right between the eyes. Well, eye. He only had one."]
+    },
+    "multi_kill": {
+      "scorpion": ["Combo breaker!", "Two for one! I love a bargain."]
+    },
+    "idle": {
+      "scorpion": ["Bullets are like friends. I'm running out of both."]
+    },
+    "reload": {
+      "scorpion": ["Reloading. Admire me while you wait."]
+    },
+    "low_ammo": {
+      "scorpion": ["Low on ammo, high on charm."]
+    }
+  }
+}

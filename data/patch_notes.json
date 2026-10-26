@@ -1,5 +1,162 @@
 [
   {
+    "version": "0.77",
+    "title": "Endboss, Tokio-Halle und Appenweier",
+    "sections": [
+      {
+        "title": "Mission 2: Der Endkampf in der Reaktorhalle",
+        "items": [
+          "Mission 2 endet nicht mehr am Frachtaufzug der Eindämmungshalle: Der Aufzug fährt hinunter zur Ebene U9 – ein letzter Gang mit Vorraum und Infizierten, dann das Tor zur Reaktorhalle. Am Aufzug unten liegt ein Kontrollpunkt.",
+          "Die Reaktorhalle: eine runde Halle aus nassem Stahl mit roten Warnlichtern, hellen Spots von oben, einem hängenden Reaktor an Kabeln, Glastanks mit Kreaturen, Laufsteg, Rohren, Schaltpulten und dem Beobachtungsraum „OBSERVATION A-1“ hinter Panzerglas, aus dem Nadja zusieht.",
+          "Neuer Endgegner „Subjekt Null“: Nadjas Kreation, 3,3 m groß, auf einem Mixamo-Skelett mit echten Mixamo-Bewegungen: schwerer Mutantengang, Sprint, Klauenhieb, Aufheben und Werfen, Sprung mit Faustschlag in den Boden, Brüllen, Laser, Treffer, Tod und Aufwachen im Tank.",
+          "Seine Angriffe: Ansturm mit roter Linie am Boden als Vorwarnung (läuft er gegen eine Wand, ist er kurz benommen und nimmt mehr Schaden), Säurekanister, Sprung mit Faustschlag in den Boden und Schockwelle (er geht vorher in die Hocke; drüberspringen), Augenlaser, der quer durch die Halle schwenkt (ducken oder Deckung), und Brüllen, das Infizierte durch die Seitentore ruft.",
+          "Lebensbalken oben, Phasenwechsel bei 66 % (Laser kommt dazu) und 33 % (er rast: schneller, härter, kürzere Pausen).",
+          "Die Halle kämpft mit: Lasergitter fahren durch den Raum (springen, ducken oder die Lücke finden), Düsen setzen Giftgas in einem Viertel frei, und quadratische Bodenluken leuchten erst auf und öffnen sich dann über Lava.",
+          "Im Vorraum hängt ein Spind mit Gasmasken: [E] nimmt eine Maske mit vollem Filter.",
+          "Zwischensequenzen (mit Leertaste überspringbar): Die Kamera fährt durch die Halle, Nadja spricht hinter dem Glas, und Subjekt Null bricht aus seinem Tank. Nach dem Sieg bricht der Trupp die Tür zum Beobachtungsraum auf, nimmt Nadja fest und bringt sie zum Helikopter auf dem Dach – dann ist die Mission gewonnen.",
+          "Nadja und Coleman sind im Endkampf vertont: Nadja über die Lautsprecher der Halle, bei der Festnahme direkt, Coleman zum Schluss über Funk.",
+          "Im Koop entscheidet der Host über den Boss und die Fallen, der Mitspieler sieht und erlebt dasselbe.",
+          "Testraum: F1 > MISSION 2 · AREALE > ENDBOSS-RAUM stellt dich direkt vor die Reaktorhalle. Subjekt Null steht auch in der Gegnerliste."
+        ]
+      },
+      {
+        "title": "Taschenlampe",
+        "items": [
+          "Taschenlampe viel stärker, überall: Sie war etwa zehnmal zu schwach für dunkle Böden. Jetzt reicht sie gut 25–35 m weit, mit breiterem Kegel, hellem Kern und weichem Rand. Direkt vor einer Wand dimmt sie sich selbst, damit nichts weiß ausbrennt. Gilt in Tokio, Villa, Anlage und auf Hof 19."
+        ]
+      },
+      {
+        "title": "Mission 2: Mehr Zufallsräume",
+        "items": [
+          "Der Zufallsteil der Forschungsanlage ist länger: Pro Nacht kommen jetzt zwei bis sechs gewürfelte Areale (meist drei bis fünf) statt einem bis vier, also im Schnitt ein bis zwei Räume mehr. Wo es mehr Areale als Aufzug-Abzweige gibt, folgen in einem Abschnitt zwei Areale direkt hintereinander.",
+          "Kryoarchiv: Die wenigen klaren Kapseln sind jetzt leicht beschlagen. Der Schläfer darin ist noch zu erkennen, aber nicht mehr gestochen scharf."
+        ]
+      },
+      {
+        "title": "Granatenkisten und HUD",
+        "items": [
+          "Neue Granatenkiste: eine offene Militärkiste, in der alle Wurfwaffen liegen – Splittergranaten, Blendgranaten, Heilgranaten und Molotowcocktails.",
+          "Das Fach mit der Wurfwaffe, die in dieser Kiste steckt, leuchtet sanft pulsierend in ihrer Farbe (Blendgranate hellblau, Heilgranate grün, Molotow orange). Genau diese bekommst du zusätzlich zur Splittergranate, solange sie noch in die Taschen passt. Im Koop sieht jeder dieselbe.",
+          "Der Ladekreis für Gedrückthalten, Aufhelfen, Aufgaben und Stationen sitzt nicht mehr in der Bildschirmmitte, sondern etwas kleiner unten mittig unter dem Hinweistext.",
+          "Was du einsammelst, siehst du sofort: Das Symbol der Granate, Mine oder Spritze unten im HUD leuchtet kurz in seiner Farbe auf, mit „+1“ darüber."
+        ]
+      },
+      {
+        "title": "Koop",
+        "items": [
+          "Der Prowler in Mission 2 ist jetzt auch für den Mitspieler sichtbar. Bisher gab es ihn nur beim Host: Wer beigetreten war, wurde von einem unsichtbaren Hund angegriffen.",
+          "Der Mitspieler sieht auch, wenn der Prowler in Rage gerät und wenn er sich gerade versteckt hat.",
+          "Fehlt einem Mitspieler ein Gegner, den der Host schon hat, wird er automatisch nachgeschickt, statt unsichtbar zu bleiben.",
+          "Verlässt ein Mitspieler mitten in der Runde das Spiel, laufen die Gegner beim Host ohne Fehler weiter."
+        ]
+      },
+      {
+        "title": "Mission 1: Codes und Festplatten",
+        "items": [
+          "Zugangscodes und Probenkoffer der Toten lassen sich wieder zuverlässig mit [E] nehmen: Es reicht, auf die Leiche oder ihre blinkende Marke zu schauen. Bisher musste man einen winzigen Punkt am Boden unter der Leiche treffen.",
+          "Die Festplatten der Server im Keller-Labor werden genommen, wenn man auf den markierten Einschub schaut. Bisher reagierte [E] dort fast nie."
+        ]
+      },
+      {
+        "title": "Neue Karte: Appenweier (erste Fassung)",
+        "items": [
+          "Dritte Karte unter SPIELEN: Appenweier, der Ortsrand an der Sander Straße – vom Haus 13a über die Feuerwehr, den Markt und die Gärtnerei bis zum Kreisverkehr an der B 3. Straßen, Häuser, Felder, Bäume und Laternen liegen dort, wo sie auch in Wirklichkeit stehen.",
+          "Das Haus 13a ist im Erdgeschoss begehbar: die Halle mit Schachbrettboden und Wendeltreppe, Küche, Bad, Büro, Arbeitszimmer, das blaue Musikzimmer mit der Tür zum Garten, der Anbau mit seinen Zimmern und hinter der bemalten Tür die Stube und die Werkhalle des Torbaus nebenan.",
+          "Gespielt wird in Runden wie auf Hof 19 – zehn Runden oder endlos, ohne Aufgaben und Modifikatoren. Waffenschrank, Munition und Erste Hilfe stehen in der Halle; mehr Munition und Erste Hilfe gibt es in der Werkhalle und vor der Feuerwehr.",
+          "Die Infizierten kommen über die Maisfelder, die Wiesen, die Straße und vom Kreisverkehr. Koop zu zweit geht wie auf den anderen Karten: Der Mitspieler lädt die Karte des Hosts.",
+          "Alle Firmen und Geschäfte tragen erfundene Namen. Noch grob: Obergeschosse und die übrigen Gebäude sind nicht begehbar."
+        ]
+      },
+      {
+        "title": "Mission 2: Die Tokio-Simulationshalle",
+        "items": [
+          "In der Forschungsanlage kann es jetzt einen riesigen neuen Raum geben: eine geschlossene Helix-Halle, in der eine Nacht in Tokio simuliert wird – und darin immer wieder der Ausbruch. Sie gehört zum Zufallsteil der Nacht: Etwa jede zweite bis dritte Nacht ist sie dabei, sonst gibt es sie gar nicht. In einer Nacht mit Halle führt vom Terminal (nach der Zugfahrt) an der Ostwand ein Gang mit Schleuse direkt hinein, ohne Ladebildschirm, und das Schild „SIMULATIONSHALLE B · TOKIO“ zeigt den Weg. Im Koop haben Host und Gast immer dieselbe Nacht.",
+          "Zum Anschauen: im Testraum mit F1 unter MISSION 2 · AREALE der Knopf TOKIO-SIMULATIONSHALLE – er stellt dich direkt an die Kreuzung.",
+          "Die Videowand am NEO 108 zeigt einen eigenen Werbespot: 15 Sekunden überdrehter Anime-Spot für den erfundenen Energy-Drink NEO KICK! mit dem Roboterkatzen-Maskottchen Kiku-chan – Speed-Lines, 電撃, die drehende Dose, „未来をチャージ！“, Farbwischer, Glitches und Scanlines, in Endlosschleife. Er läuft nur, solange man in der Halle ist.",
+          "Shibuya-Kreuzung mit Diagonal-Zebrastreifen, der runde Bildschirmturm NEO 108 mit einer Videowand, ein roter Funkturm, eine Hochbahn mit Bahnhof, eine Fußgängerbrücke über die Hauptstraße, enge Gassen mit roten Laternen, ein Schreinpark mit Torii und Kirschbäumen, Neonschilder und Riesenbildschirme auf nassem, spiegelndem Asphalt im Regen.",
+          "Mehr Details: Stromkabel über den Straßen, Feuertreppen, Balkone, Fallrohre, Mülltonnen, Fahrräder, Müllsäcke, Aufsteller, Pylonen, Absperrungen und Gullydeckel. Schaufenster zeigen Regale mit Waren, Fenster haben Rahmen, Jalousien und Vorhänge. Die nasse Straße spiegelt die Neonschilder auch am Bildrand.",
+          "Ein erstes Gebäude als richtiges Modell steht an der Ecke der Kreuzung: ein Ramen-Laden mit Leitungen und Klimaanlagen.",
+          "Neue Fassaden: Fenster, Türen, Balkone und Läden der Häuser sind jetzt selbst gebaut, im Stil des Ramen-Izakaya. Fensterrahmen mit Tiefe, mit Vordach, Rollladenkasten oder als Erker, dahinter beleuchtete Zimmer mit Vorhängen oder dunkles Glas. Balkone mit Geländer, Schiebetür und manchmal Wäsche oder einer Pflanze. Unten Läden mit Noren-Vorhang, Rolltor oder Schaufenster, jeder mit Namensschild und Licht. Jedes Haus mischt anders, für beide Spieler gleich.",
+          "Abwechslungsreichere Häuser: Die Wände sind nicht mehr alle dunkel. Es gibt Betonplatten, kleine glasierte Fliesen, Ziegel, Putz und Wellblech, in hellen und dunklen Farben – Creme, Hellgrau, Blassblau, Mint, Sand, Rosé, Ziegelrot. Mit Fugen, Regenspuren und nasser Spritzzone. Helle Wände fangen das Neon der Straße ein.",
+          "Sieben neue Wahrzeichen-Gebäude nach Henrys Bildern: das Ramenhaus mit Karaoke-Wand am Funkturm-Platz, das 10-stöckige Shinonome-Hochhaus am Eingang, die Sakura-Apartments mit Wäsche, Fahrradunterstand und Kirschbaum, die Yakitori-Ecke „月見“ mit grüner Apotheke und Dachterrasse, der Shinsekai-Tech-Tower mit Riesen-LED, der Yamashita-Markt und die Pachinko-Halle „SHINSEKAI“ mit Krone und gebogener LED-Front.",
+          "Begehbar: In der Pachinko-Halle stehen Reihen von Automaten als Deckung, dazu eine Preistheke im roten Licht; im Yamashita-Markt gibt es Regale, eine Kühlwand und die Kasse. Beide haben zwei Türen, Infizierte und Bots finden hinein.",
+          "Neue Werbespots auf den LED-Wänden, live gezeichnet wie NEO KICK!: eine Karaoke-Sängerin, „夜の花“, die Cocktailbar „夜桜“, ein Kirschblüten-Band, das Tech-Girl mit Kopfhörern, Pachinko-Gesichter mit Goldmünzen, Slot-Walzen „大当たり!“, der Warnschirm „警告 · SIMULATION INSTABIL“ und eine Nachrichten-Laufschrift. Auch viele Billboards der Stadt zeigen sie jetzt.",
+          "Neue Aufgabe in der Halle: Simulation stabilisieren. Drei Steuerterminals (Pachinko-Halle, Yamashita-Markt, Shinsekai-Tech) mit [E] starten und in der Nähe bleiben, während mehr Infizierte kommen. Danach gibt der Kontrollraum den Datenkern an der Südwand frei. Belohnung: 100 ◈ je Terminal und 400 ◈ plus Versorgung für den Kern. Im Koop für beide gleich.",
+          "Testraum: Unter TOKIO · GEBÄUDE DER SIMULATIONSHALLE steht ein eigener Knopf für jedes Gebäude.",
+          "Neu an der Kreuzung: das TOKYO RAMEN IZAKAYA, ein zweistöckiges Eckhaus nach Henrys Vorlage – drei beleuchtete Stufen zum Eingang mit rotem Noren-Vorhang, Bambuskübel und Menütafel, ein Küchenfenster mit Lüftungslamellen, darüber der rot gerahmte Gastraum mit Papierlaternen und Tischen, zwei große 居酒屋-Laternen, ein Wandbild mit Sonne, Skyline und Kirschzweig, ein hohes Leuchtschild an der Ecke, Dachschild, Klimageräte und eine Seitentür.",
+          "Der Ramen-Laden an der Kreuzung hat jetzt den richtigen Maßstab: Er war doppelt so groß wie seine Nachbarn, jetzt passen Stockwerke und Ladentür zu dir und den Häusern daneben. Er steht an der Ecke zur Kreuzung, der Rest des Blocks ist mit Häusern bebaut.",
+          "Mehr Leben auf der Straße mit freien Modellen (CC0, Poly Haven): echte Klimageräte an den Fassaden, Mülltonnen, Müllsäcke, Kartonstapel, Fässer, Warnschilder und alte Reifen auf den Gehwegen, Zählerkästen, Sicherheitslampen und Kameras an den Hintertüren, Gullydeckel in den Fahrbahnen.",
+          "Feinere Oberflächen: Hauswände haben Plattenfugen, Regenspuren unter den Fenstern, Schmutz und eine nasse Spritzzone am Boden; der Asphalt hat ältere und neuere Flicken und Ölflecken, die Gehwege versetzte Betonplatten. Nichts wiederholt sich sichtbar.",
+          "Asphalt und Gehwege haben echte Oberflächen bekommen: körniger, rissiger Asphalt mit glatten, spiegelnden Pfützen und abgenutzter Beton (freie CC0-Texturen von Poly Haven, Nachweis in assets/tokyo/LICENSES.md).",
+          "Man sieht, dass alles nur Simulation ist: Wände und Decke der Halle tragen ein leuchtendes Projektionsgitter, am Stadtrand stehen halb geladene Gitter-Gebäude, manche Fassaden glitchen, und aus einem Kontrollraum an der Südwand schauen Helix-Leute zu.",
+          "Die Infizierten und Begleiter finden ihre Wege durch die ganze Halle, auch auf die Brücke; im Koop sehen beide dieselbe Halle. Munition und Erste Hilfe gibt es am Polizeiposten an der Kreuzung und in der Stadt verteilt. Die Halle wird nur gezeichnet, wenn man im Gang oder in ihr ist.",
+          "Die eigene Kachel TOKIO-SIM unter SPIELEN gibt es nicht mehr: Die Halle ist jetzt Teil von Mission 2. Wer zuletzt TOKIO-SIM gewählt hatte, landet in der Villa. Alle Schilder und Marken sind erfunden. Noch grob: Gebäude sind nicht begehbar.",
+          "Henrys Videos laufen auf den Bildschirmen: der NEO-108-Turm zeigt den Anime-Spot mit der NEO-108-Dose, das Ramenhaus eine Idol-Tänzerin, die Riesenwand des Tech-Towers die NEON-X-Dose und die Pachinko-Halle ihre Rattenmenschen-Werbung. Nahtlos geloopt. Damit es flüssig bleibt, läuft immer nur das nächste sichtbare Video.",
+          "Stärkere Neon-Stimmung: sattere Farben, dunklere Ecken zwischen den Lichtinseln, mehr brennende Fenster, viele Häuser mit Neon an Kanten und Dach.",
+          "Neues Wahrzeichen: das Love Hotel „HOTEL 恋 KOI“ am Platz des Funkturms. Sieben Stockwerke in rosa Fliesen mit Milchglasfenstern und Neonbändern, das hohe ホテル恋-Schild, Neon-Herzen, ein großes Herz mit Glühbirnen-Krone auf dem Dach, eine LED-Wand mit eigenem Spot, Preistafel, grünes 空室-Schild, Lichter im Boden und Zinnen wie bei einer Burg. Die Lobby ist begehbar: roter Teppich, beleuchtete Zimmerwahl-Tafel, Rezeption, Spiegelkugel. Dazu die Parkhaus-Einfahrt mit Lamellenvorhang. Eigener Testraum-Knopf.",
+          "Licht in der Tokio-Halle neu: Statt gemalter Farbflecken auf dem Boden werfen Schilder, Bildschirme und Fenster jetzt echtes Licht – viele kleine Lampen ohne Schatten, die mit der Entfernung weich ausblenden. Ihre Farbe zeigt sich vor allem in den Spiegelungen auf der nassen Straße.",
+          "Klareres Bild: deutlich weniger Bloom (Neonröhren bleiben Röhren statt Leuchtkugeln), kein flackernder Volumennebel mehr, schärfere Spiegelungen, nassere Straße mit mehr Pfützen.",
+          "Schaufenster haben jetzt echte Tiefe: Regale mit Flaschen und Kartons, eine Rückwand mit Plakaten und eine Deckenleuchte, die sich beim Vorbeigehen mitverschieben – und sie leuchten viel weniger grell.",
+          "Hellere, abwechslungsreichere Hauswände; Werbetafeln haben Stahlrahmen und Streben, Schilderkästen sind nicht mehr schwarz.",
+          "Kirschbäume neu: feine rosa Blütenbüschel aus vielen kleinen fünfblättrigen Blüten statt lila Kugeln, leicht durchscheinend, mit herabschwebenden Blütenblättern.",
+          "Der NEO-108-Turm wechselt ab: zweimal Henrys Video, dann 15 Sekunden NEO KICK!, mit weicher Überblendung.",
+          "Flackern an den Ladenfronten behoben: Die absichtlich „kaputten“ Neonröhren unter den Schildern flackerten zu einem Viertel ununterbrochen – jetzt sind es nur noch wenige, und die setzen alle paar Sekunden kurz aus. Die Regale hinter den Schaufenstern flimmern im Vorbeigehen nicht mehr, Spiegelungen in Pfützen und Glas sind ruhiger, Kirschblüten flimmern aus der Ferne nicht mehr, und Billboard-Rahmen, Fensterscheiben sowie Schildertexte flackern nicht mehr gegen die Wand."
+        ]
+      },
+      {
+        "title": "Neue Waffe: FALKE SK-17",
+        "items": [
+          "Neue Primärwaffe FALKE SK-17 (Taste 1, ab Runde 3 im Shop für 650): ein Kampfgewehr im Stil der modernen modularen Gewehre, graublau eloxiert mit dunklem Polymer – langer Oberschaft mit durchgehender Schiene, seitlich klappbarer Schaft, Klappvisier vorn und hinten, Ladehebel links, der bei jedem Schuss mit dem Verschluss zurückläuft, gerades 20-Schuss-Magazin im Kaliber 7,62.",
+          "Sie schlägt von allen Sturmgewehren am härtesten zu (46 Schaden, 600 Schuss in der Minute), tritt dafür kräftiger, hat nur 20 Schuss und lädt langsamer nach. Nimmt Rotpunkt, Zielfernrohr und Schalldämpfer, wirft Hülsen aus, hat einen eigenen, tieferen Schuss und steht auf der Wunschliste des Breachers. Im Koop hört der Partner ihren eigenen Schuss und sieht ihre Hülsen fliegen.",
+          "Die FALKE liegt jetzt höher und präsenter in der Hand. Beim Zielen über Kimme und Korn verdeckt kein dickes Schaftstück mehr das Bild: Schaftrücken und Wangenauflage sitzen tiefer."
+        ]
+      },
+      {
+        "title": "Granatenkisten",
+        "items": [
+          "Neu zu finden: Kisten mit Wurfwaffen. Wer drüberläuft, bekommt eine Splittergranate und dazu eine Blendgranate, einen Molotowcocktail oder eine Heilgranate – so viel in die Taschen passt.",
+          "Auf Hof 19 liegt ab der zweiten Runde zu Beginn jeder Runde eine Kiste irgendwo auf dem Hof, ab der sechsten Runde zwei. Sie bleibt liegen, bis jemand sie findet.",
+          "In Mission 2 liegen pro Nacht sieben Kisten in Räumen der Anlage, zwei davon in der Tokio-Halle, wenn die Nacht sie hat. Eine Kiste erscheint, sobald jemand vom Trupp in die Nähe kommt."
+        ]
+      },
+      {
+        "title": "Mission 2: Ruhe, Bots und Bahnhof",
+        "items": [
+          "Ruhige Zonen: Wer direkt an einem Waffenschrank, einer Werkbank oder einer Ausrüstungsstation steht, bekommt keinen neuen Nachschub an Infizierten – in kleinen Räumen gilt das für den ganzen Raum. Während eine Stellung gehalten werden muss, kommen sie dort nur langsamer. Das HUD zeigt RUHIGE ZONE an.",
+          "Der Prowler sieht erst im letzten Kampf mutiert aus – mit den Stacheln den Rücken hinab. Bei seinen Besuchen davor bleibt er das normale Tier.",
+          "Die Bots gehen ab und zu zu einer Station oder einer geöffneten Waffenkiste in der Nähe und kommen mit einer anderen Waffe zurück: AK, Badger, M14, SVD oder Auto-Schrotflinte. Das ist nur Optik und Klang – ihr Schaden bleibt wie bisher.",
+          "Bahnhof: Während Nadja geht und die Operatoren reden, gibt es etwas zu tun – drei Notstrom-Sicherungen an den Säulen des Bahnsteigs einschalten. Jede Sicherung macht Lärm und lockt ein paar Infizierte an.",
+          "Mit allen drei Sicherungen fährt der Zug in 45 statt 80 Sekunden hoch, mit weniger deutlich langsamer. Zweimal fliegt beim Hochfahren eine Sicherung raus und muss wieder eingeschaltet werden."
+        ]
+      },
+      {
+        "title": "Neue Gegner",
+        "items": [
+          "Der Striker, der beim Treffen und Sterben explosive Kugeln fallen lässt, kommt deutlich seltener: in Mission 2 etwa halb so oft wie bisher, auf Hof 19 höchstens noch zwei pro Runde.",
+          "Neu: der schwere Striker in Gasmaske und Overall mit Sprengbeuteln. Er funktioniert wie der normale, hält aber mehr aus, verliert mehr Kugeln, und jede davon explodiert viel stärker und weiter. Er ist seltener als der normale Striker: etwa jeder vierte Striker ist ein schwerer.",
+          "Neu: der Weed-Infizierte im Schutzanzug, überwuchert von Hanfpflanzen. Ab und zu ist ein gewöhnlicher Infizierter einer von ihnen. Stirbt er, platzt er in einer dichten grünen Rauchwolke. Wer hineinläuft, ist kurz bekifft: Das Bild schwimmt, wird doppelt und bunt und an den Rändern grün-violett verschwommen. Der Effekt schadet nicht und lässt nach ein paar Sekunden nach. Im Koop trifft es jeden, der selbst in der Wolke steht."
+        ]
+      },
+      {
+        "title": "Weed-Rausch",
+        "items": [
+          "Wer die grüne Wolke eines geplatzten Weed-Infizierten einatmet, gerät in einen Rausch – und dann kommt eine Horde Gartenzwerge aus grünen Rauchwolken gerannt: viele kleine schwache und zwei, drei große, die kräftig zuschlagen.",
+          "Die Zwerge gibt es nur für den, der high ist: Im Koop sieht und trifft sie niemand sonst. Solange sie da sind, läuft eigene Musik („Melting Sounds“); ist der letzte erledigt oder nach spätestens 40 Sekunden, lässt der Rausch nach und die übrigen verpuffen."
+        ]
+      },
+      {
+        "title": "Musik und Stimmen",
+        "items": [
+          "Neue Musik: Zwei eigene Stücke laufen jetzt im Hauptmenü, in der Lobby und in den Pausen zwischen den Runden. Zwei weitere spielen, sobald in der Tokio-Simulationshalle gekämpft wird.",
+          "Nadja spricht mit einer neuen, lebhafteren Stimme. Alle ihre 168 Sätze in beiden Missionen sind neu aufgenommen.",
+          "Scorpion hat zehn neue Sprüche, darunter eigene Rufe für einen Doppelkill und für knappe Munition.",
+          "Viper, Scorpion, Raven, Phantom, Havoc und Ghost haben fast 200 neue Rufe für Abschüsse, Doppelkills, Nachladen, Treffer, große Gegner, Lob und ruhige Momente. Dadurch wiederholen sie sich deutlich seltener.",
+          "Die Begleiter melden jetzt, wenn ihnen die Munition knapp wird, und kommentieren, wenn sie zwei Gegner kurz hintereinander erledigen."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.76",
     "title": "Neuer Hof, Gore und Scoreboard",
     "sections": [

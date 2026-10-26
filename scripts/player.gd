@@ -18,6 +18,13 @@ const WEAPONS := {
 	# M21E: 370 damage a second while it fires (AK 360, M21E 380), a magazine half as big
 	# again as the AK's, a slower reload. Sold from round three. Parts: see ATTACHMENTS.
 	"wirbel": {"label": "WIRBEL W-45", "slot": 1, "price": 600, "from_round": 3, "sound": "wirbel", "magazine": 45, "reserve_max": 270, "reload_time": 3.0, "interval": 0.095, "casing": "rifle", "damage": 37.0, "head_multiplier": 2.4, "spread": 0.016, "kick": 0.0125, "flash": 1.2, "rotor": 8, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	# The FALKE (tools/blender_make_falke.py): a battle rifle of the modern modular kind, grey-blue,
+	# 7.62 from a straight box of twenty. It hits hardest of the automatic rifles and fires
+	# slower than the G36: 460 a second while it fires (G36 440, WIRBEL 390), but it holds
+	# twenty and kicks harder, and its reload is slow. Sold from round three. cycle: its
+	# charging handle runs back with the bolt at every shot and its trigger moves (as on the
+	# WIRBEL, without a drum). Parts: see ATTACHMENTS.
+	"falke": {"label": "FALKE SK-17", "slot": 1, "price": 650, "from_round": 3, "sound": "falke", "magazine": 20, "reserve_max": 160, "reload_time": 2.6, "interval": 0.1, "casing": "rifle", "damage": 46.0, "head_multiplier": 2.5, "spread": 0.0105, "kick": 0.0165, "flash": 1.25, "punch": 1.15, "settle": 0.55, "cycle": true, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	"p90": {"label": "P90", "slot": 1, "price": 100, "sound": "p90", "magazine": 50, "reserve_max": 250, "reload_time": 2.15, "interval": 0.075, "damage": 23.0, "head_multiplier": 3.0, "spread": 0.016, "kick": 0.0072, "flash": 0.85},
 	# cues: when in its reload each step is heard. Parts for it: see ATTACHMENTS.
 	"ump": {"label": "UMP45", "slot": 1, "price": 220, "sound": "ump", "magazine": 25, "reserve_max": 200, "reload_time": 2.3, "interval": 0.1, "damage": 31.0, "head_multiplier": 2.8, "spread": 0.013, "kick": 0.0095, "flash": 0.9, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
@@ -79,8 +86,8 @@ const WEAPONS := {
 	"fifty": {"label": "M107 KALIBER .50", "slot": 3, "price": 900, "group": "class", "sound": "fifty", "semi": true, "magazine": 5, "reserve_max": 30, "reload_time": 3.4, "interval": 0.7, "damage": 520.0, "head_multiplier": 2.0, "spread": 0.03, "kick": 0.075, "flash": 2.0, "punch": 3.0, "settle": 0.9, "scope": 11.0, "pierce": 4, "shield": 1.0, "armour": 0.0}
 }
 ## Shots with these sounds are suppressed (what a co-op guest's shot is known by).
-const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil", "hornet_sil", "wirbel_sil"]
-const ORDER := ["rifle", "ak", "g36", "wirbel", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "usp", "g18", "hornet", "revolver", "deagle", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
+const QUIET_SOUNDS := ["badger", "ump_sil", "ak_sil", "g36_sil", "mp7_sil", "hornet_sil", "wirbel_sil", "falke_sil"]
+const ORDER := ["rifle", "ak", "g36", "wirbel", "falke", "p90", "ump", "mp7", "badger", "m14", "shotgun", "pistol", "usp", "g18", "hornet", "revolver", "deagle", "autoshotgun", "sniper", "svd", "launcher", "mg", "mg2", "minigun", "flamer", "nitro", "fifty"]
 ## The three kinds of weapon: the key that takes one in hand, what the interface calls
 ## it, and the shop lists whose weapons are of that kind. Two primary slots come issued;
 ## a single sling adds a third. Heavy weapons and purchased sidearms keep one slot each.
@@ -151,6 +158,11 @@ const ATTACHMENTS := {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier auf der Schiene über der Trommel: heller Leuchtpunkt, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – nur die Trommel tickt noch", "set": {"sound": "wirbel_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+	},
+	"falke": {
+		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier auf der langen Schiene: heller Leuchtpunkt, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: mit dem schweren Kaliber das Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 220, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "falke_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
 	},
 	"mp7": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
@@ -466,6 +478,27 @@ var landing := 0.0
 var airborne := false
 var shake_noise := FastNoiseLite.new()
 
+const TORCH_ENERGY := 34.0
+## How much of TORCH_ENERGY the flashlight gives now (less right before a wall).
+var torch_near := 1.0
+
+## The flashlight dims while a wall is right ahead (from 6 m down to an eighth at 0.4 m),
+## smoothly, so that the spot on it never burns out white.
+func _torch_near(delta: float) -> void:
+	if flashlight == null or not flashlight.visible:
+		return
+	var from := flashlight.global_position
+	var ahead := -flashlight.global_basis.z
+	var ask := PhysicsRayQueryParameters3D.create(from, from + ahead * 6.0)
+	ask.exclude = [get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(ask)
+	var want := 1.0
+	if not hit.is_empty():
+		var gap := from.distance_to(hit.position)
+		want = clampf(remap(gap * gap, 0.16, 36.0, 0.13, 1.0), 0.13, 1.0)
+	torch_near = lerpf(torch_near, want, minf(1.0, delta * 10.0))
+	flashlight.light_energy = TORCH_ENERGY * torch_near
+
 func toggle_flashlight() -> void:
 	flashlight.visible = not flashlight.visible
 	game.sounds.play_sound("click", -6.0, 1.5)
@@ -496,14 +529,20 @@ func _ready() -> void:
 	flashlight = SpotLight3D.new()
 	flashlight.name = "Flashlight"
 	flashlight.position = Vector3(0.12, -0.12, -0.1)
-	flashlight.light_color = Color("e6ecd8")
-	flashlight.light_energy = 5.8
-	flashlight.spot_range = 60
-	flashlight.spot_angle = 31
-	flashlight.spot_attenuation = 0.9
-	flashlight.spot_angle_attenuation = 0.7
+	# (v0.77, Henry: too weak - in the dark the ground stayed black a few metres ahead. It
+	# was about a tenth as strong as a torch has to be, and fell off nearly with the distance
+	# itself (attenuation 0.9); now it is much stronger and falls off far more slowly,
+	# so that it still finds the street at 25-35 m, in a wider cone with a bright core and a
+	# soft rim. Close to a wall it dims itself (_torch_near) so that it does not burn white.)
+	flashlight.light_color = Color("eef0e2")
+	flashlight.light_energy = TORCH_ENERGY
+	flashlight.spot_range = 42
+	flashlight.spot_angle = 36
+	flashlight.spot_attenuation = 0.42
+	flashlight.spot_angle_attenuation = 1.35
 	flashlight.shadow_enabled = true
 	flashlight.shadow_bias = 0.06
+	flashlight.shadow_blur = 1.6
 	flashlight.light_volumetric_fog_energy = 0.3
 	# The beam sits just beside the weapon, so it must not light the viewmodel itself.
 	flashlight.light_cull_mask = 1
@@ -528,6 +567,7 @@ func _build_weapon() -> void:
 	weapon_models["mp7"] = WeaponView.build_gun("mp7")
 	weapon_models["hornet"] = WeaponView.build_gun("hornet")
 	weapon_models["wirbel"] = WeaponView.build_gun("wirbel")
+	weapon_models["falke"] = WeaponView.build_gun("falke")
 	for id in WeaponView.MODELS:
 		weapon_models[id] = WeaponView.build_model(id)
 	for id in ["usp", "g18", "deagle"]:
@@ -930,6 +970,8 @@ func _melee_strike(blade: Dictionary) -> void:
 		game.fx.melee_hit(enemy, chest.lerp(origin, 0.15), push, weight, bool(motion.edged))
 		if struck >= int(blade.targets):
 			break
+	# The gnomes of the Weed high, which only this machine sees.
+	struck += WeedVisions.melee(game, global_position, ahead, float(blade.reach), float(blade.damage))
 	if struck > 0:
 		game.sounds.play_sound("melee_blade" if bool(motion.edged) else ("melee_heavy" if weight >= 0.7 else "melee"), 0.0, randf_range(0.94, 1.04))
 		game.hud.hit_marker(false)
@@ -1398,6 +1440,7 @@ func _physics_process(delta: float) -> void:
 		var env := get_world_3d().environment
 		var ambient := Color(env.ambient_light_color * env.ambient_light_energy, 1.0) if env != null else Color(0.08, 0.08, 0.09)
 		view_light.update(delta, camera.global_position, flashlight, ambient)
+	_torch_near(delta)
 	shot_cooldown = maxf(0, shot_cooldown - delta)
 	dual_cooldowns = Vector2(maxf(0.0, dual_cooldowns.x - delta), maxf(0.0, dual_cooldowns.y - delta))
 	dual_kick = Vector2(maxf(0.0, dual_kick.x - delta * 9.0), maxf(0.0, dual_kick.y - delta * 9.0))
@@ -1614,7 +1657,7 @@ func _rotor(delta: float) -> void:
 		# The full drum goes in with its index mark at the top of its window.
 		if done > 0.4:
 			rotor_turn = 0.0
-	var step := TAU / float(data.rotor)
+	var step := TAU / float(data.get("rotor", 1))
 	if rotor_speed >= ROTOR_CATCH:
 		rotor_turn += rotor_speed * delta
 	elif rotor_speed > 0.0:
@@ -1628,7 +1671,7 @@ func _rotor(delta: float) -> void:
 	rotor_speed *= exp(-delta / ROTOR_TAU)
 	rotor_kick = move_toward(rotor_kick, 0.0, delta / minf(0.08, float(data.interval)))
 	var clip := weapon.get_node_or_null("Magazine") as Node3D
-	if clip != null and clip.get_child_count() > 0:
+	if data.has("rotor") and clip != null and clip.get_child_count() > 0:
 		var drum := clip.get_child(0) as Node3D
 		if not drum.has_meta("rest"):
 			drum.set_meta("rest", drum.basis)
@@ -1921,8 +1964,9 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var step: Dictionary = WeaponView.reload_step(current_weapon, done)
 		clip.position = step.magazine
 		(weapon.get_node("Support") as Node3D).position = step.hand
-	# The WIRBEL: its drum turns, its bolt runs back, its trigger is pulled.
-	if WEAPONS[current_weapon].has("rotor"):
+	# The WIRBEL: its drum turns, its bolt runs back, its trigger is pulled. The FALKE (cycle):
+	# its charging handle and its trigger.
+	if WEAPONS[current_weapon].has("rotor") or WEAPONS[current_weapon].has("cycle"):
 		_rotor(delta)
 	# The launcher: the drum turns on after each shot (and back for each shell loaded), the front
 	# frame swings out while it is loaded, and the left hand brings the shells.
@@ -2138,6 +2182,9 @@ func shoot(hand: int = 1) -> void:
 		# The drum is kicked on by one step (see _rotor).
 		rotor_speed += TAU / float(data.rotor) / ROTOR_TAU
 		rotor_kick = 1.0
+	elif data.has("cycle"):
+		# The bolt runs back and home (see _rotor).
+		rotor_kick = 1.0
 		# (Its cases fly from the port on the right of its receiver: WEAPONS.wirbel.casing,
 		# WeaponView.GUNS.wirbel.eject, brass.gd.)
 	if data.has("grenade"):
@@ -2164,7 +2211,7 @@ func shoot(hand: int = 1) -> void:
 		var off: Vector2 = scatter[pellet] if pellets > 1 else Vector2(randf_range(-spread, spread), randf_range(-spread, spread))
 		var direction := (-camera.global_basis.z + camera.global_basis.x * off.x + camera.global_basis.y * off.y).normalized()
 		endpoint = origin + direction * 90
-		var query := PhysicsRayQueryParameters3D.create(origin, endpoint, 1 | 4 | 8, [get_rid()])
+		var query := PhysicsRayQueryParameters3D.create(origin, endpoint, 1 | 4 | 8 | WeedVisions.LAYER, [get_rid()])
 		var hit := get_world_3d().direct_space_state.intersect_ray(query)
 		if not hit.is_empty():
 			endpoint = hit.position
@@ -2213,6 +2260,12 @@ func shoot(hand: int = 1) -> void:
 						game.sounds.play_at("bolt", endpoint, -3.0, randf_range(0.7, 0.9))
 					else:
 						game.fx.blood(endpoint, direction, headshot or pellets > 1)
+			elif target is WeedVisions.Gnome:
+				# One of the gnomes of the Weed high, which only this machine sees.
+				var harm: float = float(data.damage) + weapon_level * (10.0 / pellets)
+				if pellets > 1:
+					harm *= shot_force(origin.distance_to(endpoint))
+				WeedVisions.shot(game, target, harm, direction, endpoint)
 			else:
 				# A wall, a floor, a prop: it keeps the hole (a limited number of them).
 				if not target is CharacterBody3D:

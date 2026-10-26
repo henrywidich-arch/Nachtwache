@@ -125,6 +125,18 @@ const GUNS := {
 		"support": Vector3(0, 0.012, -0.355), "handle": Vector3(-0.026, 0.078, -0.112), "bolt_travel": 0.075,
 		"magazine_out": Vector3(-0.6, 0.183, 0.0), "magazine_foot": Vector3(-0.045, 0.116, -0.148),
 		"eject": Vector3(0.026, 0.075, -0.057)
+	},
+	# The FALKE (tools/blender_make_falke.py, which prints these places): its rail runs the
+	# whole length of the upper, the folding sights stand at both ends of it (irons: the
+	# middle of the rear aperture, level with the tip of the front post). Its box magazine
+	# drops out below and a little forward. handle: the charging handle on the left, which
+	# runs back with the bolt at every shot (bolt_travel). eject: the port on the right.
+	"falke": {
+		"scene": "res://assets/models/falke.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.072, -0.605), "bore": 0.0072,
+		"rail": 0.12, "optic": -0.03, "irons": 0.137, "folding": true,
+		"support": Vector3(0, 0.018, -0.33), "handle": Vector3(-0.029, 0.091, -0.208), "bolt_travel": 0.1,
+		"magazine_out": Vector3(0, -0.99, -0.1), "magazine_foot": Vector3(0, -0.118, -0.082),
+		"eject": Vector3(0.02, 0.074, -0.062)
 	}
 }
 ## The reflex sight is the user's model of a holographic sight: a hood with a tunnel to
@@ -296,6 +308,16 @@ const VIEWS := {
 		"hip": Vector3(0.12, -0.19, -0.36), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.133, -0.24), "muzzle": Vector3(0, -0.008, -0.52),
 		"reload_low": Vector3(-0.03, 0.0, 0.03), "reload_turn": Vector3(0.3, 0.35, -0.3)
+	},
+	# The FALKE (build_gun): aimed through its rear aperture, 13 cm before the eye, the butt
+	# at the shoulder. For a reload it is tipped and rolled to the left like the AK, so that
+	# the well and the magazine dropping out of it can be seen.
+	# (After Henry: from the hip it sat too low and far right; it is held higher and nearer
+	# the middle now, like the AK. Aimed, the eye is 16 cm behind the rear aperture.)
+	"falke": {
+		"hip": Vector3(0.11, -0.122, -0.3), "hip_angles": Vector3(0.5, 5.0, -2.0),
+		"aim": Vector3(0.0, -0.057, -0.33), "muzzle": Vector3(0, -0.008, -0.555),
+		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	# The MP7 (build_gun): no iron sights, so aimed along the top of its rail, 2.5 cm above it
 	# and 16 cm behind its end. For a reload it is raised high and rolled far over to the

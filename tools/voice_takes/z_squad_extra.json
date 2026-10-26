@@ -1,0 +1,69 @@
+{
+  "bark": {
+    "kill": {
+      "viper": ["Target neutralized. Next.", "Dropped him.", "One more off the board.", "Clean. Keep moving.", "That is a confirmed kill.", "Hostile is done.", "Down and out.", "Good. Who is next?"],
+      "scorpion": ["Ha! Did you see him fold?", "Night night, ugly!", "And THAT is how it is done!", "Bye bye, stinky!"],
+      "raven": ["Quiet now.", "It stopped.", "Another one for the dark.", "Done with that one.", "It will not get up.", "Less noise now.", "Gone. Like the rest.", "Rest. Finally."]
+    },
+    "multi_kill": {
+      "viper": ["Two down. Good grouping.", "Double kill. Stay on it.", "Multiple hostiles down.", "That is two at once. Nice."],
+      "scorpion": ["Two birds, one shotgun!", "Double trouble, double dead!", "Ha! Buy one, get one free!"],
+      "raven": ["Two. Together.", "They died in pairs.", "Both of them. Gone.", "Two for the price of one bullet."]
+    },
+    "reload": {
+      "viper": ["Reloading, cover my side!", "Mag change, give me two seconds!", "Topping off!", "Swapping magazines!", "Loading, watch my angle!"],
+      "scorpion": ["Feeding the beast!", "Shells in, hold your horses!", "Reload time! Do not die while I am busy!", "Hang on, she is hungry!", "Loading up the good stuff!"],
+      "raven": ["Reloading. Do not let them close.", "Mag.", "Empty. Covering is your job now.", "Changing. Watch the left.", "Loading. Quiet."]
+    },
+    "hurt": {
+      "viper": ["I am hit, still in it!", "Took one, keep firing!", "Ah! That one got through!", "Bleeding, but I am fine!", "They are getting through to me!"],
+      "scorpion": ["Ow! Not the face!", "Hey! That was rude!", "Ah! Okay, now I am angry!", "They bit me! They actually bit me!", "That is gonna leave a mark!"],
+      "raven": ["Cut. It is nothing.", "Ah. I felt that.", "Blood. Mine, this time.", "They hurt me. They will pay.", "Still standing."]
+    },
+    "big_kill": {
+      "viper": ["Big one neutralized. Good teamwork.", "Priority target is down.", "The heavy is finished. Reset.", "That thing is dead. Check your ammo."],
+      "scorpion": ["Timber! Ha ha!", "The bigger they are, the louder they splat!", "Somebody take a picture, that was huge!", "Down goes the big boy!"],
+      "raven": ["Big. Dead. Same thing now.", "It was strong. Not strong enough.", "The monster is quiet.", "That one will haunt nobody."]
+    },
+    "praise": {
+      "viper": ["Excellent shot.", "That is how we train it.", "Precise. Well done.", "Good eye, leader."],
+      "scorpion": ["Whoa! Teach me that one!", "Okay, show off!", "That was beautiful, I might cry!", "Right in the noggin!"],
+      "raven": ["Clean. I like that.", "Good kill.", "You did not hesitate. Good.", "Again. Exactly like that."]
+    },
+    "special": {
+      "viper": ["Heavy target, focus fire!", "Special infected, on my mark!", "Watch it, that one is mutated!"],
+      "scorpion": ["Oh, that one is ugly ugly!", "Big boy incoming, say hello!", "What is THAT? Shoot it!"],
+      "raven": ["Something big. Kill it first.", "That one is wrong. Burn it down.", "Mutation. Do not let it reach us."]
+    },
+    "idle": {
+      "viper": ["Use the quiet. Reload, regroup.", "Check your corners, then check them again.", "Stay hydrated, stay alive.", "We hold this together. Nobody wanders off.", "Keep your eyes open. They always come back."],
+      "scorpion": ["You think zombies have birthdays?", "When this is over, I want a burger the size of my head.", "I am naming my next shotgun Betty.", "Is it just me, or do they smell worse today?", "Somebody tell a joke. No, not you, Raven."],
+      "raven": ["Silence lies.", "I hear them breathing. Out there.", "Sleep is for later. Or never.", "Scorpion, stop humming.", "The dark is patient. So am I."]
+    },
+    "clear": {
+      "viper": ["Area clear. Regroup on me.", "No more movement. Good work.", "Clear. Take a breath."],
+      "scorpion": ["Clear! Who wants seconds?", "All done! Applause, please!", "That is the last of them. For now!"],
+      "raven": ["Nothing moves.", "Clear. For a moment.", "Silence again."]
+    },
+    "round": {
+      "viper": ["Contacts inbound, positions!", "Next wave. Stay disciplined.", "They are moving again. Weapons ready."],
+      "scorpion": ["Round two! Or three! Whatever, bring it!", "Here comes room service!", "Oh good, more friends!"],
+      "raven": ["Here they are.", "They never learn.", "More. Always more."]
+    },
+    "horde": {
+      "viper": ["Big group! Hold the line!", "Mass contact, controlled fire!", "Horde inbound, stay together!"],
+      "scorpion": ["That is a LOT of zombies!", "Party bus is here!", "Okay, okay, maybe too many!"],
+      "raven": ["A flood of them.", "So many. Good. More targets.", "Back to back. Now."]
+    },
+    "low_ammo": {
+      "viper": ["Running dry. Make every shot count.", "Ammo is getting low.", "Low on rounds, conserve fire."],
+      "scorpion": ["My shells are running away from me!", "Almost empty! Somebody throw me a box!", "I am down to harsh language!"],
+      "raven": ["Few left. Each one counts.", "Almost empty.", "Ammo is thin."]
+    },
+    "down": {
+      "viper": ["I am down! Get to me!", "Hit hard! I need a revive!", "Cannot move! Help!"],
+      "scorpion": ["I am down! This is so embarrassing!", "Get me up, I still have jokes left!", "Help! Floor is cold!"],
+      "raven": ["Down. Come quick.", "I cannot get up. Hurry.", "They got me. Help."]
+    }
+  }
+}

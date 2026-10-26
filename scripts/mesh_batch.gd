@@ -31,6 +31,9 @@ var label := ""
 ## [batch, material, centre, size, colour, basis].
 static var watching := false
 static var watched: Array = []
+## Where what is built into this batch really stands: added to the centre of every box
+## that is noted (a part of a map built around its own middle, see HiveCore.nav_shift).
+var shift := Vector3.ZERO
 
 func _surface(material: Material) -> Surface:
 	if not surfaces.has(material):
@@ -39,7 +42,7 @@ func _surface(material: Material) -> Surface:
 
 func box(material: Material, center: Vector3, size: Vector3, color: Color = Color.WHITE, basis: Basis = Basis.IDENTITY) -> void:
 	if watching:
-		watched.append([self, material, center, size, color, basis])
+		watched.append([self, material, center + shift, size, color, basis])
 	var surface := _surface(material)
 	var half := size * 0.5
 	for face in FACES:

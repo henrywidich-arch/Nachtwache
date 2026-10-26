@@ -330,7 +330,7 @@ func run(game: Node3D) -> void:
 		bystander.receive_hit(9999, Vector3.FORWARD)
 	# --- Striker
 	face(game, Vector3(0, 0.05, 3.0), PI)
-	var striker: Infected = game.spawn_enemy("striker")
+	var striker: Infected = game.spawn_enemy("striker", "striker")
 	striker.set_physics_process(false)
 	striker.position = Vector3(0, 0.05, 4.6)
 	await frames(3)
@@ -2153,7 +2153,7 @@ func _loadout(game: Node3D) -> void:
 		var kind := Survivor.kind_of(id)
 		kinds[kind] = int(kinds.get(kind, 0)) + 1
 		keyed = keyed and int(Survivor.WEAPONS[id].slot) == int({"primary": 1, "secondary": 2, "heavy": 3}[kind]) and int(Survivor.KINDS.primary.key) == 1 and int(Survivor.KINDS.heavy.key) == 2 and int(Survivor.KINDS.secondary.key) == 3
-	expect(keyed and int(kinds.primary) == 10 and int(kinds.secondary) == 6 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, including the three new sidearms , the HORNISSE and the WIRBEL")
+	expect(keyed and int(kinds.primary) == 11 and int(kinds.secondary) == 6 and int(kinds.heavy) == 10 and Survivor.kind_of("flamer") == "heavy" and Survivor.kind_of("shotgun") == "primary" and Survivor.kind_of("revolver") == "secondary", "Every weapon is a primary, a secondary or a heavy one, including the three new sidearms , the HORNISSE, the WIRBEL and the FALKE")
 	# --- two issued primary slots; a third trades in a chosen primary
 	game.credits = 1000
 	player.position = (spots.shop as Vector3) + Vector3(0, 0.05, 0)
@@ -2412,7 +2412,7 @@ func _loadout(game: Node3D) -> void:
 	var cued := true
 	for cue in Survivor.WEAPONS.g36.cues:
 		cued = cued and str(cue[1]).begins_with("g36_")
-	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 12 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 retains its shot, physical reload, aligned sights and working attachments in the new weapon editor")
+	expect(got and on_line and plain_sound == "g36" and heard_g36 and sighted and hushed and dots == 2 and Survivor.ATTACHMENTS.size() == 13 and clip != null and g36.get_node_or_null("Support") != null and left_well > 0.15 and clip.position.length() < 0.001 and player.ammo == 30 and cued and Survivor.kind_of("g36") == "primary" and float(Survivor.WEAPONS.g36.damage) > float(Survivor.WEAPONS.rifle.damage) and float(Survivor.WEAPONS.g36.interval) < float(Survivor.WEAPONS.rifle.interval), "The G36 retains its shot, physical reload, aligned sights and working attachments in the new weapon editor")
 	_wipe(game)
 	# --- the MP7: its magazine comes out of the pistol grip, and it has no iron sights
 	game.preparation_left = 9999.0
@@ -2709,7 +2709,7 @@ func _later(game: Node3D) -> void:
 		heard.append(music.current_phase())
 	game.phase = "preparing"
 	game.wave = 1
-	expect(parts == MusicDirector.PHASES.size() and heard == ["anfang", "welle", "harte_welle", "kurz_vor_ende", "letzte_runde"], "The music follows the night: calm between the rounds, harder as they go on, tracks of its own for the last one (%s)" % str(heard))
+	expect(parts == MusicDirector.PHASES.size() and heard == ["warten", "welle", "harte_welle", "kurz_vor_ende", "letzte_runde"], "The music follows the night: calm between the rounds, harder as they go on, tracks of its own for the last one (%s)" % str(heard))
 	# --- settings and readouts
 	game.sounds.set_volume("Music", 0.25)
 	var quarter: bool = absf(game.sounds.volume("Music") - 0.25) < 0.01
@@ -3742,7 +3742,7 @@ func _hive_staff(game: Node3D) -> void:
 		one.set_physics_process(false)
 		farm = farm and old.has(one.model.kind)
 		_take_off(game, one)
-	expect(farm and Infected.TYPES.mauler.visuals == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"] and old.size() == 6, "On the farm the plain infected look as they always did, and now and then like a soldier")
+	expect(farm and Infected.TYPES.mauler.visuals == ["mauler_hazmat", "mauler_female", "normalzombie", "normalzombie2", "zombiehelm"] and old.size() == 7, "On the farm the plain infected look as they always did, and now and then like a soldier or the Weed infected")
 	_wipe_all(game)
 	await wait(0.5)
 
@@ -4544,6 +4544,8 @@ func _toughness(game: Node3D) -> void:
 			var one: Infected = game.body_for(str(kind))
 			one.game = game
 			one.kind = str(kind)
+			# (The heavier Striker is tougher by itself: measure the plain one.)
+			one.visual_kind = "striker" if str(kind) == "striker" else ""
 			one.wave = 4
 			one.puppet = true
 			game.enemies.add_child(one)
@@ -4704,7 +4706,7 @@ func _kit(game: Node3D) -> void:
 	var widest := 0
 	for tab in rows:
 		widest = maxi(widest, int(rows[tab]))
-	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 9 and int(rows.heavy) == 7 and int(rows.sidearms) == 6 and int(rows.melee) == 7 and not rows.has("mods") and not Survivor.GOODS.has("mags") and parts == 39 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The eight shop lists include six sidearms and seven melee options; attachments live on the weapon pages (%s)" % str(rows))
+	expect(rows.size() == SurvivalHUD.SHOP_TABS.size() and rows.size() == 8 and widest <= 10 and int(rows.weapons) == 10 and int(rows.heavy) == 7 and int(rows.sidearms) == 6 and int(rows.melee) == 7 and not rows.has("mods") and not Survivor.GOODS.has("mags") and parts == 42 and int(rows.get("class", 0)) == 3 and int(rows.team) == 2, "The eight shop lists include six sidearms and seven melee options; attachments live on the weapon pages (%s)" % str(rows))
 	game.team_enabled = true
 	game.start_run()
 	expect(player.plate_level == 0 and not player.inventory.has("ump"), "A new night starts without plates and without the UMP")
@@ -7291,7 +7293,7 @@ func _overhaul(game: Node3D) -> void:
 	await frames(3)
 	face(game, post, PI)
 	player.health = 100.0
-	var runner: Infected = game.spawn_enemy("striker")
+	var runner: Infected = game.spawn_enemy("striker", "striker")
 	runner.set_physics_process(false)
 	runner.position = post + Vector3(0, 0, 2.0)
 	runner.shed = true
@@ -7503,7 +7505,7 @@ func _overhaul(game: Node3D) -> void:
 		seated = seated and is_equal_approx(-eye.y, centre) and is_equal_approx(-eye.z, tube_z + WeaponView.DOT_LENGTH * size * 0.5 + WeaponView.DOT_EYE * size)
 		seated = seated and (bool(spec.get("folding", false)) or centre - WeaponView.DOT_RADIUS * size > (spec.mount as Vector3).y + float(spec.irons)) and centre - (WeaponView.DOT_RADIUS + WeaponView.DOT_WALL) * size >= rail_y - 0.0005
 		sights += 1
-	expect(sights == 12 and seated and WeaponView.dot_size("revolver") < 1.0 and WeaponView.dot_size("rifle") == 1.0 and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is a compact round red dot on all twelve guns that take one: it stands on the rail, its lens clear above the iron sights, the dot in the middle")
+	expect(sights == 13 and seated and WeaponView.dot_size("revolver") < 1.0 and WeaponView.dot_size("rifle") == 1.0 and WeaponView.holo_material != null and WeaponView.holo_material.use_fov_override, "The reflex sight is a compact round red dot on all thirteen guns that take one: it stands on the rail, its lens clear above the iron sights, the dot in the middle")
 	# --- the lobby says what the router said
 	var link: NetLink = game.net
 	var sorted: bool = NetLink.reachable("203.0.113.7") and NetLink.reachable("172.32.1.1") and not NetLink.reachable("192.168.178.27") and not NetLink.reachable("10.0.0.5") and not NetLink.reachable("172.20.1.1") and not NetLink.reachable("100.72.3.4") and not NetLink.reachable("192.0.0.2") and not NetLink.reachable("")
@@ -8382,7 +8384,12 @@ func _hive(game: Node3D) -> void:
 	for station in map.stations:
 		shops += 1 if str(station.kind) == "shop" else 0
 		benches += 1 if str(station.kind) == "upgrade" and not station.get("outpost", false) else 0
-	expect(map.floors.size() == 5 and map.navigation.size() == 5 and map.rooms.size() >= 50 and shops == 4 and benches == 4 and map.plans().size() == 5 and map.level_label(map.under) == "BAHNHOF" and map.abyss() < HiveMap.UNDER - 5.0, "The map has five floors, more than fifty rooms and four supply points, each with ammunition, first aid, a workbench and a weapon locker (%d rooms, %d doors)" % [map.rooms.size(), map.doors.size()])
+	# (A night with the simulation hall has its footbridge as a sixth floor.)
+	var storeys := 6 if is_instance_valid(map.tokyo) else 5
+	# (The reactor hall of the end and its roof are two more, see BossArena.)
+	if map.boss_arena != null:
+		storeys += 2
+	expect(map.floors.size() == storeys and map.navigation.size() == storeys and map.rooms.size() >= 50 and shops == 4 and benches == 4 and map.plans().size() == storeys and map.level_label(map.under) == "BAHNHOF" and map.abyss() < HiveMap.UNDER - 5.0, "The map has five floors (six with the simulation hall), more than fifty rooms and four supply points, each with ammunition, first aid, a workbench and a weapon locker (%d rooms, %d doors)" % [map.rooms.size(), map.doors.size()])
 	# --- no round comes by itself; the guards of the house come out when the squad nears it
 	var quiet: bool = game.alive_count == 0
 	player.global_position = Vector3(0, 0.05, 50)
@@ -8422,6 +8429,9 @@ func _hive(game: Node3D) -> void:
 			continue
 		var level: int = room.level
 		var from: Vector3 = map.points.landing if level in [map.ground, map.upper] else (map.points.platform if level == map.under else map.points.terminal)
+		# (The corridor to the reactor hall is reached by the freight lift: from where it stops.)
+		if level == map.boss_level:
+			from = map.points.boss_start
 		var middle: Rect2 = room.outer
 		var cell: Vector2i = map._free_near(level, middle.get_center(), 12)
 		if room.has("walk"):
@@ -8587,8 +8597,27 @@ func _hive(game: Node3D) -> void:
 	_wipe_all(game)
 	player.global_position = (map.points.lift as Vector3) + Vector3(0, 0.05, 0)
 	await frames(8)
+	# The freight lift goes down to the last corridor (BossFight), its gate to the reactor hall
+	# and the end boss; when it has fallen and the squad has Nadja, the mission is won.
+	reached.append(hive.stage)
+	_wipe_all(game)
+	player.global_position = (map.points.boss_door as Vector3) + Vector3(0, 0.05, 0)
+	await frames(8)
+	reached.append(hive.stage)
+	var boss_ok: bool = hive.boss.state == "intro"
+	hive.boss._skip_intro()
+	await frames(8)
+	boss_ok = boss_ok and is_instance_valid(game.boss) and game.boss is BossMutant and (game.boss as BossMutant).awake and not map.door_open("boss_gate")
+	if is_instance_valid(game.boss):
+		game.boss.receive_hit(game.boss.max_health * 3.0, Vector3.FORWARD)
+	await frames(8)
+	boss_ok = boss_ok and hive.boss.state == "won"
+	hive.boss.won_left = 0.0
+	await frames(4)
+	hive.boss._finish()
+	await frames(8)
 	var last_word: bool = (not game.radio_queue.is_empty() and str(game.radio_queue[-1][0]) == "m2_end") or hud.radio_label.text.contains("losing your signal")
-	expect(reached == ["generator", "decon", "labs", "hall", "exit"] and game.state == "win" and hive.on and hive.checkpoint == "labs" and last_word and hive.lines.is_empty(), "Power for the sluice, the sluice, the laboratories, the containment hall and the freight lift end the mission, and the last word is Coleman's (%s, state %s)" % [str(reached), game.state])
+	expect(reached == ["generator", "decon", "labs", "hall", "exit", "boss_gang", "boss"] and boss_ok and game.state == "win" and hive.on and hive.checkpoint == "boss_gang" and last_word and hive.lines.is_empty(), "Power for the sluice, the sluice, the laboratories, the containment hall, the freight lift down to the reactor hall and its end boss end the mission, and the last word is Coleman's (%s, state %s)" % [str(reached), game.state])
 	# --- taking it up again at a checkpoint
 	hive.resume_at = "terminal"
 	game.start_run()
@@ -8699,7 +8728,7 @@ func _hive(game: Node3D) -> void:
 	# under a roof. (Nadja's lock is hers alone, and nobody stays in the car of a train.)
 	var snug: Array[String] = []
 	for room in map.rooms:
-		if bool(room.outdoor) or room.get("nav", true) == false or room.get("walls", true) == false or (room.doors as Array).size() != 1 or str(room.id) == "airlock":
+		if bool(room.outdoor) or room.get("nav", true) == false or room.get("walls", true) == false or (room.doors as Array).size() != 1 or str(room.id) == "airlock" or str(room.id) == "boss_lift":
 			continue
 		if not way_rooms.has(str(room.id)):
 			snug.append(str(room.id))
@@ -9644,7 +9673,7 @@ func _hive_rare(game: Node3D) -> void:
 	var sealed_share := float(rare_ones.sealed) / maxf(1.0, drawn.sealed)
 	var a_night := float(int(rare_ones.plain) + int(rare_ones.sealed)) / 600.0
 	var same_again: bool = HiveCaches.deal_rare(7, sites, HiveCaches.deal(7, sites)) == HiveCaches.deal_rare(7, sites, HiveCaches.deal(7, sites))
-	expect(absf(plain_share - HiveCaches.RARE_PLAIN) < 0.03 and absf(sealed_share - HiveCaches.RARE_SEALED) < 0.04 and a_night > 1.0 and a_night < 2.8 and nights_without > 18 and nights_without < 150 and most <= 7 and faults == 0 and with_parts > 20 and with_both > 5 and bare > 5 and lines_seen.size() == HiveCaches.RARE_LINES.size() and same_again, "A found weapon is a rare one now and then: in %.1f %% of the plain caches and %.1f %% of the sealed ones over six hundred nights (%.1f a night, none in %d of them), each with one thing of its own that fits the weapon, attachments only on a weapon that takes them and one for a slot (%d with parts, %d of them with both), and a night is dealt the same again" % [plain_share * 100.0, sealed_share * 100.0, a_night, nights_without, with_parts, with_both])
+	expect(absf(plain_share - HiveCaches.RARE_PLAIN) < 0.03 and absf(sealed_share - HiveCaches.RARE_SEALED) < 0.04 and a_night > 1.0 and a_night < 2.8 and nights_without > 18 and nights_without < 150 and most <= 8 and faults == 0 and with_parts > 20 and with_both > 5 and bare > 5 and lines_seen.size() == HiveCaches.RARE_LINES.size() and same_again, "A found weapon is a rare one now and then: in %.1f %% of the plain caches and %.1f %% of the sealed ones over six hundred nights (%.1f a night, none in %d of them), each with one thing of its own that fits the weapon, attachments only on a weapon that takes them and one for a slot (%d with parts, %d of them with both), and a night is dealt the same again" % [plain_share * 100.0, sealed_share * 100.0, a_night, nights_without, with_parts, with_both])
 	# --- a rare one arrives better than a plain one of its kind, and the workbench comes on top
 	for id in map.areas:
 		map.unlock(str(id), true)
@@ -10537,8 +10566,8 @@ func _areas(game: Node3D) -> void:
 				objectives[str(piece.event.kind)] = true
 	var in_range := true
 	for n in counts:
-		in_range = in_range and int(n) >= 1 and int(n) <= 4
-	expect(bad.is_empty() and in_range and counts.size() == 4 and arrivals.size() == 2 and seams.size() == HiveLayout.SEAMS.size() and kinds.size() == HiveLayout.TRANSITIONS.size() and defs.size() == HiveLayout.pool().size() and objectives.size() == HiveLayout.OBJECTIVES.size(), "200 nights of mission two are laid out from their seeds: the old route of the facility as their spine, chains of areas in some of its seams - each from a freight lift (or the crash in the tunnel) to the twin of a lift (or of the lock), no piece on another, no area twice, every area with an objective that can be done - and the same night again from the same seed; one to four areas (%s), both arrivals, every seam (%s), every transition, area and kind of objective (%d / %d / %d)%s" % [str(counts), str(seams), kinds.size(), defs.size(), objectives.size(), "" if bad.is_empty() else " - " + ", ".join(PackedStringArray(bad.slice(0, 5)))])
+		in_range = in_range and HiveLayout.AREA_COUNTS.has(int(n))
+	expect(bad.is_empty() and in_range and counts.size() == HiveLayout.AREA_COUNTS.size() and arrivals.size() == 2 and seams.size() == HiveLayout.SEAMS.size() and kinds.size() == HiveLayout.TRANSITIONS.size() and defs.size() == HiveLayout.pool().size() and objectives.size() == HiveLayout.OBJECTIVES.size(), "200 nights of mission two are laid out from their seeds: the old route of the facility as their spine, chains of areas in some of its seams - each from a freight lift (or the crash in the tunnel) to the twin of a lift (or of the lock), no piece on another, no area twice, every area with an objective that can be done - and the same night again from the same seed; two to six areas (%s), both arrivals, every seam (%s), every transition, area and kind of objective (%d / %d / %d)%s" % [str(counts), str(seams), kinds.size(), defs.size(), objectives.size(), "" if bad.is_empty() else " - " + ", ".join(PackedStringArray(bad.slice(0, 5)))])
 	var classic := hive.prepare_night()
 	hive.night_fresh = false
 	expect(bool(classic.get("classic", false)) and str(HiveAreale.wanted_from_args().get("key", "")) == "classic", "A check that asks for no night of its own gets the classic one (the facility as it was)")
@@ -11246,7 +11275,7 @@ func _figures(game: Node3D) -> void:
 		await frames(2)
 	player.camera.rotation = Vector3.ZERO
 	room.frozen = false
-	expect(whole and HiveProwler.fed(HiveProwler.ELITE_FROM, false) and not HiveProwler.fed(HiveProwler.ELITE_FROM - 1, false) and HiveProwler.fed(0, true), "The Prowler once it has fed: his model on the Prowler's own skeleton with all 24 clips, a little bigger; it comes so from its visit %d on and always in the hall" % (HiveProwler.ELITE_FROM + 1))
+	expect(whole and not HiveProwler.fed(0, false) and not HiveProwler.fed(9, false) and HiveProwler.fed(0, true), "The mutated Prowler: his model on the Prowler's own skeleton with all 24 clips, a little bigger; it comes so only in the last fight, never on a visit before it")
 	expect(struck, "Rays at the visible skull of both Prowlers - its middle, front, top and sides - strike the head's zone in twelve clips, and a shot there counts in the head (misses: %s)" % ", ".join(PackedStringArray(notes)))
 	# --- the sharks: their pool, and a shark that never leaves its water
 	var made: Array = room.spawn("shark1")

@@ -8,7 +8,7 @@ extends Node
 ## that asks whether there is a story or a last round answers as it does there.
 
 ## What can be put on the field, in the order of the menu: [kind, name on the button].
-const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"], ["prowler_elite", "PROWLER (GEFRESSEN)"]]
+const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"], ["prowler_elite", "PROWLER (GEFRESSEN)"], ["boss", "SUBJEKT NULL (ENDBOSS)"]]
 ## The sharks, which only live in water: a click takes the survivor to the test pool
 ## (SharkPool) and puts them into it. [look, name on the button]
 const SHARKS := [["shark1", "HAI (VERSEUCHT)"], ["shark2", "HAI (BLAU)"]]
@@ -377,7 +377,27 @@ func set_squad(with: bool) -> void:
 ## again on that map, and the survivor stands where one comes into the piece.
 func visit(def: String) -> void:
 	visit_id = def
+	# The simulation hall is no piece of the showcase: the classic night with the hall.
+	# The reactor hall of the end lies on every night's map: the classic one will do.
+	if def == BOSS_VISIT:
+		game.visit_night = HiveLayout.classic()
+		game.start_run(true)
+		return
+	if def == TOKYO_VISIT or def == TOKYO_IZAKAYA or def.begins_with(TOKYO_HOUSE):
+		game.visit_night = HiveLayout.with_tokyo(HiveLayout.classic(), true)
+	elif str(game.visit_night.get("key", "")).ends_with("+tokio"):
+		game.visit_night = {}
 	game.start_run(true)
+
+## The simulation hall of mission two, as a place of the test room's visits (TokyoHall).
+const TOKYO_VISIT := "tokyo"
+## The same hall, but standing before the TOKYO RAMEN IZAKAYA (TokyoHall._tk_izakaya),
+## looking at its front: for looking at new buildings quickly.
+const TOKYO_IZAKAYA := "tokyo_izakaya"
+## Before one of the landmark houses of the hall (TokyoLandmarks.HOUSES): "tokyo:<id>".
+const TOKYO_HOUSE := "tokyo:"
+## The reactor hall with the end boss of mission two (BossArena, BossFight): at its gate.
+const BOSS_VISIT := "boss"
 
 ## Back to the test room on the farm.
 func leave_visit() -> void:
@@ -389,6 +409,17 @@ func visit_spot(def: String) -> Array:
 	var map := game.cabin as HiveMap
 	if map == null:
 		return []
+	if def == TOKYO_VISIT and is_instance_valid(map.tokyo):
+		return [map.points.tokyo_start, 0.0]
+	if def == BOSS_VISIT and map.points.has("boss_vorraum"):
+		return [map.points.boss_vorraum, 0.0]
+	if def.begins_with(TOKYO_HOUSE) and is_instance_valid(map.tokyo) and map.tokyo.landmarks != null:
+		var house := def.trim_prefix(TOKYO_HOUSE)
+		if map.points.has("tokyo_lm_" + house) and map.tokyo.landmarks.views.has(house):
+			return [map.points["tokyo_lm_" + house], float(map.tokyo.landmarks.views[house][1])]
+	if def == TOKYO_IZAKAYA and is_instance_valid(map.tokyo) and map.points.has("tokyo_izakaya"):
+		# (Looking south, at its front.)
+		return [map.points.tokyo_izakaya, PI]
 	for piece: Dictionary in map.night.get("pieces", []):
 		if str(piece.def) != def:
 			continue
@@ -423,7 +454,17 @@ func _place_visit() -> void:
 	player.velocity = Vector3.ZERO
 	player.rotation.y = float(spot[1])
 	player.camera.rotation.x = 0.0
-	var label := str(HiveLayout.info(visit_id).get("name", visit_id))
+	if visit_id == BOSS_VISIT:
+		game.hive.boss.game = game
+		game.hive.boss.start_test()
+		return
+	var label := "Tokio-Simulationshalle"
+	if visit_id.begins_with(TOKYO_HOUSE):
+		label = "Tokio · " + str(TokyoLandmarks.HOUSES.get(visit_id.trim_prefix(TOKYO_HOUSE), {}).get("label", visit_id))
+	elif visit_id == TOKYO_IZAKAYA:
+		label = "Tokio · Ramen Izakaya"
+	elif visit_id != TOKYO_VISIT:
+		label = str(HiveLayout.info(visit_id).get("name", visit_id))
 	game.hud.announce("TESTRAUM  ·  " + label.to_upper(), "Mission 2, Zufallsteil. F1: Menü – auf der Seite WELT geht es zu den anderen Arealen und zurück zum Hof.", 7)
 
 func jump(point: String) -> void:

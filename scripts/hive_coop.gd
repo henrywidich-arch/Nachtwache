@@ -53,7 +53,7 @@ func export_friends() -> Array:
 	var bodies: Array = []
 	for node in game.mates.get_children():
 		if node is Teammate and not node.is_queued_for_deletion():
-			bodies.append([str(node.get_instance_id()), node.look, node.global_position, node.rotation.y, node.velocity, node.down, node.lifted, node.health, node.max_health, game.team.has(node)])
+			bodies.append([str(node.get_instance_id()), node.look, node.global_position, node.rotation.y, node.velocity, node.down, node.lifted, node.health, node.max_health, game.team.has(node), node.visual.weapon_id if node.visual != null else ""])
 	for entry: Dictionary in director.puppets:
 		if is_instance_valid(entry.node) and not entry.node.is_queued_for_deletion():
 			bodies.append([str(entry.node.get_instance_id()), str(entry.look), entry.node.global_position, entry.node.rotation.y, Vector3.ZERO, false, 0.0])
@@ -88,7 +88,7 @@ func export_state() -> Dictionary:
 		"summary": director.summary(), "markers": director.markers(), "done": director.done,
 		"doors": doors, "locked": map.locked, "moods": moods, "alarm": map.alarm_on,
 		"forced": map.forced, "riding": map.riding, "crash": director.run.crash_id(),
-		"friends": bodies, "task": task}
+		"friends": bodies, "task": task, "tokyo": director.tokyo_tasks.export() if director.tokyo_tasks != null else {}}
 
 func adopt(state: Dictionary) -> void:
 	if not game.net.joined or not director.on:
@@ -136,6 +136,8 @@ func adopt(state: Dictionary) -> void:
 		map._show_zones()
 	_adopt_friends(state.friends)
 	_adopt_task(state.task)
+	if director.tokyo_tasks != null and state.has("tokyo"):
+		director.tokyo_tasks.adopt(state.tokyo)
 
 func _adopt_friends(bodies: Array) -> void:
 	var seen := {}
@@ -158,6 +160,9 @@ func _adopt_friends(bodies: Array) -> void:
 		entry.health = float(data[7]) if data.size() > 7 else 100.0
 		entry.maximum = float(data[8]) if data.size() > 8 else 100.0
 		entry.in_team = bool(data[9]) if data.size() > 9 else false
+		# (A companion that took up another weapon at a counter carries it here too.)
+		if data.size() > 10 and str(data[10]) != "" and str(data[10]) != (entry.body as SoldierVisual).weapon_id:
+			(entry.body as SoldierVisual).swap_weapon(str(data[10]))
 		if bool(data[5]) != bool(entry.down):
 			entry.down = bool(data[5])
 			(entry.body as SoldierVisual).ally_outline(bool(entry.down))

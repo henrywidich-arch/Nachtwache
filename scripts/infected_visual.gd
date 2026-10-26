@@ -243,6 +243,51 @@ const KINDS := {
 		# It never lies down: it bursts, like the charger. No fall is allowed (the check of every fall in _arsenal skips such a kind).
 		"deaths": []
 	},
+	# [enemies 2026-10-24] The heavier Striker (Infected.TYPES.striker.rare): a woman in a gas mask and a torn
+	# overall with bags of explosives; her growths burst much harder. Prepared like the figures (30,000 triangles,
+	# 22 bones, maps baked over at 2048).
+	"striker2": {
+		"scene": preload("res://assets/models/striker2.glb"), "source_height": 1.76, "height": 1.76, "set": "zombie",
+		"maps": "res://assets/models/striker2_",
+		"eye_color": Color(1.0, 0.72, 0.15), "eye_height": 1.63, "eye_gap": 0.032, "eye_center": 0.001, "eye_size": 0.009,
+		"metallic": 1.0,
+		"moves": {"run": ["feral"], "walk": ["creep"], "attacks": ["punch", "swipe", "punch_left", "swipe_left", "kick"], "pace": [0.7, 1.75]},
+		# (Falling forward her bags sink 0.18 m into the floor: that fall is left out.)
+		"deaths": ["death_back", "death_back_headshot", "death_bow_forward", "death_drop_back", "death_drop_left", "death_drop_right", "death_dying_back", "death_fall_back", "death_fall_forward", "death_fly_back", "death_from_back", "death_from_front", "death_from_left", "death_from_right", "death_headshot", "death_side", "death_side_left"]
+	},
+	# [enemies 2026-10-24] The Weed infected (Infected.TYPES.mauler.rare): a hazmat suit overgrown with hemp, a
+	# glowing violet eye behind the mask. When it dies it bursts into a green cloud that gets survivors high
+	# (WeedHaze). Prepared like striker2.
+	"weedzombie": {
+		"scene": preload("res://assets/models/weedzombie.glb"), "source_height": 1.84, "height": 1.84, "set": "zombie",
+		"maps": "res://assets/models/weedzombie_",
+		"eye_color": Color(0.75, 0.3, 1.0), "eye_height": 1.643, "eye_gap": 0.026, "eye_center": 0.0025, "eye_size": 0.01,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "run", "feral"], "walk": ["shamble", "drag", "creep"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.6, 1.5]},
+		# (The plants stand far out of the suit: in most falls they would reach 0.2-0.3 m into the floor.)
+		"deaths": ["death_headshot", "death_dying_back", "death_fall_back", "death_drop_left", "death_drop_right"]
+	},
+	# [gnomes 2026-10-26] The garden gnomes of the Weed high (WeedVisions): two Meshy gnomes, rigged like the figures
+	# (16,000 triangles, 22 bones), one metre tall in the file; WeedVisions sizes each one.
+	# Prepared at the start of every night like the others: on the spot the two would hold the game for 0.3 s.
+	"gnome": {
+		"scene": preload("res://assets/models/gnome.glb"), "source_height": 1.0, "height": 1.0, "set": "zombie",
+		"maps": "res://assets/models/gnome_",
+		"eye_color": Color(0.55, 1.0, 0.3), "eye_height": 0.656, "eye_gap": 0.045, "eye_center": 0.0015, "eye_size": 0.008,
+		"metallic": 1.0,
+		"moves": {"run": ["run", "feral"], "walk": ["shamble"], "attacks": ["swipe", "punch", "swipe_left", "punch_left", "kick", "headbutt"], "pace": [0.7, 2.8]},
+		# (Shot in the back of the head his hat would reach 0.17 m into the floor: that fall is left out.)
+		"deaths": ["death_back", "death_forward", "death_side", "death_headshot", "death_from_back", "death_from_front", "death_from_right", "death_drop_back", "death_drop_left", "death_from_left", "death_drop_right", "death_side_left", "death_dying_back", "death_fall_back", "death_fall_forward", "death_fly_back", "death_bow_forward"]
+	},
+	"gnome2": {
+		"scene": preload("res://assets/models/gnome2.glb"), "source_height": 1.0, "height": 1.0, "set": "zombie",
+		"maps": "res://assets/models/gnome2_",
+		"eye_color": Color(0.8, 0.35, 1.0), "eye_height": 0.689, "eye_gap": 0.029, "eye_center": 0.003, "eye_size": 0.008,
+		"metallic": 1.0,
+		"moves": {"run": ["feral", "run"], "walk": ["creep"], "attacks": ["punch", "swipe", "punch_left", "swipe_left", "kick", "headbutt"], "pace": [0.7, 2.8]},
+		# (Three falls take his hat 0.16-0.2 m into the floor or leave his hips too low: they are left out.)
+		"deaths": ["death_forward", "death_side", "death_headshot", "death_from_back", "death_from_front", "death_from_right", "death_drop_back", "death_drop_left", "death_from_left", "death_drop_right", "death_side_left", "death_fall_back", "death_fall_forward", "death_fly_back", "death_bow_forward"]
+	},
 	"stalker": {
 		"scene": preload("res://assets/models/stalker.glb"), "source_height": 2.0, "height": 2.0, "set": "zombie",
 		"maps": "res://assets/models/stalker_",

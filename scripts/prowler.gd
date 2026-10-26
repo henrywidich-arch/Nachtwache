@@ -1584,7 +1584,8 @@ func roar() -> float:
 ## The last fight begins.
 func enrage() -> void:
 	enraged = true
-	(model as ProwlerVisual).set_enraged(true)
+	# (A cue, so that a co-op guest sees it in its rage as well.)
+	cue("rage")
 	roar()
 
 ## It lets go of the squad and runs. `hurt`: because it has taken enough.
@@ -1670,6 +1671,8 @@ func show_cue(action: String, args: Array) -> void:
 			game.sounds.play_at("prowler_strike", mouth())
 		"hide":
 			model.hide()
+		"rage":
+			(model as ProwlerVisual).set_enraged(true)
 		"show":
 			model.show()
 			game.sounds.play_at("prowler_growl", mouth(), 6.0, 0.9)

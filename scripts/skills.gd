@@ -124,7 +124,7 @@ const OWN_BLAST_LEFT := 0.1
 const WISHES := {
 	"sweeper": {"plain": ["p90", "mp7", "shotgun", "hornet"], "heavy": ["autoshotgun", "minigun"]},
 	"hunter": {"plain": ["m14", "badger", "revolver"], "heavy": ["sniper", "svd"]},
-	"breacher": {"plain": ["g36", "wirbel", "shotgun"], "heavy": ["launcher", "mg", "mg2", "minigun"]}
+	"breacher": {"plain": ["g36", "wirbel", "falke", "shotgun"], "heavy": ["launcher", "mg", "mg2", "minigun"]}
 }
 const WISH_CUT := 0.25
 const WISH_ROUNDS := 2

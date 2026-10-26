@@ -13,3 +13,10 @@ Der Anfang des Dateinamens sagt, zu welchem Teil der Nacht ein Stueck gehoert:
 Neue Stuecke: als MP3 oder OGG hier hineinlegen und so benennen, z. B. welle_3.mp3.
 Beim naechsten Start des Spiels sind sie dabei. Gibt es mehrere Stuecke fuer einen
 Teil, wechselt das Spiel ab.
+
+Neu dazu (Oktober 2026):
+  warten_         Hauptmenue und Lobby, Pausen zwischen den Runden, ruhige Strecken in Mission 2
+                  (anfang_ laeuft jetzt nur noch bei der Ankunft vor der ersten Runde)
+  tokio_          wenn in der Tokio-Simulationshalle gekaempft wird
+  rausch_         solange man im Weed-Rausch ist und die Gartenzwerge kommen (nur beim Spieler,
+                  der die Wolke eingeatmet hat)

@@ -6,7 +6,7 @@ extends RefCounted
 ## Up to the station the night is what it always was. Then either the train comes in at a
 ## platform of its own ("ankunft"), or it is derailed in the tunnel ("absturz") and the
 ## squad goes the last stretch on foot and up an emergency stair. From there it goes
-## through two to four AREAS ("Areale") of a pool (POOL; never one twice in a night), each
+## through two to six AREAS ("Areale") of a pool (POOL; never one twice in a night), each
 ## joined to the next by a TRANSITION (TRANSITIONS: a corridor with laboratories at its
 ## sides, one with offices, a lock, a stairwell that changes the level). At the end a lock
 ## like the decontamination lock of the facility ("schleuse_ende") leads into the
@@ -74,8 +74,9 @@ const LIFTS := {
 	"pump": {"room": "pump", "rect": Rect2(55.6, -495.4, 4.4, 4.4), "door": HiveCore.SOUTH, "title": "LASTENAUFZUG  P-1"}
 }
 const LIFT_DEF := "aufzug"
-## How many areas a night has in all its seams together: count -> weight.
-const AREA_COUNTS := {1: 2, 2: 5, 3: 4, 4: 2}
+## How many areas a night has in all its seams together: count -> weight (two to six,
+## mostly three to five; where there are more than seams, a chain gets two in a row).
+const AREA_COUNTS := {2: 1, 3: 4, 4: 5, 5: 3, 6: 2}
 ## The chains of a night lie this far apart (each has floors of its own).
 const CHAIN_SPACING := 700.0
 ## How often a night tries to lay itself out before it falls back to a straight way.
@@ -142,9 +143,33 @@ static func opposite(side: int) -> int:
 static func heading(side: int) -> Vector2:
 	return HiveCore.OUT[side]
 
-## The night of a seed: the old route as its spine, and chains of areas in some of its
-## seams (see SEAMS). On a night with a crash the first chain begins in the tunnel.
+## The simulation hall (TokyoHall) east of the terminal is a room a night may have: so
+## often, decided by the seed with dice of their own (the areas of a seed stay as they
+## were). A night has it if its "tokyo" says so; its key says so as well, so that a map
+## built without it is built anew (HiveMap.layout_key). The night goes to a co-op guest as
+## it is (NetLink.start_match): both have the hall or neither.
+const TOKYO_CHANCE := 0.4
+
+static func tokyo_of(seed_value: int) -> bool:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("hive-tokio-%d" % seed_value)
+	return rng.randf() < TOKYO_CHANCE
+
+## The same night with the hall or without it.
+static func with_tokyo(night: Dictionary, on: bool) -> Dictionary:
+	var out := night.duplicate()
+	var key := str(out.get("key", "classic")).trim_suffix("+tokio")
+	out["tokyo"] = on
+	out["key"] = key + ("+tokio" if on else "")
+	return out
+
+## The night of a seed: the old route as its spine, chains of areas in some of its seams
+## (see SEAMS), and perhaps the simulation hall (tokyo_of).
 static func plan(seed_value: int) -> Dictionary:
+	return with_tokyo(_plan(seed_value), tokyo_of(seed_value))
+
+## On a night with a crash the first chain begins in the tunnel.
+static func _plan(seed_value: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("hive-areale-%d" % seed_value)
 	var crash := rng.randf() < 0.5

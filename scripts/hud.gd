@@ -14,7 +14,7 @@ const INK := Color("0f1317")
 const SYMBOLS = preload("res://scripts/ui_symbols.gd")
 const RADIO_INK := Color("e9dfa3")
 const SHOP_NOTES := {
-	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "wirbel": "Sturmgewehr mit 45-Schuss-Trommel obenauf, die sich bei jedem Schuss weiterdreht – schlägt fast wie die AK zu, schießt aber anderthalbmal so lange", "mp7": "Kompakte MP, 950 Schuss in der Minute, das Magazin im Griff – ohne Kimme und Korn, nimmt Aufsätze", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action: breiter Schrotkegel, der durch zwei Körper weitergeht – für das Rudel in der Tür, wirft Getroffene zurück",
+	"ak": "Kaliber 7,62: schlägt hart zu, tritt kräftig", "p90": "Kompakt und sehr schnell", "ump": "Schwere MP, Kaliber .45", "falke": "Kampfgewehr im Kaliber 7,62, graublau: schlägt von allen Sturmgewehren am härtesten zu, 20 Schuss im Kastenmagazin, tritt kräftig", "wirbel": "Sturmgewehr mit 45-Schuss-Trommel obenauf, die sich bei jedem Schuss weiterdreht – schlägt fast wie die AK zu, schießt aber anderthalbmal so lange", "mp7": "Kompakte MP, 950 Schuss in der Minute, das Magazin im Griff – ohne Kimme und Korn, nimmt Aufsätze", "badger": "Schallgedämpft, präzise, stark", "shotgun": "Pump-Action: breiter Schrotkegel, der durch zwei Körper weitergeht – für das Rudel in der Tür, wirft Getroffene zurück",
 	"pistol": "Leicht, schnell gezogen", "hornet": "Maschinenpistole im Pistolenformat: 1200 Schuss in der Minute, das lange Magazin ist in anderthalb Sekunden leer – stark auf kurze Distanz", "revolver": "Sechs Schuss, jeder ein Hammer", "autoshotgun": "Halbautomatisch, Kastenmagazin: drei Ladungen in der Sekunde, der Schrot geht durch Körper weiter",
 	"sniper": "Zielfernrohr, durchschlägt mehrere Körper", "launcher": "Sechs 40-mm-Granaten in der Trommel, einzeln geladen, zünden beim Aufschlag", "mg": "100 Schuss im Kasten und vier Kästen Reserve", "mg2": "Maschinengewehr im Kaliber 7,62 mit 75-Schuss-Trommel: trifft härter als das MG, tritt kräftiger", "minigun": "Läuft an, dann mäht sie alles nieder",
 	"g36": "750 Schuss in der Minute, genau und ruhig im Rückstoß: das beste Sturmgewehr im Regal", "m14": "Ein Schuss pro Abzug: schlägt hart ein, geht durch einen Körper, sehr genau", "svd": "Halbautomatisches Scharfschützengewehr mit Zielfernrohr",
@@ -127,8 +127,15 @@ var difficulty_label: Label
 var task_label: Label
 var gear_label: Label
 var armor_label: Label
-## The pocket tiles beside the weapon: item -> [the tile, its count].
+## The pocket tiles beside the weapon: item -> [the tile, its count, the glow behind its
+## symbol, the "+1" over it].
 var tiles: Dictionary = {}
+## Something just found lights its tile (gained): item -> seconds left, and how many.
+var gain_left: Dictionary = {}
+var gain_count: Dictionary = {}
+const GAIN_TIME := 2.4
+## The colour a tile lights up in when something of it is found (as on the crate).
+const GAIN_TINTS := {"grenade": Color("ffb35c"), "flashbang": Color("9fc4ff"), "molotov": Color("ff7a2e"), "heal": Color("6dffa8"), "claymore": Color("d8e07a"), "syringe": Color("7fe3b4")}
 ## Which list of the shop is open.
 var shop_tab := "weapons"
 var scope_rect: ColorRect
@@ -454,6 +461,34 @@ func _build_play_ui() -> void:
 		glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		glyph.custom_minimum_size = Vector2(22, 20)
 		tile.add_child(glyph)
+		# What lights up when something of it is found: a glow behind the symbol, a "+1" over it.
+		var burst := TextureRect.new()
+		burst.name = "GainGlow"
+		burst.texture = _gain_glow_texture()
+		burst.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		burst.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		burst.show_behind_parent = true
+		burst.set_anchors_preset(Control.PRESET_CENTER)
+		burst.offset_left = -42
+		burst.offset_right = 42
+		burst.offset_top = -42
+		burst.offset_bottom = 42
+		burst.pivot_offset = Vector2(42, 42)
+		var additive := CanvasItemMaterial.new()
+		additive.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		burst.material = additive
+		burst.modulate = Color(GAIN_TINTS.get(entry[0], AMBER), 0.0)
+		glyph.add_child(burst)
+		var plus := label("+1", 24, GAIN_TINTS.get(entry[0], AMBER), true)
+		plus.name = "GainCount"
+		plus.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		plus.set_anchors_preset(Control.PRESET_CENTER_TOP)
+		plus.offset_left = -30
+		plus.offset_right = 30
+		plus.offset_top = -30
+		plus.offset_bottom = -6
+		plus.hide()
+		glyph.add_child(plus)
 		var count := label("0", 22, IVORY, true)
 		count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tile.add_child(count)
@@ -461,7 +496,7 @@ func _build_play_ui() -> void:
 		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tile.add_child(key)
 		pockets.add_child(tile)
-		tiles[entry[0]] = [tile, count]
+		tiles[entry[0]] = [tile, count, burst, plus]
 	loadout_box = VBoxContainer.new()
 	loadout_box.alignment = BoxContainer.ALIGNMENT_END
 	loadout_box.add_theme_constant_override("separation", -2)
@@ -474,10 +509,13 @@ func _build_play_ui() -> void:
 	interaction_label = label("", 19, AMBER, true)
 	interaction_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_anchored(interaction_label, Control.PRESET_CENTER_BOTTOM, -390, -150, 390, -112)
-	# Under the crosshair: a ring that fills while something is held (the next round, helping somebody up).
+	# Low in the middle, under the prompt: a small ring that fills while something is held or
+	# takes its time (the next round, helping somebody up, a task, a station being held).
 	hold_bar = HoldRing.new()
 	hold_bar.max_value = 1.0
-	_anchored(hold_bar, Control.PRESET_CENTER, -32, 46, 32, 110)
+	hold_bar.radius = 17.0
+	hold_bar.width = 5.0
+	_anchored(hold_bar, Control.PRESET_CENTER_BOTTOM, -24, -106, 24, -58)
 	hold_bar.hide()
 	fps_label = label("", 13, MUTED, true)
 	fps_label.name = "FPSCounter"
@@ -636,6 +674,57 @@ func _draw_reticle() -> void:
 			reticle.draw_line(centre + direction * 4.5 * impulse, centre + direction * 8.5 * impulse, color, 1.6, true)
 		if hit_is_blocked:
 			reticle.draw_line(centre + Vector2(-7, -12), centre + Vector2(7, -12), color, 1.6, true)
+
+## Something was found or taken (a crate, a find): its tile lights up in its colour for a
+## moment, with a glow behind it and "+n" over it, so it is plain what was got.
+func gained(item: String, amount: int = 1) -> void:
+	if not tiles.has(item):
+		return
+	gain_count[item] = (int(gain_count.get(item, 0)) if float(gain_left.get(item, 0.0)) > 0.0 else 0) + amount
+	gain_left[item] = GAIN_TIME
+
+## A tile while it is lit by gained(): bright and flickering at first, then fading.
+func _light_gain(item: String, tile: Array, delta: float) -> void:
+	var left := float(gain_left.get(item, 0.0))
+	var burst := tile[2] as Control
+	var plus := tile[3] as Label
+	if left <= 0.0:
+		if plus.visible:
+			plus.hide()
+			burst.modulate.a = 0.0
+		return
+	left = maxf(0.0, left - delta)
+	gain_left[item] = left
+	var age := GAIN_TIME - left
+	var strength := clampf(left / (GAIN_TIME * 0.45), 0.0, 1.0)
+	var beat := 0.75 + 0.25 * cos(age * 14.0) if age < 0.9 else 1.0
+	var tint: Color = GAIN_TINTS.get(item, AMBER)
+	(tile[0] as Control).visible = true
+	(tile[0] as Control).modulate = Color.WHITE.lerp(tint, strength)
+	burst.modulate = Color(tint, strength * beat)
+	var grow := 1.0 + 0.9 * maxf(0.0, 1.0 - age / 0.35)
+	burst.scale = Vector2(grow, grow)
+	plus.visible = true
+	plus.text = "+%d" % int(gain_count.get(item, 1))
+	plus.modulate.a = strength
+	plus.position.y = -30.0 - minf(age, 1.0) * 10.0
+
+## A soft round glow, white in the middle (tinted by the modulate of what shows it).
+static var _gain_glow: GradientTexture2D
+static func _gain_glow_texture() -> GradientTexture2D:
+	if _gain_glow == null:
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(1, 1, 1, 0.95))
+		ramp.set_color(1, Color(1, 1, 1, 0.0))
+		ramp.add_point(0.45, Color(1, 1, 1, 0.45))
+		_gain_glow = GradientTexture2D.new()
+		_gain_glow.gradient = ramp
+		_gain_glow.fill = GradientTexture2D.FILL_RADIAL
+		_gain_glow.fill_from = Vector2(0.5, 0.5)
+		_gain_glow.fill_to = Vector2(1.0, 0.5)
+		_gain_glow.width = 64
+		_gain_glow.height = 64
+	return _gain_glow
 
 ## The groups of what is carried, one line for each number key: the key, the group, what
 ## of it is in hand (or would come with the key) and how many more the key steps through.
@@ -956,6 +1045,7 @@ func _process(delta: float) -> void:
 		(tile[1] as Label).text = str(carried)
 		var ready: bool = player.throw_kind == str(entry[0])
 		(tile[0] as Control).modulate = Color(1.0, 0.82, 0.45, 1.0) if ready else Color(1, 1, 1, 1.0 if carried > 0 else 0.32)
+		_light_gain(str(entry[0]), tile, delta)
 	var extras: Array[String] = []
 	if player.mask_level > 0:
 		# The gas is hard to see: the mask says when its filter is at work.
@@ -1239,8 +1329,8 @@ func _start_night() -> void:
 	game.start_run()
 
 func _menu_loading(column: VBoxContainer) -> Control:
-	_title(column, "MISSION 2")
-	_text(column, "Die Villa, der Bahnhof und die Anlage werden aufgebaut …")
+	_title(column, "MISSION %d" % game.profile.mission)
+	_text(column, "Appenweier wird aufgebaut …" if game.profile.mission == 3 else "Die Villa, der Bahnhof und die Anlage werden aufgebaut …")
 	return null
 
 func _modifiers_label() -> String:
@@ -1601,9 +1691,19 @@ func _test_world(column: VBoxContainer, room: Sandbox) -> void:
 	for group: Array in [HiveLayout.ARRIVALS, HiveLayout.pool(), HiveLayout.transitions(), [HiveLayout.END]]:
 		for def in group:
 			pieces.append(_chip(str(HiveLayout.info(str(def)).get("name", def)).to_upper(), _test_do.bind("visit", str(def)), room.visit_id == str(def), 270))
+	# (The simulation hall, which a night of mission two may have: TokyoHall.)
+	pieces.append(_chip("TOKIO-SIMULATIONSHALLE", _test_do.bind("visit", Sandbox.TOKYO_VISIT), room.visit_id == Sandbox.TOKYO_VISIT, 270))
+	# (The end of every night: the reactor hall with the end boss, BossArena and BossFight.)
+	pieces.append(_chip("ENDBOSS-RAUM  ·  REAKTORHALLE", _test_do.bind("visit", Sandbox.BOSS_VISIT), room.visit_id == Sandbox.BOSS_VISIT, 270))
 	if room.visit_id != "":
 		pieces.append(_chip("ZURÜCK ZUM HOF", _test_do.bind("farm"), false, 200))
 	_test_row(column, "MISSION 2  ·  AREALE (ALLEIN BEGEHEN)", pieces)
+	# The houses of the simulation hall, each built after a picture: stand before it.
+	var houses: Array = [_chip("RAMEN IZAKAYA", _test_do.bind("visit", Sandbox.TOKYO_IZAKAYA), room.visit_id == Sandbox.TOKYO_IZAKAYA, 230)]
+	for house: String in TokyoLandmarks.HOUSES:
+		var visit_id := Sandbox.TOKYO_HOUSE + house
+		houses.append(_chip(str(TokyoLandmarks.HOUSES[house].label), _test_do.bind("visit", visit_id), room.visit_id == visit_id, 230))
+	_test_row(column, "TOKIO  ·  GEBÄUDE DER SIMULATIONSHALLE", houses)
 	# The open world in the making (scenes/world.tscn): Esc there leads back to the menu.
 	_test_row(column, "NEUE KARTE  ·  IM AUFBAU", [_chip("OFFENE WELT  ·  3 × 3 KM", _open_world, false, 300)])
 	_test_row(column, "AUSPROBIEREN", [
@@ -1791,7 +1891,7 @@ const CLASH_HELP := "Für den Koop brauchen beide denselben Stand: Wer die älte
 func _menu_host(column: VBoxContainer) -> Control:
 	var net: NetLink = game.net
 	_title(column, "KOOP\nHOSTEN")
-	var description := "MISSION %d  ·  %s\nDein Mitspieler wählt „Koop beitreten“ und trägt deine Adresse ein.\n" % [game.profile.mission, "DIE VILLA" if game.profile.mission == 2 else "HOF 19"]
+	var description := "MISSION %d  ·  %s\nDein Mitspieler wählt „Koop beitreten“ und trägt deine Adresse ein.\n" % [game.profile.mission, ["HOF 19", "DIE VILLA", "APPENWEIER"][clampi(game.profile.mission, 1, 3) - 1]]
 	# What the router said when it was asked to pass the port on (NetLink.forward).
 	match net.forward:
 		"open":

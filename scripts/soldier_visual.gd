@@ -162,6 +162,21 @@ const WEAPONS := {
 	"shotgun": {"mount": Vector3.ZERO, "support": Vector3(0, 0.05, -0.43), "muzzle": Vector3(0, 0.105, -0.703)},
 	"ak": {"mount": Vector3.ZERO, "support": Vector3(0, 0.055, -0.325), "muzzle": Vector3(0, 0.0764, -0.6253)}
 }
+## Weapons a companion can take up at a counter of the second mission for its looks alone
+## (Teammate.take_up): the models of the survivor's own weapons (WeaponView.MODELS), held at
+## their pistol grip; the muzzle is found on the model. Each says which of the carried
+## weapons it stands in for - a companion keeps how its own weapon fires and what it does,
+## so it only ever changes to one of the same family - and the sound of its shots. "ahead"
+## moves a model forward in the hand where its stock is too long to end at the shoulder.
+const LOOK_ONLY := {
+	"rifle": {"family": "rifle", "shot": "shot"},
+	"badger": {"family": "rifle", "shot": "badger"},
+	"ak": {"family": "rifle", "shot": "ak"},
+	"m14": {"family": "rifle", "shot": "m14", "model": true},
+	"svd": {"family": "rifle", "shot": "svd", "model": true},
+	"shotgun": {"family": "shotgun", "shot": "shotgun"},
+	"autoshotgun": {"family": "shotgun", "shot": "autoshotgun", "model": true, "ahead": 0.13}
+}
 
 static var sampled: Dictionary = {}
 static var rigs: Dictionary = {}
@@ -247,6 +262,13 @@ var shift: Node3D
 var holder: Node3D
 var gun: Node3D
 var flash: Node3D
+## What it carries (config.weapon until it takes up another one: see swap_weapon), the
+## sound of its shots, and the joint the weapon hangs from.
+var weapon_id := ""
+var shot_sound := ""
+var hand_mount: BoneAttachment3D
+## The muzzles found on models of WeaponView.MODELS (see LOOK_ONLY).
+static var muzzles: Dictionary = {}
 var flash_left := 0.0
 var model_scale := 1.0
 var stride_scale := 1.0
@@ -271,6 +293,8 @@ var flinch_side := 1.0
 func _ready() -> void:
 	set_physics_process(false)
 	config = LOOKS[look]
+	weapon_id = str(config.weapon)
+	shot_sound = str(config.shot)
 	model_scale = float(config.height) / float(config.source_height)
 	# Getting up starts where the body fell; `shift` carries that offset.
 	shift = Node3D.new()
@@ -428,17 +452,20 @@ func _material() -> StandardMaterial3D:
 ## Puts the weapon into the right hand so that, in the firing stance, it runs through
 ## both palms. The stance is the same for every clip, so it is worked out once per look.
 func _build_weapon() -> void:
-	if str(config.weapon) == "":
+	if weapon_id == "":
 		# Empty hands: there is nothing to hold, only a place where a muzzle would be.
 		flash = Node3D.new()
 		flash.hide()
 		add_child(flash)
 		return
-	var data: Dictionary = WEAPONS[config.weapon]
+	var data: Dictionary = _weapon_data(weapon_id)
 	var right_hand: int = rig.arms[0].hand.index
-	var left_hand: int = rig.arms[1].hand.index
 	# Arms are sorted by x; the model faces +Z, so its right hand is the one at -x.
-	if not grips.has(look):
+	var grip_key := look if weapon_id == str(config.weapon) else look + "/" + weapon_id
+	if not grips.has(grip_key):
+		# (Taken up later: the stance is worked out on the clip that runs, which goes on after.)
+		var was := legs.current_animation
+		var at := legs.current_animation_position if was != "" else 0.0
 		legs.play("fire")
 		legs.advance(0.0)
 		var palms: Array[Vector3] = []
@@ -449,33 +476,45 @@ func _build_weapon() -> void:
 			palms.append(wrist.origin + wrist.basis * (rest.basis.inverse() * reach))
 		var along := (palms[1] - palms[0]).normalized()
 		var aimed := Basis.looking_at(along, Vector3.UP) * Basis(Quaternion((data.support as Vector3).normalized(), Vector3.FORWARD))
-		grips[look] = skeleton.get_bone_global_pose(right_hand).affine_inverse() * Transform3D(aimed, palms[0])
+		grips[grip_key] = skeleton.get_bone_global_pose(right_hand).affine_inverse() * Transform3D(aimed, palms[0])
 		legs.stop()
-	var hand := BoneAttachment3D.new()
-	hand.name = "RightHand"
-	skeleton.add_child(hand)
-	hand.bone_idx = right_hand
+		if was != "":
+			legs.play(was)
+			legs.seek(at, true)
+	if hand_mount == null:
+		hand_mount = BoneAttachment3D.new()
+		hand_mount.name = "RightHand"
+		skeleton.add_child(hand_mount)
+		hand_mount.bone_idx = right_hand
 	gun = Node3D.new()
 	gun.name = "Weapon"
-	gun.transform = grips[look]
-	hand.add_child(gun)
+	gun.transform = grips[grip_key]
+	hand_mount.add_child(gun)
 	var model: Node3D
-	if config.weapon == "badger":
+	if weapon_id == "badger":
 		model = BadgerVisual.create()
 		model.scale = Vector3.ONE * WeaponView.BADGER_SCALE
-	elif config.weapon == "shotgun":
+	elif weapon_id == "shotgun":
 		model = WeaponView.shotgun_model(false)
 		(model.find_child("Shell", true, false) as Node3D).hide()
-	elif config.weapon == "ak":
+	elif weapon_id == "ak":
 		model = WeaponView.build_ak_world()
+	elif WeaponView.MODELS.has(weapon_id):
+		model = WeaponView.model_scene(weapon_id, false)
 	else:
 		model = WeaponView.build_rifle_world()
 	model.position = data.mount
 	gun.add_child(model)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		(node as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if not WEAPONS.has(weapon_id) and not muzzles.has(weapon_id):
+		muzzles[weapon_id] = _find_muzzle(model, data.support)
 	flash = Node3D.new()
-	flash.position = data.muzzle
+	if WEAPONS.has(weapon_id):
+		flash.position = data.muzzle
+	else:
+		# (Found on the model, which sits at its mount in the hand.)
+		flash.position = (data.mount as Vector3) + muzzles.get(weapon_id, Vector3(0, 0.08, -0.7))
 	flash.add_child(WeaponView.build_flash(true))
 	var glow := OmniLight3D.new()
 	glow.light_color = Color("ffd39b")
@@ -484,6 +523,49 @@ func _build_weapon() -> void:
 	flash.add_child(glow)
 	flash.hide()
 	gun.add_child(flash)
+
+## The grip-relative points of a weapon: its own (WEAPONS), or for one of WeaponView.MODELS
+## held at its pistol grip, where its support hand goes (the muzzle is found on the model).
+static func _weapon_data(id: String) -> Dictionary:
+	if WEAPONS.has(id):
+		return WEAPONS[id]
+	if WeaponView.MODELS.has(id):
+		var ahead := Vector3(0, 0, -float(LOOK_ONLY.get(id, {}).get("ahead", 0.0)))
+		return {"mount": ahead, "support": (WeaponView.MODELS[id].support as Vector3) + ahead}
+	return WEAPONS["rifle"]
+
+## The front end of a model: the furthest point forward (-Z), at the height of the barrel
+## (that of the support hand, a little above it).
+static func _find_muzzle(model: Node3D, support: Vector3) -> Vector3:
+	var front := 0.0
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		if mesh.mesh == null:
+			continue
+		var box: AABB = mesh.mesh.get_aabb()
+		var to_model: Transform3D = mesh.transform
+		if model.is_inside_tree():
+			to_model = model.global_transform.affine_inverse() * mesh.global_transform
+		for corner in range(8):
+			front = minf(front, (to_model * box.get_endpoint(corner)).z)
+	if front > -0.2:
+		front = -0.7
+	return Vector3(0, support.y + 0.02, front - 0.02)
+
+## Takes up another weapon (for its looks: see LOOK_ONLY). Returns whether it did.
+func swap_weapon(id: String) -> bool:
+	if id == weapon_id or id == "" or weapon_id == "" or not LOOK_ONLY.has(id) or skeleton == null:
+		return false
+	if is_instance_valid(gun):
+		gun.queue_free()
+	elif is_instance_valid(flash):
+		flash.queue_free()
+	gun = null
+	flash = null
+	weapon_id = id
+	shot_sound = str(LOOK_ONLY[id].shot)
+	_build_weapon()
+	return true
 
 func muzzle_position() -> Vector3:
 	return flash.global_position
@@ -552,7 +634,7 @@ func animate(delta: float, velocity: Vector3, aim: bool, shooting: bool) -> void
 		elif aim:
 			above = "aim"
 			above_rate = 1.0
-		if str(config.weapon) == "":
+		if weapon_id == "":
 			above = "move/calm"
 			above_rate = 1.0
 		_play(arms, above, 0.14)

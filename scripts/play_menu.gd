@@ -18,8 +18,9 @@ static func build(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	mission.add_child(hud.label("KARTE", 12, SurvivalHUD.MUTED, true))
 	var cards := HBoxContainer.new()
 	cards.add_theme_constant_override("separation", 16)
-	for number in [1, 2]:
-		cards.add_child(_card(hud, number, selected == number))
+	var numbers := [1, 2, 3]
+	for number in numbers:
+		cards.add_child(_card(hud, number, selected == number, numbers.size()))
 	mission.add_child(cards)
 	hud._gap(mission, 8)
 	var options := GridContainer.new()
@@ -37,7 +38,7 @@ static func build(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var mods: bool = bool(net.lobby_settings.get("modifiers", game.profile.modifiers)) if net.joined else game.profile.modifiers
 	_setting(hud, options, "MODIFIKATOREN", "AN" if mods and selected == 1 else "AUS", func() -> void:
 		hud._toggle_modifiers()
-		net.broadcast_lobby(), selected == 2 or net.joined)
+		net.broadcast_lobby(), selected != 1 or net.joined)
 	var bots: bool = bool(net.lobby_settings.get("bots", game.team_enabled)) if net.joined else game.team_enabled
 	_setting(hud, options, "BOTS", "DABEI" if bots else "OHNE", func() -> void:
 		game.team_enabled = not game.team_enabled
@@ -96,9 +97,19 @@ static func _setting(hud: SurvivalHUD, parent: Control, title: String, value: St
 	field.add_child(button)
 	parent.add_child(field)
 
-static func _card(hud: SurvivalHUD, mission: int, active: bool) -> Control:
+## The picture, name and line under it of each mission's card.
+const CARDS := {
+	1: ["res://assets/menu/hof19.png", "HOF 19", "01  ·  FARMHAUS"],
+	2: ["res://assets/menu/villa.png", "DIE VILLA", "02  ·  FORSCHUNGSANLAGE"],
+	3: ["res://assets/menu/appenweier.png", "APPENWEIER", "03  ·  DORFRAND"]
+}
+
+static func _card(hud: SurvivalHUD, mission: int, active: bool, count: int = 3) -> Control:
 	var card := PanelContainer.new()
-	card.custom_minimum_size = Vector2(338, 224)
+	# (The cards share the width of the column: 692 with a gap of 16 between them.)
+	card.custom_minimum_size = Vector2(floorf((692.0 - 16.0 * (count - 1)) / count), 224)
+	var info: Array = CARDS.get(mission, CARDS[1])
+	var narrow := count > 3
 	var plate := hud._flat(Color("10191e"), SurvivalHUD.AMBER if active else Color("34434b"), 0)
 	plate.content_margin_top = 0
 	plate.content_margin_right = 0
@@ -107,7 +118,7 @@ static func _card(hud: SurvivalHUD, mission: int, active: bool) -> Control:
 	card.add_theme_stylebox_override("panel", plate)
 	var canvas := Control.new()
 	card.add_child(canvas)
-	var path := "res://assets/menu/hof19.png" if mission == 1 else "res://assets/menu/villa.png"
+	var path := str(info[0])
 	var thumbnail: Texture2D
 	if "--ui-review-check" in OS.get_cmdline_user_args() and FileAccess.file_exists(path):
 		# The capture run has just written fresh previews, before the editor can import them.
@@ -133,13 +144,13 @@ static func _card(hud: SurvivalHUD, mission: int, active: bool) -> Control:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	canvas.add_child(shade)
-	var title := hud.label("HOF 19" if mission == 1 else "DIE VILLA", 29, SurvivalHUD.AMBER if active else SurvivalHUD.IVORY, true)
+	var title := hud.label(str(info[1]), 20 if narrow else 26, SurvivalHUD.AMBER if active else SurvivalHUD.IVORY, true)
 	title.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	title.position = Vector2(18, -68)
+	title.position = Vector2(12 if narrow else 18, -64 if narrow else -68)
 	canvas.add_child(title)
-	var sub := hud.label("01  ·  FARMHAUS" if mission == 1 else "02  ·  FORSCHUNGSANLAGE", 12, SurvivalHUD.MUTED, true)
+	var sub := hud.label(str(info[2]), 10 if narrow else 12, SurvivalHUD.MUTED, true)
 	sub.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	sub.position = Vector2(18, -30)
+	sub.position = Vector2(12 if narrow else 18, -30)
 	canvas.add_child(sub)
 	var select := Button.new()
 	select.flat = true

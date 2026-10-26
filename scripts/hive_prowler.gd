@@ -74,15 +74,14 @@ const END_SPITS := 4
 const REACHED := 10.0
 ## Seconds until it comes again after it left a squad that sat somewhere tight.
 const LURK_RETURN := Vector2(10.0, 18.0)
-## It feeds between its visits: from this visit on (counted from 0) it comes as the elite
-## look - bigger, its back all spikes (ProwlerVisual.LOOKS.prowler_elite) - and in the hall
-## it always does. Its numbers stay those of its visit; what makes it worse is the boldness
-## every visit adds anyway.
-const ELITE_FROM := 2
+## The mutated look - bigger, its back all spikes (ProwlerVisual.LOOKS.prowler_elite) -
+## is kept for the last fight, the one in which it can die: on its visits before that it
+## is always the plain animal. Its numbers stay those of its visit; what makes it worse
+## is the boldness every visit adds anyway.
 
-## True if the Prowler of this visit has fed (the last fight counts as fed).
-static func fed(visit: int, for_good: bool) -> bool:
-	return for_good or visit >= ELITE_FROM
+## True if the Prowler of this visit comes mutated: only in the last fight.
+static func fed(_visit: int, for_good: bool) -> bool:
+	return for_good
 
 var director: HiveDirector
 var game: Node3D
@@ -273,6 +272,9 @@ func _arrive(for_good: bool) -> void:
 	beast.net_id = game.next_net_id
 	game.next_net_id += 1
 	game.enemies.add_child(beast)
+	# A co-op guest builds its copy from this message: without it the beast was there for
+	# the host only and attacked the guest unseen.
+	game.net.send_spawn(beast)
 	var to: Vector3 = game.player.global_position - lair
 	beast.model.rotation.y = atan2(-to.x, -to.z)
 	beast.lair = _way_out
@@ -299,8 +301,6 @@ func _arrive(for_good: bool) -> void:
 	else:
 		beast.nerve = nerve_on(visits) * tough
 		stay = stay_on(visits)
-		if fed(visits, false) and not shown_fed:
-			game.hud.announce("ER HAT GEFRESSEN", "Der Prowler ist gewachsen – Stacheln den ganzen Rücken hinab.", 4.0)
 	if fed(visits, for_good):
 		shown_fed = true
 	game.boss = beast

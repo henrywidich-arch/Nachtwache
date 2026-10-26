@@ -12,11 +12,11 @@ const ROUNDS := [
 	{"mauler": 10, "charger": 2, "ripper": 2},
 	{"mauler": 12, "charger": 3, "ripper": 3, "leech": 2, "healer": 1},
 	{"mauler": 13, "charger": 3, "striker": 1, "ripper": 2, "leech": 2, "healer": 1},
-	{"mauler": 15, "charger": 3, "striker": 2, "ripper": 3, "leech": 3, "healer": 1, "crusher": 1},
-	{"mauler": 15, "charger": 4, "striker": 3, "ripper": 4, "leech": 3, "healer": 1},
-	{"mauler": 18, "charger": 4, "striker": 3, "ripper": 4, "leech": 4, "healer": 2, "crusher": 1},
-	{"mauler": 18, "charger": 5, "striker": 4, "ripper": 5, "leech": 4, "healer": 2},
-	{"mauler": 22, "charger": 5, "striker": 4, "ripper": 6, "leech": 5, "healer": 2, "crusher": 1}
+	{"mauler": 15, "charger": 3, "striker": 1, "ripper": 3, "leech": 3, "healer": 1, "crusher": 1},
+	{"mauler": 15, "charger": 4, "striker": 2, "ripper": 4, "leech": 3, "healer": 1},
+	{"mauler": 18, "charger": 4, "striker": 2, "ripper": 4, "leech": 4, "healer": 2, "crusher": 1},
+	{"mauler": 18, "charger": 5, "striker": 2, "ripper": 5, "leech": 4, "healer": 2},
+	{"mauler": 22, "charger": 5, "striker": 2, "ripper": 6, "leech": 5, "healer": 2, "crusher": 1}
 ]
 ## Shares of the window's pixels the 3D picture can be drawn with (menu: 3D).
 const RENDER_SCALES := [1.0, 0.85, 0.7, 0.6, 0.5, 0.4]
@@ -203,6 +203,8 @@ const PRAISE_PAUSE := 35.0
 var interact_blocked_until := 0
 ## Plans the rounds and runs their tasks.
 var mission: MissionDirector
+## The crates of throwables to be found (GrenadeFinds).
+var finds: GrenadeFinds
 ## The thread through the night: clues, the hack module, the lab, Nadja, the way out.
 var story: StoryDirector
 ## Gas that comes and goes in the yard and in the house.
@@ -267,6 +269,8 @@ var sandbox: Sandbox
 var hive: HiveDirector
 var farm: CabinMap
 var hive_map: HiveMap
+## The third map, Appenweier (built the first time it is played; see its script).
+const APPENWEIER := preload("res://scripts/appenweier_map.gd")
 ## The night a visit of the test room is built with ({}: the showcase; the picture run of
 ## the areas sets another with --areas-night=all).
 var visit_night: Dictionary = {}
@@ -338,6 +342,10 @@ func _ready() -> void:
 	mission.name = "Mission"
 	mission.game = self
 	add_child(mission)
+	finds = GrenadeFinds.new()
+	finds.name = "GrenadeFinds"
+	finds.game = self
+	add_child(finds)
 	sandbox = Sandbox.new()
 	sandbox.name = "Sandbox"
 	sandbox.game = self
@@ -867,6 +875,8 @@ func _clear_match_nodes() -> void:
 
 ## The words under the opening banner: what is open tonight.
 func opening_note() -> String:
+	if cabin is APPENWEIER:
+		return APPENWEIER.OPENING
 	if endless:
 		return "Endlosmodus: Runde um Runde, bis der Hof fällt. Das ganze Haus und das Labor stehen offen."
 	if story.enabled:
@@ -907,7 +917,12 @@ func start_run(test: bool = false) -> void:
 	# The test room on the map of the second mission: every area of its random part, to
 	# walk through alone (Sandbox.visit).
 	var visit: bool = sandbox.on and sandbox.visit_id != ""
-	use_map(second or visit, ((HiveLayout.showcase() if visit_night.is_empty() else visit_night) if visit else (net.match_night if second and net.joined else {})))
+	# The third map: Appenweier (scripts/appenweier_map.gd), rounds like on the farm.
+	var third: bool = (net.match_mission == 3 if net.joined else profile.mission == 3) and not test
+	if third:
+		APPENWEIER.enter(self)
+	else:
+		use_map(second or visit, ((HiveLayout.showcase() if visit_night.is_empty() else visit_night) if visit else (net.match_night if second and net.joined else {})))
 	if second:
 		# The staff of the Hive: prepared the first time a night begins there, not before.
 		InfectedVisual.warm_up(self, 2)
@@ -915,7 +930,7 @@ func start_run(test: bool = false) -> void:
 	if not net.joined:
 		level = profile.difficulty
 		mode = "endless" if sandbox.on else ("villa" if second else profile.mode)
-		modifiers_on = profile.modifiers and not sandbox.on and not second
+		modifiers_on = profile.modifiers and not sandbox.on and not second and not third
 	elif second:
 		mode = "villa"
 		modifiers_on = false
@@ -935,6 +950,9 @@ func start_run(test: bool = false) -> void:
 		story.begin()
 		if not net.joined:
 			mission.prepare()
+			# (The tasks of the farm need the farm: in Appenweier every round is a plain one.)
+			if third:
+				mission.plain()
 			plan_operators()
 	for station in cabin.stations:
 		if station.has("label"):
@@ -991,7 +1009,10 @@ func start_run(test: bool = false) -> void:
 		story.play_intro()
 	else:
 		hud.announce("DIE NACHT BRICHT AN", opening_note(), 8)
-		_say("mission_start", 11.0)
+		# (The radio's opening line names the farm: not said in Appenweier.)
+		if not (cabin is APPENWEIER):
+			_say("mission_start", 11.0)
+	finds.night_begins()
 	if not check_mode:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -1032,6 +1053,8 @@ func _aim_shop_camera(view: Dictionary) -> void:
 ## Whether starting the night that is chosen builds the map of the second mission first
 ## (it takes a moment: the menu says so meanwhile).
 func hive_needs_build() -> bool:
+	if profile.mission == 3 and not net.joined:
+		return not APPENWEIER.built(self)
 	if profile.mission != 2 or net.joined:
 		return false
 	var night := hive.prepare_night()
@@ -1133,6 +1156,7 @@ func begin_wave() -> void:
 	phase = "wave"
 	spawn_queue.clear()
 	mission.begin_round(wave)
+	finds.round_begins(wave)
 	_draw_modifier()
 	var roster: Dictionary = roster_of(wave)
 	if modifier == "pack":
@@ -1341,6 +1365,8 @@ func spawn_enemy(forced_kind: String = "", visual: String = "") -> Infected:
 ## The right kind of body for a kind of enemy: an operator, a soldier, or one of the infected.
 static func body_for(kind: String) -> Infected:
 	var spec: Dictionary = Infected.TYPES[kind]
+	if spec.get("boss", false):
+		return BossMutant.new()
 	if spec.get("operator", false):
 		return Operator.new()
 	if spec.get("prowler", false):
@@ -1380,7 +1406,15 @@ func spawn_stalker(at: Vector3, mode: String, prey: Node3D) -> Infected:
 
 ## The living survivor closest to `from`. The one already being chased is preferred a
 ## little, and a survivor on another storey counts as further away.
+## Takes out the survivors whose bodies are gone (a co-op partner who left, a body freed
+## with the others). Their entries would stop every loop over the typed list with an error.
+func prune_survivors() -> void:
+	for i in range(survivors.size() - 1, -1, -1):
+		if not is_instance_valid(survivors[i]):
+			survivors.remove_at(i)
+
 func nearest_survivor(from: Vector3, current: Node3D = null) -> Node3D:
+	prune_survivors()
 	var best: Node3D = player
 	var best_gap := INF
 	for candidate in survivors:
@@ -1546,6 +1580,7 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 	# ("boomer": the second exploding infected - no bang, something wet and heavy.)
 	sounds.play_at("pop" if style == "growth" else ("boomer_burst" if style == "boomer" else "explosion"), center)
 	net.send_explosion(center, radius, player_damage, style)
+	prune_survivors()
 	for survivor in survivors:
 		# A blast without harm for the survivors (a Charger that burnt out) leaves them be.
 		if player_damage <= 0.0 or not is_instance_valid(survivor) or not survivor.takes_local_damage() or not survivor.is_targetable():
@@ -1560,6 +1595,8 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 			if survivor == player and style == "growth" and not shielded:
 				hud.flash(Color(1.0, 0.97, 0.82), 0.3 + 0.6 * falloff)
 	player.shake_from(center, 1.0, radius * 4.0)
+	# The gnomes of the Weed high live on this machine only: every machine's blasts reach its own.
+	WeedVisions.blast(self, center, radius, infected_damage)
 	if net.joined:
 		# The host works out what the blast does to the infected.
 		return
@@ -1766,10 +1803,14 @@ func _update_pickups(delta: float) -> void:
 	for crate in pickups.get_children():
 		var age: float = crate.get_meta("age") + delta
 		crate.set_meta("age", age)
-		if age > 30.0:
+		# (A crate of throwables lies until it is found: GrenadeFinds.)
+		if age > 30.0 and crate.get_meta("kind") != GrenadeFinds.KIND:
 			crate.queue_free()
 		elif Vector2(crate.position.x - player.position.x, crate.position.z - player.position.z).length() < 1.2 and absf(player.position.y - float(crate.get_meta("floor"))) < 1.5:
-			if crate.get_meta("kind") == "ammo":
+			if crate.get_meta("kind") == GrenadeFinds.KIND:
+				if not finds.take(player, crate):
+					continue
+			elif crate.get_meta("kind") == "ammo":
 				if player.reserve >= player.max_reserve():
 					continue
 				player.reserve = mini(player.max_reserve(), player.reserve + player.magazine_size())

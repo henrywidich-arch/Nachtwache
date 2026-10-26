@@ -34,8 +34,9 @@ const bonus = {};
 for (const part of ((args.find(a => a.startsWith('--bonus=')) || '--bonus=').slice(8)).split(',').filter(x => x)) bonus[part.split(':')[0]] = Number(part.split(':')[1]);
 const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
-// (Since 2026-10-10 the squad, Nadja and Coleman speak with voices the user made himself.)
-const VOICES = { coleman: 'ColemanNEW', nadja: 'Nadja', viper: 'Viper', scorpion: 'Scorpion', raven: 'Raven', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura', phantom: 'Phantom', havoc: 'Havoc', ghost: 'Ghost' };
+// (Since 2026-10-10 the squad, Nadja and Coleman speak with voices the user made himself;
+// since 2026-10-24 Nadja speaks with the voice "Nadja2", recorded with Eleven v4.)
+const VOICES = { coleman: 'ColemanNEW', nadja: 'Nadja2', viper: 'Viper', scorpion: 'Scorpion', raven: 'Raven', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura', phantom: 'Phantom', havoc: 'Havoc', ghost: 'Ghost' };
 // The three later voices of the C.R.U. are meant to sound hard and without feeling. Each is
 // pitched down a little (semitones) and put through a helmet set: a narrow band, pressed
 // flat, the roughest of them with a little grit.
@@ -53,7 +54,7 @@ function hard(speaker) {
 // lab's in the first mission, the facility's in the second (m2_n_lock, m2_n_cru,
 // m2_n_tanks, m2_n_work, m2_n_taunt).
 const IN_PERSON = ['nadja_freed', 'nadja_follow', 'nadja_pain', 'nadja_board', 'nadja_channel', 'nadja_static',
-  'm2_n_house', 'm2_n_mirror', 'm2_n_open', 'm2_n_wait', 'm2_n_sorry', 'm2_n_home'];
+  'm2_n_house', 'm2_n_mirror', 'm2_n_open', 'm2_n_wait', 'm2_n_sorry', 'm2_n_home', 'm2_n_caught'];
 // (The Coleman before this one was slowed down a touch, calm and unhurried even when
 // things go wrong. The voice of 2026-10-10 speaks at that pace by itself - slowed down
 // as well its lines came out 5 % longer than the old ones - so nothing is stretched now.)

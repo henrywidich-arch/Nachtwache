@@ -9,6 +9,9 @@ static func material(color: Color, metal: float = 0.0) -> StandardMaterial3D:
 	return paint
 
 static func build(kind: String) -> Node3D:
+	# (A crate of throwables is a model of its own: see GrenadeFinds.)
+	if kind == GrenadeFinds.KIND:
+		return GrenadeFinds.build_view()
 	var root := Node3D.new()
 	var batch := MeshBatch.new()
 	var fabric := material(Color("733d36") if kind == "health" else Color("454e3c"))

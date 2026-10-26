@@ -27,6 +27,15 @@ var upper := 0
 var under := 0
 var deep := 0
 var deck := 0
+## The simulation hall east of the terminal (TokyoHall), and the floor of its footbridge.
+## Its middle: the lock in its west wall lies on the line of the passage from the terminal.
+const TOKYO_AT := Vector3(142.0, UNDER, -333.4)
+var tokyo_deck := 0
+var tokyo: TokyoHall
+## The reactor hall at the end of the night, its floor and that of its roof (BossArena).
+var boss_arena: BossArena
+var boss_level := -1
+var boss_roof_level := -1
 ## What passes the windows of the car while the train runs (see ride).
 var ride_lamps: Array[MeshInstance3D] = []
 var riding := false
@@ -82,16 +91,26 @@ func _ready() -> void:
 	var began := Time.get_ticks_msec()
 	if night.is_empty():
 		night = HiveAreale.wanted_from_args()
+		if "--tokyo" in OS.get_cmdline_user_args():
+			night = HiveLayout.with_tokyo(night, true)
 	layout_key = str(night.get("key", "classic"))
+	# (The simulation hall only on a night that has it: HiveLayout.tokyo_of.)
+	var hall := bool(night.get("tokyo", false))
 	_begin_build()
 	_build_environment()
 	_build_styles()
 	ground = _floor("ground", "", 0.0, Rect2(-72, -34, 144, 130))
 	upper = _floor("gallery", "GALERIE", STOREY_VILLA, Rect2(-8, 7, 16, 16))
 	under = _floor("station", "BAHNHOF", UNDER, Rect2(-66, -76, 132, 52))
-	deep = _floor("facility", "ANLAGE", UNDER, Rect2(-60, -644, 132, 340))
+	# (With the simulation hall the facility's floor reaches east over it: one grid with the
+	# terminal. Its footbridge is a floor of its own.)
+	var facility := Rect2(-60, -644, 132, 340)
+	deep = _floor("facility", "ANLAGE", UNDER, facility.merge(TokyoHall.plan_of(TOKYO_AT)) if hall else facility)
 	deck = _floor("deck", "GALERIE", DECK, Rect2(-60, -644, 132, 340))
+	tokyo_deck = _floor("tokyo_deck", "BRÜCKE", UNDER + TokyoHall.TK_DECK, TokyoHall.deck_plan(TOKYO_AT)) if hall else -1
 	HiveAreale.declare_floors(self)
+	boss_level = _floor("boss", "REAKTOR  U9", BossArena.AT.y, BossArena.plan())
+	boss_roof_level = _floor("boss_roof", "DACH", BossArena.ROOF.y, BossArena.roof_plan())
 	areas = ["descent", "station", "nadja", "admin", "cafe", "atrium", "decon", "research", "hall"]
 	var shop_sign := Label3D.new()
 	shop_sign.name = "WeaponShopLabel"
@@ -99,7 +118,7 @@ func _ready() -> void:
 	plan = PLAN_SCRIPT.new()
 	add_child(plan)
 	build_times["setup"] = Time.get_ticks_msec() - began
-	for part in [_lay_grounds, _lay_villa, _lay_descent, _lay_station, _lay_terminal, _lay_admin, _lay_canteen, _lay_atrium, _lay_research, _lay_entries]:
+	for part in [_lay_grounds, _lay_villa, _lay_descent, _lay_station, _lay_terminal, _lay_tokyo, _lay_admin, _lay_canteen, _lay_atrium, _lay_research, _lay_entries]:
 		var from := Time.get_ticks_msec()
 		(part as Callable).call()
 		build_times[str((part as Callable).get_method())] = Time.get_ticks_msec() - from
@@ -107,6 +126,8 @@ func _ready() -> void:
 	var laid := Time.get_ticks_msec()
 	_lay_seam_lifts()
 	HiveAreale.lay(self)
+	# The end of every night: the last corridor, the reactor hall, the roof (BossArena).
+	boss_arena = BossArena.build(self, boss_level, boss_roof_level)
 	build_times["areale"] = Time.get_ticks_msec() - laid
 	# The furniture of the weapon caches, in the rooms off the way (see HiveCaches).
 	HiveCaches.furnish(self)
@@ -2598,6 +2619,42 @@ func _lay_terminal() -> void:
 		add_child(bar)
 		ride_lamps.append(bar)
 	_end_zone()
+
+# ---------------------------------------------------------------- the simulation hall
+
+## East of the terminal: a passage from its east wall (between the second freight lift and
+## the duct) to the lock in the west wall of the simulation hall (TokyoHall). Nothing has to
+## be opened for it: whoever has come in by train can walk over. The hall is only drawn
+## from the passage on (TokyoHall._process). Only on a night that has the hall (its
+## "tokyo", see HiveLayout.tokyo_of): otherwise nothing of it is built and the terminal's
+## east wall stays whole.
+func _lay_tokyo() -> void:
+	if not bool(night.get("tokyo", false)):
+		return
+	var z := TOKYO_AT.z
+	var lock_x := TOKYO_AT.x - TokyoHall.TK_HALL - 1.2
+	_own_dice(71031)
+	_begin_zone("tokyo_gang", "cold", ["terminal"])
+	area = ""
+	_room("tokyo_gang", deep, Rect2(40.0, z - 1.8, lock_x - 40.0, 3.6), 3.2, "panel", {"look": {"stripe": Color("c9a227")}})
+	_door("terminal", "tokyo_gang", z, 2.2, {"kind": "frame", "height": 2.5})
+	_chunk("Kit", false)
+	# Signs: over the way in, in the terminal, and along the passage.
+	_part("plate", Vector3(39.75, UNDER + 3.1, z), Vector3(0.12, 0.6, 3.4), Color("15181a"))
+	var sign := lettering("SIMULATIONSHALLE B  ·  TOKIO  →", Vector3(39.68, UNDER + 3.1, z), 40, Color("9fe8ff"))
+	sign.rotation.y = -PI / 2
+	sign.outline_size = 0
+	_glow_box(Vector3(39.7, UNDER + 2.62, z), Vector3(0.03, 0.05, 2.6), Color("ffb84d"), 3.0)
+	for k in range(1, int((lock_x - 40.0) / 6.0)):
+		var x := 40.0 + k * 6.0
+		_glow_box(Vector3(x, UNDER + 0.02, z), Vector3(1.6, 0.02, 0.12), Color("2ff3ff"), 3.0, Basis(Vector3.UP, 0.0))
+		_glow_box(Vector3(x + 0.95, UNDER + 0.02, z - 0.35), Vector3(0.5, 0.02, 0.1), Color("2ff3ff"), 3.0, Basis(Vector3.UP, 0.6))
+		_glow_box(Vector3(x + 0.95, UNDER + 0.02, z + 0.35), Vector3(0.5, 0.02, 0.1), Color("2ff3ff"), 3.0, Basis(Vector3.UP, -0.6))
+	_shared_dice()
+	_end_zone()
+	tokyo = TokyoHall.build(self, TOKYO_AT, deep, tokyo_deck, true)
+	_zones_see("tokyo_gang", TokyoHall.ZONE)
+	_door("tokyo_gang", "tk_streets", z, 2.6, {"kind": "slide", "name": "tokyo_lock"})
 
 # ---------------------------------------------------------------- offices and corridors
 
@@ -6134,6 +6191,10 @@ func _after_build() -> void:
 	}
 	facings = {"landing": 0.0, "landing_out": 0.0}
 	points.merge(areal_points, true)
+	if tokyo != null:
+		points.merge(tokyo.places, true)
+	if boss_arena != null:
+		points.merge(boss_arena.places, true)
 	facings.merge(areal_facings, true)
 	# The tunnels of the rides of the random part are only there while the train runs.
 	for id in areal_rides:
@@ -6150,3 +6211,7 @@ func _after_build() -> void:
 		Vector3(-66, 0, 0.5), Vector3(-66, 0, 40.5), Vector3(66, 0, 4.5), Vector3(66, 0, 52.5), Vector3(-35.5, 0, 91.5), Vector3(30.5, 0, 91.5)
 	]
 	shop_view = {"position": Vector3(-9.2, 1.55, 73.4), "target": Vector3(-13.5, 1.2, 73.4)}
+
+## The gas of the reactor hall's nozzles (BossArena) is the only gas of this map.
+func is_toxic(pos: Vector3) -> bool:
+	return boss_arena != null and boss_arena.toxic_at(pos)

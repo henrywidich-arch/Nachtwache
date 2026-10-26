@@ -5,6 +5,9 @@ extends Node3D
 
 const MAX_DECALS := 190
 const GROWTH_RADIUS := 3.1
+## What a growth of the heavier Striker does: reach and harm to the survivors.
+const HEAVY_GROWTH_RADIUS := 4.4
+const HEAVY_GROWTH_DAMAGE := 42.0
 const ACID_RADIUS := 4.3
 const ACID_SECONDS := 9.0
 const ACID_DENSITY := 0.42
@@ -1382,7 +1385,9 @@ func boomer_burst(center: Vector3) -> void:
 ## only look the part: the host of a co-op match decides when and where they go off.
 ## `spent` ones come from a Striker that burnt (the sweeper's ability): charred, and they
 ## only fizzle out.
-func drop_growths(center: Vector3, count: int, cosmetic: bool = false, spent: bool = false) -> void:
+## `heavy` ones come from the heavier Striker (striker2): bigger, angrier red, and they
+## burst much harder (HEAVY_GROWTH_*).
+func drop_growths(center: Vector3, count: int, cosmetic: bool = false, spent: bool = false, heavy: bool = false) -> void:
 	for i in range(count):
 		var orb := RigidBody3D.new()
 		orb.collision_layer = 0
@@ -1399,11 +1404,15 @@ func drop_growths(center: Vector3, count: int, cosmetic: bool = false, spent: bo
 		skin.albedo_color = Color("3a2a26") if spent else Color("c98a86")
 		skin.roughness = 0.9 if spent else 0.35
 		skin.emission_enabled = true
-		skin.emission = Color(1.0, 0.35, 0.08) if spent else Color(1.0, 0.72, 0.2)
+		skin.emission = Color(1.0, 0.35, 0.08) if spent else (Color(1.0, 0.28, 0.08) if heavy else Color(1.0, 0.72, 0.2))
+		if heavy and not spent:
+			skin.albedo_color = Color("b2453a")
 		skin.emission_energy_multiplier = 0.3
 		var body := MeshInstance3D.new()
 		body.mesh = growth_mesh
 		body.material_override = skin
+		if heavy:
+			body.scale = Vector3.ONE * 1.45
 		orb.add_child(body)
 		var glow := OmniLight3D.new()
 		glow.light_color = Color(1.0, 0.75, 0.3)
@@ -1414,15 +1423,18 @@ func drop_growths(center: Vector3, count: int, cosmetic: bool = false, spent: bo
 		var angle := randf() * TAU
 		orb.global_position = center + Vector3(cos(angle), 0, sin(angle)) * 0.2
 		orb.linear_velocity = Vector3(cos(angle) * randf_range(1.2, 2.6), randf_range(1.5, 3.0), sin(angle) * randf_range(1.2, 2.6))
-		growths.append({"body": orb, "material": skin, "light": glow, "fuse": randf_range(1.7, 2.4) + i * 0.22, "age": 0.0, "cosmetic": cosmetic, "spent": spent})
+		if heavy:
+			glow.light_color = Color(1.0, 0.4, 0.15)
+		growths.append({"body": orb, "material": skin, "light": glow, "fuse": randf_range(1.7, 2.4) + i * 0.22, "age": 0.0, "cosmetic": cosmetic, "spent": spent, "heavy": heavy})
 	game.sounds.play_at("squish", center)
 
 ## Removes the cosmetic growth closest to a blast the host reported.
-func pop_growth_near(at: Vector3) -> void:
+## (`heavy`: a blast of the heavier Striker's growths, which looks like a Charger's.)
+func pop_growth_near(at: Vector3, heavy: bool = false) -> void:
 	var best := -1
-	var best_gap := 6.0
+	var best_gap := 1.5 if heavy else 6.0
 	for i in range(growths.size()):
-		if not growths[i].cosmetic:
+		if not growths[i].cosmetic or bool(growths[i].get("heavy", false)) != heavy:
 			continue
 		var gap: float = (growths[i].body as RigidBody3D).global_position.distance_to(at)
 		if gap < best_gap:
@@ -1683,7 +1695,7 @@ func _physics_process(delta: float) -> void:
 			continue
 		(growth.material as StandardMaterial3D).emission_energy_multiplier = 0.15 + pulse * (0.45 + urgency * 1.5)
 		(growth.light as OmniLight3D).light_energy = 0.3 + pulse * (0.6 + urgency * 1.6)
-		orb.get_child(1).scale = Vector3.ONE * (1.0 + urgency * 0.35 + pulse * 0.08)
+		orb.get_child(1).scale = Vector3.ONE * (1.0 + urgency * 0.35 + pulse * 0.08) * (1.45 if growth.get("heavy", false) else 1.0)
 		if growth.cosmetic:
 			# Left over when the host's blast was never reported: fade out quietly.
 			if growth.fuse <= -1.5:
@@ -1693,7 +1705,10 @@ func _physics_process(delta: float) -> void:
 			var at := orb.global_position
 			growths.remove_at(i)
 			orb.queue_free()
-			game.explode(at, GROWTH_RADIUS, 28.0, 40.0, "growth")
+			if growth.get("heavy", false):
+				game.explode(at, HEAVY_GROWTH_RADIUS, HEAVY_GROWTH_DAMAGE, 70.0, "charger")
+			else:
+				game.explode(at, GROWTH_RADIUS, 28.0, 40.0, "growth")
 	acid_tick -= delta
 	for i in range(clouds.size() - 1, -1, -1):
 		var cloud: Dictionary = clouds[i]

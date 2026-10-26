@@ -85,7 +85,7 @@ const LONE := 0.5
 ## How often a kind that the dice chose really comes; a Mauler comes in its place the
 ## other times. (The Striker stands in nearly every list above and left its growths
 ## everywhere; the Charger only a little too often.)
-const THIN := {"striker": 0.65, "charger": 0.88}
+const THIN := {"striker": 0.35, "charger": 0.88}
 ## How many may be alive at once in this mission whatever a stage and a level say (the
 ## squad's guns and the answer to camping come on top): what the frame rate was measured
 ## with.
@@ -113,7 +113,9 @@ const STAFF_PLACES := {
 	"generator": ["hive_lab2", "hive_worker"],
 	"decon": ["hive_lab2", "hive_lab", "hive_nurse"]
 }
-const HOLD_STATION := 80.0
+## The seconds the train takes to come up with all three fuses of the platform on (see
+## "the fuses": with fewer it takes longer). It was 80 with nothing to do meanwhile.
+const HOLD_STATION := 45.0
 const HOLD_CAFE := 70.0
 const HOLD_HALL := 60.0
 const KEYPAD_SECONDS := 20.0
@@ -129,6 +131,39 @@ const STALE := 45.0
 const VOICE_REACH := 11.0
 ## The rooms of the research wing that stand full of what Nadja has made.
 const LAB_ROOMS := ["lab_corridor", "lab_a", "lab_b", "lab_c", "quarantine", "cryo", "flooded"]
+## The emergency power of the station: three fuse boxes on pillars of the platform (x, z of
+## the box, and which way along z it faces). While Nadja leaves and the operators talk the
+## squad can switch them on; the train comes up the faster the more of them are on
+## (FUSE_PACE by how many: all three is HOLD_STATION). While it comes up one of them trips
+## twice (FUSE_TRIPS: the share of the way at which it may) and has to be switched on again.
+## Every switch is loud: a few infected come to see (FUSE_DRAW).
+const FUSES := [[-16.0, -48.52, 1.0], [-8.0, -41.48, -1.0], [24.0, -48.52, 1.0]]
+const FUSE_PACE := [0.2, 0.3, 0.5, 1.0]
+const FUSE_TRIPS := [[0.3, 0.6], [0.65, 0.88]]
+const FUSE_REACH := 2.2
+const FUSE_DRAW := [["mauler", "striker"], ["mauler", "mauler", "ripper"]]
+## The stages in which the fuses are there to be switched.
+const FUSE_STAGES := ["nadja", "deal", "power", "hold"]
+## Quiet at a counter: where a supply point, a workbench or an equipment station stands,
+## nobody new comes while one of the humans stands within SAFE_REACH of it - or anywhere
+## in its room, if that room is a small one (SAFE_ROOM square metres at the most). While a
+## place has to be held they come all the same, only slower (SAFE_HOLD: the share of
+## their pace). Whoever is already on his way still comes; a sealed cache that is being
+## opened is still heard.
+const SAFE_REACH := 6.0
+const SAFE_ROOM := 160.0
+const SAFE_HOLD := 0.4
+## The squad has no money, but now and then one of it goes over to a counter or an opened
+## cache nearby and comes back with another weapon - for its looks (Teammate.take_up):
+## how far it goes for it, the share of the counters it goes to, and what it may come back
+## with by the family of the weapon it started with (later in the night the better ones
+## come more often: the second list is added from the terminal on).
+const SHOP_REACH := 16.0
+const SHOP_CHANCE := 0.55
+const SHOP_GUNS := {
+	"rifle": [["rifle", "ak", "badger", "m14"], ["m14", "ak", "svd"]],
+	"shotgun": [["shotgun", "autoshotgun"], ["autoshotgun"]]
+}
 ## What is said at the station when it is settled who goes on with the survivor, for each
 ## choice of company (Profile.COMPANIES), in its order. Whoever stays or goes says why.
 ## Each: how it is said - "face" in person, "talk" by somebody of the squad, "line" over
@@ -223,15 +258,34 @@ var board_time := 0.0
 ## stages, what each is called, who keeps coming, where a defeat is taken up again (the
 ## classic ones - ORDER, STAGES, PRESSURE, CHECKPOINTS - when there is no random part).
 var run: HiveAreaRun
+## The end after the containment hall: the last corridor and the reactor hall (BossFight).
+var boss: BossFight
 var night: Dictionary = {}
 var night_fresh := false
 ## Which night comes next: -2 the director decides (a new seed for every night in play,
 ## the classic night in a check), -1 the classic night, -3 the showcase, a seed otherwise.
 var seed_wanted := -2
+## Whether the night has the simulation hall: -1 as its seed says (HiveLayout.tokyo_of; the
+## classic night never), 0 never, 1 always. The start options --tokyo and --no-tokyo set it.
+var tokyo_wanted := -1
+## The objectives of the simulation hall in a night that has it (TokyoTasks), else null.
+var tokyo_tasks: TokyoTasks
 var order: Array = ORDER
 var stages: Dictionary = STAGES
 var pressure: Dictionary = PRESSURE
 var checkpoints: Dictionary = CHECKPOINTS
+## The fuse boxes of the station as they are seen (built on the host and on a guest alike,
+## their state read from `done`): {node, lamp, at, stand}.
+var fuse_boxes: Array = []
+## The counters that make a quiet place: {pos, room} (see SAFE_REACH), and whether one of
+## the humans stands at one right now (looked at a few times a second).
+var safe_spots: Array = []
+var safe_now := false
+var safe_left := 0.0
+## Which companion has been to which counter tonight ("look@place"), and when it is next
+## looked whether one goes.
+var shopped: Dictionary = {}
+var shop_left := 0.0
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -252,6 +306,10 @@ func _ready() -> void:
 	run = HiveAreaRun.new()
 	run.director = self
 	add_child(run)
+	boss = BossFight.new()
+	boss.director = self
+	boss.game = game
+	add_child(boss)
 
 ## The night the next start builds its map for (Game.start_run asks before the map is put
 ## into the world): the same one again when a defeat is taken up at a checkpoint, a new one
@@ -269,6 +327,13 @@ func prepare_night() -> Dictionary:
 			night = HiveLayout.showcase()
 		else:
 			night = HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted)
+		var hall := tokyo_wanted
+		if "--tokyo" in OS.get_cmdline_user_args():
+			hall = 1
+		elif "--no-tokyo" in OS.get_cmdline_user_args():
+			hall = 0
+		if hall >= 0:
+			night = HiveLayout.with_tokyo(night, hall == 1)
 	night_fresh = true
 	return night
 
@@ -319,7 +384,14 @@ func begin() -> void:
 		company = Profile.known_company(game.net.match_company)
 	pair = Profile.pair_of(company)
 	night_fresh = false
+	_clear_fuses()
+	_find_safe_spots()
+	shopped.clear()
+	shop_left = 20.0
 	run.setup()
+	# (The stages of the end, after the containment hall: see BossFight.)
+	boss.game = game
+	boss.extend_night()
 	var from := resume_at if checkpoints.has(resume_at) else "landing"
 	resume_at = ""
 	checkpoint = from
@@ -328,6 +400,13 @@ func begin() -> void:
 	caches.begin(from)
 	# (The throwables to be found: dealt from the same night as the caches.)
 	finds.begin(caches.night ^ 0x6E4A)
+	# (The simulation hall's side job, in a night that has the hall.)
+	if tokyo_tasks != null:
+		tokyo_tasks.clear()
+	tokyo_tasks = null
+	if is_instance_valid(map.tokyo):
+		tokyo_tasks = TokyoTasks.new(self, map.tokyo)
+		tokyo_tasks.setup()
 	var start: Dictionary = checkpoints[from]
 	map.lock_all()
 	for id in start.open:
@@ -369,9 +448,16 @@ func end() -> void:
 	on = false
 	coop.clear()
 	prowl.end()
+	boss.end()
 	caches.end()
 	finds.end()
+	if tokyo_tasks != null:
+		tokyo_tasks.clear()
+	tokyo_tasks = null
 	run.clear_things()
+	_clear_fuses()
+	safe_spots.clear()
+	safe_now = false
 	_end_intro()
 	for puppet in puppets:
 		if is_instance_valid(puppet.node):
@@ -610,13 +696,17 @@ func _enter(id: String) -> void:
 			_post(["mauler", "mauler", "striker", "mauler", "mauler", "ripper", "mauler", "charger"], [middle + Vector3(-14, 0, -5), middle + Vector3(12, 0, -6), middle + Vector3(-6, 0, -8), middle + Vector3(18, 0, -3), middle + Vector3(-24, 0, -2), middle + Vector3(27, 0, -7), middle + Vector3(3, 0, -3), middle + Vector3(-30, 0, -8)], true)
 		"nadja":
 			_nadja_leaves()
+			_fuses_begin()
 		"deal":
 			_deal()
+			_fuses_begin()
+			if _fuses_on() < FUSES.size():
+				goal = "Sicherungen am Bahnsteig einschalten, während die Operatoren reden"
 		"power":
 			_use("booth", "booth", "[E] Zug hochfahren")
 		"hold":
 			progress = 0.0
-			progress_text = "ZUG FÄHRT HOCH"
+			progress_text = _hold_text()
 			game.round_called = false
 			# Whoever goes on with the survivor is at his side when the infected come, and
 			# whoever stays is on his way - what they still have to say to each other they
@@ -710,6 +800,8 @@ func _enter(id: String) -> void:
 
 func _update(delta: float) -> void:
 	var player: Survivor = game.player
+	if tokyo_tasks != null:
+		tokyo_tasks.update(delta)
 	var here: Vector3 = coop.position_near(marker)
 	var room: Dictionary = map.room_at(here)
 	var room_id := "" if room.is_empty() else str(room.id)
@@ -779,7 +871,13 @@ func _update(delta: float) -> void:
 				_part(false)
 				_enter("power")
 		"hold":
-			progress = minf(1.0, progress + delta / HOLD_STATION)
+			progress = minf(1.0, progress + delta / HOLD_STATION * float(FUSE_PACE[_fuses_on()]))
+			progress_text = _hold_text()
+			for trip in range(FUSE_TRIPS.size()):
+				var window: Array = FUSE_TRIPS[trip]
+				if progress > float(window[0]) and progress < float(window[1]) and not done.has("trip_%d" % trip):
+					if _trip_fuse():
+						done["trip_%d" % trip] = true
 			if progress > 0.45 and _once("hold_squad"):
 				line("m2_depot", true)
 				_post(["mauler", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
@@ -853,7 +951,9 @@ func _update(delta: float) -> void:
 				_enter("exit")
 		"exit":
 			if here.distance_to(_point("lift")) < 3.2:
-				_win()
+				# Down to the reactor hall (BossFight); without it the night ends here.
+				if not boss.lift_reached():
+					_win()
 		_:
 			if run.owns(stage):
 				run.update(delta)
@@ -878,9 +978,16 @@ func _use_spot(at: Vector3, key: String, text: String) -> void:
 	use_text = text
 
 func prompt() -> String:
+	var end_hint: String = boss.prompt() if boss != null else ""
+	if end_hint != "":
+		return end_hint
 	var nearby: Dictionary = coop.nearby_use()
 	if not nearby.is_empty():
 		return str(nearby.text)
+	if tokyo_tasks != null and tokyo_tasks.prompt() != "":
+		return tokyo_tasks.prompt()
+	if _fuse_near(game.player.global_position) >= 0:
+		return "[E] Sicherung einschalten  ·  Notstrom für den Zug"
 	# (What the stage wants used comes first; then a throwable or a weapon cache one stands
 	# before.)
 	var found := finds.prompt()
@@ -890,12 +997,29 @@ func prompt() -> String:
 func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) -> bool:
 	if game.net.joined:
 		var nearby: Dictionary = coop.nearby_use()
+		if nearby.is_empty() and tokyo_tasks != null:
+			nearby = tokyo_tasks.near_use(game.player.global_position)
 		if nearby.is_empty():
+			var fuse := _fuse_near(game.player.global_position)
+			if fuse >= 0:
+				game.net.request_hive_use("fuse", fuse_stand(fuse))
+				return true
 			return _side_use()
 		game.net.request_hive_use(str(nearby.key), nearby.at)
 		return true
 	if who == null:
 		who = game.player
+	if requested == "fuse":
+		var asked := _fuse_near(at)
+		if asked < 0 or who.global_position.distance_to(fuse_stand(asked)) >= FUSE_REACH + 0.8:
+			return false
+		return _switch_fuse(asked)
+	if requested in ["tk_term", "tk_core"]:
+		return tokyo_tasks != null and tokyo_tasks.use(who, requested, at)
+	if who == game.player and requested == "" and tokyo_tasks != null and (use_at == Vector3.INF or who.global_position.distance_to(use_at) >= 2.9):
+		var asked_tk := tokyo_tasks.near_use(who.global_position)
+		if not asked_tk.is_empty():
+			return tokyo_tasks.use(who, str(asked_tk.key), asked_tk.at)
 	var key := use_key if requested == "" else requested
 	if who == game.player and requested == "":
 		var focused: Dictionary = run.focused_use()
@@ -936,6 +1060,10 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 
 ## [E] for what lies off the way: a throwable that is aimed at, else a weapon cache.
 func _side_use() -> bool:
+	if not game.net.joined:
+		var fuse := _fuse_near(game.player.global_position)
+		if fuse >= 0:
+			return _switch_fuse(fuse)
 	return finds.use() or caches.use(true)
 
 ## What [E] would be for off the way (for the outline).
@@ -1171,6 +1299,7 @@ func _run_leavers(delta: float) -> void:
 
 ## The train has left: nobody who stayed at the station is seen again.
 func _station_left() -> void:
+	_clear_fuses()
 	for leaver: Dictionary in leavers:
 		if is_instance_valid(leaver.node):
 			(leaver.node as Node).queue_free()
@@ -1286,6 +1415,284 @@ func _run_ride(_delta: float) -> void:
 	if stage_time > RIDE_SECONDS:
 		map.ride(false)
 		_enter("terminal")
+
+# ---------------------------------------------------------------- the fuses
+
+## The fuses are there to be switched from the moment Nadja leaves (see FUSES).
+func _fuses_begin() -> void:
+	if _once("fuses_out"):
+		game.hud.announce("NOTSTROM", "Drei Sicherungen am Bahnsteig. Jede, die an ist, bringt den Zug schneller hoch.", 5)
+
+## How many of the fuses are on.
+func _fuses_on() -> int:
+	var count := 0
+	for index in range(FUSES.size()):
+		if done.has("fuse_%d" % index):
+			count += 1
+	return count
+
+## What the HUD says while the train comes up.
+func _hold_text() -> String:
+	var on_now := _fuses_on()
+	if on_now == FUSES.size():
+		return "ZUG FÄHRT HOCH"
+	return "ZUG FÄHRT HOCH  ·  NUR %d / %d SICHERUNGEN – SCHALTET SIE EIN" % [on_now, FUSES.size()]
+
+## Where the box of a fuse hangs (on the floor below it), and where one stands to use it.
+func fuse_at(index: int) -> Vector3:
+	var spec: Array = FUSES[index]
+	return Vector3(float(spec[0]), _point("platform").y, float(spec[1]))
+
+func fuse_stand(index: int) -> Vector3:
+	return fuse_at(index) + Vector3(0, 0, float(FUSES[index][2]) * 0.8)
+
+## The fuse that is off and can be switched from `here`, or -1.
+func _fuse_near(here: Vector3) -> int:
+	if not on or not stage in FUSE_STAGES or here == Vector3.INF:
+		return -1
+	for index in range(FUSES.size()):
+		if done.has("fuse_%d" % index):
+			continue
+		var stand := fuse_stand(index)
+		if absf(here.y - stand.y) < 1.6 and Vector2(here.x - stand.x, here.z - stand.z).length() < FUSE_REACH:
+			return index
+	return -1
+
+## A fuse is switched on: the train comes up faster, and the noise draws a few of them.
+func _switch_fuse(index: int) -> bool:
+	if done.has("fuse_%d" % index):
+		return false
+	done["fuse_%d" % index] = true
+	var box := fuse_at(index) + Vector3(0, 1.3, 0)
+	game.sounds.play_at("click", box, 4.0, 0.7)
+	game.sounds.play_at("beep", box, 2.0, 1.2)
+	game.stats.objectives += 1
+	var count := _fuses_on()
+	if stage == "hold":
+		game.hud.announce("SICHERUNG WIEDER DRIN", "Der Zug zieht wieder an.", 2.5)
+	elif count == FUSES.size():
+		game.hud.announce("NOTSTROM STEHT", "Alle Sicherungen an: der Zug kommt so schnell hoch, wie er kann.", 4)
+		if stage == "deal":
+			goal = str(stages["deal"][1])
+	else:
+		game.hud.announce("SICHERUNG %d / %d" % [count, FUSES.size()], "Das hat man gehört. Augen auf.", 2.5)
+	# (Not on the platform's floor in sight of the squad: from where nobody looks.)
+	var kinds: Array = FUSE_DRAW[mini(count - 1, FUSE_DRAW.size() - 1)] if stage != "hold" else ["mauler", "striker"]
+	var crowd := int(game.alive_count)
+	for kind in kinds:
+		if crowd >= _crowd_cap():
+			break
+		var spot := _hidden_spot(12.0, 26.0)
+		if spot != Vector3.INF and _spawn(str(kind), spot) != null:
+			crowd += 1
+	return true
+
+## How many may be alive when a fuse draws them (the station's own number of the hold).
+func _crowd_cap() -> int:
+	return mini(CROWD_LIMIT, roundi(int(PRESSURE.hold[1]) * _horde())) + game.extra_guns()
+
+## While the train comes up one of the fuses trips: the one furthest from the humans. True
+## if one did.
+func _trip_fuse() -> bool:
+	var best := -1
+	var best_gap := -1.0
+	var here: Vector3 = game.player.global_position
+	for index in range(FUSES.size()):
+		if not done.has("fuse_%d" % index):
+			continue
+		var gap := fuse_at(index).distance_to(here)
+		if game.net.hosting and is_instance_valid(game.net.remote):
+			gap = minf(gap, fuse_at(index).distance_to(game.net.remote.global_position))
+		if gap > best_gap:
+			best_gap = gap
+			best = index
+	if best < 0:
+		return false
+	done.erase("fuse_%d" % best)
+	var box := fuse_at(best) + Vector3(0, 1.3, 0)
+	game.sounds.play_at("glitch", box, 4.0, 0.8)
+	game.hud.announce("SICHERUNG RAUSGEFLOGEN", "Der Zug fährt nur noch langsam hoch. Schaltet sie wieder ein!", 4)
+	return true
+
+## The boxes as they are seen: built when the fuses are there, their lamps red or green.
+func _show_fuses() -> void:
+	if not on or map == null:
+		return
+	if not stage in FUSE_STAGES:
+		if not fuse_boxes.is_empty() and stage != "board":
+			_clear_fuses()
+		return
+	if fuse_boxes.is_empty():
+		_build_fuses()
+	for index in range(fuse_boxes.size()):
+		var box: Dictionary = fuse_boxes[index]
+		var lit := done.has("fuse_%d" % index)
+		var lamp: StandardMaterial3D = box.lamp
+		lamp.albedo_color = Color(0.3, 1.0, 0.45) if lit else Color(1.0, 0.25, 0.15)
+		lamp.emission = lamp.albedo_color
+		lamp.emission_energy_multiplier = 3.0 if lit else 2.0 + 2.0 * sin(clock * 9.0)
+		(box.lever as Node3D).rotation.x = -0.7 if lit else 0.7
+
+func _build_fuses() -> void:
+	for index in range(FUSES.size()):
+		var spec: Array = FUSES[index]
+		var facing := float(spec[2])
+		var root := Node3D.new()
+		root.name = "Fuse%d" % index
+		add_child(root)
+		root.global_position = fuse_at(index)
+		# (The box's front looks along +z or -z.)
+		root.rotation.y = 0.0 if facing > 0.0 else PI
+		var steel := StandardMaterial3D.new()
+		steel.albedo_color = Color("3a4146")
+		steel.roughness = 0.55
+		steel.metallic = 0.6
+		var housing := MeshInstance3D.new()
+		var shape := BoxMesh.new()
+		shape.size = Vector3(0.62, 0.82, 0.22)
+		housing.mesh = shape
+		housing.material_override = steel
+		housing.position = Vector3(0, 1.3, 0.0)
+		root.add_child(housing)
+		var stripe := MeshInstance3D.new()
+		var band := BoxMesh.new()
+		band.size = Vector3(0.62, 0.06, 0.012)
+		stripe.mesh = band
+		var yellow := StandardMaterial3D.new()
+		yellow.albedo_color = Color("c9a227")
+		stripe.material_override = yellow
+		stripe.position = Vector3(0, 1.66, 0.116)
+		root.add_child(stripe)
+		var lamp_mat := StandardMaterial3D.new()
+		lamp_mat.emission_enabled = true
+		lamp_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var lamp := MeshInstance3D.new()
+		var bulb := BoxMesh.new()
+		bulb.size = Vector3(0.1, 0.1, 0.04)
+		lamp.mesh = bulb
+		lamp.material_override = lamp_mat
+		lamp.position = Vector3(0.18, 1.52, 0.12)
+		root.add_child(lamp)
+		var lever := Node3D.new()
+		lever.position = Vector3(-0.08, 1.2, 0.12)
+		root.add_child(lever)
+		var handle := MeshInstance3D.new()
+		var grip := BoxMesh.new()
+		grip.size = Vector3(0.06, 0.24, 0.05)
+		handle.mesh = grip
+		var red := StandardMaterial3D.new()
+		red.albedo_color = Color("8f1d18")
+		handle.material_override = red
+		handle.position = Vector3(0, 0.1, 0.03)
+		lever.add_child(handle)
+		var word := Label3D.new()
+		word.text = "NOTSTROM  F%d" % (index + 1)
+		word.font_size = 30
+		word.pixel_size = 0.004
+		word.modulate = Color("e8d9a0")
+		word.outline_size = 6
+		word.outline_modulate = Color(0, 0, 0, 0.85)
+		word.position = Vector3(0, 1.82, 0.12)
+		root.add_child(word)
+		fuse_boxes.append({"node": root, "lamp": lamp_mat, "lever": lever})
+
+func _clear_fuses() -> void:
+	for box: Dictionary in fuse_boxes:
+		if is_instance_valid(box.node):
+			(box.node as Node).queue_free()
+	fuse_boxes.clear()
+
+# ---------------------------------------------------------------- quiet at a counter
+
+## The counters of the map that make a quiet place (see SAFE_REACH).
+func _find_safe_spots() -> void:
+	safe_spots.clear()
+	safe_now = false
+	for station: Dictionary in map.stations:
+		if not station.has("pos"):
+			continue
+		var at: Vector3 = station.pos
+		var room: Dictionary = map.room_at(at + Vector3(0, 0.3, 0))
+		var small := ""
+		if not room.is_empty() and not bool(room.get("outdoor", false)):
+			var rect: Rect2 = room.outer
+			if rect.get_area() <= SAFE_ROOM:
+				small = str(room.id)
+		safe_spots.append({"pos": at, "room": small})
+
+## Whether this place is quiet.
+func is_safe(pos: Vector3) -> bool:
+	if safe_spots.is_empty():
+		return false
+	var room_id := ""
+	var asked_room := false
+	for spot: Dictionary in safe_spots:
+		var at: Vector3 = spot.pos
+		if absf(pos.y - at.y) > 2.4:
+			continue
+		if Vector2(pos.x - at.x, pos.z - at.z).length() < SAFE_REACH:
+			return true
+		if str(spot.room) != "":
+			if not asked_room:
+				asked_room = true
+				room_id = str(map.room_at(pos).get("id", ""))
+			if room_id == str(spot.room):
+				return true
+	return false
+
+## Whether one of the humans on his feet stands in a quiet place.
+func _anybody_safe() -> bool:
+	if intro_left > 0.0:
+		return false
+	var player: Survivor = game.player
+	if not player.down and is_safe(player.global_position):
+		return true
+	if game.net.hosting and is_instance_valid(game.net.remote) and not game.net.remote.down:
+		return is_safe(game.net.remote.global_position)
+	return false
+
+## Now and then a companion goes over to a counter or an opened cache near it and takes
+## up another weapon there (see SHOP_GUNS). Not while there is fighting, not while a place
+## is held, and every one of them to every place once a night at the most.
+func _send_shopping() -> void:
+	if intro_left > 0.0 or _holding() or stage in ["ride", "board", "exit", "nadja", "deal"] or (game.alive_count > 2 and not safe_now):
+		return
+	var places: Array = []
+	for index in range(safe_spots.size()):
+		places.append(["s%d" % index, safe_spots[index].pos])
+	for index in range(caches.sites.size()):
+		var site: Dictionary = caches.sites[index]
+		if str(site.get("state", "none")) in ["open", "empty"]:
+			places.append(["c%d" % index, site.stand])
+	for mate: Teammate in game.team:
+		if not is_instance_valid(mate) or mate.down or mate.unarmed or mate.errand != Vector3.INF or mate.target != null or not mate.job.is_empty() or mate.order != "follow":
+			continue
+		var family := "shotgun" if str(mate.visual.config.weapon) == "shotgun" else "rifle"
+		for place: Array in places:
+			var key := "%s@%s" % [mate.look, place[0]]
+			var at: Vector3 = place[1]
+			if shopped.has(key) or absf(at.y - mate.global_position.y) > 1.5 or at.distance_to(mate.global_position) > SHOP_REACH:
+				continue
+			shopped[key] = true
+			if randf() > SHOP_CHANCE:
+				continue
+			var lists: Array = SHOP_GUNS[family]
+			var pool: Array = (lists[0] as Array).duplicate()
+			if order.find(stage) > order.find("ride") or run.owns(stage):
+				pool.append_array(lists[1])
+			var carried: String = mate.visual.weapon_id
+			pool = pool.filter(func(id: String) -> bool: return id != carried)
+			if pool.is_empty():
+				continue
+			mate.errand = at
+			mate.errand_gun = str(pool.pick_random())
+			mate.errand_left = 12.0
+			# (One at a time: the other stays with the survivor.)
+			return
+
+## A place has to be held right now.
+func _holding() -> bool:
+	return stage in ["hold", "lockdown", "hall", "mirror"] or run.holding()
 
 func _clear_enemies() -> void:
 	for node in game.enemies.get_children():
@@ -1452,18 +1859,24 @@ static func pick(kinds: Array) -> String:
 func _crowd() -> int:
 	if not pressure.has(stage):
 		return 0
-	return mini(CROWD_LIMIT, roundi(int(pressure[stage][1]) * _horde())) + game.extra_guns() + entries.more() + run.more()
+	return mini(CROWD_LIMIT, roundi(int(pressure[stage][1]) * _horde())) + game.extra_guns() + entries.more() + run.more() + (tokyo_tasks.more() if tokyo_tasks != null else 0)
 
 func _run_pressure(delta: float) -> void:
 	if not pressure.has(stage) or intro_left > 0.0:
 		return
 	var plan: Array = pressure[stage]
-	pressure_left -= delta
+	# (At a counter it is quiet: nothing new comes, or while a place is held only slower.)
+	if safe_now:
+		if not _holding():
+			return
+		pressure_left -= delta * SAFE_HOLD
+	else:
+		pressure_left -= delta
 	var room: int = _crowd() - int(game.alive_count) - entries.coming()
 	if pressure_left > 0.0 or room <= 0:
 		return
 	# (Whoever digs himself in gets them sooner.)
-	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste() * run.haste()
+	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste() * run.haste() * (tokyo_tasks.haste() if tokyo_tasks != null else 1.0)
 	var kinds: Array = plan[0]
 	var kind := pick(kinds)
 	# Nearly all of them come through a way in near the squad - out of a ceiling, out of a
@@ -1729,7 +2142,13 @@ func summary() -> Array[String]:
 		out.append(progress_text)
 	if stage == "station" and _guards_left() > 0:
 		out.append("Wachen auf dem Bahnsteig:  %d" % _guards_left())
+	if stage in FUSE_STAGES:
+		out.append("Notstrom:  %d / %d Sicherungen an%s" % [_fuses_on(), FUSES.size(), "" if _fuses_on() == FUSES.size() else "  ·  der Zug fährt langsamer hoch"])
+	if safe_now:
+		out.append("◆  RUHIGE ZONE  ·  " + ("weniger Nachschub" if _holding() else "hier kommt nichts Neues"))
 	out.append_array(run.summary())
+	if tokyo_tasks != null:
+		out.append_array(tokyo_tasks.summary())
 	# (Side goals: a cache that is being opened, the nearest one the survivor knows of.)
 	out.append_array(caches.summary())
 	return out
@@ -1738,9 +2157,15 @@ func markers() -> Array:
 	if game.net.joined:
 		return coop.markers
 	var at := use_at if use_at != Vector3.INF else marker
+	var hall_marks: Array = tokyo_tasks.markers() if tokyo_tasks != null and intro_left <= 0.0 else []
 	if at == Vector3.INF or intro_left > 0.0:
-		return []
-	return [{"pos": at + Vector3(0, 1.4, 0), "text": "ZIEL"}] + run.markers()
+		return hall_marks
+	var fuses: Array = []
+	if stage in FUSE_STAGES:
+		for index in range(FUSES.size()):
+			if not done.has("fuse_%d" % index):
+				fuses.append({"pos": fuse_at(index) + Vector3(0, 0.9, 0), "text": "SICHERUNG"})
+	return [{"pos": at + Vector3(0, 1.4, 0), "text": "ZIEL"}] + fuses + run.markers() + hall_marks
 
 ## Which music fits: none of the first mission's rounds, so the director says.
 func music_phase() -> String:
@@ -1777,9 +2202,18 @@ func _process(delta: float) -> void:
 	clock += delta
 	stage_time += delta
 	_run_heli(delta)
+	_show_fuses()
 	if game.net.joined:
 		coop.move_friends(delta)
 		return
+	safe_left -= delta
+	if safe_left <= 0.0:
+		safe_left = 0.25
+		safe_now = _anybody_safe()
+	shop_left -= delta
+	if shop_left <= 0.0:
+		shop_left = 2.0
+		_send_shopping()
 	_run_lines(delta)
 	if intro_left > 0.0:
 		return

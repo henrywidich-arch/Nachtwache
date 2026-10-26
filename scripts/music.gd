@@ -7,15 +7,18 @@ extends Node
 
 const FOLDER := "res://assets/music"
 ## The parts of the night, as the beginnings of the file names:
-##   anfang         the menu, the arrival, the breaks between rounds
+##   warten         the menu and lobby, the breaks between rounds, calm stretches
+##   anfang         the arrival, before the first round
 ##   auftrag        a device is running or a place has to be held
 ##   welle          the early rounds
 ##   harte_welle    from round five on, and whenever the C.R.U. or a horde comes
 ##   kurz_vor_ende  the last two rounds before the final one
 ##   letzte_runde   the final round and the evacuation
-const PHASES := ["anfang", "auftrag", "welle", "harte_welle", "kurz_vor_ende", "letzte_runde"]
+##   tokio          a fight inside the Tokyo simulation hall of the second mission
+##   rausch         the high of the Weed cloud, while its gnomes are about (WeedVisions)
+const PHASES := ["warten", "anfang", "auftrag", "welle", "harte_welle", "kurz_vor_ende", "letzte_runde", "tokio", "rausch"]
 ## What is played instead when a part of the night has no track of its own.
-const STAND_IN := {"auftrag": "harte_welle", "harte_welle": "welle", "kurz_vor_ende": "harte_welle", "letzte_runde": "kurz_vor_ende", "welle": "anfang", "anfang": "welle"}
+const STAND_IN := {"warten": "anfang", "tokio": "harte_welle", "auftrag": "harte_welle", "harte_welle": "welle", "kurz_vor_ende": "harte_welle", "letzte_runde": "kurz_vor_ende", "welle": "anfang", "anfang": "welle"}
 ## Seconds one track fades into the next, and how long the night must have moved on before
 ## the music follows.
 const FADE := 2.6
@@ -79,14 +82,22 @@ func _stream(path: String) -> AudioStream:
 ## The part of the night the game is in right now.
 func current_phase() -> String:
 	if game.state not in ["playing", "paused", "shop"]:
-		return "anfang"
+		return "warten"
+	# The high of the Weed cloud brings its own track, on this machine only.
+	if game.state == "playing" and WeedVisions.tripping(game):
+		return "rausch"
 	# The second mission has no rounds: its director says what fits.
 	if game.hive.on:
-		return game.hive.music_phase()
+		var said: String = game.hive.music_phase()
+		if said == "anfang":
+			return "warten"
+		if said != "letzte_runde" and in_tokyo():
+			return "tokio"
+		return said
 	var rounds: int = game.ROUNDS.size()
 	var final: bool = (not game.endless and game.wave >= rounds) or (game.story.enabled and str(game.story.stage) in ["evac", "done"])
 	if game.phase != "wave":
-		return "anfang"
+		return "anfang" if game.wave <= 0 else "warten"
 	if final:
 		return "letzte_runde"
 	for task in game.mission.tasks:
@@ -97,6 +108,14 @@ func current_phase() -> String:
 	if game.wave >= 5 or str(game.mission.wave_kind) in ["cru", "mixed", "elite", "horde"]:
 		return "harte_welle"
 	return "welle"
+
+## Whether the player stands in the Tokyo simulation hall of the second mission.
+func in_tokyo() -> bool:
+	var map = game.hive.map
+	if map == null or not ("tokyo" in map) or map.tokyo == null or game.player == null:
+		return false
+	var at: Vector3 = game.player.global_position
+	return TokyoHall.plan_of(map.tokyo.origin).has_point(Vector2(at.x, at.z))
 
 ## The files for a part of the night, or for the nearest part that has any.
 func tracks_for(key: String) -> Array:

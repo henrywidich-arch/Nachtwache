@@ -1,0 +1,29 @@
+{
+  "bark": {
+    "kill": {
+      "phantom": ["Removed.", "Another one, filed away.", "Elegant, if I say so myself.", "Do stay on the floor, there is a dear."],
+      "havoc": ["Kaboom! Well, more of a pop.", "Down you go, sunshine!", "Ha! Did you see that? Nobody saw that!", "That one is in pieces! Lots of pieces!"],
+      "ghost": ["Silent.", "Erased.", "No more.", "Done."]
+    },
+    "multi_kill": {
+      "phantom": ["Two at once. Efficient.", "A pair. How tidy."],
+      "havoc": ["Two! Two at once! I am a genius!", "Double pop! Somebody write that down!"],
+      "ghost": ["Two.", "Both. One breath."]
+    },
+    "reload": {
+      "phantom": ["Reloading. Try not to embarrass yourselves.", "A moment. Even artists need fresh paint."],
+      "havoc": ["Reloading! Everybody act natural!", "Out of boom! Getting more boom!"],
+      "ghost": ["Loading.", "Empty. Covering."]
+    },
+    "idle": {
+      "phantom": ["Helix never paid me enough for this. Nobody could.", "I miss proper coffee. And proper people."],
+      "havoc": ["Anyone want to hear about my favorite explosion? No? Too bad.", "If it is quiet, it means I have not blown anything up yet."],
+      "ghost": ["I am watching the shadows. So are they.", "Quiet. I prefer it."]
+    },
+    "big_kill": {
+      "phantom": ["And the large one falls. Applause is optional.", "Big, ugly and finished."],
+      "havoc": ["The big one went splat! Best day ever!", "Did you hear that thud? Glorious!"],
+      "ghost": ["The big one. Gone.", "Heavy. Down."]
+    }
+  }
+}

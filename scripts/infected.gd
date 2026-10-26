@@ -32,7 +32,7 @@ const TYPES := {
 		"stagger": "stumble",
 		# Now and then one of them wears a uniform: a soldier of the cordon that was thrown
 		# round the woods before the squad came (share of the plain ones that look so).
-		"rare": {"zombie_soldier": 0.06}
+		"rare": {"zombie_soldier": 0.06, "weedzombie": 0.05}
 	},
 	"charger": {
 		# Two bodies, one enemy: the second ("boomer2") bursts wet and wide, see bursts_wet.
@@ -49,7 +49,10 @@ const TYPES := {
 		"health": 120.0, "health_per_round": 6.0, "speed": 4.5, "speed_per_round": 0.04,
 		"damage": 12.0, "reach": 1.3, "attack_time": 0.42, "attack_gap": 0.68, "strike_at": 0.2,
 		"radius": 0.28, "height": 1.72, "head": 1.4, "head_size": 0.17, "head_factor": 0.7, "reward": 45, "score": 200,
-		"stagger": "flinch"
+		"stagger": "flinch",
+		# One in four is the heavier one in the gas mask (striker2): tougher, and what it
+		# sheds bursts much harder (see heavy_growths).
+		"rare": {"striker2": 0.25}
 	},
 	"ripper": {
 		"label": "RIPPER", "visuals": ["ripper"],
@@ -82,6 +85,15 @@ const TYPES := {
 		"health": 3000.0, "health_per_round": 0.0, "speed": 8.6, "speed_per_round": 0.0,
 		"damage": 17.0, "reach": 2.2, "attack_time": 0.7, "attack_gap": 1.0, "strike_at": 0.31,
 		"radius": 0.5, "height": 1.3, "head": 1.0, "head_size": 0.3, "head_factor": 0.8, "reward": 800, "score": 4000,
+		"stagger": ""
+	},
+	# The end boss of mission two in the reactor hall (BossMutant, BossFight). `boss`: its own mind.
+	"boss": {
+		"label": "SUBJEKT NULL", "visuals": ["boss"], "boss": true,
+		"voice": "prowler_growl", "idle": "prowler_growl", "strike": "prowler_strike", "pain": "prowler_pain", "death": "prowler_death",
+		"health": 11000.0, "health_per_round": 0.0, "speed": 2.2, "speed_per_round": 0.0,
+		"damage": 34.0, "reach": 4.6, "attack_time": 1.2, "attack_gap": 1.4, "strike_at": 0.55,
+		"radius": 0.8, "height": 3.2, "head": 2.85, "head_size": 0.34, "head_factor": 1.4, "reward": 2500, "score": 15000,
 		"stagger": ""
 	},
 	# An infected shark of the flooded laboratory. `shark`: it lives in water (see Shark).
@@ -206,9 +218,11 @@ const TYPES := {
 const CHARGER_BLAST := 4.3
 ## Infected that are fights of their own: what a difficulty does to the health of the horde
 ## (the rule "brood", see Profile) leaves them as they are.
-const BROOD_APART := ["crusher", "stalker", "prowler", "shark"]
+const BROOD_APART := ["crusher", "stalker", "prowler", "shark", "boss"]
 ## Looks of the plain infected that are women: they get the female voices.
-const FEMALE_LOOKS := ["mauler_female", "hive_lab", "hive_office"]
+const FEMALE_LOOKS := ["mauler_female", "hive_lab", "hive_office", "striker2"]
+## How much tougher the heavier Striker (striker2) is than the plain one.
+const HEAVY_STRIKER_HEALTH := 1.35
 ## The Medic's gas: how far it reaches at most, the health it gives back per second to
 ## an infected it has strengthened, the share of a hit that still gets through to them,
 ## and how close the Medic comes to its prey before it stops and lets the gas work.
@@ -471,6 +485,8 @@ static func pick_look(type: Dictionary) -> String:
 ## The body that shows a look: the hound, the Prowler (and its elite), a shark, a soldier
 ## or one of the two-legged infected.
 static func visual_for(look: String, human: bool = false) -> InfectedVisual:
+	if look == "boss":
+		return BossVisual.new()
 	if look == "ripper":
 		return RipperVisual.new()
 	if look.begins_with("prowler"):
@@ -524,6 +540,9 @@ func _ready() -> void:
 	model = visual_for(look, spec.get("human", false))
 	model.kind = look
 	add_child(model)
+	if look == "striker2":
+		max_health *= HEAVY_STRIKER_HEALTH
+		health = max_health
 	for role in ["voice", "idle", "strike", "pain", "death"]:
 		voices[role] = str(spec[role])
 	if kind == "stalker":
@@ -740,7 +759,9 @@ func show_cue(action: String, args: Array) -> void:
 			else:
 				game.fx.charger_burst(global_position + Vector3(0, 0.9, 0))
 		"shed":
-			game.fx.drop_growths(global_position + Vector3(0, 1.0, 0), int(args[0]), puppet, args.size() > 1 and bool(args[1]))
+			game.fx.drop_growths(global_position + Vector3(0, 1.0, 0), int(args[0]), puppet, args.size() > 1 and bool(args[1]), args.size() > 2 and bool(args[2]))
+		"weed_burst":
+			WeedHaze.burst(game, global_position + Vector3(0, 0.9, 0))
 		"shell":
 			shell = str(args[0])
 			model.set_shell(shell)
@@ -1421,7 +1442,7 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 	burst_left = 0.7
 	if kind == "striker" and not shed and health > 0.0 and health <= max_health * 0.5:
 		shed = true
-		cue("shed", [1, burn_tame])
+		cue("shed", [2 if heavy_growths() else 1, burn_tame, heavy_growths()])
 	if health <= 0.0:
 		# Thrown the way the blow went, as hard as it was, on top of the way it was moving.
 		var speed := punch if punch >= 0.0 else throw_for(amount)
@@ -1605,7 +1626,9 @@ func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: boo
 			var across := direction.dot(Vector3(-facing().z, 0, facing().x))
 			cue("die", [model.pick_death(_shot_from_behind(direction), headshot, across, overkill), headshot, direction, overkill, fling])
 			if kind == "striker":
-				cue("shed", [3, burn_tame])
+				cue("shed", [4 if heavy_growths() else 3, burn_tame, heavy_growths()])
+			elif model.kind == "weedzombie":
+				cue("weed_burst")
 
 ## The Charger reached its victim and blows itself up; nobody is credited.
 func detonate() -> void:
@@ -1620,6 +1643,10 @@ func _explode() -> void:
 	# but does the survivors nothing.
 	game.explode(centre, CHARGER_BLAST, 0.0 if burn_tame else float(spec.damage), 110.0, "boomer" if bursts_wet() else "charger", self)
 	queue_free()
+
+## True for the heavier Striker in the gas mask: more growths, and each bursts much harder.
+func heavy_growths() -> bool:
+	return kind == "striker" and model != null and model.kind == "striker2"
 
 ## True for the second exploding infected: a Charger in another body. It is the same enemy
 ## in every number and in all it does; only its burst looks and sounds different - low,

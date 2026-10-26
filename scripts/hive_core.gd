@@ -61,10 +61,13 @@ const MOODS := {
 	"cryo": {"ambient": Color(0.4, 0.52, 0.7), "energy": 0.42, "fog": 0.006, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.08, 0.13, 0.2)},
 	"reactor": {"ambient": Color(0.58, 0.4, 0.26), "energy": 0.34, "fog": 0.005, "haze": 0.026, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.2, 0.09, 0.03)},
 	"store": {"ambient": Color(0.52, 0.48, 0.42), "energy": 0.36, "fog": 0.004, "haze": 0.016, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.17, 0.12, 0.07)},
-	"ward": {"ambient": Color(0.44, 0.52, 0.62), "energy": 0.32, "fog": 0.003, "haze": 0.012, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.13, 0.18)}
+	"ward": {"ambient": Color(0.44, 0.52, 0.62), "energy": 0.32, "fog": 0.003, "haze": 0.012, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.13, 0.18)},
+	# The simulation hall (TokyoHall): a violet night, neon in a light haze of rain.
+	# (Darker between its lights than before, the haze thicker and lit by the neon.)
+	"sim": {"ambient": Color(0.3, 0.27, 0.42), "energy": 0.38, "fog": 0.005, "haze": 0.017, "glow": 0.9, "sky": 0.0, "moon": 0.0, "tint": Color(0.18, 0.07, 0.26)}
 }
 ## The moods of places under the ground (no moon, no shadows of it).
-const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo", "reactor", "store", "ward"]
+const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo", "reactor", "store", "ward", "sim"]
 ## Water that stands in a room: dark, smooth, with a slow swell that bends what is
 ## mirrored in it. It is drawn where it stands deeper than a few millimetres over the
 ## floor `floor_y`, so that a sheet of it may rise out of the floor like a shore.
@@ -198,6 +201,7 @@ func _chunk(id: String, shadows: bool = true) -> void:
 	if not chunks.has(key):
 		chunks[key] = MeshBatch.new()
 		(chunks[key] as MeshBatch).label = key
+		(chunks[key] as MeshBatch).shift = nav_shift
 		chunk_shadows[key] = shadows and bool(zones[zone].shadows) if zones.has(zone) else shadows
 	batch = chunks[key]
 
@@ -1984,7 +1988,19 @@ func plans() -> Array:
 
 # ---------------------------------------------------------------- obstacles
 
+## Where what is being built is moved to: a part laid out around its own middle and built
+## somewhere else (TokyoHall). Its meshes go into a zone that stands there; its colliders
+## and its place in the paths are moved by this while it is built. Zero otherwise.
+var nav_shift := Vector3.ZERO
+
+func _add_shape(owner_body: StaticBody3D, center: Vector3, size: Vector3, orientation: Basis = Basis.IDENTITY) -> void:
+	super(owner_body, center + nav_shift, size, orientation)
+
+func _snag_floor(center: Vector3, size: Vector3) -> Array:
+	return super(center + nav_shift, size)
+
 func _register(center: Vector3, size: Vector3, yaw: float = 0.0) -> void:
+	center += nav_shift
 	var extent := Vector2(size.x, size.z)
 	if yaw != 0.0:
 		var c := absf(cos(yaw))

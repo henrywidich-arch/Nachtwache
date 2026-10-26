@@ -1,7 +1,7 @@
 class_name HiveFinds
 extends Node
 ## Throwables to be found in the second mission: now and then a frag grenade, a Molotov
-## cocktail, a flashbang - more rarely a heal grenade or a mine - lies on a small crate in
+## cocktail, a flashbang - more rarely a heal grenade or a mine - lies in a crate of throwables in
 ## a room of the old facility or of an area of the random part, because hardly anybody
 ## buys grenades. A handful a night (COUNT), at least SPACING apart, never in a doorway;
 ## where, and what, is dealt from the night like the caches (the same for both players in
@@ -18,7 +18,6 @@ const KINDS := {"grenade": 34, "molotov": 24, "flashbang": 22, "heal": 11, "clay
 const REACH := 2.4
 const SEEN := 14.0
 const MARK_REACH := 40.0
-const GLINT := Color(1.0, 0.86, 0.55)
 
 var director: Node
 var game: Node3D
@@ -153,88 +152,18 @@ static func _spot(where: Node3D, room: Dictionary, rng: RandomNumberGenerator, s
 		return at
 	return Vector3.INF
 
-## A find as it lies: a small olive ammunition box with a yellow band, the throwable on its
-## lid, and a soft glint.
+## A find as it lies: the crate of throwables (GrenadeFinds' model), the picture of what it
+## holds glowing on it. A mine is not painted on the crate: it lies on top.
 static func build(kind: String) -> Node3D:
-	var root := Node3D.new()
+	var root := GrenadeFinds.build_view(kind if GrenadeFinds.SPOTS.has(kind) else "")
 	root.name = "Find_" + kind
 	root.set_meta("kind", kind)
-	var wood := StandardMaterial3D.new()
-	wood.albedo_color = Color("465238")
-	wood.roughness = 0.6
-	wood.metallic = 0.35
-	var crate := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.5, 0.38, 0.38)
-	crate.mesh = box
-	crate.material_override = wood
-	crate.position.y = 0.19
-	root.add_child(crate)
-	var lid := MeshInstance3D.new()
-	var plank := BoxMesh.new()
-	plank.size = Vector3(0.52, 0.03, 0.4)
-	lid.mesh = plank
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color("2f3726")
-	dark.roughness = 0.55
-	dark.metallic = 0.4
-	lid.material_override = dark
-	lid.position.y = 0.395
-	root.add_child(lid)
-	var band := MeshInstance3D.new()
-	var stripe := BoxMesh.new()
-	stripe.size = Vector3(0.505, 0.05, 0.385)
-	band.mesh = stripe
-	var yellow := StandardMaterial3D.new()
-	yellow.albedo_color = Color("b89a2e")
-	yellow.roughness = 0.7
-	band.material_override = yellow
-	band.position.y = 0.3
-	root.add_child(band)
-	var thing := Node3D.new()
-	thing.name = "Thing"
-	thing.position = Vector3(0, 0.41, 0)
-	root.add_child(thing)
-	_thing(thing, kind)
-	# The glint: a little light, and a spark that breathes.
-	var light := OmniLight3D.new()
-	light.name = "Glint"
-	light.light_color = GLINT
-	light.light_energy = 0.35
-	light.omni_range = 1.4
-	light.omni_attenuation = 2.0
-	light.light_cull_mask = 1
-	light.position = Vector3(0, 0.6, 0)
-	root.add_child(light)
-	var spark := MeshInstance3D.new()
-	spark.name = "Spark"
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.16, 0.16)
-	spark.mesh = quad
-	spark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var shader := Shader.new()
-	shader.code = """shader_type spatial;
-render_mode unshaded, blend_add, depth_draw_never, cull_disabled;
-uniform vec4 tint : source_color;
-uniform float phase = 0.0;
-void vertex() {
-	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(INV_VIEW_MATRIX[0], INV_VIEW_MATRIX[1], INV_VIEW_MATRIX[2], MODEL_MATRIX[3]);
-}
-void fragment() {
-	vec2 p = (UV - vec2(0.5)) * 2.0;
-	float star = max(0.0, 1.0 - abs(p.x) * 6.0) * max(0.0, 1.0 - abs(p.y)) + max(0.0, 1.0 - abs(p.y) * 6.0) * max(0.0, 1.0 - abs(p.x));
-	float core = 1.0 - smoothstep(0.0, 0.5, length(p));
-	float beat = 0.35 + 0.65 * pow(0.5 + 0.5 * sin(TIME * 2.2 + phase), 4.0);
-	ALBEDO = tint.rgb * (star * 0.8 + core) * beat;
-}
-"""
-	var glow := ShaderMaterial.new()
-	glow.shader = shader
-	glow.set_shader_parameter("tint", GLINT)
-	glow.set_shader_parameter("phase", float(kind.hash() % 100) * 0.1)
-	spark.material_override = glow
-	spark.position = Vector3(0.05, 0.52, 0.02)
-	root.add_child(spark)
+	if not GrenadeFinds.SPOTS.has(kind):
+		var thing := Node3D.new()
+		thing.name = "Thing"
+		thing.position = Vector3(-0.1, 0.345, 0.04)
+		root.add_child(thing)
+		_thing(thing, kind)
 	return root
 
 ## The throwable lying on the crate, at its true size.
@@ -360,6 +289,7 @@ func take(index: int) -> void:
 	find.node = null
 	game.sounds.play_sound("pickup")
 	game.hud.kill_feed(str(Survivor.GOODS[kind].label), 0, false)
+	game.hud.gained(kind)
 	game.hud.loadout()
 
 ## The finds that have been seen and still lie there (for the map in the corner).

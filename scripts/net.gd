@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.76"
+const VERSION := "0.77"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
@@ -68,6 +68,8 @@ var clash := ""
 ## Guest side: the host's infected by their number.
 var puppets: Dictionary = {}
 var seen: Dictionary = {}
+## Guest side: when it last asked the host again for an infected it has no copy of.
+var asked: Dictionary = {}
 var state_left := 0.0
 var snapshot_left := 0.0
 var status_left := 0.0
@@ -214,6 +216,7 @@ func close() -> void:
 	_drop_remote()
 	puppets.clear()
 	seen.clear()
+	asked.clear()
 	changed.emit()
 
 func _on_peer_connected(id: int) -> void:
@@ -308,6 +311,8 @@ func _drop_remote() -> void:
 		game.survivors.erase(remote)
 		remote.queue_free()
 	remote = null
+	# (A partner body freed some other way leaves no entry behind either.)
+	game.prune_survivors()
 
 ## The other player's soldier, created when a match starts.
 @rpc("any_peer", "call_remote", "reliable")
@@ -407,6 +412,9 @@ func _prune(_delta: float) -> void:
 			(puppet as Infected).queue_free()
 			puppets.erase(id)
 			seen.erase(id)
+	for id in asked.keys():
+		if clock - float(asked[id]) > 10.0:
+			asked.erase(id)
 
 # ---------------------------------------------------------------- host -> guest
 
@@ -495,6 +503,7 @@ func _cue(id: int, action: String, args: Array) -> void:
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _snapshot(data: PackedFloat32Array) -> void:
+	var missing := PackedInt32Array()
 	for i in range(0, data.size(), 6):
 		var id := int(data[i])
 		var found: Variant = puppets.get(id)
@@ -504,6 +513,27 @@ func _snapshot(data: PackedFloat32Array) -> void:
 			puppet.net_yaw = data[i + 4]
 			puppet.alert = data[i + 5] > 0.5
 			seen[id] = clock
+		elif clock - float(asked.get(id, -10.0)) > 1.0:
+			# The host reports one this side never got (or dropped): ask for it again.
+			asked[id] = clock
+			missing.append(id)
+	if not missing.is_empty():
+		_resend.rpc_id(1, missing)
+
+## Host: the guest misses these infected; it gets their spawn again (the living ones).
+@rpc("any_peer", "call_remote", "reliable")
+func _resend(ids: PackedInt32Array) -> void:
+	if not hosting or multiplayer.get_remote_sender_id() != partner:
+		return
+	for node in game.enemies.get_children():
+		var enemy := node as Infected
+		if enemy != null and not enemy.dead and enemy.net_id in ids:
+			send_spawn(enemy)
+			# One that is out of sight just now is so on the guest's side too.
+			if enemy is Prowler and (enemy as Prowler).absent:
+				send_cue(enemy, "hide", [])
+			if enemy is Prowler and (enemy as Prowler).enraged:
+				send_cue(enemy, "rage", [])
 
 @rpc("authority", "call_remote", "unreliable_ordered")
 func _status(wave: int, phase_now: String, break_left: float, income: int, score: int, remaining: int, boss_id: int, boss_health: float, elapsed: float, bars: PackedFloat32Array = PackedFloat32Array()) -> void:
@@ -551,8 +581,8 @@ func send_explosion(center: Vector3, radius: float, damage: float, style: String
 
 @rpc("authority", "call_remote", "reliable")
 func _boom(center: Vector3, radius: float, damage: float, style: String) -> void:
-	if style == "growth":
-		game.fx.pop_growth_near(center)
+	if style == "growth" or style == "charger":
+		game.fx.pop_growth_near(center, style == "charger")
 	game.explode(center, radius, damage, 0.0, style)
 
 func send_hurt(amount: float, from: Vector3, kind: String, by: String = "") -> void:

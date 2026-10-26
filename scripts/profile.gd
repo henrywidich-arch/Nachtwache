@@ -94,8 +94,11 @@ func read(parsed: Dictionary) -> void:
 	if str(parsed.get("mode", "")) in ["story", "endless"]:
 		mode = str(parsed.mode)
 	var saved_mission := int(parsed.get("mission", 1))
-	if saved_mission in [1, 2]:
+	if saved_mission in [1, 2, 3]:
 		mission = saved_mission
+	elif saved_mission == 4:
+		# (Mission 4, the simulation hall, is a part of the second mission now.)
+		mission = 2
 	modifiers = bool(parsed.get("modifiers", false))
 	if parsed.get("runs") is Dictionary:
 		# (Also the lists of the levels that are gone: they stay in the file.)
@@ -194,7 +197,7 @@ static func pair_of(value: String) -> Array[String]:
 	return looks
 
 func choose_mission(number: int) -> void:
-	if number in [1, 2]:
+	if number in [1, 2, 3]:
 		mission = number
 		save()
 
