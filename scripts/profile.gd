@@ -58,6 +58,9 @@ var mission := 1
 ## What a night on the farm is: "story" or "endless", and whether its rounds bring
 ## modifiers (see Game.MODIFIERS). The second mission has neither.
 var mode := "story"
+## The room the second mission surely has (HiveLayout.rooms(): "" leaves it to chance,
+## "tokio" the simulation hall, else an area of HiveLayout.POOL). Chosen in the play menu.
+var room := ""
 var modifiers := false
 ## Difficulty -> finished runs, best first.
 var runs: Dictionary = {}
@@ -75,9 +78,19 @@ var skill_tree := ""
 var wishes: Dictionary = {}
 ## Who goes on with the survivor from the station of the second mission: "fireteam", the
 ## two who came with him, or two of the three operators, named by their looks - while the
-## squad and the third of them stay behind at the station.
-const COMPANIES := ["fireteam", "phantom_havoc", "phantom_ghost", "havoc_ghost"]
+## squad and the third of them stay behind at the station. Since v0.79 also one operator
+## alone ("havoc"): he takes the place of the one of the squad who was not picked, and the
+## one who was picked goes on beside him.
+const COMPANIES := ["fireteam", "phantom_havoc", "phantom_ghost", "havoc_ghost", "phantom", "havoc", "ghost"]
 var company := "fireteam"
+## Who comes along (v0.79, ticked on the page before a mission): two of CANDIDATES. The
+## squad and the two plain men come from the start; an operator only in the second mission,
+## where he joins at the station - until then one of the squad who was not picked walks in
+## his place and stays behind there. `squad` (who starts) and `company` (who goes on from
+## the station) are worked out from these two (settle_picks).
+const CANDIDATES := ["viper", "scorpion", "raven", "phantom", "havoc", "ghost", "dude_shorts", "dude_turtleneck"]
+const OPERATORS := ["phantom", "havoc", "ghost"]
+var picks: Array = ["viper", "scorpion"]
 
 func open() -> void:
 	if not stored or not FileAccess.file_exists(PATH):
@@ -100,6 +113,8 @@ func read(parsed: Dictionary) -> void:
 		# (Mission 4, the simulation hall, is a part of the second mission now.)
 		mission = 2
 	modifiers = bool(parsed.get("modifiers", false))
+	if str(parsed.get("room", "")) in HiveLayout.rooms():
+		room = str(parsed.get("room", ""))
 	if parsed.get("runs") is Dictionary:
 		# (Also the lists of the levels that are gone: they stay in the file.)
 		for level in ORDER + RETIRED:
@@ -123,6 +138,15 @@ func read(parsed: Dictionary) -> void:
 	if parsed.get("wishes") is Dictionary:
 		wishes = parsed.wishes
 	company = known_company(str(parsed.get("company", "")))
+	# (A file from before v0.79 has no picks: the operators of its company, else its squad.)
+	var saved: Variant = parsed.get("picks")
+	if saved is Array and (saved as Array).size() == 2 and str(saved[0]) != str(saved[1]) and may_pick(str(saved[0])) and may_pick(str(saved[1])):
+		picks = [str(saved[0]), str(saved[1])]
+	elif company != "fireteam" and pair_of(company).size() == 2:
+		picks = pair_of(company)
+	else:
+		picks = squad.duplicate()
+	settle_picks()
 
 func save() -> void:
 	if not stored:
@@ -133,7 +157,7 @@ func save() -> void:
 
 ## What is written to the file.
 func kept() -> Dictionary:
-	var out := {"difficulty": difficulty, "mission": mission, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad}
+	var out := {"difficulty": difficulty, "mission": mission, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad, "picks": picks, "room": room}
 	if not skills.is_empty():
 		out["skills"] = skills
 	if skill_tree != "":
@@ -162,9 +186,58 @@ func wear(id: String) -> void:
 
 ## Puts a look into the squad; the one that has been in it longest makes room.
 func enlist(id: String) -> void:
-	if SKINS.has(id) and bool(SKINS[id].bot) and unlocked(id) and not squad.has(id):
-		squad = [squad[1], id]
-		save()
+	if SKINS.has(id) and bool(SKINS[id].bot) and unlocked(id) and not picks.has(id):
+		pick(id)
+
+## Whether somebody can be ticked to come along: the operators always, the others once
+## their look is unlocked.
+func may_pick(id: String) -> bool:
+	return id in CANDIDATES and SKINS.has(id) and (id in OPERATORS or unlocked(id))
+
+## Ticks one more to come along; the one that was ticked longest ago makes room.
+func pick(id: String) -> void:
+	if not may_pick(id) or picks.has(id):
+		return
+	picks = [picks[picks.size() - 1], id] if not picks.is_empty() else [id]
+	settle_picks()
+	save()
+
+## Sets both at once (the start option --squad=, the checks). Unknown or twice the same:
+## nothing changes.
+func set_picks(first: String, second: String) -> bool:
+	if first == second or not (first in CANDIDATES and second in CANDIDATES):
+		return false
+	picks = [first, second]
+	settle_picks()
+	return true
+
+## Works out from the picks who starts (`squad`: those of them who are not operators, and
+## for each operator one of the squad who was not picked - the ones there were before
+## first) and who goes on from the station (`company`: the operators among them, or
+## "fireteam").
+func settle_picks() -> void:
+	var starters: Array = []
+	for id in picks:
+		if not str(id) in OPERATORS:
+			starters.append(str(id))
+	for id in squad + ["viper", "scorpion", "raven"]:
+		if starters.size() >= 2:
+			break
+		if not starters.has(id) and not picks.has(id) and SKINS.has(id) and bool(SKINS[id].bot) and unlocked(id):
+			starters.append(id)
+	if starters.size() == 2:
+		squad = starters
+	var operators: Array[String] = []
+	for id in OPERATORS:
+		if picks.has(id):
+			operators.append(id)
+	company = "fireteam" if operators.is_empty() else "_".join(PackedStringArray(operators))
+
+## Who of the squad goes on from the station beside one operator alone: the one who was
+## picked ("" when both or none of the squad were).
+func goer() -> String:
+	var mine: Array = picks.filter(func(id: String) -> bool: return not id in OPERATORS)
+	return str(mine[0]) if mine.size() == 1 else ""
 
 func rules() -> Dictionary:
 	return DIFFICULTIES[difficulty]
@@ -205,6 +278,12 @@ func choose_mission(number: int) -> void:
 ## on the farm, "villa" for the second mission.
 func play() -> String:
 	return "villa" if mission == 2 else mode
+
+## The next room in the list of HiveLayout.rooms() (after the last: chance again).
+func next_room() -> void:
+	var list := HiveLayout.rooms()
+	room = list[(list.find(room) + 1) % list.size()]
+	save()
 
 func toggle_modifiers() -> void:
 	modifiers = not modifiers

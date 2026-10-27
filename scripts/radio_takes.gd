@@ -322,6 +322,18 @@ const LINES := {
 		"Nadja holds the facility system, and now she has bought the C.R.U. Expect them at every entrance, Fireteam.",
 		"She controls that facility, and she is paying the C.R.U. to protect her. That means squads at every door and every junction. Watch your back, Fireteam."
 	]],
+	"m2_d_coleman": ["coleman", [
+		"One of theirs and one of ours. I can live with that. Whoever stays, that platform is your way home."
+	]],
+	"m2_d_ghost": ["ghost", [
+		"One of us goes with you. I will. Two are enough for a tunnel."
+	]],
+	"m2_d_havoc": ["havoc", [
+		"One of us comes along, and I call it! Me! The other two can babysit the tunnel!"
+	]],
+	"m2_d_phantom": ["phantom", [
+		"One of us goes with you. Me, naturally. The other two can mind the tunnel."
+	]],
 	"m2_depot": ["coleman", [
 		"More coming out of the depot!",
 		"Fireteam, another group is coming out of the depot. All that noise is bringing them to you.",
@@ -337,6 +349,12 @@ const LINES := {
 		"You are in the lift. Signal is fading. Finish this, Fireteam.",
 		"Signal is breaking up, Fireteam. You are in the lift and going down. Whatever waits below, end it.",
 		"I am losing you. The lift is taking you deeper than my equipment can reach, and I cannot follow. Whatever is down there, Fireteam, finish it."
+	]],
+	"m2_fuel_short": ["coleman", [
+		"The train is up, and the tank is not. Get the fuel in, Fireteam."
+	]],
+	"m2_fuse_trip": ["coleman", [
+		"One of the fuses just blew. Get it back in, or that train crawls."
 	]],
 	"m2_g_clear": ["ghost", [
 		"Clean again. The man on that channel is the real colonel.",
@@ -567,15 +585,51 @@ const LINES := {
 		"Powering that train up makes noise, and it will carry down the tunnel. Hold the platform until it is done.",
 		"Fireteam, when that train comes alive, every infected in the tunnel will hear it. Stay on the platform and do not give it up."
 	]],
+	"m2_power_fuel": ["coleman", [
+		"The train is coming up, but it will not leave on an empty tank. Three canisters, Fireteam. Hold the platform while you fill it."
+	]],
+	"m2_power_fuses": ["coleman", [
+		"The train is coming up on emergency power, Fireteam. Keep all three fuses on, and hold the platform until it is ready."
+	]],
 	"m2_power_on": ["coleman", [
 		"Power restored. North lock, central hall.",
 		"Power is back. Return to the central hall, Fireteam. You will find the lock on the north side.",
 		"We have power again, so go back to the central hall. The lock you need is on the north side, and it should open for you now."
 	]],
+	"m2_power_ready": ["coleman", [
+		"The train is pulling out of the siding. A few seconds, and then you are aboard. Do not get comfortable."
+	]],
+	"m2_r_ghost": ["ghost", [
+		"Ghost. The relay is clean, the platform is covered. Board the train."
+	]],
+	"m2_r_havoc": ["havoc", [
+		"Havoc here! Whatever crawls out of that tunnel meets me first! Go, go, we have got this!"
+	]],
+	"m2_r_phantom": ["phantom", [
+		"Phantom here. The tunnel behind you is ours. Get on that train. We will take care of the rest."
+	]],
+	"m2_r_raven": ["raven", [
+		"Raven. The platform is held. Get in the train. We handle the rest."
+	]],
+	"m2_r_scorpion": ["scorpion", [
+		"Scorpion here! The platform is ours. Go, get on that train, I will keep the welcome party busy!"
+	]],
+	"m2_r_viper": ["viper", [
+		"Viper here. We have the platform. Board the train, we will take care of the rest. Do not look back."
+	]],
 	"m2_ride": ["coleman", [
 		"That facility is on no map. Nadja wants in. Find out why.",
 		"I have never seen the facility ahead of you on any map. Nadja wants to get in there, and I want to know why.",
 		"Fireteam, that facility is not on any map I have, and I have seen a lot of maps. Nadja is desperate to get inside. Find out why."
+	]],
+	"m2_s_fuel": ["ghost", [
+		"That train is dry. Fuel canisters stand about the station. Workshop, depot, both ends of the platform. Three will do."
+	]],
+	"m2_s_fuses": ["havoc", [
+		"Oh, and your train is dead, by the way! Somebody pulled the emergency fuses on the platform. Three boxes, red lights. Flip them all, and it wakes up!"
+	]],
+	"m2_s_ready": ["phantom", [
+		"And before you ask: the train is fuelled and powered. We had time while you were busy in the villa. You are welcome."
 	]],
 	"m2_sector": ["coleman", [
 		"You are in sector C. There is no guard detail on the platform and nobody answering my calls. Something went badly wrong here. Move carefully.",
@@ -1023,6 +1077,816 @@ const BARKS := {
 			"That thing is dead. Check your ammo."
 		]
 	},
+	"bt_ghost_havoc_01_1": {
+		"havoc": [
+			"Ghost! Ghost! Guess what I have got in my bag!"
+		]
+	},
+	"bt_ghost_havoc_01_2": {
+		"ghost": [
+			"No."
+		]
+	},
+	"bt_ghost_havoc_01_3": {
+		"havoc": [
+			"You did not even guess!"
+		]
+	},
+	"bt_ghost_havoc_01_4": {
+		"ghost": [
+			"No."
+		]
+	},
+	"bt_ghost_havoc_02_1": {
+		"ghost": [
+			"Havoc."
+		]
+	},
+	"bt_ghost_havoc_02_2": {
+		"havoc": [
+			"Yes?"
+		]
+	},
+	"bt_ghost_havoc_02_3": {
+		"ghost": [
+			"Something in your bag is ticking."
+		]
+	},
+	"bt_ghost_havoc_02_4": {
+		"havoc": [
+			"Oh. Oh! That one is for later!"
+		]
+	},
+	"bt_ghost_phantom_01_1": {
+		"phantom": [
+			"Ghost, say something nice about me."
+		]
+	},
+	"bt_ghost_phantom_01_2": {
+		"ghost": [
+			"You are punctual."
+		]
+	},
+	"bt_ghost_phantom_01_3": {
+		"phantom": [
+			"I will take it."
+		]
+	},
+	"bt_ghost_phantom_02_1": {
+		"ghost": [
+			"She knew we would come."
+		]
+	},
+	"bt_ghost_phantom_02_2": {
+		"phantom": [
+			"Of course she did. She simply never knew how well."
+		]
+	},
+	"bt_ghost_raven_01_1": {
+		"raven": [
+			"You count your rounds?"
+		]
+	},
+	"bt_ghost_raven_01_2": {
+		"ghost": [
+			"Every one."
+		]
+	},
+	"bt_ghost_raven_01_3": {
+		"raven": [
+			"Me too."
+		]
+	},
+	"bt_ghost_raven_01_4": {
+		"ghost": [
+			"... Good."
+		]
+	},
+	"bt_ghost_raven_02_1": {
+		"ghost": [
+			"You hear it too?"
+		]
+	},
+	"bt_ghost_raven_02_2": {
+		"raven": [
+			"Under the floor."
+		]
+	},
+	"bt_ghost_raven_02_3": {
+		"ghost": [
+			"Yes."
+		]
+	},
+	"bt_ghost_raven_02_4": {
+		"raven": [
+			"Keep walking."
+		]
+	},
+	"bt_ghost_scorpion_01_1": {
+		"scorpion": [
+			"Ghost, buddy. Do you ever say more than three words at once?"
+		]
+	},
+	"bt_ghost_scorpion_01_2": {
+		"ghost": [
+			"Rarely."
+		]
+	},
+	"bt_ghost_scorpion_01_3": {
+		"scorpion": [
+			"That was one word."
+		]
+	},
+	"bt_ghost_scorpion_01_4": {
+		"ghost": [
+			"Exactly."
+		]
+	},
+	"bt_ghost_scorpion_02_1": {
+		"scorpion": [
+			"How do you move that quietly?"
+		]
+	},
+	"bt_ghost_scorpion_02_2": {
+		"ghost": [
+			"Practice."
+		]
+	},
+	"bt_ghost_scorpion_02_3": {
+		"scorpion": [
+			"Teach me?"
+		]
+	},
+	"bt_ghost_scorpion_02_4": {
+		"ghost": [
+			"You breathe too loud. Start there."
+		]
+	},
+	"bt_ghost_viper_01_1": {
+		"viper": [
+			"Ghost. Your angle on the left, mine on the right."
+		]
+	},
+	"bt_ghost_viper_01_2": {
+		"ghost": [
+			"Already there."
+		]
+	},
+	"bt_ghost_viper_01_3": {
+		"viper": [
+			"Of course you are."
+		]
+	},
+	"bt_ghost_viper_02_1": {
+		"ghost": [
+			"You lead them well."
+		]
+	},
+	"bt_ghost_viper_02_2": {
+		"viper": [
+			"Coming from you, I will take it."
+		]
+	},
+	"bt_ghost_viper_02_3": {
+		"ghost": [
+			"Do not tell Phantom I said that."
+		]
+	},
+	"bt_havoc_phantom_01_1": {
+		"havoc": [
+			"Phantom, admit it. You missed me."
+		]
+	},
+	"bt_havoc_phantom_01_2": {
+		"phantom": [
+			"Every day. I kept aiming."
+		]
+	},
+	"bt_havoc_phantom_02_1": {
+		"phantom": [
+			"Try not to blow up the doctor before she talks."
+		]
+	},
+	"bt_havoc_phantom_02_2": {
+		"havoc": [
+			"Before. Got it. And after?"
+		]
+	},
+	"bt_havoc_phantom_02_3": {
+		"phantom": [
+			"After, I will hold the lighter."
+		]
+	},
+	"bt_havoc_raven_01_1": {
+		"havoc": [
+			"Raven, right? You look like you would be fun at parties!"
+		]
+	},
+	"bt_havoc_raven_01_2": {
+		"raven": [
+			"I do not go to parties."
+		]
+	},
+	"bt_havoc_raven_01_3": {
+		"havoc": [
+			"I do! Mostly to blow them up."
+		]
+	},
+	"bt_havoc_raven_02_1": {
+		"raven": [
+			"Walk quieter. Your leg clanks."
+		]
+	},
+	"bt_havoc_raven_02_2": {
+		"havoc": [
+			"It is a feature!"
+		]
+	},
+	"bt_havoc_raven_02_3": {
+		"raven": [
+			"It is a dinner bell."
+		]
+	},
+	"bt_havoc_scorpion_01_1": {
+		"havoc": [
+			"Scorpion! I like your shotgun! Can I put something extra in it?"
+		]
+	},
+	"bt_havoc_scorpion_01_2": {
+		"scorpion": [
+			"Touch Betty, and I put something extra in you."
+		]
+	},
+	"bt_havoc_scorpion_01_3": {
+		"havoc": [
+			"Oh, we are going to be friends!"
+		]
+	},
+	"bt_havoc_scorpion_02_1": {
+		"scorpion": [
+			"So. The metal leg. How did that happen?"
+		]
+	},
+	"bt_havoc_scorpion_02_2": {
+		"havoc": [
+			"Explosion!"
+		]
+	},
+	"bt_havoc_scorpion_02_3": {
+		"scorpion": [
+			"Yours?"
+		]
+	},
+	"bt_havoc_scorpion_02_4": {
+		"havoc": [
+			"Mine! Best day of my life! Second best is today!"
+		]
+	},
+	"bt_havoc_scorpion_03_1": {
+		"havoc": [
+			"Did you see? Did you see that? Boom!"
+		]
+	},
+	"bt_havoc_scorpion_03_2": {
+		"scorpion": [
+			"I saw it. I am still picking it out of my hair."
+		]
+	},
+	"bt_havoc_viper_01_1": {
+		"viper": [
+			"Havoc. One rule. You throw nothing without telling me first."
+		]
+	},
+	"bt_havoc_viper_01_2": {
+		"havoc": [
+			"Telling you... before? That ruins the surprise!"
+		]
+	},
+	"bt_havoc_viper_01_3": {
+		"viper": [
+			"That is the point."
+		]
+	},
+	"bt_havoc_viper_02_1": {
+		"havoc": [
+			"You are the boss type, huh? Plans, maps, all that."
+		]
+	},
+	"bt_havoc_viper_02_2": {
+		"viper": [
+			"Plans keep people alive."
+		]
+	},
+	"bt_havoc_viper_02_3": {
+		"havoc": [
+			"So do explosions! Just not the people nearby."
+		]
+	},
+	"bt_phantom_raven_01_1": {
+		"phantom": [
+			"You have been staring at the back of my head for ten minutes."
+		]
+	},
+	"bt_phantom_raven_01_2": {
+		"raven": [
+			"Eleven."
+		]
+	},
+	"bt_phantom_raven_01_3": {
+		"phantom": [
+			"Charming. Do blink now and then."
+		]
+	},
+	"bt_phantom_raven_02_1": {
+		"raven": [
+			"You trained the C.R.U."
+		]
+	},
+	"bt_phantom_raven_02_2": {
+		"phantom": [
+			"Some of them."
+		]
+	},
+	"bt_phantom_raven_02_3": {
+		"raven": [
+			"They miss a lot."
+		]
+	},
+	"bt_phantom_raven_02_4": {
+		"phantom": [
+			"Not my best students, then."
+		]
+	},
+	"bt_phantom_scorpion_01_1": {
+		"phantom": [
+			"Do you always talk this much, or is tonight special?"
+		]
+	},
+	"bt_phantom_scorpion_01_2": {
+		"scorpion": [
+			"Always. You get used to it."
+		]
+	},
+	"bt_phantom_scorpion_01_3": {
+		"phantom": [
+			"I sincerely hope not."
+		]
+	},
+	"bt_phantom_scorpion_02_1": {
+		"scorpion": [
+			"Nice jacket. Helix issue?"
+		]
+	},
+	"bt_phantom_scorpion_02_2": {
+		"phantom": [
+			"Tailored. Helix only paid for the holes."
+		]
+	},
+	"bt_phantom_viper_01_1": {
+		"phantom": [
+			"You run a tidy team, Viper. I almost tried to recruit you once."
+		]
+	},
+	"bt_phantom_viper_01_2": {
+		"viper": [
+			"Almost?"
+		]
+	},
+	"bt_phantom_viper_01_3": {
+		"phantom": [
+			"Your file said loyal. Terribly inconvenient."
+		]
+	},
+	"bt_phantom_viper_02_1": {
+		"viper": [
+			"If you turn on us down here, Phantom..."
+		]
+	},
+	"bt_phantom_viper_02_2": {
+		"phantom": [
+			"You will be the first to know. I promise you that much."
+		]
+	},
+	"bt_raven_scorpion_01_1": {
+		"scorpion": [
+			"Raven, have you ever smiled? Like, once? As a baby?"
+		]
+	},
+	"bt_raven_scorpion_01_2": {
+		"raven": [
+			"Once. It did not suit me."
+		]
+	},
+	"bt_raven_scorpion_01_3": {
+		"scorpion": [
+			"I bet it did."
+		]
+	},
+	"bt_raven_scorpion_01_4": {
+		"raven": [
+			"Keep betting."
+		]
+	},
+	"bt_raven_scorpion_02_1": {
+		"scorpion": [
+			"Da da da, da da..."
+		]
+	},
+	"bt_raven_scorpion_02_2": {
+		"raven": [
+			"Stop humming."
+		]
+	},
+	"bt_raven_scorpion_02_3": {
+		"scorpion": [
+			"You know the song?"
+		]
+	},
+	"bt_raven_scorpion_02_4": {
+		"raven": [
+			"No. That is why I want it to stop."
+		]
+	},
+	"bt_raven_scorpion_03_1": {
+		"scorpion": [
+			"Ha! I got more than you this time!"
+		]
+	},
+	"bt_raven_scorpion_03_2": {
+		"raven": [
+			"You counted the ones you shot twice."
+		]
+	},
+	"bt_raven_scorpion_03_3": {
+		"scorpion": [
+			"They deserved it twice."
+		]
+	},
+	"bt_raven_scorpion_04_1": {
+		"raven": [
+			"Your dog. What is his name."
+		]
+	},
+	"bt_raven_scorpion_04_2": {
+		"scorpion": [
+			"Biscuit! Why?"
+		]
+	},
+	"bt_raven_scorpion_04_3": {
+		"raven": [
+			"If you die, somebody has to feed him."
+		]
+	},
+	"bt_raven_scorpion_04_4": {
+		"scorpion": [
+			"Raven... that is almost sweet."
+		]
+	},
+	"bt_raven_scorpion_05_1": {
+		"scorpion": [
+			"I think the cows here were the lucky ones. They left early."
+		]
+	},
+	"bt_raven_scorpion_05_2": {
+		"raven": [
+			"Nothing left this farm early. Look at the barn."
+		]
+	},
+	"bt_raven_scorpion_06_1": {
+		"raven": [
+			"Hear that? In the vents."
+		]
+	},
+	"bt_raven_scorpion_06_2": {
+		"scorpion": [
+			"Please tell me that is the wind."
+		]
+	},
+	"bt_raven_scorpion_06_3": {
+		"raven": [
+			"There is no wind down here."
+		]
+	},
+	"bt_raven_scorpion_06_4": {
+		"scorpion": [
+			"I hate you a little bit right now."
+		]
+	},
+	"bt_raven_scorpion_07_1": {
+		"scorpion": [
+			"On a scale from one to ten, how much do you hate this job?"
+		]
+	},
+	"bt_raven_scorpion_07_2": {
+		"raven": [
+			"Eleven. You are three of that."
+		]
+	},
+	"bt_raven_scorpion_08_1": {
+		"scorpion": [
+			"Raven, look, a piano. Can you play?"
+		]
+	},
+	"bt_raven_scorpion_08_2": {
+		"raven": [
+			"Yes."
+		]
+	},
+	"bt_raven_scorpion_08_3": {
+		"scorpion": [
+			"Seriously?"
+		]
+	},
+	"bt_raven_scorpion_08_4": {
+		"raven": [
+			"Funerals, mostly."
+		]
+	},
+	"bt_raven_scorpion_09_1": {
+		"raven": [
+			"Too many windows in these houses."
+		]
+	},
+	"bt_raven_scorpion_09_2": {
+		"scorpion": [
+			"Too many windows, not enough doors, and no beer. Worst village ever."
+		]
+	},
+	"bt_raven_scorpion_09_3": {
+		"raven": [
+			"We agree on something."
+		]
+	},
+	"bt_raven_viper_01_1": {
+		"viper": [
+			"You are quiet, Raven. Even for you."
+		]
+	},
+	"bt_raven_viper_01_2": {
+		"raven": [
+			"I am counting the exits."
+		]
+	},
+	"bt_raven_viper_01_3": {
+		"viper": [
+			"And?"
+		]
+	},
+	"bt_raven_viper_01_4": {
+		"raven": [
+			"Not enough."
+		]
+	},
+	"bt_raven_viper_02_1": {
+		"viper": [
+			"That was close on the left."
+		]
+	},
+	"bt_raven_viper_02_2": {
+		"raven": [
+			"I had it."
+		]
+	},
+	"bt_raven_viper_02_3": {
+		"viper": [
+			"I know. I am saying it was close."
+		]
+	},
+	"bt_raven_viper_02_4": {
+		"raven": [
+			"... It was close."
+		]
+	},
+	"bt_raven_viper_03_1": {
+		"raven": [
+			"Why do you always go in first?"
+		]
+	},
+	"bt_raven_viper_03_2": {
+		"viper": [
+			"Because then I know who is behind me."
+		]
+	},
+	"bt_raven_viper_03_3": {
+		"raven": [
+			"Us."
+		]
+	},
+	"bt_raven_viper_03_4": {
+		"viper": [
+			"That is why I go."
+		]
+	},
+	"bt_raven_viper_04_1": {
+		"viper": [
+			"Drink some water. That is not a request."
+		]
+	},
+	"bt_raven_viper_04_2": {
+		"raven": [
+			"You sound like my mother."
+		]
+	},
+	"bt_raven_viper_04_3": {
+		"viper": [
+			"Your mother was right."
+		]
+	},
+	"bt_raven_viper_05_1": {
+		"raven": [
+			"These were not just labs. People lived down here."
+		]
+	},
+	"bt_raven_viper_05_2": {
+		"viper": [
+			"Then we remember them. And we keep moving."
+		]
+	},
+	"bt_raven_viper_06_1": {
+		"viper": [
+			"The house holds if we hold it. The upstairs window is yours."
+		]
+	},
+	"bt_raven_viper_06_2": {
+		"raven": [
+			"It is always mine."
+		]
+	},
+	"bt_raven_viper_06_3": {
+		"viper": [
+			"Because you never miss from up there."
+		]
+	},
+	"bt_raven_viper_07_1": {
+		"raven": [
+			"Do you trust the colonel?"
+		]
+	},
+	"bt_raven_viper_07_2": {
+		"viper": [
+			"With my life."
+		]
+	},
+	"bt_raven_viper_07_3": {
+		"raven": [
+			"With ours?"
+		]
+	},
+	"bt_raven_viper_07_4": {
+		"viper": [
+			"... Ask me tomorrow."
+		]
+	},
+	"bt_raven_viper_08_1": {
+		"viper": [
+			"Clean sight lines down the street. Use them."
+		]
+	},
+	"bt_raven_viper_08_2": {
+		"raven": [
+			"I see the road. The fields worry me."
+		]
+	},
+	"bt_raven_viper_08_3": {
+		"viper": [
+			"Then you watch the fields. I have the road."
+		]
+	},
+	"bt_scorpion_viper_01_1": {
+		"scorpion": [
+			"Viper. Honest question. Do you ever take a day off?"
+		]
+	},
+	"bt_scorpion_viper_01_2": {
+		"viper": [
+			"I took one, once."
+		]
+	},
+	"bt_scorpion_viper_01_3": {
+		"scorpion": [
+			"And?"
+		]
+	},
+	"bt_scorpion_viper_01_4": {
+		"viper": [
+			"Somebody called. I came back."
+		]
+	},
+	"bt_scorpion_viper_02_1": {
+		"scorpion": [
+			"Did you see that one fold? Like a lawn chair!"
+		]
+	},
+	"bt_scorpion_viper_02_2": {
+		"viper": [
+			"I saw you reload in the open. Again."
+		]
+	},
+	"bt_scorpion_viper_02_3": {
+		"scorpion": [
+			"Details, boss. Details."
+		]
+	},
+	"bt_scorpion_viper_03_1": {
+		"viper": [
+			"Scorpion. How many shells have you got left?"
+		]
+	},
+	"bt_scorpion_viper_03_2": {
+		"scorpion": [
+			"Enough."
+		]
+	},
+	"bt_scorpion_viper_03_3": {
+		"viper": [
+			"A number, please."
+		]
+	},
+	"bt_scorpion_viper_03_4": {
+		"scorpion": [
+			"Enough-ish."
+		]
+	},
+	"bt_scorpion_viper_04_1": {
+		"scorpion": [
+			"When this is over, I am opening a bar. You can be my bouncer."
+		]
+	},
+	"bt_scorpion_viper_04_2": {
+		"viper": [
+			"I will be your accountant. Somebody has to stop you from drinking the stock."
+		]
+	},
+	"bt_scorpion_viper_05_1": {
+		"scorpion": [
+			"This farm used to grow potatoes, you know. Now look at it."
+		]
+	},
+	"bt_scorpion_viper_05_2": {
+		"viper": [
+			"It still grows something. Keep your eyes on the tree line."
+		]
+	},
+	"bt_scorpion_viper_06_1": {
+		"scorpion": [
+			"Boss, if I get turned down here, promise you shoot me before I get ugly."
+		]
+	},
+	"bt_scorpion_viper_06_2": {
+		"viper": [
+			"Too late for that."
+		]
+	},
+	"bt_scorpion_viper_06_3": {
+		"scorpion": [
+			"Hey!"
+		]
+	},
+	"bt_scorpion_viper_06_4": {
+		"viper": [
+			"Nobody gets turned. Stay close."
+		]
+	},
+	"bt_scorpion_viper_07_1": {
+		"viper": [
+			"You talk to your shotgun."
+		]
+	},
+	"bt_scorpion_viper_07_2": {
+		"scorpion": [
+			"Betty listens. Unlike some people."
+		]
+	},
+	"bt_scorpion_viper_07_3": {
+		"viper": [
+			"Betty needs a cleaning if you keep dragging her through the mud."
+		]
+	},
+	"bt_scorpion_viper_08_1": {
+		"viper": [
+			"Good work. Count your rounds."
+		]
+	},
+	"bt_scorpion_viper_08_2": {
+		"scorpion": [
+			"Counted them. Most of them went into heads."
+		]
+	},
+	"bt_scorpion_viper_08_3": {
+		"viper": [
+			"Most is the word that worries me."
+		]
+	},
+	"bt_scorpion_viper_09_1": {
+		"scorpion": [
+			"A whole village, and not one bakery open. Tragic."
+		]
+	},
+	"bt_scorpion_viper_09_2": {
+		"viper": [
+			"The bakers are out there in the fields, Scorpion. Do not ask them for bread."
+		]
+	},
 	"bye": {
 		"shop": [
 			"Walk safe. My prices will not.",
@@ -1052,7 +1916,10 @@ const BARKS := {
 			"Done. Check the corners anyway.",
 			"Nothing moves.",
 			"Clear. For a moment.",
-			"Silence again."
+			"Silence again.",
+			"Quiet. I like it.",
+			"That was all of them. This time.",
+			"Dead. All of them."
 		],
 		"scorpion": [
 			"Is that it? Shame.",
@@ -1060,7 +1927,10 @@ const BARKS := {
 			"Clear. Somebody wake me when the next lot shows up.",
 			"Clear! Who wants seconds?",
 			"All done! Applause, please!",
-			"That is the last of them. For now!"
+			"That is the last of them. For now!",
+			"And they say I cannot dance!",
+			"Clean-up on aisle everywhere!",
+			"Ha! Who is next? Anybody? No?"
 		],
 		"viper": [
 			"Area secure.",
@@ -1068,29 +1938,36 @@ const BARKS := {
 			"That is all of them. Check ammo, check each other, then we move.",
 			"Area clear. Regroup on me.",
 			"No more movement. Good work.",
-			"Clear. Take a breath."
+			"Clear. Take a breath.",
+			"That is the lot. Breathe, then move.",
+			"Good. Patch up while it lasts.",
+			"All clear. Nobody relax."
 		]
 	},
 	"contact": {
 		"cru": [
 			"Enemy contact, open fire!",
 			"They are here, take them down!",
-			"Fire, fire, fire!"
+			"Fire, fire, fire!",
+			"Eyes on! Fireteam, right there!"
 		],
 		"cru2": [
 			"Contact, front.",
 			"Hostiles sighted. Weapons hot.",
-			"Visual on the targets. Engaging now."
+			"Visual on the targets. Engaging now.",
+			"Fireteam spotted. Engaging."
 		],
 		"cru3": [
 			"There. Kill.",
 			"Found you. Now bleed.",
-			"Break them. All of them."
+			"Break them. All of them.",
+			"There you are. Finally."
 		],
 		"cru4": [
 			"Targets acquired.",
 			"Hostile presence confirmed. Proceeding to engage.",
-			"Contact verified."
+			"Contact verified.",
+			"Fireteam identified. Bounty confirmed."
 		],
 		"ghost": [
 			"Found you.",
@@ -1112,22 +1989,26 @@ const BARKS := {
 		"cru": [
 			"I am dry, cover me!",
 			"Reloading, watch my back!",
-			"Reload, reload! Keep their heads down!"
+			"Reload, reload! Keep their heads down!",
+			"Last mag! Cover me!"
 		],
 		"cru2": [
 			"Reloading. Cover.",
 			"Magazine empty. Reloading now.",
-			"Need cover, reloading."
+			"Need cover, reloading.",
+			"Changing. Watch my sector."
 		],
 		"cru3": [
 			"Empty.",
 			"Keep them down while I reload.",
-			"Hold them off. Just a second."
+			"Hold them off. Just a second.",
+			"Reloading. Do not let them breathe."
 		],
 		"cru4": [
 			"Ammunition depleted. Reloading.",
 			"Weapon dry.",
-			"Replacing magazine. Requesting cover."
+			"Replacing magazine. Requesting cover.",
+			"Reloading. Maintain fire."
 		],
 		"ghost": [
 			"Cover me. Quietly.",
@@ -1234,22 +2115,26 @@ const BARKS := {
 		"cru": [
 			"Going right!",
 			"I am swinging wide, keep them busy!",
-			"Going around, cover the front!"
+			"Going around, cover the front!",
+			"Around the side, go, go, go!"
 		],
 		"cru2": [
 			"Moving right.",
 			"Taking the side.",
-			"Shifting to the flank. Keep them pinned."
+			"Shifting to the flank. Keep them pinned.",
+			"Taking the long way. Keep them busy."
 		],
 		"cru3": [
 			"Behind them.",
 			"Closing in from the side. They will not see it.",
-			"Their backs are open."
+			"Their backs are open.",
+			"I will come from behind. Quiet."
 		],
 		"cru4": [
 			"Moving to the left flank.",
 			"Angle acquired. Circling.",
-			"Taking the secondary position."
+			"Taking the secondary position.",
+			"Executing flanking route."
 		],
 		"ghost": [
 			"Moving around.",
@@ -1271,22 +2156,26 @@ const BARKS := {
 		"cru": [
 			"Grenade out, get down!",
 			"Fire in the hole!",
-			"Frag, take cover!"
+			"Frag, take cover!",
+			"Grenade! Eat it!"
 		],
 		"cru2": [
 			"Throwing frag.",
 			"Grenade away.",
-			"Fragmentation out."
+			"Fragmentation out.",
+			"Frag out. Heads down."
 		],
 		"cru3": [
 			"Catch.",
 			"Here is a gift.",
-			"Say goodbye."
+			"Say goodbye.",
+			"Pieces. Lots of little pieces."
 		],
 		"cru4": [
 			"Fragmentation deployed.",
 			"Throwing grenade.",
-			"Ordnance away."
+			"Ordnance away.",
+			"Explosive deployed."
 		],
 		"ghost": [
 			"Grenade out.",
@@ -1486,6 +2375,24 @@ const BARKS := {
 			"Hold there, this will help."
 		]
 	},
+	"hit": {
+		"cru": [
+			"Ah! I am hit!",
+			"They got me! Keep firing!"
+		],
+		"cru2": [
+			"Hit. Still in it.",
+			"Took one. Fine."
+		],
+		"cru3": [
+			"Is that all you have?",
+			"Ha. It only stings."
+		],
+		"cru4": [
+			"Armor holding.",
+			"Minor damage. Continuing."
+		]
+	},
 	"horde": {
 		"ghost": [
 			"A flood. Pick your spot.",
@@ -1586,21 +2493,26 @@ const BARKS := {
 			"I like it when nobody talks.",
 			"Check your corners. Then check them again.",
 			"I am watching the shadows. So are they.",
-			"Quiet. I prefer it."
+			"Quiet. I prefer it.",
+			"I like this part. Nobody talks."
 		],
 		"havoc": [
 			"Did you know a wall is just a door you have not made yet?",
 			"Quiet. Too quiet. I am going to start counting the bricks.",
 			"My leg itches. How does a metal leg itch? Do not answer that.",
 			"Anyone want to hear about my favorite explosion? No? Too bad.",
-			"If it is quiet, it means I have not blown anything up yet."
+			"If it is quiet, it means I have not blown anything up yet.",
+			"I named my grenades. This one is Gerald. Say hello, Gerald!",
+			"Is anybody else hungry? I could eat a horse. Or whatever that was."
 		],
 		"phantom": [
 			"I trust this peace is not an invitation.",
 			"Do you know, I miss proper tea.",
 			"Silence is only the interval. Enjoy it while it lasts.",
 			"Helix never paid me enough for this. Nobody could.",
-			"I miss proper coffee. And proper people."
+			"I miss proper coffee. And proper people.",
+			"In my day, the end of the world came with a dress code.",
+			"I do hope someone is keeping score. I am."
 		],
 		"raven": [
 			"Quiet never lasts.",
@@ -1610,7 +2522,12 @@ const BARKS := {
 			"I hear them breathing. Out there.",
 			"Sleep is for later. Or never.",
 			"Scorpion, stop humming.",
-			"The dark is patient. So am I."
+			"The dark is patient. So am I.",
+			"I like the dark. They do not.",
+			"Count to ten. If it is still quiet, count again.",
+			"My knife is clean. The rest of me is not.",
+			"Do not get used to this. That is when they come.",
+			"Scorpion is quiet. Something is wrong."
 		],
 		"scorpion": [
 			"You know what this place needs? A bar.",
@@ -1621,7 +2538,13 @@ const BARKS := {
 			"When this is over, I want a burger the size of my head.",
 			"I am naming my next shotgun Betty.",
 			"Is it just me, or do they smell worse today?",
-			"Somebody tell a joke. No, not you, Raven."
+			"Somebody tell a joke. No, not you, Raven.",
+			"I dreamt about tacos last night. Big ones. They talked.",
+			"If anybody asks, I was the hero of this whole thing.",
+			"My dog would have bitten half of these things by now. Good boy, Biscuit.",
+			"Betty is hungry. Betty is always hungry.",
+			"I miss my couch. I miss my couch so much.",
+			"Zombies, gas, mad scientists. Next time I read the contract."
 		],
 		"viper": [
 			"Stay close. We move out soon.",
@@ -1631,7 +2554,12 @@ const BARKS := {
 			"Check your corners, then check them again.",
 			"Stay hydrated, stay alive.",
 			"We hold this together. Nobody wanders off.",
-			"Keep your eyes open. They always come back."
+			"Keep your eyes open. They always come back.",
+			"Drink, check your mags, and tell me if anything hurts.",
+			"Nobody does anything heroic without telling me first.",
+			"My first sergeant said quiet is a loan. You pay it back with interest.",
+			"Keep your spacing. One grenade should never get two of us.",
+			"We are doing fine. I want to keep saying that."
 		]
 	},
 	"intro": {
@@ -1788,6 +2716,24 @@ const BARKS := {
 			"Leech attached! Get it off, now!",
 			"Do not panic. Shake it off!",
 			"It is draining you! Strike it!"
+		]
+	},
+	"lost": {
+		"cru": [
+			"Where did they go?!",
+			"Lost them! Eyes open!"
+		],
+		"cru2": [
+			"Lost visual.",
+			"Target gone. Sweep the area."
+		],
+		"cru3": [
+			"Hiding? I will find you.",
+			"Come out, come out..."
+		],
+		"cru4": [
+			"Visual contact lost.",
+			"Target concealed. Searching."
 		]
 	},
 	"low_ammo": {
@@ -2112,6 +3058,28 @@ const BARKS := {
 			"Status, now. Anyone hurt? Walk it off, and follow me to the exit."
 		]
 	},
+	"m2_d_go": {
+		"raven": [
+			"Hold it. I am not walking home."
+		],
+		"scorpion": [
+			"Keep the lights on for us. And do not get eaten, I still owe you money."
+		],
+		"viper": [
+			"Hold the platform. We will need that train to get back."
+		]
+	},
+	"m2_d_stay": {
+		"raven": [
+			"I stay. Go with them. Fast. Every minute we stand here is hers."
+		],
+		"scorpion": [
+			"So I am the one babysitting the platform. Fine. Go on, go, before I change my mind!"
+		],
+		"viper": [
+			"Then I hold here. Go with them, and go quickly. We have no time to argue."
+		]
+	},
 	"m2_decon": {
 		"raven": [
 			"I do not like being sealed in.",
@@ -2144,6 +3112,17 @@ const BARKS := {
 			"In order, and quickly. Watch the one behind you.",
 			"Tight formation. Move.",
 			"Fewer jokes, more steps. Go."
+		]
+	},
+	"m2_fuse_out": {
+		"raven": [
+			"Fuse. Go. I cover you."
+		],
+		"scorpion": [
+			"The light went red again! Somebody kick that box!"
+		],
+		"viper": [
+			"Fuse is out! Who is closest?"
 		]
 	},
 	"m2_land": {
@@ -2263,6 +3242,39 @@ const BARKS := {
 			"Weapons low. Let them speak first.",
 			"We need what they know. Steady.",
 			"Easy. Nobody fires until I say so."
+		]
+	},
+	"m2_s_fuel_t": {
+		"raven": [
+			"Three cans. Quickly, before more of them come."
+		],
+		"scorpion": [
+			"Hauling gas cans through a station full of zombies. Living the dream."
+		],
+		"viper": [
+			"Fuel run. One carries, the others cover."
+		]
+	},
+	"m2_s_fuses_t": {
+		"raven": [
+			"Every switch will be heard. Be ready when it is."
+		],
+		"scorpion": [
+			"Flip a switch, wake the dead. What could possibly go wrong?"
+		],
+		"viper": [
+			"Three boxes. Split up, and watch each other's backs."
+		]
+	},
+	"m2_s_ready_t": {
+		"raven": [
+			"A gift from Helix hunters. Check it for wires."
+		],
+		"scorpion": [
+			"Wait. They did us a favour? I do not trust it."
+		],
+		"viper": [
+			"Then we do not waste it. Get to the control room."
 		]
 	},
 	"m2_sector_c": {
@@ -2422,22 +3434,26 @@ const BARKS := {
 		"cru": [
 			"Ours is hit, get him out of there!",
 			"He is hit, he is hit!",
-			"Somebody get him!"
+			"Somebody get him!",
+			"No! Man down, man down!"
 		],
 		"cru2": [
 			"Soldier down.",
 			"Casualty. One of ours.",
-			"Lost a man."
+			"Lost a man.",
+			"We lost another one."
 		],
 		"cru3": [
 			"Weak. Keep moving.",
 			"He fell. Step over him.",
-			"One less. Keep firing."
+			"One less. Keep firing.",
+			"More pay for the rest of us."
 		],
 		"cru4": [
 			"Friendly down.",
 			"Unit lost.",
-			"Personnel down. Continuing."
+			"Personnel down. Continuing.",
+			"Unit strength reduced."
 		]
 	},
 	"mate_rescue": {
@@ -3101,22 +4117,26 @@ const BARKS := {
 		"cru": [
 			"Back, back, back!",
 			"Get out of there, fall back!",
-			"Break off, regroup!"
+			"Break off, regroup!",
+			"Too hot! Pull back!"
 		],
 		"cru2": [
 			"Falling back to cover.",
 			"Retreating. Cover fire.",
-			"Moving back."
+			"Moving back.",
+			"Breaking contact. Moving."
 		],
 		"cru3": [
 			"Not worth it. Back.",
 			"Back off. For now.",
-			"Pull out. We will return."
+			"Pull out. We will return.",
+			"This is not over."
 		],
 		"cru4": [
 			"Disengaging.",
 			"Retreat authorized.",
-			"Repositioning to the rear."
+			"Repositioning to the rear.",
+			"Tactical withdrawal."
 		]
 	},
 	"rope": {
@@ -3299,6 +4319,46 @@ const BARKS := {
 			"We are not alone out here.",
 			"Eyes open, it is circling.",
 			"Contact in the shadows. Do not split up."
+		]
+	},
+	"suppress": {
+		"cru": [
+			"Suppressing fire! Keep their heads down!",
+			"Light them up!"
+		],
+		"cru2": [
+			"Suppressing.",
+			"Pinning them down."
+		],
+		"cru3": [
+			"Stay down. Stay dead.",
+			"Eat lead."
+		],
+		"cru4": [
+			"Suppressive fire.",
+			"Saturating the position."
+		]
+	},
+	"taunt": {
+		"cru": [
+			"Come out, Fireteam! We only want to talk!",
+			"You are all alone out here!",
+			"Helix pays double for your heads!"
+		],
+		"cru2": [
+			"Give it up. You are surrounded.",
+			"Nobody is coming for you.",
+			"Drop the weapon. Last warning."
+		],
+		"cru3": [
+			"I can smell your fear from here.",
+			"Run. I like it when they run.",
+			"Your friends screamed too."
+		],
+		"cru4": [
+			"Resistance is noted. And ignored.",
+			"Termination is only a matter of time.",
+			"Your odds of survival are falling."
 		]
 	},
 	"thanks": {

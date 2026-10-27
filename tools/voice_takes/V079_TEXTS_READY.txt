@@ -1,0 +1,6 @@
+v0.79 texts of the story/code worker are final:
+  tools/voice_takes/z_v079_bahnhof.json   (station variants, k=1 company talk, radio lines m2_r_*)
+  tools/voice_takes/z_v079_banter.json    (51 squad/operator conversations bt_<pair>_<nn>_<k>, 30 solo idle/clear lines)
+Audio tags like [laughs] [sighs] [hums] are in the texts for the TTS only; make_takes.js strips them from the subtitles.
+make_voices.js: m2_r_phantom / m2_r_havoc / m2_r_ghost were added to OVER_RADIO (operators calling over the radio).
+radio_takes.gd has been regenerated (node tools/make_takes.js).

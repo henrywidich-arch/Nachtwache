@@ -2,7 +2,7 @@ extends SceneTree
 ## Pictures of one weapon of the game as the player sees it, in the simulation hall's light
 ## (TokyoHall at the crossing): from the hip, aimed over its sights, and from the side
 ## (the model on its own in front of a lit shop). Run with tools/godot_bg.ps1 -Render:
-##   -s res://tools/gun_shots.gd -- --gun=falke --out=<folder> [--prefix=runde1_]
+##   -s res://tools/gun_shots.gd -- --gun=falke --out=<folder> [--prefix=runde1_] [--skin=scorpion]
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -19,6 +19,9 @@ func _run() -> void:
 			id = arg.trim_prefix("--gun=")
 		elif arg.begins_with("--prefix="):
 			prefix = arg.trim_prefix("--prefix=")
+		elif arg.begins_with("--skin="):
+			# The arms as that skin wears them (Profile.SKINS).
+			WeaponView.wear(arg.trim_prefix("--skin="))
 	DirAccess.make_dir_recursive_absolute(folder)
 	# (--day: a bright field instead of the hall, as on the farm: size and place read better.)
 	if day:
@@ -51,7 +54,8 @@ func _run() -> void:
 	camera.far = 400
 	root.add_child(camera)
 	camera.current = true
-	var gun := WeaponView.build_gun(id)
+	# (build: any weapon of the view, those of MODELS too - the minigun.)
+	var gun := WeaponView.build(id)
 	camera.add_child(gun)
 	var view: Dictionary = WeaponView.VIEWS[id]
 	# Standing at the crossing, looking up the avenue at the tower and the screens.

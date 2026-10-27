@@ -44,13 +44,16 @@ static func build(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 		game.team_enabled = not game.team_enabled
 		net.broadcast_lobby()
 		hud.show_menu("play"), net.joined)
-	if selected == 2 and bots:
-		var company := hud._chip(hud._company_label(), func() -> void:
-			hud._next_company()
-			net.broadcast_lobby(), false, 692)
-		company.add_theme_font_size_override("font_size", 14)
-		company.disabled = net.joined
-		mission.add_child(company)
+	# (The second mission: one room of the random part that is surely in the night. The
+	# host's choice counts; a guest sees it.)
+	if selected == 2:
+		var room: String = str(net.lobby_settings.get("room", game.profile.room)) if net.joined else str(game.profile.room)
+		_setting(hud, options, "RAUM GARANTIERT", HiveLayout.room_label(room), func() -> void:
+			game.profile.next_room()
+			net.broadcast_lobby()
+			hud.show_menu("play"), net.joined)
+	if bots:
+		_companions(hud, mission, selected)
 	var lobby := VBoxContainer.new()
 	lobby.name = "LobbySection"
 	lobby.custom_minimum_size.x = 376
@@ -84,6 +87,57 @@ static func build(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 		clash.custom_minimum_size.x = 376
 		lobby.add_child(clash)
 	return start
+
+## Who comes along (v0.79): two of Profile.CANDIDATES are ticked; ticking a third lets the
+## one ticked longest ago go. The operators come only in the second mission and join there
+## at the station - until then one of the squad who was not ticked walks in each one's
+## place and stays at the station; on the other maps they are greyed out and one of the
+## squad comes instead. A look that is not unlocked yet cannot be ticked. A guest sees the
+## host's choice; the host's counts.
+static func _companions(hud: SurvivalHUD, parent: VBoxContainer, selected: int) -> void:
+	var game: Node3D = hud.game
+	var net: NetLink = game.net
+	var profile: Profile = game.profile
+	var picks: Array = net.lobby_settings.get("picks", profile.picks) if net.joined else profile.picks
+	var section := VBoxContainer.new()
+	section.name = "CompanionSection"
+	section.add_theme_constant_override("separation", 6)
+	parent.add_child(section)
+	section.add_child(hud.label("BEGLEITER  ·  ZWEI ANHAKEN", 11, SurvivalHUD.MUTED, true))
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 8)
+	section.add_child(grid)
+	for id: String in Profile.CANDIDATES:
+		var ticked := picks.has(id)
+		var operator := id in Profile.OPERATORS
+		var chip := hud._chip(("✓  " if ticked else "") + str(Profile.SKINS[id].label), func() -> void:
+			hud._pick_companion(id)
+			net.broadcast_lobby(), ticked, 164)
+		chip.name = "Pick_" + id
+		chip.custom_minimum_size.y = 34
+		chip.add_theme_font_size_override("font_size", 14)
+		chip.disabled = net.joined or not profile.may_pick(id) or (operator and selected != 2 and not ticked)
+		if not profile.may_pick(id):
+			chip.tooltip_text = profile.progress(id)
+		elif operator:
+			chip.tooltip_text = "Stößt am Bahnhof von Einsatz 2 dazu"
+		grid.add_child(chip)
+	var operators: Array = picks.filter(func(id: Variant) -> bool: return str(id) in Profile.OPERATORS)
+	# (Who walks in an operator's place: one of the squad who was not ticked - the host's
+	# squad is not known to a guest, so he reads the rule only.)
+	var stand_in: Array = [] if net.joined else profile.squad.filter(func(id: Variant) -> bool: return not picks.has(id))
+	var names := " und ".join(PackedStringArray(stand_in.map(func(id: Variant) -> String: return str(Profile.SKINS[str(id)].label).capitalize())))
+	var note := "Phantom, Havoc und Ghost stoßen erst am Bahnhof dazu – bis dahin geht für jeden einer aus dem Trupp mit."
+	if not operators.is_empty() and names != "":
+		note = "Phantom, Havoc und Ghost stoßen erst am Bahnhof dazu – bis dahin %s %s mit und %s dort die Stellung." % ["gehen" if stand_in.size() > 1 else "geht", names, "halten" if stand_in.size() > 1 else "hält"]
+	if selected != 2:
+		note = "Phantom, Havoc und Ghost kommen nur in Einsatz 2 mit (ab dem Bahnhof)." + ("  Hier %s dafür %s mit." % ["gehen" if stand_in.size() > 1 else "geht", names] if not operators.is_empty() and names != "" else "")
+	var words := hud.label(note, 12, SurvivalHUD.MUTED)
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.custom_minimum_size.x = 686
+	section.add_child(words)
 
 static func _setting(hud: SurvivalHUD, parent: Control, title: String, value: String, callback: Callable, locked: bool) -> void:
 	var field := VBoxContainer.new()

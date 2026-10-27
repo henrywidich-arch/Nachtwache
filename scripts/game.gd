@@ -267,6 +267,10 @@ var sandbox: Sandbox
 ## what lies under it (built when it is first asked for, kept from then on). Only the one
 ## that is played on is in the world.
 var hive: HiveDirector
+## The small talk of the two companions (SquadBanter).
+var banter: SquadBanter
+## The way to the goal on the ground, shown with the middle mouse button.
+var path_guide: PathGuide
 var farm: CabinMap
 var hive_map: HiveMap
 ## The third map, Appenweier (built the first time it is played; see its script).
@@ -354,6 +358,12 @@ func _ready() -> void:
 	hive.name = "Hive"
 	hive.game = self
 	add_child(hive)
+	banter = SquadBanter.new()
+	banter.name = "Banter"
+	banter.game = self
+	add_child(banter)
+	path_guide = PathGuide.new(self)
+	add_child(path_guide)
 	player = Survivor.new()
 	player.name = "Survivor"
 	player.game = self
@@ -414,6 +424,8 @@ func _ready() -> void:
 		player.sensitivity = float(settings.get_value("controls", "sensitivity", 1.0)) * 0.0022
 		player.set_crouch_mode(bool(settings.get_value("controls", "crouch_toggle", false)))
 		show_fps = bool(settings.get_value("video", "show_fps", false))
+		# The marks of the sights and the laser as the player set them up (reticle workshop).
+		Reticle.load_from(settings)
 		set_hole_level(int(settings.get_value("video", "holes", BulletHoles.DEFAULT_LEVEL)), false)
 		set_fps_limit(int(settings.get_value("video", "fps_limit", 0)), false)
 		# (Only what was chosen: the project's own edge smoothing stays until then.)
@@ -447,11 +459,12 @@ func _ready() -> void:
 	for arg in args:
 		if arg.begins_with("--scale="):
 			set_render_scale(float(arg.trim_prefix("--scale=")), false)
-	# --squad=raven,viper picks the two bots for this start, whatever the profile says.
+	# --squad=raven,viper picks the two bots for this start, whatever the profile says; an
+	# operator among them (--squad=viper,havoc) joins at the station of the second mission.
 	for arg in args:
 		if arg.begins_with("--squad="):
 			var picked: PackedStringArray = arg.trim_prefix("--squad=").split(",")
-			if picked.size() == 2 and Profile.SKINS.has(picked[0]) and Profile.SKINS.has(picked[1]):
+			if picked.size() == 2 and not profile.set_picks(picked[0], picked[1]) and Profile.SKINS.has(picked[0]) and Profile.SKINS.has(picked[1]):
 				profile.squad = [picked[0], picked[1]]
 	if "--smoke-test" in args:
 		check_mode = true
@@ -731,6 +744,12 @@ func _configure_input() -> void:
 		var event := InputEventMouseButton.new()
 		event.button_index = MOUSE_BUTTON_LEFT if action == "fire" else MOUSE_BUTTON_RIGHT
 		InputMap.action_add_event(action, event)
+	# The way to the goal: the middle mouse button.
+	if not InputMap.has_action("show_way"):
+		InputMap.add_action("show_way")
+	var middle := InputEventMouseButton.new()
+	middle.button_index = MOUSE_BUTTON_MIDDLE
+	InputMap.action_add_event("show_way", middle)
 
 func is_playing() -> bool:
 	return state == "playing"
@@ -747,6 +766,8 @@ func _input(event: InputEvent) -> void:
 			resume_run()
 		elif state == "playing" and overlay == "":
 			open_test()
+	if event.is_action_pressed("show_way") and state == "playing" and overlay == "":
+		show_way()
 	if event.is_action_pressed("interact") and (state in ["shop", "bench"] or overlay in ["shop", "bench"]):
 		resume_run()
 		get_viewport().set_input_as_handled()
@@ -912,6 +933,8 @@ func start_run(test: bool = false) -> void:
 	_clear_match_nodes()
 	sandbox.end()
 	hive.end()
+	banter.reset()
+	path_guide.hide_way()
 	sandbox.on = test and not net.active
 	var second: bool = (net.match_mission == 2 if net.joined else profile.mission == 2) and not test
 	# The test room on the map of the second mission: every area of its random part, to
@@ -1059,6 +1082,18 @@ func hive_needs_build() -> bool:
 		return false
 	var night := hive.prepare_night()
 	return not is_instance_valid(hive_map) or hive_map.layout_key != str(night.get("key", "classic"))
+
+## Lays the way from the player to the nearest goal of the HUD on the ground for a few
+## seconds (PathGuide); with no goal the banner says so.
+func show_way() -> void:
+	if player.down:
+		return
+	var from: Vector3 = player.global_position
+	var to: Vector3 = path_guide.pick_goal(from, markers())
+	if to == Vector3.INF:
+		hud.announce("KEIN ZIEL", "Gerade gibt es keinen Ort, zu dem du musst.", 2.0)
+		return
+	path_guide.request(from, to)
 
 ## The places the HUD and the map in the corner point at.
 func markers() -> Array:
@@ -1611,6 +1646,22 @@ func explode(center: Vector3, radius: float, player_damage: float, infected_dama
 			var throw := clampf(infected_damage / 14.0, 4.0, 8.0) * (1.0 - 0.5 * gap / radius)
 			enemy.hit_hard(infected_damage * (1.0 - 0.6 * gap / radius) * (shell_gain if enemy.hardened() else 1.0), (enemy.global_position - center).normalized(), false, null, throw, 0.45)
 	blasting = false
+
+## A shell from the launcher has gone off: of the survivors it hurts only the one who fired
+## it (as a grenade would, on his own machine) - never a companion, and never the partner
+## in a co-op match. The rest is a grenade's blast that spares every survivor.
+func shell_blast(center: Vector3, shooter: Node, radius: float, survivor_damage: float, infected_damage: float) -> void:
+	var survivor := shooter as Survivor
+	if survivor != null and is_instance_valid(survivor) and survivor.takes_local_damage() and survivor.is_targetable():
+		var reach := radius * (1.0 + skills.value("blast_reach"))
+		var chest: Vector3 = survivor.global_position + Vector3(0, 0.9, 0)
+		var distance := chest.distance_to(center)
+		if distance < reach:
+			var query := PhysicsRayQueryParameters3D.create(center, chest, 1)
+			var shielded := not get_world_3d().direct_space_state.intersect_ray(query).is_empty()
+			var falloff := 1.0 - distance / reach
+			survivor.receive_damage(survivor_damage * float(rules.harm) * (0.35 + 0.65 * falloff) * (0.3 if shielded else 1.0), center, "blast")
+	blast(center, radius, 0.0, infected_damage)
 
 ## The blast of a grenade or a mine. In a co-op match the host works it out.
 ## `style` is "frag" for a grenade the C.R.U. threw: ballistic plates help against those.

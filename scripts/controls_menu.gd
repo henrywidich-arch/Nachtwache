@@ -1,7 +1,7 @@
 extends RefCounted
 ## Read the actual bindings, with one roomy category at a time.
 const GROUPS := {
-	"movement": {"title": "BEWEGUNG", "actions": ["move_forward", "#Maus", "sprint", "jump", "crouch"]},
+	"movement": {"title": "BEWEGUNG", "actions": ["move_forward", "#Maus", "sprint", "jump", "crouch", "#Mittlere Maustaste"]},
 	"combat": {"title": "WAFFEN", "actions": ["#Linke Maustaste", "#Rechte Maustaste", "reload", "melee", "weapon_1", "weapon_2", "weapon_3", "weapon_4", "#Mausrad"]},
 	"equipment": {"title": "AUSRÜSTUNG", "actions": ["interact", "flashlight", "syringe", "throw_grenade", "throw_flash", "throw_molotov", "throw_heal", "place_claymore"]},
 	"team": {"title": "TEAM & MENÜ", "actions": ["squad_follow", "squad_hold", "squad_free", "next_wave", "scoreboard", "pause", "fullscreen", "test_menu", "skip_round"]}

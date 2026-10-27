@@ -1,0 +1,54 @@
+{
+  "line": {
+    "m2_s_fuses": {"speaker": "havoc", "takes": ["Oh, and your train is dead, by the way! Somebody pulled the emergency fuses on the platform. Three boxes, red lights. Flip them all, and it wakes up!"]},
+    "m2_s_fuel": {"speaker": "ghost", "takes": ["That train is dry. Fuel canisters stand about the station. Workshop, depot, both ends of the platform. Three will do."]},
+    "m2_s_ready": {"speaker": "phantom", "takes": ["And before you ask: the train is fuelled and powered. We had time while you were busy in the villa. You are welcome."]},
+    "m2_power_fuses": {"speaker": "coleman", "takes": ["The train is coming up on emergency power, Fireteam. Keep all three fuses on, and hold the platform until it is ready."]},
+    "m2_power_fuel": {"speaker": "coleman", "takes": ["The train is coming up, but it will not leave on an empty tank. Three canisters, Fireteam. Hold the platform while you fill it."]},
+    "m2_power_ready": {"speaker": "coleman", "takes": ["The train is pulling out of the siding. A few seconds, and then you are aboard. Do not get comfortable."]},
+    "m2_fuse_trip": {"speaker": "coleman", "takes": ["One of the fuses just blew. Get it back in, or that train crawls."]},
+    "m2_fuel_short": {"speaker": "coleman", "takes": ["The train is up, and the tank is not. Get the fuel in, Fireteam."]},
+    "m2_r_phantom": {"speaker": "phantom", "takes": ["Phantom here. The tunnel behind you is ours. Get on that train. We will take care of the rest."]},
+    "m2_r_havoc": {"speaker": "havoc", "takes": ["Havoc here! Whatever crawls out of that tunnel meets me first! Go, go, we have got this!"]},
+    "m2_r_ghost": {"speaker": "ghost", "takes": ["Ghost. The relay is clean, the platform is covered. Board the train."]},
+    "m2_r_viper": {"speaker": "viper", "takes": ["Viper here. We have the platform. Board the train, we will take care of the rest. Do not look back."]},
+    "m2_r_scorpion": {"speaker": "scorpion", "takes": ["Scorpion here! The platform is ours. Go, get on that train, I will keep the welcome party busy!"]},
+    "m2_r_raven": {"speaker": "raven", "takes": ["Raven. The platform is held. Get in the train. We handle the rest."]},
+    "m2_d_phantom": {"speaker": "phantom", "takes": ["One of us goes with you. Me, naturally. The other two can mind the tunnel."]},
+    "m2_d_havoc": {"speaker": "havoc", "takes": ["One of us comes along, and I call it! Me! The other two can babysit the tunnel!"]},
+    "m2_d_ghost": {"speaker": "ghost", "takes": ["One of us goes with you. I will. Two are enough for a tunnel."]},
+    "m2_d_coleman": {"speaker": "coleman", "takes": ["One of theirs and one of ours. I can live with that. Whoever stays, that platform is your way home."]}
+  },
+  "bark": {
+    "m2_s_fuses_t": {
+      "viper": ["Three boxes. Split up, and watch each other's backs."],
+      "scorpion": ["Flip a switch, wake the dead. What could possibly go wrong?"],
+      "raven": ["Every switch will be heard. Be ready when it is."]
+    },
+    "m2_s_fuel_t": {
+      "viper": ["Fuel run. One carries, the others cover."],
+      "scorpion": ["Hauling gas cans through a station full of zombies. Living the dream."],
+      "raven": ["Three cans. Quickly, before more of them come."]
+    },
+    "m2_s_ready_t": {
+      "viper": ["Then we do not waste it. Get to the control room."],
+      "scorpion": ["Wait. They did us a favour? I do not trust it."],
+      "raven": ["A gift from Helix hunters. Check it for wires."]
+    },
+    "m2_fuse_out": {
+      "viper": ["Fuse is out! Who is closest?"],
+      "scorpion": ["The light went red again! Somebody kick that box!"],
+      "raven": ["Fuse. Go. I cover you."]
+    },
+    "m2_d_stay": {
+      "viper": ["Then I hold here. Go with them, and go quickly. We have no time to argue."],
+      "scorpion": ["So I am the one babysitting the platform. Fine. Go on, go, before I change my mind!"],
+      "raven": ["I stay. Go with them. Fast. Every minute we stand here is hers."]
+    },
+    "m2_d_go": {
+      "viper": ["Hold the platform. We will need that train to get back."],
+      "scorpion": ["Keep the lights on for us. And do not get eaten, I still owe you money."],
+      "raven": ["Hold it. I am not walking home."]
+    }
+  }
+}

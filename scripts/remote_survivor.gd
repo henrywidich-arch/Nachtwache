@@ -21,6 +21,9 @@ var clung_by: Infected
 var aiming := false
 var reloading := false
 var interacting := false
+## The partner's weapon carries a laser module that is on: its dot is shown here too.
+var laser_on := false
+var laser: LaserSight
 var firing_left := 0.0
 var rising_left := 0.0
 var net_position := Vector3.ZERO
@@ -118,10 +121,33 @@ func _physics_process(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, net_yaw, minf(1.0, delta * 14.0))
 	visual.pitch = lerpf(visual.pitch, net_pitch, minf(1.0, delta * 12.0))
 	visual.animate(delta, net_velocity, aiming or firing_left > 0.0, firing_left > 0.0)
+	_show_laser()
 	if rising_left > 0.0:
 		rising_left -= delta
 		if rising_left <= 0.0:
 			visual.settle()
+
+## The partner's laser dot, where the beam from his muzzle along his view strikes. (Its
+## colour is this player's own choice: the partner's is not sent.)
+func _show_laser() -> void:
+	var on := laser_on and not down and not reloading and visual.mode != "rising"
+	if laser == null:
+		if not on:
+			return
+		laser = LaserSight.new()
+		laser.name = "PartnerLaser"
+		game.add_child(laser)
+	if not on:
+		laser.hide()
+		return
+	var muzzle := visual.muzzle_position()
+	var ahead := Basis.from_euler(Vector3(visual.pitch, rotation.y, 0.0)) * Vector3.FORWARD
+	var eye := get_viewport().get_camera_3d()
+	laser.aim(muzzle, ahead, muzzle, eye.global_position if eye != null else muzzle, [get_rid()])
+
+func _exit_tree() -> void:
+	if is_instance_valid(laser):
+		laser.queue_free()
 
 func set_reloading(now: bool) -> void:
 	if now and not reloading:

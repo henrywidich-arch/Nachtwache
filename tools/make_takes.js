@@ -46,7 +46,10 @@ for (const file of fs.readdirSync(takesDir).filter((f) => f.endsWith('.json')).s
 paired = [...new Set(paired)].sort();
 for (const cue of paired) if (!bark[cue] && !base.barks[cue]) throw new Error('paired cue without lines: ' + cue);
 
-const q = (s) => JSON.stringify(s);
+// ElevenLabs v4 audio tags ([laughs], [sighs] ...) are meant for the voice only: the orders keep them,
+// the subtitles in radio_takes.gd are written without them.
+const untagged = (t) => t.replace(/\s*\[[a-z ]+\]\s*/gi, ' ').replace(/\s+/g, ' ').trim();
+const q = (s) => JSON.stringify(untagged(s));
 let gd = 'class_name RadioTakes\nextends RefCounted\n';
 gd += '## The takes that came after the first recordings of the voices (see Radio): more variants of\n';
 gd += '## cues that exist, and cues of their own. They are put after the variants written in\n';

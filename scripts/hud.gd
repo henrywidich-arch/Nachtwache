@@ -38,7 +38,7 @@ const KEY_HELP := [
 	[["reload"], "Nachladen"], [["sprint"], "Sprinten"], [["jump"], "Springen / Hindernis überwinden"], [["crouch"], "Ducken (halten oder umschalten)"],
 	[["interact"], "Benutzen, aufhelfen, Shop"], [["flashlight"], "Taschenlampe · halten: nächste Runde"], [["syringe"], "Heilspritze"], [["melee"], "Nahkampf"],
 	[["weapon_1"], "Primärwaffen durchwechseln"], [["weapon_2"], "Schwere Waffen durchwechseln"],
-	[["weapon_3"], "Sekundärwaffen (ohne: Wurfzeug)"], [["weapon_4"], "Wurfzeug in die Hand nehmen"], [["#Mausrad"], "Nächste / vorige Waffe"],
+	[["weapon_3"], "Sekundärwaffen (ohne: Wurfzeug)"], [["weapon_4"], "Wurfzeug in die Hand nehmen"], [["#Mausrad"], "Nächste / vorige Waffe"], [["#Mittlere Maustaste"], "Weg zum Ziel einblenden"],
 	[["throw_grenade"], "Splittergranate (halten, loslassen)"], [["throw_flash"], "Blendgranate"], [["throw_molotov"], "Molotow"],
 	[["throw_heal"], "Heilgranate"], [["place_claymore"], "Mine legen"],
 	[["squad_follow"], "Team: folgen"], [["squad_hold"], "Team: halten"], [["squad_free"], "Team: frei"],
@@ -1277,10 +1277,15 @@ func _choose_mission(number: int) -> void:
 func _company_label() -> String:
 	var choice: String = str(game.net.lobby_settings.get("company", game.profile.company)) if game.net.joined else str(game.profile.company)
 	var pair := Profile.pair_of(Profile.known_company(choice))
-	return "BEGLEITER AB BAHNHOF  ·  %s" % ("FIRETEAM" if pair.is_empty() else "%s + %s" % [pair[0].to_upper(), pair[1].to_upper()])
+	return "BEGLEITER AB BAHNHOF  ·  %s" % ("FIRETEAM" if pair.is_empty() else " + ".join(PackedStringArray(pair.map(func(look: String) -> String: return look.to_upper()))))
 
 func _next_company() -> void:
 	game.profile.next_company()
+	show_menu(current_menu)
+
+## A companion is ticked on the page that starts a game (Profile.pick).
+func _pick_companion(id: String) -> void:
+	game.profile.pick(id)
 	show_menu(current_menu)
 
 ## A button for one of the missions; the one that is chosen stands out.
@@ -1394,7 +1399,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "skins", "board", "skills", "test"]
+	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "reticle", "skins", "board", "skills", "test"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -1439,6 +1444,8 @@ func show_menu(mode: String) -> void:
 			first = preload("res://scripts/controls_menu.gd").build(self, column)
 		"graphics":
 			first = preload("res://scripts/graphics_menu.gd").build(self, column)
+		"reticle":
+			first = preload("res://scripts/reticle_menu.gd").build(self, column)
 		"shop", "bench":
 			first = _menu_shop(column, mode)
 		"host":
@@ -1874,6 +1881,16 @@ func _menu_settings(column: VBoxContainer) -> Control:
 	graphics.custom_minimum_size = Vector2(290, 48)
 	graphics.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	actions.add_child(graphics)
+	# The reticle workshop: colour, size and line strength of the sights' mark and the laser.
+	var reticle := _button("VISIER-WERKSTATT", show_menu.bind("reticle"))
+	reticle.name = "ReticleButton"
+	reticle.icon = SYMBOLS.icon("mods")
+	reticle.expand_icon = true
+	reticle.add_theme_constant_override("icon_max_width", 26)
+	reticle.add_theme_constant_override("h_separation", 16)
+	reticle.custom_minimum_size = Vector2(290, 48)
+	reticle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	column.add_child(reticle)
 	var crouch := HBoxContainer.new()
 	crouch.add_theme_constant_override("separation", 12)
 	crouch.size_flags_vertical = Control.SIZE_SHRINK_CENTER

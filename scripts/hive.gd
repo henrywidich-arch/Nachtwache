@@ -25,7 +25,7 @@ const STAGES := {
 	"descent": ["DER ABSTIEG", "Die Treppe hinunter zum Stahltor", "lobby", 4],
 	"station": ["DER BAHNHOF", "Den Bahnsteig von den Infizierten säubern", "platform", 4],
 	"nadja": ["DER BAHNHOF", "Bei Nadja bleiben", "nadja_door", 4],
-	"deal": ["DER BAHNHOF", "Abwarten, was die Operatoren wollen", "radio", 4],
+	"deal": ["DER BAHNHOF", "Im Stellwerk den Zug hochfahren  ·  nebenbei Sicherungen und Benzin", "booth", 4],
 	"power": ["DER BAHNHOF", "Im Stellwerk den Zug hochfahren", "booth", 5],
 	"hold": ["DER BAHNHOF", "Den Bahnsteig halten, bis der Zug bereit ist", "platform", 5],
 	"board": ["DER BAHNHOF", "In den Zug einsteigen", "car_a", 5],
@@ -114,8 +114,9 @@ const STAFF_PLACES := {
 	"decon": ["hive_lab2", "hive_lab", "hive_nurse"]
 }
 ## The seconds the train takes to come up with all three fuses of the platform on (see
-## "the fuses": with fewer it takes longer). It was 80 with nothing to do meanwhile.
-const HOLD_STATION := 45.0
+## "the fuses": with fewer it takes longer, every canister of fuel already in it makes it
+## shorter). It was 80 with nothing to do meanwhile, then 45.
+const HOLD_STATION := 30.0
 const HOLD_CAFE := 70.0
 const HOLD_HALL := 60.0
 const KEYPAD_SECONDS := 20.0
@@ -135,15 +136,54 @@ const LAB_ROOMS := ["lab_corridor", "lab_a", "lab_b", "lab_c", "quarantine", "cr
 ## the box, and which way along z it faces). While Nadja leaves and the operators talk the
 ## squad can switch them on; the train comes up the faster the more of them are on
 ## (FUSE_PACE by how many: all three is HOLD_STATION). While it comes up one of them trips
-## twice (FUSE_TRIPS: the share of the way at which it may) and has to be switched on again.
+## once (FUSE_TRIPS: the share of the way at which it may) and has to be switched on again.
 ## Every switch is loud: a few infected come to see (FUSE_DRAW).
 const FUSES := [[-16.0, -48.52, 1.0], [-8.0, -41.48, -1.0], [24.0, -48.52, 1.0]]
-const FUSE_PACE := [0.2, 0.3, 0.5, 1.0]
-const FUSE_TRIPS := [[0.3, 0.6], [0.65, 0.88]]
+const FUSE_PACE := [0.25, 0.4, 0.6, 1.0]
+const FUSE_TRIPS := [[0.35, 0.7]]
 const FUSE_REACH := 2.2
 const FUSE_DRAW := [["mauler", "striker"], ["mauler", "mauler", "ripper"]]
 ## The stages in which the fuses are there to be switched.
 const FUSE_STAGES := ["nadja", "deal", "power", "hold"]
+## The train runs dry: canisters of fuel stand about the station (x, z on the floor of the
+## platform's level: the workshop, the depot, both ends of the platform). A human carries
+## one at a time ([E]) and fills it into the train at its tank beside the car (TANK: where
+## one stands for it). The train only leaves with FUEL_NEEDED of them in it; every one that
+## is filled also brings it FUEL_BOOST of the way up. They can be taken up as soon as the
+## platform is reached (FUEL_STAGES); the companions leave them to the humans.
+const FUEL := [[-43.5, -38.0], [50.0, -47.5], [-28.0, -52.3], [33.0, -37.6]]
+const FUEL_NEEDED := 3
+const FUEL_BOOST := 0.12
+const FUEL_REACH := 1.8
+const TANK := [-5.0, -54.2]
+const TANK_REACH := 2.2
+const FUEL_STAGES := ["station", "nadja", "deal", "power", "hold"]
+## How the train is got going (v0.79), drawn by the host when a night begins and kept in
+## `done` ("station_kind"), so that a guest sees the same: "fuses" - it comes up on the
+## emergency power, and leaves only with all three fuses on (no fuel); "fuel" - its tank is
+## dry, FUEL_NEEDED canisters go into it (no fuses, the full pace); "ready" - the operators
+## have brought it up already: it is started in the control room, and those who stay hold
+## the platform for the few seconds it takes (HOLD_READY) and say so over the radio. "both"
+## is the station of v0.78 (fuses and fuel): the classic night of the checks, and
+## --station=both. --station=fuses|fuel|ready|both forces one.
+const STATION_KINDS := ["fuses", "fuel", "ready"]
+const HOLD_READY := 14.0
+## What command says when the train comes up, by the kind of the station.
+const POWER_LINES := {"fuses": "m2_power_fuses", "fuel": "m2_power_fuel", "ready": "m2_power_ready"}
+## The goal while the control room waits, by the kind of the station.
+const DEAL_GOALS := {"fuses": "Im Stellwerk den Zug hochfahren  ·  nebenbei die Sicherungen einschalten", "fuel": "Im Stellwerk den Zug hochfahren  ·  nebenbei Benzin suchen", "ready": "Im Stellwerk den Zug starten"}
+## What an operator who stays says in person when the roads part (one operator goes on):
+## Phantom and Havoc hold the tunnel, Ghost the relay.
+const STAYING_WORDS := {"phantom": "m2_p_tunnel", "havoc": "m2_a_havoc", "ghost": "m2_a_ghost"}
+## ... and what the one who goes says (in person).
+const JOIN_WORDS := {"phantom": "m2_d_phantom", "havoc": "m2_d_havoc", "ghost": "m2_d_ghost"}
+## What is the matter with the train, by the kind of the station: the operator's word for
+## it (in person), and the squad's answer (one of it).
+const TRAIN_NEWS := {"fuses": ["m2_s_fuses", "m2_s_fuses_t"], "fuel": ["m2_s_fuel", "m2_s_fuel_t"], "ready": ["m2_s_ready", "m2_s_ready_t"]}
+## Who calls over the radio that they hold the platform when the train stood ready.
+const READY_CALLS := {"viper": "m2_r_viper", "scorpion": "m2_r_scorpion", "raven": "m2_r_raven", "phantom": "m2_r_phantom", "havoc": "m2_r_havoc", "ghost": "m2_r_ghost"}
+## For a test: the kind the next night takes ("" draws one).
+var station_wanted := ""
 ## Quiet at a counter: where a supply point, a workbench or an equipment station stands,
 ## nobody new comes while one of the humans stands within SAFE_REACH of it - or anywhere
 ## in its room, if that room is a small one (SAFE_ROOM square metres at the most). While a
@@ -277,6 +317,13 @@ var checkpoints: Dictionary = CHECKPOINTS
 ## The fuse boxes of the station as they are seen (built on the host and on a guest alike,
 ## their state read from `done`): {node, lamp, at, stand}.
 var fuse_boxes: Array = []
+## The canisters of fuel as they are seen (built on the host and on a guest alike, their
+## state read from `done`: "can_N" is "host" or "guest" while one of the two carries it,
+## "in" once it is in the train), and the tank beside the car: {node, gauge}.
+var fuel_cans: Array = []
+var fuel_tank: Dictionary = {}
+## Where the canisters stand: on the free floor nearest to FUEL (found once a night).
+var fuel_spots: Array = []
 ## The counters that make a quiet place: {pos, room} (see SAFE_REACH), and whether one of
 ## the humans stands at one right now (looked at a few times a second).
 var safe_spots: Array = []
@@ -326,7 +373,7 @@ func prepare_night() -> Dictionary:
 		elif wanted == -3:
 			night = HiveLayout.showcase()
 		else:
-			night = HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted)
+			night = HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted, _room_wanted())
 		var hall := tokyo_wanted
 		if "--tokyo" in OS.get_cmdline_user_args():
 			hall = 1
@@ -336,6 +383,14 @@ func prepare_night() -> Dictionary:
 			night = HiveLayout.with_tokyo(night, hall == 1)
 	night_fresh = true
 	return night
+
+## The room the night must have: --hive-room= on the command line, else the one chosen in
+## the play menu (Profile.room; not in a check, so that the checks keep their nights).
+func _room_wanted() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hive-room="):
+			return arg.trim_prefix("--hive-room=")
+	return "" if game.check_mode else str(game.profile.room)
 
 func _seed_for_night() -> int:
 	if seed_wanted != -2:
@@ -383,8 +438,13 @@ func begin() -> void:
 	if game.net.joined:
 		company = Profile.known_company(game.net.match_company)
 	pair = Profile.pair_of(company)
+	# (The guest takes the station's kind from the host's snapshots of `done`.)
+	if not game.net.joined:
+		done["station_kind"] = _draw_station()
 	night_fresh = false
 	_clear_fuses()
+	_clear_fuel()
+	fuel_spots.clear()
 	_find_safe_spots()
 	shopped.clear()
 	shop_left = 20.0
@@ -456,6 +516,7 @@ func end() -> void:
 	tokyo_tasks = null
 	run.clear_things()
 	_clear_fuses()
+	_clear_fuel()
 	safe_spots.clear()
 	safe_now = false
 	_end_intro()
@@ -698,26 +759,37 @@ func _enter(id: String) -> void:
 			_nadja_leaves()
 			_fuses_begin()
 		"deal":
-			_deal()
+			# (Begun as soon as Nadja's door has shut: the operators come while she still
+			# talks through the glass, and the train can be brought up from the control room
+			# at once - what is said goes on over whatever the squad does meanwhile.)
+			if _once("dealt"):
+				_deal()
 			_fuses_begin()
-			if _fuses_on() < FUSES.size():
-				goal = "Sicherungen am Bahnsteig einschalten, während die Operatoren reden"
+			goal = str(DEAL_GOALS.get(station_kind(), goal))
+			_use("booth", "booth", "[E] Zug starten" if station_kind() == "ready" else "[E] Zug hochfahren")
 		"power":
-			_use("booth", "booth", "[E] Zug hochfahren")
+			if station_kind() == "ready":
+				goal = str(DEAL_GOALS.ready)
+			_use("booth", "booth", "[E] Zug starten" if station_kind() == "ready" else "[E] Zug hochfahren")
 		"hold":
-			progress = 0.0
+			# (Fuel that is in the train already has brought it part of the way.)
+			progress = minf(0.6, FUEL_BOOST * _fuel_in())
 			progress_text = _hold_text()
 			game.round_called = false
 			# Whoever goes on with the survivor is at his side when the infected come, and
 			# whoever stays is on his way - what they still have to say to each other they
-			# say meanwhile, after command's word about the train.
-			_part(false)
+			# say meanwhile, after command's word about the train. (Brought up before command
+			# has got to the train, the roads part when he has.)
+			if done.has("power_said"):
+				_part(false)
 			game.sounds.play_sound("wave")
-			line("m2_power", true)
+			_command(str(POWER_LINES.get(station_kind(), "m2_power")))
 		"board":
 			map.set_door("car_a", true)
 			game.sounds.play_at("shutter_open", _point("car_a"))
-			line("m2_board", true)
+			_command("m2_board")
+			# (Whoever stays has gone to his post by the time the doors open.)
+			_part(false)
 			_goodbye()
 		"ride":
 			_start_ride()
@@ -822,6 +894,11 @@ func _update(delta: float) -> void:
 			game.bark(chatter, chatter.look, "idle")
 	if room_id == "flooded" and _once("water"):
 		talk("m2_water")
+	# A canister the other human carried when he left stands where it stood again.
+	if stage in FUEL_STAGES:
+		var lost := _fuel_carried("guest")
+		if lost >= 0 and not (game.net.hosting and is_instance_valid(game.net.remote)):
+			done.erase("can_%d" % lost)
 	match stage:
 		"landing":
 			# The last guards of the house show themselves once the squad comes up the drive.
@@ -868,20 +945,47 @@ func _update(delta: float) -> void:
 				lines.clear()
 				hold_id = ""
 				done["radio_clear"] = true
+				done["power_said"] = true
+				if is_instance_valid(nadja):
+					_nadja_is_gone()
 				_part(false)
 				_enter("power")
 		"hold":
-			progress = minf(1.0, progress + delta / HOLD_STATION * float(FUSE_PACE[_fuses_on()]))
+			# (The pace: by the fuses where there are any; a train that stood ready only has
+			# to pull out of its siding.)
+			var kind := station_kind()
+			var pace := float(FUSE_PACE[_fuses_on()]) if _uses_fuses() else 1.0
+			progress = minf(1.0, progress + delta / (HOLD_READY if kind == "ready" else HOLD_STATION) * pace)
 			progress_text = _hold_text()
-			for trip in range(FUSE_TRIPS.size()):
-				var window: Array = FUSE_TRIPS[trip]
-				if progress > float(window[0]) and progress < float(window[1]) and not done.has("trip_%d" % trip):
-					if _trip_fuse():
-						done["trip_%d" % trip] = true
-			if progress > 0.45 and _once("hold_squad"):
-				line("m2_depot", true)
+			var short := _uses_fuel() and _fuel_in() < FUEL_NEEDED
+			# (On the emergency power alone the train leaves only with every fuse on.)
+			var unfused := kind == "fuses" and _fuses_on() < FUSES.size()
+			goal = str(stages["hold"][1])
+			if short:
+				goal = "Den Bahnsteig halten  ·  Benzin in den Zug füllen (%d / %d)" % [_fuel_in(), FUEL_NEEDED]
+			elif unfused:
+				goal = "Den Bahnsteig halten  ·  Sicherungen einschalten (%d / %d)" % [_fuses_on(), FUSES.size()]
+			elif kind == "ready":
+				goal = "Der Zug fährt an  ·  die anderen halten den Bahnsteig"
+			marker = _fuel_goal() if short and progress >= 1.0 else (_fuse_goal() if unfused and progress >= 1.0 else _point("platform"))
+			if short and progress >= 1.0 and kind != "both" and _once("short_said"):
+				line("m2_fuel_short")
+			if _uses_fuses():
+				for trip in range(FUSE_TRIPS.size()):
+					var window: Array = FUSE_TRIPS[trip]
+					if progress > float(window[0]) and progress < float(window[1]) and not done.has("trip_%d" % trip):
+						if _trip_fuse():
+							done["trip_%d" % trip] = true
+							if kind == "fuses":
+								line("m2_fuse_trip")
+								var caller := _squad_look()
+								if caller != "":
+									talk("m2_fuse_out", caller)
+			if progress > 0.45 and kind != "ready" and _once("hold_squad"):
+				_command("m2_depot")
 				_post(["mauler", "striker", "ripper", "ripper", "charger"], [_point("depot") + Vector3(-2, 0, -2), _point("depot") + Vector3(2, 0, 0), _point("depot") + Vector3(-1, 0, 3), _point("depot") + Vector3(3, 0, 2), _point("depot") + Vector3(0, 0, -4)], false)
-			if progress >= 1.0:
+			# (The train only leaves with fuel in it - or with its fuses on.)
+			if progress >= 1.0 and not short and not unfused:
 				_all_clear()
 				_enter("board")
 		"board":
@@ -988,6 +1092,10 @@ func prompt() -> String:
 		return tokyo_tasks.prompt()
 	if _fuse_near(game.player.global_position) >= 0:
 		return "[E] Sicherung einschalten  ·  Notstrom für den Zug"
+	if _tank_near(game.player.global_position, _my_tag()):
+		return "[E] Benzin in den Zug füllen  ·  %d / %d" % [_fuel_in() + 1, FUEL_NEEDED]
+	if _can_near(game.player.global_position, _my_tag()) >= 0:
+		return "[E] Benzinkanister aufheben"
 	# (What the stage wants used comes first; then a throwable or a weapon cache one stands
 	# before.)
 	var found := finds.prompt()
@@ -1004,6 +1112,13 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 			if fuse >= 0:
 				game.net.request_hive_use("fuse", fuse_stand(fuse))
 				return true
+			if _tank_near(game.player.global_position, "guest"):
+				game.net.request_hive_use("tank", tank_at())
+				return true
+			var can := _can_near(game.player.global_position, "guest")
+			if can >= 0:
+				game.net.request_hive_use("can", fuel_at(can))
+				return true
 			return _side_use()
 		game.net.request_hive_use(str(nearby.key), nearby.at)
 		return true
@@ -1014,6 +1129,8 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 		if asked < 0 or who.global_position.distance_to(fuse_stand(asked)) >= FUSE_REACH + 0.8:
 			return false
 		return _switch_fuse(asked)
+	if requested in ["can", "tank"]:
+		return _use_fuel(who, requested)
 	if requested in ["tk_term", "tk_core"]:
 		return tokyo_tasks != null and tokyo_tasks.use(who, requested, at)
 	if who == game.player and requested == "" and tokyo_tasks != null and (use_at == Vector3.INF or who.global_position.distance_to(use_at) >= 2.9):
@@ -1064,6 +1181,8 @@ func _side_use() -> bool:
 		var fuse := _fuse_near(game.player.global_position)
 		if fuse >= 0:
 			return _switch_fuse(fuse)
+		if _use_fuel(game.player, ""):
+			return true
 	return finds.use() or caches.use(true)
 
 ## What [E] would be for off the way (for the outline).
@@ -1104,10 +1223,6 @@ func _run_nadja_leaving() -> void:
 		_enter("deal")
 		return
 	if done.has("nadja_inside"):
-		# What she says through the glass, what the squad makes of it and her going are
-		# carried by the lines (see _beat). Should they ever stall, the mission goes on.
-		if stage_time > 90.0:
-			_beat("deal")
 		return
 	var inside := _point("nadja_inside")
 	# To the door along the platform first, then straight through it.
@@ -1124,6 +1239,10 @@ func _run_nadja_leaving() -> void:
 		talk("m2_betrayed")
 		until("nadja_off", 6.0)
 		beat("deal")
+		# What she says through the glass, what the squad makes of it and her going are
+		# carried by the lines (see _beat) - but nobody waits for them: the operators come
+		# out of the tunnel meanwhile and the train can be brought up (see "deal").
+		_enter("deal")
 
 func _nadja_is_gone() -> void:
 	nadja_gone = true
@@ -1152,6 +1271,14 @@ func _deal() -> void:
 	until("ops_there", 7.0)
 	face("m2_p_truce")
 	face("m2_h_used")
+	# What is the matter with the train (v0.79): one of them knows, and the squad has its
+	# word for it. (The station of v0.78 has only the HUD's.)
+	var kind := station_kind()
+	if kind != "both":
+		face(str(TRAIN_NEWS[kind][0]))
+		var reply := _squad_look()
+		if reply != "":
+			talk(str(TRAIN_NEWS[kind][1]), reply)
 	face("m2_g_radio")
 	beat("ghost_radio")
 	until("ops_there", 7.0)
@@ -1161,7 +1288,7 @@ func _deal() -> void:
 	line("m2_truth")
 	beat("power")
 	talk("m2_colonel")
-	for part: Array in SETTLED[company]:
+	for part: Array in _settled_parts():
 		match str(part[0]):
 			"face":
 				face(str(part[1]))
@@ -1211,8 +1338,17 @@ func _run_puppets(delta: float) -> void:
 func _part(instant: bool) -> void:
 	if not _once("parted"):
 		return
+	var player: Survivor = game.player
+	var slots := [Vector3(-2.0, 0, 2.3), Vector3(2.2, 0, 2.6)]
+	# (With one operator alone, the one of the squad who was picked goes on beside him, and
+	# the operator takes the place of the one who stays.)
+	var goer := _goer() if pair.size() == 1 else ""
 	if not pair.is_empty():
+		var freed: Array = []
 		for mate: Teammate in game.team.duplicate():
+			if mate.look == goer or mate == nadja:
+				continue
+			freed.append(mate.slot)
 			game.team.erase(mate)
 			game.survivors.erase(mate)
 			stayed.append(mate.look)
@@ -1220,8 +1356,8 @@ func _part(instant: bool) -> void:
 				mate.queue_free()
 			else:
 				_stay(mate, mate.look == "raven" and pair.has("ghost"))
-	var player: Survivor = game.player
-	var slots := [Vector3(-2.0, 0, 2.3), Vector3(2.2, 0, 2.6)]
+		if pair.size() == 1 and not freed.is_empty():
+			slots = [freed[0], freed[0]]
 	var walking: Array = []
 	for look: String in ["phantom", "havoc", "ghost"]:
 		var puppet: Dictionary = {}
@@ -1259,6 +1395,73 @@ func _part(instant: bool) -> void:
 		else:
 			_stay(mate, true)
 	puppets = walking
+	# A train that stood ready (v0.79): whoever stays tells the survivor over the radio that
+	# they hold the platform and see to the rest.
+	if not instant and station_kind() == "ready":
+		var caller := _ready_caller()
+		if caller != "":
+			line(str(READY_CALLS[caller]))
+
+## Who of those who stay calls the train's leaving over the radio: one of the squad who
+## stays, else the first of the operators who do.
+func _ready_caller() -> String:
+	for look in stayed:
+		if READY_CALLS.has(look):
+			return look
+	for look in ["phantom", "havoc", "ghost"]:
+		if not pair.has(look):
+			return look
+	return ""
+
+## The one of the squad who goes on beside one operator alone: the one who was picked
+## (Profile.goer) if he is there, else the first of the squad.
+func _goer() -> String:
+	var wanted: String = game.profile.goer()
+	var first := ""
+	for mate: Teammate in game.team:
+		if mate == nadja or not mate.look in HiveVoice.SQUAD + ["dude_shorts", "dude_turtleneck"]:
+			continue
+		if mate.look == wanted:
+			return wanted
+		if first == "":
+			first = mate.look
+	return first
+
+## One of the squad who is with the survivor and on his feet, at random ("" if none).
+func _squad_look() -> String:
+	var looks: Array = []
+	for mate: Teammate in game.team:
+		if is_instance_valid(mate) and not mate.down and mate.look in HiveVoice.SQUAD:
+			looks.append(mate.look)
+	return "" if looks.is_empty() else str(looks.pick_random())
+
+## What is said when it is settled who goes on (see SETTLED). With one operator alone
+## (v0.79) it is put together here: he says he comes along, the two others say why they
+## stay, the one of the squad who stays says so - Raven of the relay, when Ghost goes - the
+## one who was picked has a word for him, and command one for all of it.
+func _settled_parts() -> Array:
+	if SETTLED.has(company):
+		return SETTLED[company]
+	var parts: Array = []
+	if pair.size() != 1:
+		return parts
+	var joiner := pair[0]
+	parts.append(["face", str(JOIN_WORDS[joiner])])
+	for look: String in ["phantom", "havoc", "ghost"]:
+		if look != joiner:
+			parts.append(["face", str(STAYING_WORDS[look])])
+	var goer := _goer()
+	for mate: Teammate in game.team:
+		if mate == nadja or mate.look == goer or not mate.look in HiveVoice.SQUAD:
+			continue
+		if mate.look == "raven" and joiner == "ghost":
+			parts.append(["talk", "m2_b_raven", "raven"])
+		else:
+			parts.append(["talk", "m2_d_stay", mate.look])
+	if goer in HiveVoice.SQUAD:
+		parts.append(["talk", "m2_d_go", goer])
+	parts.append(["line", "m2_d_coleman"])
+	return parts
 
 ## Somebody stays at the station. He is out of the fight from here on - nothing about how
 ## hard the platform is to hold changes with who stays - and goes to his post: the relay,
@@ -1300,6 +1503,9 @@ func _run_leavers(delta: float) -> void:
 ## The train has left: nobody who stayed at the station is seen again.
 func _station_left() -> void:
 	_clear_fuses()
+	_clear_fuel()
+	if is_instance_valid(nadja) and done.has("nadja_inside"):
+		_nadja_is_gone()
 	for leaver: Dictionary in leavers:
 		if is_instance_valid(leaver.node):
 			(leaver.node as Node).queue_free()
@@ -1326,8 +1532,10 @@ func _beat(id: String) -> void:
 			if is_instance_valid(nadja):
 				nadja.hold_point = _point("nadja_far")
 		"deal":
-			if stage == "nadja":
+			# (She has said what she had to say: whatever the squad is at by now.)
+			if is_instance_valid(nadja) and done.has("nadja_inside"):
 				_nadja_is_gone()
+			if stage == "nadja":
 				_enter("deal")
 		"ghost_radio":
 			for puppet: Dictionary in puppets:
@@ -1339,8 +1547,12 @@ func _beat(id: String) -> void:
 			done["radio_clear"] = true
 			game.sounds.play_sound("glitch", -6.0)
 		"power":
+			done["power_said"] = true
 			if stage == "deal":
 				_enter("power")
+			elif stage == "hold":
+				# (The train was brought up before command got to it.)
+				_part(false)
 		"part":
 			_part(false)
 
@@ -1420,8 +1632,52 @@ func _run_ride(_delta: float) -> void:
 
 ## The fuses are there to be switched from the moment Nadja leaves (see FUSES).
 func _fuses_begin() -> void:
-	if _once("fuses_out"):
-		game.hud.announce("NOTSTROM", "Drei Sicherungen am Bahnsteig. Jede, die an ist, bringt den Zug schneller hoch.", 5)
+	var kind := station_kind()
+	# (That the train stands ready is news the operators bring: not before they are there.)
+	if kind == "ready" and stage != "deal":
+		return
+	if not _once("fuses_out"):
+		return
+	match kind:
+		"fuses":
+			game.hud.announce("NOTSTROM", "Drei Sicherungen am Bahnsteig: je mehr an sind, desto schneller kommt der Zug hoch – abfahren kann er nur mit allen dreien.", 6)
+		"fuel":
+			game.hud.announce("BENZIN", "Der Zug ist trocken: sucht %d Kanister am Bahnhof und füllt sie am Tank ein." % FUEL_NEEDED, 6)
+		"ready":
+			game.hud.announce("DER ZUG STEHT BEREIT", "Die Operatoren haben ihn schon hochgefahren. Im Stellwerk nur noch starten.", 5)
+		_:
+			game.hud.announce("NOTSTROM UND BENZIN", "Drei Sicherungen am Bahnsteig bringen den Zug schneller hoch. Und er braucht %d Kanister Benzin: sucht sie und füllt sie am Tank ein." % FUEL_NEEDED, 6)
+
+## The station's kind this night (see STATION_KINDS).
+func station_kind() -> String:
+	return str(done.get("station_kind", "both"))
+
+func _uses_fuses() -> bool:
+	return station_kind() in ["fuses", "both"]
+
+func _uses_fuel() -> bool:
+	return station_kind() in ["fuel", "both"]
+
+## The host draws the station's kind for a night: forced (--station=, a test), the one of
+## v0.78 in the checks, else one of the three at random.
+func _draw_station() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--station=") and arg.trim_prefix("--station=") in STATION_KINDS + ["both"]:
+			return arg.trim_prefix("--station=")
+	if station_wanted in STATION_KINDS + ["both"]:
+		return station_wanted
+	return "both" if game.check_mode else str(STATION_KINDS.pick_random())
+
+## The nearest fuse that is off (for the marker), else the platform.
+func _fuse_goal() -> Vector3:
+	var here: Vector3 = game.player.global_position
+	var best := _point("platform")
+	var gap := INF
+	for index in range(FUSES.size()):
+		if not done.has("fuse_%d" % index) and fuse_at(index).distance_squared_to(here) < gap:
+			gap = fuse_at(index).distance_squared_to(here)
+			best = fuse_at(index)
+	return best
 
 ## How many of the fuses are on.
 func _fuses_on() -> int:
@@ -1434,9 +1690,19 @@ func _fuses_on() -> int:
 ## What the HUD says while the train comes up.
 func _hold_text() -> String:
 	var on_now := _fuses_on()
-	if on_now == FUSES.size():
-		return "ZUG FÄHRT HOCH"
-	return "ZUG FÄHRT HOCH  ·  NUR %d / %d SICHERUNGEN – SCHALTET SIE EIN" % [on_now, FUSES.size()]
+	var fuel := _fuel_in()
+	if station_kind() == "ready":
+		return "ZUG FÄHRT AN"
+	if progress >= 1.0 and _uses_fuel() and fuel < FUEL_NEEDED:
+		return "ZUG BEREIT  ·  ES FEHLT BENZIN: %d / %d KANISTER" % [fuel, FUEL_NEEDED]
+	if progress >= 1.0 and station_kind() == "fuses" and on_now < FUSES.size():
+		return "ZUG BEREIT  ·  ES FEHLEN SICHERUNGEN: %d / %d AN" % [on_now, FUSES.size()]
+	var text := "ZUG FÄHRT HOCH"
+	if _uses_fuses() and on_now < FUSES.size():
+		text += "  ·  NUR %d / %d SICHERUNGEN – SCHALTET SIE EIN" % [on_now, FUSES.size()]
+	if _uses_fuel() and fuel < FUEL_NEEDED:
+		text += "  ·  BENZIN %d / %d" % [fuel, FUEL_NEEDED]
+	return text
 
 ## Where the box of a fuse hangs (on the floor below it), and where one stands to use it.
 func fuse_at(index: int) -> Vector3:
@@ -1448,7 +1714,7 @@ func fuse_stand(index: int) -> Vector3:
 
 ## The fuse that is off and can be switched from `here`, or -1.
 func _fuse_near(here: Vector3) -> int:
-	if not on or not stage in FUSE_STAGES or here == Vector3.INF:
+	if not on or not stage in FUSE_STAGES or here == Vector3.INF or not _uses_fuses():
 		return -1
 	for index in range(FUSES.size()):
 		if done.has("fuse_%d" % index):
@@ -1473,7 +1739,7 @@ func _switch_fuse(index: int) -> bool:
 	elif count == FUSES.size():
 		game.hud.announce("NOTSTROM STEHT", "Alle Sicherungen an: der Zug kommt so schnell hoch, wie er kann.", 4)
 		if stage == "deal":
-			goal = str(stages["deal"][1])
+			goal = str(stages["power"][1] if station_kind() == "fuses" else stages["deal"][1])
 	else:
 		game.hud.announce("SICHERUNG %d / %d" % [count, FUSES.size()], "Das hat man gehört. Augen auf.", 2.5)
 	# (Not on the platform's floor in sight of the squad: from where nobody looks.)
@@ -1518,7 +1784,7 @@ func _trip_fuse() -> bool:
 func _show_fuses() -> void:
 	if not on or map == null:
 		return
-	if not stage in FUSE_STAGES:
+	if not stage in FUSE_STAGES or not _uses_fuses():
 		if not fuse_boxes.is_empty() and stage != "board":
 			_clear_fuses()
 		return
@@ -1601,6 +1867,286 @@ func _clear_fuses() -> void:
 		if is_instance_valid(box.node):
 			(box.node as Node).queue_free()
 	fuse_boxes.clear()
+
+# ---------------------------------------------------------------- the fuel
+
+## Where a canister of fuel stands (on the free floor nearest to its place in FUEL).
+func fuel_at(index: int) -> Vector3:
+	if fuel_spots.size() != FUEL.size():
+		fuel_spots.clear()
+		for spec: Array in FUEL:
+			var spot := Vector3(float(spec[0]), _point("platform").y, float(spec[1]))
+			var level := map.level_of(spot + Vector3(0, 0.3, 0))
+			var cell := map._free_near(level, Vector2(spot.x, spot.z), 4)
+			if cell.x < 99999:
+				spot = Vector3(cell.x * CabinMap.CELL, map.level_height(level), cell.y * CabinMap.CELL)
+			fuel_spots.append(spot)
+	return fuel_spots[index]
+
+## Where one stands to fill the train.
+func tank_at() -> Vector3:
+	return Vector3(float(TANK[0]), _point("platform").y, float(TANK[1]))
+
+## Who of the two humans "host"/"guest" is as seen here: this machine's own player is "host"
+## on the host (and alone), "guest" on a guest.
+func _my_tag() -> String:
+	return "guest" if game.net.joined else "host"
+
+func _tag_of(who: Node3D) -> String:
+	return "host" if who == game.player else "guest"
+
+## The body of whoever carries under that tag, as seen here (null if he is not there).
+func _carrier(tag: String) -> Node3D:
+	if tag == _my_tag():
+		return game.player
+	return game.net.remote if is_instance_valid(game.net.remote) else null
+
+## How many canisters are in the train.
+func _fuel_in() -> int:
+	var count := 0
+	for index in range(FUEL.size()):
+		if str(done.get("can_%d" % index, "")) == "in":
+			count += 1
+	return count
+
+## The canister that one carries, or -1.
+func _fuel_carried(tag: String) -> int:
+	for index in range(FUEL.size()):
+		if str(done.get("can_%d" % index, "")) == tag:
+			return index
+	return -1
+
+## How many are being carried right now.
+func _fuel_on_way() -> int:
+	var count := 0
+	for index in range(FUEL.size()):
+		if str(done.get("can_%d" % index, "")) in ["host", "guest"]:
+			count += 1
+	return count
+
+## The canister that stands within reach of `here` for one who carries none, or -1.
+func _can_near(here: Vector3, tag: String) -> int:
+	if not on or not stage in FUEL_STAGES or here == Vector3.INF or map == null or _fuel_carried(tag) >= 0 or not _uses_fuel():
+		return -1
+	for index in range(FUEL.size()):
+		if done.has("can_%d" % index):
+			continue
+		var at := fuel_at(index)
+		if absf(here.y - at.y) < 1.6 and Vector2(here.x - at.x, here.z - at.z).length() < FUEL_REACH:
+			return index
+	return -1
+
+## Whether one who carries a canister stands at the train's tank.
+func _tank_near(here: Vector3, tag: String) -> bool:
+	if not on or not stage in FUEL_STAGES or here == Vector3.INF or map == null or _fuel_carried(tag) < 0 or not _uses_fuel():
+		return false
+	var at := tank_at()
+	return absf(here.y - at.y) < 1.6 and Vector2(here.x - at.x, here.z - at.z).length() < TANK_REACH
+
+## [E] for the fuel (on the host, for either human): a canister taken up, or one filled
+## into the train. `requested` "" is the host's own player, at whatever is in reach.
+func _use_fuel(who: Node3D, requested: String) -> bool:
+	if who == null or (who is Survivor and (who as Survivor).down):
+		return false
+	var tag := _tag_of(who)
+	var here := who.global_position
+	if requested in ["", "tank"] and _tank_near(here, tag):
+		var index := _fuel_carried(tag)
+		done["can_%d" % index] = "in"
+		game.stats.objectives += 1
+		var count := _fuel_in()
+		game.sounds.play_at("click", tank_at() + Vector3(0, 1.0, 0), 2.0, 0.6)
+		game.sounds.play_at("beep", tank_at() + Vector3(0, 1.2, 0), 0.0, 0.9)
+		if stage == "hold":
+			progress = minf(1.0, progress + FUEL_BOOST)
+			progress_text = _hold_text()
+		if count >= FUEL_NEEDED:
+			game.hud.announce("TANK VOLL", "Genug Benzin im Zug: er kann fahren, sobald er oben ist.", 3.5)
+		else:
+			game.hud.announce("BENZIN %d / %d" % [count, FUEL_NEEDED], "Noch %d Kanister in den Zug." % (FUEL_NEEDED - count), 2.5)
+		return true
+	if requested in ["", "can"]:
+		var index := _can_near(here, tag)
+		if index < 0:
+			return false
+		done["can_%d" % index] = tag
+		game.sounds.play_at("click", fuel_at(index) + Vector3(0, 0.4, 0), 0.0, 1.3)
+		if tag == "host":
+			game.hud.announce("BENZINKANISTER", "Zum Tank am Zug bringen  ·  [E] dort einfüllen", 2.5)
+		return true
+	return false
+
+## Where the fuel wants somebody: the tank while a canister is carried, else the nearest
+## canister that still stands.
+func _fuel_goal() -> Vector3:
+	if _fuel_on_way() > 0:
+		return tank_at()
+	var here: Vector3 = game.player.global_position
+	var best := tank_at()
+	var gap := INF
+	for index in range(FUEL.size()):
+		if not done.has("can_%d" % index) and fuel_at(index).distance_squared_to(here) < gap:
+			gap = fuel_at(index).distance_squared_to(here)
+			best = fuel_at(index)
+	return best
+
+## The canisters and the tank as they are seen: where they stand, in the hands of whoever
+## carries them, or gone into the train.
+func _show_fuel() -> void:
+	if not on or map == null:
+		return
+	if not stage in FUEL_STAGES or not _uses_fuel():
+		if not fuel_cans.is_empty() and stage != "board":
+			_clear_fuel()
+		return
+	if fuel_cans.is_empty():
+		_build_fuel()
+	for index in range(fuel_cans.size()):
+		var node: Node3D = fuel_cans[index].node
+		var state := str(done.get("can_%d" % index, ""))
+		if state == "":
+			node.visible = true
+			node.global_position = fuel_at(index)
+			node.rotation.y = float(index) * 1.3
+			continue
+		var carrier: Node3D = _carrier(state) if state != "in" else null
+		# (In one's own hands it is not seen: the HUD says so.)
+		node.visible = carrier != null and carrier != game.player
+		if node.visible:
+			node.global_position = carrier.global_position + carrier.global_basis * Vector3(0.32, 0.38, 0.05)
+			node.rotation.y = carrier.global_rotation.y
+	var gauge: Label3D = fuel_tank.gauge
+	gauge.text = "BENZIN  %d / %d" % [_fuel_in(), FUEL_NEEDED]
+	gauge.modulate = Color("7cff9a") if _fuel_in() >= FUEL_NEEDED else Color("ffcf5a")
+
+## One canister: a red jerrycan with its handle, its spout and a word on it.
+func _jerrycan() -> Node3D:
+	var root := Node3D.new()
+	var red := StandardMaterial3D.new()
+	red.albedo_color = Color("b3241b")
+	red.roughness = 0.45
+	red.metallic = 0.25
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color("2a2b2c")
+	dark.roughness = 0.6
+	var body := MeshInstance3D.new()
+	var shape := BoxMesh.new()
+	shape.size = Vector3(0.34, 0.44, 0.17)
+	body.mesh = shape
+	body.material_override = red
+	body.position = Vector3(0, 0.22, 0)
+	root.add_child(body)
+	# The pressed cross on its flank.
+	for turn in [0.62, -0.62]:
+		var rib := MeshInstance3D.new()
+		var bar := BoxMesh.new()
+		bar.size = Vector3(0.04, 0.42, 0.012)
+		rib.mesh = bar
+		rib.material_override = red
+		rib.position = Vector3(0, 0.22, 0.09)
+		rib.rotation.z = turn
+		root.add_child(rib)
+	for x in [-0.08, 0.0, 0.08]:
+		var grip := MeshInstance3D.new()
+		var bar := BoxMesh.new()
+		bar.size = Vector3(0.035, 0.07, 0.11)
+		grip.mesh = bar
+		grip.material_override = red
+		grip.position = Vector3(x, 0.47, 0)
+		root.add_child(grip)
+	var handle := MeshInstance3D.new()
+	var top := BoxMesh.new()
+	top.size = Vector3(0.22, 0.03, 0.11)
+	handle.mesh = top
+	handle.material_override = red
+	handle.position = Vector3(0, 0.515, 0)
+	root.add_child(handle)
+	var spout := MeshInstance3D.new()
+	var cap := CylinderMesh.new()
+	cap.top_radius = 0.028
+	cap.bottom_radius = 0.034
+	cap.height = 0.07
+	spout.mesh = cap
+	spout.material_override = dark
+	spout.position = Vector3(0.13, 0.47, 0)
+	spout.rotation.z = -0.5
+	root.add_child(spout)
+	var word := Label3D.new()
+	word.text = "BENZIN"
+	word.font_size = 22
+	word.pixel_size = 0.004
+	word.modulate = Color("ffd76a")
+	word.outline_size = 6
+	word.outline_modulate = Color(0, 0, 0, 0.85)
+	word.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	word.position = Vector3(0, 0.78, 0)
+	root.add_child(word)
+	return root
+
+func _build_fuel() -> void:
+	for index in range(FUEL.size()):
+		var can := _jerrycan()
+		can.name = "Fuel%d" % index
+		add_child(can)
+		can.global_position = fuel_at(index)
+		fuel_cans.append({"node": can})
+	# The tank: a filler on the edge of the platform beside the car, and what is in it.
+	var root := Node3D.new()
+	root.name = "FuelTank"
+	add_child(root)
+	root.global_position = tank_at() + Vector3(0, 0, -0.55)
+	var steel := StandardMaterial3D.new()
+	steel.albedo_color = Color("3a4146")
+	steel.metallic = 0.6
+	steel.roughness = 0.5
+	var yellow := StandardMaterial3D.new()
+	yellow.albedo_color = Color("c9a227")
+	var pipe := MeshInstance3D.new()
+	var tube := CylinderMesh.new()
+	tube.top_radius = 0.07
+	tube.bottom_radius = 0.07
+	tube.height = 1.0
+	pipe.mesh = tube
+	pipe.material_override = steel
+	pipe.position = Vector3(0, 0.5, 0)
+	root.add_child(pipe)
+	var mouth := MeshInstance3D.new()
+	var rim := CylinderMesh.new()
+	rim.top_radius = 0.11
+	rim.bottom_radius = 0.11
+	rim.height = 0.08
+	mouth.mesh = rim
+	mouth.material_override = yellow
+	mouth.position = Vector3(0, 1.02, 0)
+	root.add_child(mouth)
+	var word := Label3D.new()
+	word.text = "TANK"
+	word.font_size = 34
+	word.pixel_size = 0.004
+	word.modulate = Color("e8d9a0")
+	word.outline_size = 6
+	word.outline_modulate = Color(0, 0, 0, 0.85)
+	word.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	word.position = Vector3(0, 1.55, 0)
+	root.add_child(word)
+	var gauge := Label3D.new()
+	gauge.font_size = 28
+	gauge.pixel_size = 0.004
+	gauge.outline_size = 6
+	gauge.outline_modulate = Color(0, 0, 0, 0.85)
+	gauge.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	gauge.position = Vector3(0, 1.32, 0)
+	root.add_child(gauge)
+	fuel_tank = {"node": root, "gauge": gauge}
+
+func _clear_fuel() -> void:
+	for can: Dictionary in fuel_cans:
+		if is_instance_valid(can.node):
+			(can.node as Node).queue_free()
+	fuel_cans.clear()
+	if not fuel_tank.is_empty() and is_instance_valid(fuel_tank.node):
+		(fuel_tank.node as Node).queue_free()
+	fuel_tank = {}
 
 # ---------------------------------------------------------------- quiet at a counter
 
@@ -1904,8 +2450,27 @@ func _run_pressure(delta: float) -> void:
 func line(cue: String, first: bool = false) -> void:
 	if first:
 		lines.push_front({"kind": "radio", "cue": cue})
-	else:
-		lines.append({"kind": "radio", "cue": cue})
+		return
+	# (Before the small talk of the companions that still waits (SquadBanter): what command
+	# has to say does not wait for it.)
+	for index in range(lines.size()):
+		if bool(lines[index].get("banter", false)):
+			lines.insert(index, {"kind": "radio", "cue": cue})
+			return
+	lines.append({"kind": "radio", "cue": cue})
+
+## Command's word about what happens at the station right now: the next thing said - but
+## not before command is back on the channel, if he is not yet (then right after his
+## first words of his own, or after what is already waiting).
+func _command(cue: String) -> void:
+	if done.has("radio_clear"):
+		line(cue, true)
+		return
+	for index in range(lines.size()):
+		if str(lines[index].get("cue", "")) == "m2_truth":
+			lines.insert(index + 1, {"kind": "radio", "cue": cue})
+			return
+	line(cue)
 
 ## A line of somebody who stands there: Nadja while she is with the squad, an operator
 ## at the station.
@@ -1948,7 +2513,8 @@ func heard(cue: String, seconds: float, speaker: String = "") -> void:
 ## Until the channel is cleared at the station the voice of command is not Coleman's: his
 ## lines sound as in the last hours of the first mission (Radio.hijacked).
 func channel_taken() -> bool:
-	return on and not done.has("radio_clear") and order.find(stage) <= order.find("deal")
+	# (The train may be brought up while the operators are still at it.)
+	return on and not done.has("radio_clear") and order.find(stage) <= order.find("board")
 
 ## Nobody has said anything for so many seconds, and nothing waits to be said.
 func _silent_for(seconds: float) -> bool:
@@ -2132,18 +2698,29 @@ func _body_of(speaker: String) -> Node3D:
 func title() -> String:
 	return str(stages[stage][0]) if stages.has(stage) else ""
 
-func summary() -> Array[String]:
+## `mine`: with what concerns this machine's own player (not in what the host sends).
+func summary(mine: bool = true) -> Array[String]:
+	var carrying := mine and stage in FUEL_STAGES and _fuel_carried(_my_tag()) >= 0
 	if game.net.joined:
-		return coop.summary
+		if not carrying:
+			return coop.summary
+		var theirs: Array[String] = coop.summary.duplicate()
+		theirs.append("Du trägst einen Benzinkanister  ·  zum Tank am Zug")
+		return theirs
 	var out: Array[String] = []
 	if goal != "":
 		out.append("▸  " + goal)
+	if carrying:
+		out.append("Du trägst einen Benzinkanister  ·  zum Tank am Zug")
 	if progress >= 0.0:
 		out.append(progress_text)
 	if stage == "station" and _guards_left() > 0:
 		out.append("Wachen auf dem Bahnsteig:  %d" % _guards_left())
 	if stage in FUSE_STAGES:
 		out.append("Notstrom:  %d / %d Sicherungen an%s" % [_fuses_on(), FUSES.size(), "" if _fuses_on() == FUSES.size() else "  ·  der Zug fährt langsamer hoch"])
+		var fuel := _fuel_in()
+		var moving := _fuel_on_way()
+		out.append("Benzin:  %d / %d Kanister im Zug%s%s" % [fuel, FUEL_NEEDED, "  ·  %d unterwegs" % moving if moving > 0 else "", "" if fuel >= FUEL_NEEDED else "  ·  ohne Benzin fährt er nicht"])
 	if safe_now:
 		out.append("◆  RUHIGE ZONE  ·  " + ("weniger Nachschub" if _holding() else "hier kommt nichts Neues"))
 	out.append_array(run.summary())
@@ -2165,6 +2742,13 @@ func markers() -> Array:
 		for index in range(FUSES.size()):
 			if not done.has("fuse_%d" % index):
 				fuses.append({"pos": fuse_at(index) + Vector3(0, 0.9, 0), "text": "SICHERUNG"})
+		# The fuel: what still stands, and the tank while some of it is carried.
+		if _fuel_in() < FUEL_NEEDED:
+			for index in range(FUEL.size()):
+				if not done.has("can_%d" % index):
+					fuses.append({"pos": fuel_at(index) + Vector3(0, 0.9, 0), "text": "BENZIN"})
+			if _fuel_on_way() > 0:
+				fuses.append({"pos": tank_at() + Vector3(0, 1.4, 0), "text": "TANK"})
 	return [{"pos": at + Vector3(0, 1.4, 0), "text": "ZIEL"}] + fuses + run.markers() + hall_marks
 
 ## Which music fits: none of the first mission's rounds, so the director says.
@@ -2203,6 +2787,7 @@ func _process(delta: float) -> void:
 	stage_time += delta
 	_run_heli(delta)
 	_show_fuses()
+	_show_fuel()
 	if game.net.joined:
 		coop.move_friends(delta)
 		return

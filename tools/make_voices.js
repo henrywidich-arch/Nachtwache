@@ -36,13 +36,16 @@ const project = path.join(__dirname, '..');
 // Which ElevenLabs voice has to stand behind each speaker; a mismatch means the order is off.
 // (Since 2026-10-10 the squad, Nadja and Coleman speak with voices the user made himself;
 // since 2026-10-24 Nadja speaks with the voice "Nadja2", recorded with Eleven v4.)
-const VOICES = { coleman: 'ColemanNEW', nadja: 'Nadja2', viper: 'Viper', scorpion: 'Scorpion', raven: 'Raven', cru: 'Harry', cru2: 'Daniel', cru3: 'Brian', cru4: 'Roger', shop: 'Laura', phantom: 'Phantom', havoc: 'Havoc', ghost: 'Ghost' };
-// The three later voices of the C.R.U. are meant to sound hard and without feeling. Each is
-// pitched down a little (semitones) and put through a helmet set: a narrow band, pressed
-// flat, the roughest of them with a little grit.
+// (Since 2026-10-26 the C.R.U. speaks with two voices the user made for it, recorded with
+// Eleven v4: "Soldier", deep and sinister, for cru and cru4, and "Soldier 2", raspy and
+// guttural, for cru2 and cru3. Their raw files are named _Soldier_ and _Soldier2_.)
+const VOICES = { coleman: 'ColemanNEW', nadja: 'Nadja2', viper: 'Viper', scorpion: 'Scorpion', raven: 'Raven', cru: 'Soldier', cru2: 'Soldier2', cru3: 'Soldier2', cru4: 'Soldier', shop: 'Laura', phantom: 'Phantom', havoc: 'Havoc', ghost: 'Ghost' };
+// Every soldier of the C.R.U. speaks through the mask of his helmet: a narrow band, pressed
+// flat. Two voices make four men: the second of each voice is pitched down (semitones),
+// and the roughest of them gets a little grit.
 const HELMET = 'highpass=f=210,lowpass=f=3900,acompressor=threshold=-24dB:ratio=5:attack=3:release=90:makeup=5';
 // level: grit makes a voice denser at the same peak; this many dB bring it back in line.
-const HARD = { cru2: { down: 1.5, grit: 0 }, cru3: { down: 3.0, grit: 1, level: -2.5 }, cru4: { down: 1.0, grit: 0 } };
+const HARD = { cru: { down: 0, grit: 0 }, cru2: { down: 0, grit: 0 }, cru3: { down: 2.0, grit: 1, level: -2.5 }, cru4: { down: 1.5, grit: 0 } };
 function hard(speaker) {
   const how = HARD[speaker];
   if (!how) return '';
@@ -67,7 +70,8 @@ const SPEAKER = 'highpass=f=260,lowpass=f=4200,acompressor=threshold=-20dB:ratio
 // m2_h_used, m2_g_radio, m2_g_clear, m2_p_tunnel, m2_p_join, and their part of the talk
 // about who goes on from there: m2_a_..., m2_b_..., m2_c_...). What they report from the
 // tunnel later in the second mission comes over the same sets.
-const OVER_RADIO = ['m2_g_list', 'm2_h_tunnel', 'm2_p_alive'];
+// (v0.79: what the operators who stayed call over when the train is ready to leave, m2_r_....)
+const OVER_RADIO = ['m2_g_list', 'm2_h_tunnel', 'm2_p_alive', 'm2_r_phantom', 'm2_r_havoc', 'm2_r_ghost'];
 const INTRUDER = 'highpass=f=420,lowpass=f=2900,acompressor=threshold=-24dB:ratio=6:attack=3:release=80:makeup=6,volume=3dB,asoftclip=type=tanh,highpass=f=420,lowpass=f=2900';
 const OPERATORS = ['phantom', 'havoc', 'ghost'];
 const TRIM = 'silenceremove=start_periods=1:start_threshold=-46dB:start_silence=0.03,areverse,silenceremove=start_periods=1:start_threshold=-46dB:start_silence=0.06,areverse';

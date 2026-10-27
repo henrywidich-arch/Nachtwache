@@ -1,5 +1,96 @@
 [
   {
+    "version": "0.78",
+    "title": "Eigene Waffen, Begleiter-Auswahl und neue Stimmen",
+    "sections": [
+      {
+        "title": "Waffen: alles selbst gebaut",
+        "items": [
+          "Die P90 ist komplett neu und selbst gebaut, in mehreren Detailstufen: Bullpup-Gehäuse mit Daumenloch und Abzugsbügel, Ringvisier mit leuchtendem Absehen, Spannhebel auf beiden Seiten, Hülsenschacht unter dem Schaft, Riffelung, Schrauben und Beschriftungen. Das durchscheinende 50-Schuss-Magazin liegt oben, die Patronen sieht man quer darin.",
+          "Das G36 ist komplett neu gebaut: moderner G36K-Look mit M-LOK-Handschutz, Schienen, Waffenlicht, Vertikalgriff und olivgrünem Skelettschaft. Das Rauchglas-Magazin zeigt die Patronen, die Kimme sitzt im Tragegriff, Visiere kommen oben auf die Griffschiene. Das G36 wirft jetzt Hülsen aus.",
+          "Die M4A4 ist neu gebaut: Flat-Top, offener Auswurf mit Verschluss, Forward Assist, Quad-Rail, A2-Feuerdämpfer, 30er-Magazin und Gravuren.",
+          "Die UMP45 ist neu gebaut: Polymergehäuse, Klappschaft, Trommel-Diopter und durchscheinendes 25er-Magazin.",
+          "Die AK-47 ist neu gebaut: Blechgehäuse mit Nieten, gerippter Deckel, Holz mit Maserung, Bakelitgriff und Stahlmagazin. Der Verschluss läuft bei jedem Schuss zurück und wirft Hülsen aus. Auch die C.R.U.-Elitesoldaten tragen die neue AK.",
+          "Das MG ist neu gebaut: Zuführdeckel mit Schiene, sichtbarer Gurt mit Leuchtspur aus dem Kasten, Zweibein und Lochkimme.",
+          "Das Trommel-MG M21E ist neu gebaut: Stahlgehäuse, Spannhebel-Rohr, gelochter Handschutz, Trommel mit Aufziehschlüssel, Kimme und Korn im Tunnel.",
+          "Die Minigun ist komplett neu gebaut: sechs Läufe mit Klemmringen, Gehäuse, Tragegriff, Motor-Pod mit Warnstreifen und Kabel. Sie liegt tief an der rechten Hüfte, die linke Hand hält den Tragegriff.",
+          "Kimme und Korn liegen bei allen neuen Waffen genau auf der Ziellinie. Alle neuen Waffen haben neue Shop-Symbole."
+        ]
+      },
+      {
+        "title": "Visier und Lasermodul",
+        "items": [
+          "Neue VISIER-WERKSTATT in den Einstellungen: Farbe, Größe, Linienstärke und Helligkeit deines Leuchtpunkts, mit Vorschau. Gilt für alle Rotpunktvisiere, den Ring der P90 und den Laser.",
+          "Neuer Aufsatz LASERMODUL für alle Sturmgewehre und MPs, auch die P90: Ein Laserpunkt zeigt, wohin die Waffe zielt. Aus der Hüfte triffst du damit genauer, die Streuung ist kleiner. Im Koop sieht dein Mitspieler deinen Punkt.",
+          "P90: Das Visiergehäuse ist schlanker und verdeckt beim Zielen deutlich weniger vom Bild.",
+          "Beim Nachladen der P90 nimmt die Hand das leere Magazin ab und es verschwindet aus dem Bild, dann kommt ein volles hinein und die Hand zieht den Spannhebel."
+        ]
+      },
+      {
+        "title": "Arme und Hände",
+        "items": [
+          "Die Arme und Hände in der Egoperspektive passen jetzt zum gewählten Skin: Scorpion ganz in glänzendem Schwarz mit Unterarmschale, Fireteam mit hochgekrempelten Ärmeln, Raven mit geschnürten Armstulpen, Strandtyp und Rollkragen mit bloßen Händen.",
+          "Ein Skinwechsel im Menü gilt sofort für die eigenen Arme. Im Koop sieht jeder seine eigenen.",
+          "Hände und Arme sind überarbeitet: glatte Oberflächen an allen Waffen, Nähte an den Handschuhen, Stoffglanz, Leder- und Hautschattierung."
+        ]
+      },
+      {
+        "title": "Weg zum Ziel",
+        "items": [
+          "Neu: Mit der mittleren Maustaste leuchtet für ein paar Sekunden der Weg zum nächsten Ziel am Boden auf. Ein blaues Band mit Pfeilen führt um Wände, durch Türen und Treppen hinauf und hinunter. Hinter Gras, Möbeln oder um die nächste Ecke scheint es schwach durch. Gibt es gerade kein Ziel, sagt das Spiel es dir."
+        ]
+      },
+      {
+        "title": "Begleiter und Gespräche",
+        "items": [
+          "Begleiter-Auswahl im Spielen-Menü: Hake zwei Begleiter an, zum Beispiel Viper, Scorpion, Raven, die Strandtypen oder Phantom, Havoc und Ghost von der C.R.U. Die C.R.U.-Operatoren stoßen erst unten am Bahnhof von Einsatz 2 dazu.",
+          "Die Begleiter reden miteinander: über 50 kurze Gespräche zwischen Viper, Scorpion, Raven, Phantom, Havoc und Ghost, in ruhigen Momenten, nach Kämpfen und an bestimmten Orten.",
+          "30 neue Sprüche geben dem Trupp mehr Persönlichkeit."
+        ]
+      },
+      {
+        "title": "Mission 2: Der Bahnhof",
+        "items": [
+          "Der Bahnhof ist nicht mehr jedes Mal gleich: Mal fehlen Sicherungen, mal Benzin, mal ist der Zug schon bereit. Wer zurückbleibt, hält die Stellung und meldet sich über Funk. Die Dialoge passen sich an deine Begleiter an.",
+          "Der Bahnhof geht deutlich schneller: Mit allen Sicherungen fährt der Zug in 30 statt 45 Sekunden hoch, und eine Sicherung fliegt nur noch einmal raus.",
+          "Der Zug braucht jetzt Benzin: In der Werkstatt, im Depot und an beiden Enden des Bahnsteigs stehen Benzinkanister. Tragt sie einzeln zum Tank am Zug. Drei müssen rein, und jeder bringt den Zug zusätzlich schneller hoch. Das funktioniert auch im Koop.",
+          "Die Gespräche am Bahnhof laufen parallel zum Spiel: Das Stellwerk ist sofort offen, sobald die Operatoren auftauchen, und während Nadja, die Operatoren und Coleman reden, könnt ihr schon Sicherungen schalten, Benzin suchen und den Zug hochfahren."
+        ]
+      },
+      {
+        "title": "Mission 2: Wunschraum",
+        "items": [
+          "Neu im Spielmenü von Mission 2: RAUM GARANTIERT. Wähle vor dem Start einen Zufallsraum, der in dieser Nacht sicher vorkommt, zum Beispiel die Tokio-Simulation, das Haifischlabor oder das Kryoarchiv. Die übrigen Räume bleiben zufällig. Auf ZUFALL ist alles wie bisher.",
+          "Im Koop zählt die Wahl des Hosts, der Gast sieht sie in der Lobby."
+        ]
+      },
+      {
+        "title": "Waffen: Granatwerfer und Auto-Schrotflinte",
+        "items": [
+          "Granaten aus dem M32-Granatwerfer verletzen keine Teammitglieder mehr: Bots und dein Koop-Partner bleiben unversehrt. Nur wer selbst zu nah an der eigenen Explosion steht, bekommt Schaden.",
+          "Die Auto-Schrotflinte schlägt beim Schießen deutlich wuchtiger zurück: Die Waffe springt bei jedem Schuss hoch, in die Schulter und leicht zur Seite, und das Bild wird stärker durchgerüttelt."
+        ]
+      },
+      {
+        "title": "Stimmen",
+        "items": [
+          "Die C.R.U.-Soldaten haben zwei neue, härtere Stimmen, gefiltert durch die Helmmaske. Alle Soldatenrufe sind neu aufgenommen.",
+          "Soldaten verspotten jetzt das Fireteam, melden verlorene Ziele, fluchen bei Treffern und kündigen Sperrfeuer an. Das sind über 60 neue Rufe.",
+          "Scorpion, Raven, Viper und Colonel Coleman sprechen alle älteren Zeilen mit dem neuen Stimmenmodell neu ein, lebendiger und natürlicher.",
+          "Die neuen Gespräche und die neuen Funksprüche am Bahnhof sind vollständig vertont."
+        ]
+      },
+      {
+        "title": "Licht und Aussehen",
+        "items": [
+          "Die Taschenlampe ist in Mission 2 schwächer: in der Tokio-Halle etwas, in der Villa und der restlichen Anlage deutlich. Mission 1 und 3 bleiben wie bisher.",
+          "Subjekt Null, der Endboss von Mission 2, hat keine leuchtenden roten Augen mehr.",
+          "Die Stationen für Erste Hilfe und Munition sehen auf allen Karten neu aus: ein Sci-Fi-Tisch mit einem Medkit bzw. zwei Munitionskisten darauf. Die Lichtleiste des Tischs leuchtet in der Farbe der Station."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.77",
     "title": "Endboss, Tokio-Halle und Appenweier",
     "sections": [

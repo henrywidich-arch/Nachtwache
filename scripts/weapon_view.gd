@@ -5,25 +5,27 @@ extends RefCounted
 ## and a depth scale, so the weapon keeps its shape and never pokes through walls.
 
 const VIEW_FOV := 52.0
-const P90_SCALE := 0.2654
 ## The Honey Badger model is 1.9 units long; this makes it a 72 cm carbine.
 const BADGER_SCALE := 0.379
 const SHOTGUN_SCENE := "res://assets/models/shotgun.glb"
 ## Where the shotgun's pistol grip (its origin) sits in weapon space.
 const SHOTGUN_MOUNT := Vector3(0, -0.09, 0.07)
-const UMP_SCENE := "res://assets/models/ump.glb"
+## The UMP45 built by tools/blender_make_ump.py (which prints its places); the supplied
+## ump.glb it replaced stays in the folder unused.
+const UMP_SCENE := "res://assets/models/ump_built.glb"
 ## Where the UMP's pistol grip (its origin) sits in weapon space.
 const UMP_MOUNT := Vector3(0, -0.105, 0.075)
-## Places on the UMP in metres from the middle of its grip (the model's SPEC.json):
-## muzzle and half the barrel's width, top of the rail and where it begins and ends,
-## where the second hand holds, the cocking handle, the way the magazine comes out and
-## where its foot is.
+## Places on the UMP in metres from the middle of its grip: muzzle and half the width of
+## its muzzle nut, top of the rail and where it begins and ends, where the second hand
+## holds, the cocking handle, the way the magazine comes out and where its foot is.
 const UMP := {
-	"muzzle": Vector3(0, 0.1133, -0.3864), "bore": 0.0114, "rail": 0.1587, "rail_front": -0.1966, "rail_back": -0.0207,
+	"muzzle": Vector3(0, 0.1133, -0.3864), "bore": 0.0112, "rail": 0.1587, "rail_front": -0.302, "rail_back": 0.052,
 	"support": Vector3(0, 0.1133, -0.29), "handle": Vector3(-0.0207, 0.1346, -0.2553),
-	"magazine_out": Vector3(0, -0.9945, -0.1045), "magazine_foot": Vector3(0, -0.1202, -0.1984)
+	"magazine_out": Vector3(0, -0.995, -0.1), "magazine_foot": Vector3(0, -0.112, -0.186)
 }
-const AK_SCENE := "res://assets/models/ak47.glb"
+## The AK-47 (an AKM) built by tools/blender_make_ak47.py; the supplied ak47.glb it replaced
+## stays in the folder unused.
+const AK_SCENE := "res://assets/models/ak47_built.glb"
 ## Where the AK's pistol grip (its origin) sits in weapon space.
 const AK_MOUNT := Vector3(0, -0.07, 0.08)
 ## Guns that come as a model with a magazine of their own and take parts from the shop.
@@ -34,36 +36,54 @@ const AK_MOUNT := Vector3(0, -0.07, 0.08)
 ## under a handguard); the cocking handle; the way the magazine comes out and where its
 ## foot is.
 const GUNS := {
+	# The UMP45 (see UMP): aimed through the rotary drum at the back of the rail over the
+	# hooded post at its front (irons: the middle of the aperture, level with the tip of the
+	# post); its sight line runs level with the bore. The straight magazine of translucent
+	# polymer (its "Shell") drops out downwards.
 	"ump": {
-		"scene": UMP_SCENE, "mount": UMP_MOUNT, "muzzle": Vector3(0, 0.1133, -0.3864), "bore": 0.0114,
+		"scene": UMP_SCENE, "mount": UMP_MOUNT, "muzzle": Vector3(0, 0.1133, -0.3864), "bore": 0.0112,
 		"rail": 0.1587, "optic": -0.075, "irons": 0.1866,
 		"support": Vector3(0, 0.1133, -0.29), "handle": Vector3(-0.0207, 0.1346, -0.2553),
-		"magazine_out": Vector3(0, -0.9945, -0.1045), "magazine_foot": Vector3(0, -0.1202, -0.1984)
+		"magazine_out": Vector3(0, -0.995, -0.1), "magazine_foot": Vector3(0, -0.112, -0.186)
 	},
+	# The AK (tools/blender_make_ak47.py, which prints these places): a sight is clamped over
+	# the top cover (rail: its top); irons: the line from the bottom of the rear notch to the
+	# tip of the front post, level. handle: the knob of the bolt carrier on the right, which
+	# runs back with every shot (bolt_travel); eject: its port.
 	"ak": {
-		"scene": AK_SCENE, "mount": AK_MOUNT, "muzzle": Vector3(0, 0.0764, -0.6253), "bore": 0.0074,
-		"rail": 0.1186, "optic": -0.105, "irons": 0.1339,
-		"support": Vector3(0, 0.079, -0.33), "handle": Vector3(0.0398, 0.0926, -0.2084),
-		"magazine_out": Vector3(0, -0.94, -0.34), "magazine_foot": Vector3(0, -0.1416, -0.2486)
+		"scene": AK_SCENE, "mount": AK_MOUNT, "muzzle": Vector3(0, 0.0764, -0.6253), "bore": 0.0102,
+		"rail": 0.1185, "optic": -0.105, "irons": 0.1285,
+		"support": Vector3(0, 0.079, -0.33), "handle": Vector3(0.0398, 0.0905, -0.2084), "bolt_travel": 0.095,
+		"magazine_out": Vector3(0, -0.94, -0.34), "magazine_foot": Vector3(0, -0.1183, -0.2356),
+		"eject": Vector3(0.016, 0.09, -0.16)
 	},
-	# The M4A4, the starting rifle. Its iron sights are a node of their own ("Sights");
-	# folding: they are laid down (hidden) when a sight is fitted, which then sits low on
-	# the rail instead of above them. The hand works the bolt catch on the left.
+	# The M4A4, the starting rifle (tools/blender_make_m4a4.py, which prints these places):
+	# built by us, flat-top upper and quad-rail handguard. Its flip-up iron sights are a node
+	# of their own ("Sights"; their low bases stay on the rails); folding: they are laid
+	# down (hidden) when a sight is fitted, which then sits low on the rail instead of above
+	# them. irons: the middle of the rear aperture, level with the tip of the front post.
+	# The hand works the bolt catch on the left of the lower.
 	"rifle": {
-		"scene": "res://assets/models/m4a4.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.13, -0.6123), "bore": 0.0125,
-		"rail": 0.1747, "optic": -0.125, "irons": 0.2105, "folding": true,
-		"support": Vector3(0, 0.119, -0.3251), "handle": Vector3(-0.022, 0.1697, -0.0066),
-		"magazine_out": Vector3(0, -0.9724, -0.2334), "magazine_foot": Vector3(0.0016, -0.0745, -0.2086)
+		"scene": "res://assets/models/m4a4_built.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.13, -0.607), "bore": 0.0112,
+		"rail": 0.16, "optic": -0.125, "irons": 0.1958, "folding": true,
+		"support": Vector3(0, 0.119, -0.3251), "handle": Vector3(-0.017, 0.087, -0.108),
+		"magazine_out": Vector3(0, -0.985, -0.17), "magazine_foot": Vector3(0, -0.076, -0.174)
 	},
-	# The G36: the user's model, prepared like the M4A4 (Nachtwache-Modelle/g36).
-	# Its iron sights stand on a bridge, 12 mm above its flat top; a sight is clamped to that top and looks over them.
-	# holo: the holographic sight is this much smaller on it than on the others (a compact
-	# carbine with a narrow bridge: at full size the sight looked too big for it).
+	# The G36 (tools/blender_make_g36.py, which prints these places): built by us after
+	# Henry's picture, a G36K-style carbine (the user's g36.glb stays unused). Its iron
+	# sights sit inside the carry handle (node "Sights"): a ghost ring in the window at the
+	# handle's back, a post in the hood of its front strut (irons: the line through both,
+	# under the handle). A sight clamps to the rail on top of the handle and looks over
+	# them, so they stay where they are (not folding). The left hand holds the vertical grip
+	# (hands: "grip"); the translucent magazine drops out along its own slant. handle: the
+	# charging handle on top, under the carry handle, folded out to the left; eject: the
+	# port on the right.
 	"g36": {
-		"scene": "res://assets/models/g36.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0.0001, 0.0901, -0.4811), "bore": 0.0095,
-		"rail": 0.1638, "optic": -0.108, "irons": 0.1757, "holo": 0.8,
-		"support": Vector3(0, 0.0792, -0.3323), "handle": Vector3(0, 0.1249, -0.2339),
-		"magazine_out": Vector3(0, -0.9687, -0.2483), "magazine_foot": Vector3(0.0002, -0.08, -0.1577)
+		"scene": "res://assets/models/g36_built.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.0608, -0.5096), "bore": 0.0108,
+		"rail": 0.133, "optic": -0.09, "irons": 0.104, "hands": "grip",
+		"support": Vector3(0, 0.008, -0.3), "handle": Vector3(-0.022, 0.0975, -0.173),
+		"magazine_out": Vector3(0, -0.9833, -0.1819), "magazine_foot": Vector3(0, -0.1613, -0.1424),
+		"eject": Vector3(0.0215, 0.0725, -0.117)
 	},
 	# The MP7 (tools/blender_make_mp7.py): its magazine sits in the pistol grip and comes out
 	# of its foot; the left hand holds the foregrip (hands: "grip"). No iron sights: irons is
@@ -89,26 +109,30 @@ const GUNS := {
 		"support": Vector3(0, 0.035, -0.2142), "handle": Vector3(0, 0.1694, 0.1022),
 		"magazine_out": Vector3(0, -0.6477, 0.0545), "magazine_foot": Vector3(0, -0.0448, 0.0014)
 	},
-	# The machine gun: fed from a box that hangs under it on the left, which comes off
-	# sideways; the cocking handle is on the right.
+	# The machine gun (tools/blender_make_mg.py, which prints these places; the supplied
+	# mg.glb it replaced stays in the folder unused): fed by a belt from a box that hangs
+	# under it on the left, which comes off sideways with its belt; the feed tray ("Feed")
+	# stays. The cocking handle is on the right; rail: the top of the rail on the feed cover;
+	# irons: the middle of the rear aperture ("Sights"), level with the tip of the front post.
 	"mg": {
-		"scene": "res://assets/models/mg.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0.0005, 0.1217, -0.6683), "bore": 0.0109,
-		"rail": 0.17, "optic": -0.15, "irons": 0.1897, "metal": 0.85, "rough": 0.5,
+		"scene": "res://assets/models/mg_built.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1217, -0.6683), "bore": 0.0118,
+		"rail": 0.17, "optic": -0.15, "irons": 0.1897,
 		"support": Vector3(0, 0.0907, -0.3539), "handle": Vector3(0.0377, 0.1327, -0.1011),
-		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.008, -0.053, -0.18)
+		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.009, -0.052, -0.176)
 	},
-	# The M21E, the second machine gun (its id is mg2; tools/blender_make_mg2.py): the gun and
-	# its drum are two models of the user's, each with its own textures. The drum hangs in
+	# The M21E, the second machine gun (its id is mg2; tools/blender_make_mg2_built.py, which
+	# prints these places): built by us after the model it replaced (mg2.glb, made from two
+	# of the user's models), whose places it keeps; the drum has textures of its own. It hangs in
 	# the middle under the magazine well, in front of the trigger guard: its own axis lies
 	# along the barrel, the face with the winding key looks at the shooter, and the box of
 	# its feed tower goes up into the back of the well. It comes off downwards, and the hand
 	# takes it from below (magazine_foot: the lowest point of its rim). Aimed over the notch
 	# of its rear sight and its hooded front post (irons: the tip of the post).
 	"mg2": {
-		"scene": "res://assets/models/mg2.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1165, -0.7094), "bore": 0.0133,
+		"scene": "res://assets/models/mg2_built.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1165, -0.7094), "bore": 0.0133,
 		"rail": 0.1519, "optic": -0.15, "irons": 0.1754,
 		"support": Vector3(0, 0.1093, -0.4104), "handle": Vector3(-0.03, 0.133, -0.52),
-		"magazine_out": Vector3(-0.1, -0.99, 0.0), "magazine_foot": Vector3(0.0014, -0.1467, -0.174)
+		"magazine_out": Vector3(-0.1, -0.99, 0.0), "magazine_foot": Vector3(0, -0.147, -0.172)
 	},
 	# The WIRBEL (tools/blender_make_wirbel.py, which prints these places): its magazine is
 	# a drum on top, between two towers that carry the rail. The trough it lies in is open
@@ -137,6 +161,24 @@ const GUNS := {
 		"support": Vector3(0, 0.018, -0.33), "handle": Vector3(-0.029, 0.091, -0.208), "bolt_travel": 0.1,
 		"magazine_out": Vector3(0, -0.99, -0.1), "magazine_foot": Vector3(0, -0.118, -0.082),
 		"eject": Vector3(0.02, 0.074, -0.062)
+	},
+	# The P90 (tools/blender_make_p90.py, which prints these places): built by us, a bullpup.
+	# The right hand holds the bar between its two holes, the left one the front bar of the
+	# trigger loop (hands: "grip"). Its translucent magazine lies on top, the rounds across;
+	# it comes off up and to the left, and the hand takes it by its middle, from the left. It is
+	# aimed through the ring sight in the housing at the front of the top (irons: the axis of
+	# its tunnel; ring: where its glowing ring hangs, at the front of the tunnel). rail and
+	# optic only place the parts of other guns, which it does not take. The handle is the
+	# charging handle on the left under the sight; eject: the chute under the butt.
+	"p90": {
+		"scene": "res://assets/models/p90_built.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.026, -0.205), "bore": 0.0036,
+		"rail": 0.124, "optic": -0.07, "irons": 0.101, "hands": "grip", "ring": Vector3(0, 0.101, -0.098),
+		"support": Vector3(0, -0.008, -0.119), "handle": Vector3(-0.031, 0.034, -0.118),
+		"magazine_out": Vector3(-0.38, 0.3, -0.04), "magazine_foot": Vector3(-0.036, 0.028, 0.04),
+		# The empty one is taken down and to the left, out of the picture, before a full one
+		# comes back up (see reload_step).
+		"magazine_away": Vector3(-0.3, -0.45, 0.12),
+		"eject": Vector3(0, -0.075, 0.199)
 	}
 }
 ## The reflex sight is the user's model of a holographic sight: a hood with a tunnel to
@@ -179,6 +221,163 @@ const GLOVE_PAD := Color("323534")
 const KNUCKLE := Color("1c1e1e")
 const SLEEVE := Color("3a412f")
 const SLEEVE_CUFF := Color("2c3125")
+## (These colours stay in the shapes as they are: the baked hands in assets/hands are named
+## after their shapes, colours included. What the arms really look like is the material's
+## business: ARM_LOOKS, measured against these.)
+
+## What the first-person arms are made of: the three surfaces of the baked hands (glove,
+## pad, sleeve) and the pieces worn over them, each a material of its own that is dressed
+## as the worn skin (wear). arm_skin: a bare forearm, smooth, in place of the sleeve; arm_roll: a sleeve rolled or pushed up to the elbow; arm_guard:
+## a hard shell over the forearm; arm_straps: two straps round the forearm; arm_laces and
+## arm_cord: the laced opening of an arm warmer; arm_seams: the seams down the fingers of a
+## glove; arm_nails: fingernails, on a bare hand.
+const ARM_PARTS := ["glove", "pad", "sleeve", "arm_skin", "arm_roll", "arm_guard", "arm_straps", "arm_laces", "arm_cord", "arm_seams", "arm_nails"]
+## How each kind of surface is drawn: its texture (assets/surfaces/farm, laid on in the
+## weapon's own space so that it moves with it; "" for none), how often it repeats, how
+## strong its relief is, how rough it is, what share of the light the texture keeps on
+## average (so that the colour in ARM_LOOKS is the colour seen; on skin, the shading the
+## textures of the looks have painted in, which the bare surface here has not), and coat: a clear glossy
+## layer; rim: the soft sheen of cloth at a grazing angle; sss: light through skin.
+## A bare hand is drawn a little slimmer than the glove its shapes were made for (THIN).
+const ARM_FINISH := {
+	"glove": {"texture": "glove", "scale": 22.0, "normal": 0.65, "rough": 1.0, "mean": 0.58},
+	"leather": {"texture": "glove", "scale": 13.0, "normal": 0.35, "rough": 0.6, "mean": 0.58, "coat": 0.2},
+	"gloss": {"texture": "glove", "scale": 7.0, "normal": 0.18, "rough": 0.34, "mean": 0.58, "coat": 0.7},
+	"rubber": {"texture": "glove", "scale": 12.0, "normal": 0.3, "rough": 0.62, "mean": 0.58},
+	"fabric": {"texture": "fabric", "scale": 9.0, "normal": 0.9, "rough": 1.0, "mean": 0.69, "rim": 0.3},
+	"knit": {"texture": "fabric", "scale": 4.5, "normal": 1.3, "rough": 1.0, "mean": 0.69, "rim": 0.5},
+	"skin": {"texture": "", "scale": 16.0, "normal": 0.3, "rough": 0.55, "mean": 1.2, "sss": 0.15},
+	"nail": {"texture": "", "scale": 16.0, "normal": 0.0, "rough": 0.4, "mean": 1.2}
+}
+## Each skin of Profile.SKINS as its arms: [finish, colour] for each part it has (a part
+## left out is not there - no knuckle guards on a bare hand). The colours were sampled with
+## tools/skin_arm_shots.gd from the textures of the looks (SoldierVisual.LOOKS) where their
+## forearms and hands are. Gloved hands get seams, bare ones nails (see _dress).
+const ARM_LOOKS := {
+	# Fireteam: black gloves with a cuff, the camouflage sleeves rolled up over the elbow,
+	# pale bare forearms.
+	"main": {"glove": ["glove", "1c1e1d"], "pad": ["rubber", "141615"], "arm_skin": ["skin", "c2a397"], "arm_roll": ["fabric", "3c3b39"]},
+	# Viper: a black catsuit with a faint sheen, black gloves.
+	"viper": {"glove": ["glove", "1b1d1c"], "pad": ["rubber", "121413"], "sleeve": ["leather", "222423"]},
+	# Scorpion: black from head to foot - glossy padded armour, a shell over the forearm.
+	"scorpion": {"glove": ["leather", "0b0c0c"], "pad": ["gloss", "0a0b0b"], "sleeve": ["gloss", "0f1011"], "arm_guard": ["gloss", "0c0d0e"], "arm_straps": ["rubber", "0b0c0c"]},
+	# Raven: black leather arm warmers laced down the outside, the skin showing through.
+	"raven": {"glove": ["glove", "161713"], "pad": ["rubber", "101110"], "sleeve": ["leather", "1e1d19"], "arm_laces": ["skin", "d9b59c"], "arm_cord": ["leather", "2b2925"]},
+	# The C.R.U.: charcoal uniform, grey-black gloves.
+	"cru": {"glove": ["glove", "2a2d2f"], "pad": ["rubber", "1b1e1f"], "sleeve": ["fabric", "2c2f31"]},
+	# The Breacher: black jacket, black gloves, straps on the forearms.
+	"cru2": {"glove": ["glove", "141717"], "pad": ["rubber", "0c0e0e"], "sleeve": ["fabric", "1e2022"], "arm_straps": ["rubber", "2c2d2e"]},
+	# Phantom: grey camouflage, a dark guard over the forearm, black gloves.
+	"phantom": {"glove": ["glove", "2c2d2d"], "pad": ["rubber", "171918"], "sleeve": ["fabric", "4a4b4b"], "arm_guard": ["leather", "1e201e"], "arm_straps": ["rubber", "161716"]},
+	# Havoc: heavy slate-grey padded sleeves and gloves.
+	"havoc": {"glove": ["glove", "2b2c2c"], "pad": ["rubber", "18191a"], "sleeve": ["fabric", "2e3033"], "arm_straps": ["rubber", "1a1c1c"]},
+	# Ghost: dark leather gloves with hard knuckles, straps round the wrist.
+	"ghost": {"glove": ["leather", "262827"], "pad": ["gloss", "141615"], "sleeve": ["fabric", "262827"], "arm_straps": ["leather", "1a1c1b"]},
+	# The beach guy: bare arms and hands, tanned.
+	"dude_shorts": {"glove": ["skin", "b07a69"], "arm_skin": ["skin", "b47f6e"]},
+	# The man in the turtleneck: black knit sleeves pushed up to the elbow, bare forearms.
+	"dude_turtleneck": {"glove": ["skin", "d39380"], "arm_skin": ["skin", "d69886"], "arm_roll": ["knit", "151615"]}
+}
+## The skin the arms are dressed as (wear).
+static var worn := "main"
+## How much thinner a bare hand is than the glove (metres off every surface).
+const THIN := 0.0018
+static var skin_relief: Texture2D
+static var skin_tone: Texture2D
+
+## Dresses the first-person arms as `look` (an id of Profile.SKINS): every hand and arm
+## already built takes it on at once, since they share their materials.
+static func wear(look: String) -> void:
+	worn = look if ARM_LOOKS.has(look) else "main"
+	for key in ARM_PARTS:
+		for slot in [key, key + "_world"]:
+			if materials.has(slot):
+				_dress(materials[slot], key)
+
+## One part of the arms as the worn skin has it, or hidden when it has none.
+static func _dress(target: StandardMaterial3D, key: String) -> void:
+	var look: Dictionary = ARM_LOOKS[worn]
+	var part: Array = look.get(key, [])
+	var bare := str((look.glove as Array)[0]) == "skin"
+	# Seams on a glove, nails on a bare hand: in the colour of the hand.
+	if key == "arm_seams" and not bare:
+		part = ["rubber", Color(str(look.glove[1])).darkened(0.45).to_html(false)]
+	elif key == "arm_nails" and bare:
+		part = ["nail", Color(str(look.glove[1])).lerp(Color("e9c9bd"), 0.3).to_html(false)]
+	target.transparency = BaseMaterial3D.TRANSPARENCY_DISABLED
+	target.albedo_color = Color.WHITE
+	if part.is_empty():
+		# Not worn: cut away entirely (the alpha is never above the threshold).
+		target.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		target.alpha_scissor_threshold = 0.5
+		target.albedo_color = Color(0, 0, 0, 0)
+		return
+	var finish: Dictionary = ARM_FINISH[part[0]]
+	var colour := Color(str(part[1]))
+	var texture := str(finish.texture)
+	if texture != "":
+		var base := "res://assets/surfaces/farm/" + texture
+		target.albedo_texture = load(base + "_albedo.jpg")
+		target.normal_texture = load(base + "_normal.jpg")
+		target.roughness_texture = load(base + "_roughness.jpg")
+	else:
+		# Skin: a faint blotchiness in its colour and fine pores, made here.
+		if skin_relief == null:
+			var pores := FastNoiseLite.new()
+			pores.frequency = 0.09
+			pores.fractal_octaves = 3
+			var relief := NoiseTexture2D.new()
+			relief.width = 512
+			relief.height = 512
+			relief.seamless = true
+			relief.as_normal_map = true
+			relief.bump_strength = 3.0
+			relief.noise = pores
+			skin_relief = relief
+			var blotches := FastNoiseLite.new()
+			blotches.frequency = 0.012
+			var ramp := Gradient.new()
+			ramp.set_color(0, Color(0.9, 0.86, 0.86))
+			ramp.set_color(1, Color(1.0, 1.0, 0.98))
+			var tone := NoiseTexture2D.new()
+			tone.width = 256
+			tone.height = 256
+			tone.seamless = true
+			tone.noise = blotches
+			tone.color_ramp = ramp
+			skin_tone = tone
+		target.albedo_texture = skin_tone if key != "arm_nails" else null
+		target.normal_texture = skin_relief
+		target.roughness_texture = null
+	target.normal_enabled = float(finish.normal) > 0.0
+	target.normal_scale = float(finish.normal)
+	target.roughness = float(finish.rough)
+	target.uv1_triplanar = true
+	target.uv1_triplanar_sharpness = 4.0
+	target.uv1_scale = Vector3.ONE * float(finish.scale)
+	target.clearcoat_enabled = finish.has("coat")
+	target.clearcoat = float(finish.get("coat", 0.0))
+	target.clearcoat_roughness = 0.25
+	target.rim_enabled = finish.has("rim")
+	target.rim = float(finish.get("rim", 0.0))
+	target.rim_tint = 0.6
+	target.subsurf_scatter_enabled = finish.has("sss")
+	target.subsurf_scatter_strength = float(finish.get("sss", 0.0))
+	target.subsurf_scatter_skin_mode = true
+	target.grow = key == "glove" and str(part[0]) == "skin"
+	target.grow_amount = -THIN
+	# The baked surfaces carry the colours of their shapes (darker cuffs and folds, the
+	# lighter knuckles): kept as shading, measured against the colour they were made in.
+	# Bare skin is one colour: there those shades would read as bruises.
+	var reference: Variant = {"glove": GLOVE, "pad": KNUCKLE, "sleeve": SLEEVE}.get(key)
+	target.vertex_color_use_as_albedo = reference != null and str(part[0]) != "skin"
+	var seen := colour.srgb_to_linear()
+	var keep := float(finish.mean)
+	if target.vertex_color_use_as_albedo:
+		var under := (reference as Color).srgb_to_linear()
+		target.albedo_color = Color(seen.r / (under.r * keep), seen.g / (under.g * keep), seen.b / (under.b * keep)).linear_to_srgb()
+	else:
+		target.albedo_color = Color(seen.r / keep, seen.g / keep, seen.b / keep).linear_to_srgb()
 
 ## Hip and aimed positions are in camera space; angles are degrees.
 const VIEWS := {
@@ -189,31 +388,41 @@ const VIEWS := {
 	# post, 13 cm behind the aperture.
 	"rifle": {
 		"hip": Vector3(0.12, -0.155, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
-		"aim": Vector3(0.0, -0.1305, -0.1735), "muzzle": Vector3(0, 0.05, -0.5323),
+		"aim": Vector3(0.0, -0.1158, -0.1915), "muzzle": Vector3(0, 0.05, -0.527),
 		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
-	# The G36 (build_gun): aimed, the eye is on its sight line, 16 cm behind the rear sight.
+	# The G36 (build_gun): aimed through the ghost ring at the back of its carry handle at
+	# the post in the handle's front, the eye 14 cm behind the ring.
 	"g36": {
-		"hip": Vector3(0.12, -0.155, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
-		"aim": Vector3(0, -0.0957, -0.2217), "muzzle": Vector3(0.0001, 0.0101, -0.4011),
-		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
+		"hip": Vector3(0.12, -0.152, -0.37), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0, -0.024, -0.2366), "muzzle": Vector3(0, -0.0192, -0.4296),
+		"reload_low": Vector3(-0.05, 0.19, -0.12), "reload_turn": Vector3(0.12, 0.8, 0.1)
 	},
-	# The machine gun (build_gun), aimed over its aperture and ringed front post.
+	# The machine gun (build_gun), aimed through its rear aperture at the post between the
+	# ears of its front sight, the eye 10 cm behind the aperture (a ghost ring: looked through
+	# from close by, it is a ring round the post).
 	"mg": {
 		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
-		"aim": Vector3(0.0, -0.1047, -0.207), "muzzle": Vector3(0.0005, 0.0367, -0.5833),
+		"aim": Vector3(0.0, -0.1047, -0.18), "muzzle": Vector3(0, 0.0367, -0.5833),
 		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
-	# The M21E (build_gun): the eye on the line over its rear sight and the tip of its front
-	# post, 14 cm behind the rear sight.
+	# The M21E (build_gun): the eye on the line over the notch of its rear sight and the tip
+	# of its front post, 14 cm behind the notch; the notch stands 4.6 mm higher than the post,
+	# so the gun is tipped up by that line's slope (both printed by blender_make_mg2_built.py).
 	"mg2": {
 		"hip": Vector3(0.13, -0.17, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
-		"aim": Vector3(0.0, -0.0879, -0.225), "aim_angles": Vector3(1.715, 0.0, 0.0), "muzzle": Vector3(0, 0.0315, -0.6244),
+		"aim": Vector3(0.0, -0.0943, -0.225), "aim_angles": Vector3(0.458, 0.0, 0.0), "muzzle": Vector3(0, 0.0315, -0.6244),
 		"reload_low": Vector3(-0.02, 0.06, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
+	# The P90 (build_gun): aimed through its ring sight, the eye 22 cm behind the hood of its
+	# housing (after Henry: at 16 cm the housing round the deep tunnel covered too much of the
+	# picture; further back it covers far less, and the window shrinks only a little). For a
+	# reload it is raised and rolled to the left, so that the magazine on top faces the eye
+	# as it comes off.
 	"p90": {
-		"hip": Vector3(0.135, -0.15, -0.38), "hip_angles": Vector3(1.0, 7.5, -2.5),
-		"aim": Vector3(0.0, -0.0725, -0.4), "muzzle": Vector3(0, 0.0154, -0.262)
+		"hip": Vector3(0.12, -0.098, -0.37), "hip_angles": Vector3(1.5, 9.0, -3.0),
+		"aim": Vector3(0.0, -0.021, -0.284), "muzzle": Vector3(0, -0.054, -0.125),
+		"reload_low": Vector3(-0.07, 0.05, -0.1), "reload_turn": Vector3(0.35, 0.3, 0.25)
 	},
 	"badger": {
 		"hip": Vector3(0.13, -0.158, -0.5), "hip_angles": Vector3(0.5, 6.5, -2.5),
@@ -253,9 +462,13 @@ const VIEWS := {
 		"reload_low": Vector3(-0.03, -0.03, 0.0), "reload_turn": Vector3(-0.3, 0.3, 0.3),
 		"load_low": Vector3(-0.12, 0.0, -0.03), "load_turn": Vector3(1.1, 0.2, 0.35)
 	},
+	# The minigun is not aimed: held low at the right hip and tipped up, so that its housing
+	# sits in the lower right corner and the long barrel cluster runs diagonally into the
+	# middle of the picture; the hand on the carry handle stays small in the corner (Henry's
+	# first-person reference). Aimed it only comes in a little towards the middle.
 	"minigun": {
-		"hip": Vector3(0.2, -0.3, -0.46), "hip_angles": Vector3(2.0, 8.0, -3.0),
-		"aim": Vector3(0.1, -0.28, -0.46), "muzzle": Vector3(0, -0.005, -0.782)
+		"hip": Vector3(0.48, -0.24, -0.24), "hip_angles": Vector3(20.0, 25.0, -6.0),
+		"aim": Vector3(0.45, -0.22, -0.26), "aim_angles": Vector3(18.0, 22.0, -5.0), "muzzle": Vector3(0, -0.2, -0.88)
 	},
 	# The five below are models from MODELS as well. The M14 and the double rifle are aimed
 	# over their iron sights: the eye is on the line through rear and front sight, 12 cm
@@ -284,20 +497,21 @@ const VIEWS := {
 		"hip": Vector3(0.14, -0.2, -0.34), "hip_angles": Vector3(0.5, 6.0, -2.5),
 		"aim": Vector3(0.0, -0.1286, -0.132), "muzzle": Vector3(0, 0.027, -0.868)
 	},
-	# The UMP has a view of its own (build_ump). aim_angles: its sight line climbs a little
-	# towards the muzzle, so the weapon is tipped by that much when aiming over the irons.
+	# The UMP (build_gun): aimed, the eye is on the line through its rear drum and its front
+	# post, 14 cm behind the drum (its sight line runs level with the bore: no tip).
 	# reload_low and reload_turn: how the weapon is held while its magazine is changed -
 	# raised and rolled over, so that the magazine well can be seen.
 	"ump": {
 		"hip": Vector3(0.13, -0.162, -0.4), "hip_angles": Vector3(0.5, 6.5, -2.5),
-		"aim": Vector3(0.0, -0.0702, -0.3), "aim_angles": Vector3(-0.76, 0.0, 0.0), "muzzle": Vector3(0, 0.0083, -0.3114),
+		"aim": Vector3(0.0, -0.0816, -0.259), "muzzle": Vector3(0, 0.0083, -0.3114),
 		"reload_low": Vector3(-0.02, 0.07, 0.03), "reload_turn": Vector3(0.4, 0.28, -0.87)
 	},
-	# The AK-47 (build_gun). Its iron sights stand on the handguard block and at the muzzle;
-	# the eye looks along the top of the receiver.
+	# The AK-47 (build_gun). Its rear sight stands on the block before the top cover, its front
+	# post between two ears near the muzzle; their line is level, the eye on it 19 cm behind
+	# the gun's origin (35 cm behind the rear notch).
 	"ak": {
 		"hip": Vector3(0.115, -0.148, -0.33), "hip_angles": Vector3(0.5, 6.0, -2.5),
-		"aim": Vector3(0.0, -0.0612, -0.19), "aim_angles": Vector3(-0.73, 0.0, 0.0), "muzzle": Vector3(0, 0.0064, -0.5453),
+		"aim": Vector3(0.0, -0.0585, -0.19), "muzzle": Vector3(0, 0.0064, -0.5453),
 		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	# The WIRBEL (build_gun): held lower than the others, its drum and rail standing high;
@@ -345,7 +559,14 @@ const MODELS := {
 	"sniper": {"scene": "res://assets/models/sniper.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.034, -0.355), "hands": "cradle"},
 	# The launcher is the M32 (tools/blender_make_m32.py), with a view of its own: see build_m32.
 	"launcher": {"scene": "res://assets/models/m32.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.078, -0.322), "hands": "grip", "drum": true},
-	"minigun": {"scene": "res://assets/models/minigun.glb", "mount": Vector3(0, -0.12, 0.05), "support": Vector3(0, 0.251, -0.142), "hands": "grip"},
+	# The minigun (tools/blender_make_minigun.py, which prints these places): its origin is the
+	# middle of the rear grip, which rises at the back and leans forward (grip_lean: the right
+	# hand is turned with it by that many degrees; grip: where it closes, from the origin). The
+	# left hand holds the carry handle on top (hands: "bar", rolled by bar_roll degrees). baked:
+	# it keeps its own textures (model_scene). Its
+	# node "Barrels" spins about its own z, the axis of the barrel cluster (Survivor._spin).
+	"minigun": {"scene": "res://assets/models/minigun_built.glb", "mount": Vector3(0, -0.12, 0.05), "support": Vector3(0, 0.059, -0.33), "hands": "bar",
+		"bar_roll": -60.0, "bar_reach": Vector3(-0.12, -0.32, 0.06), "grip_lean": -15.0, "grip": Vector3(0, -0.008, 0.002), "baked": true},
 	"m14": {"scene": "res://assets/models/m14.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0811, -0.341), "hands": "cradle"},
 	"svd": {"scene": "res://assets/models/svd.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.0928, -0.438), "hands": "cradle"},
 	"flamer": {"scene": "res://assets/models/flamethrower.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.007, -0.437), "hands": "grip"},
@@ -366,12 +587,12 @@ const M32 := {
 }
 
 static var materials: Dictionary = {}
-static var p90_material: BaseMaterial3D
 static var holo_material: BaseMaterial3D
 static var badger_material: BaseMaterial3D
 static var gun_materials: Dictionary = {}
-## The AK-47 as soldiers carry it: a small copy of the model. Loaded once and kept.
-const AK_LOW_SCENE := "res://assets/models/ak47_low.glb"
+## The AK-47 as soldiers carry it: a light copy of the model (tools/blender_make_ak47.py
+## writes both). Loaded once and kept.
+const AK_LOW_SCENE := "res://assets/models/ak47_low_built.glb"
 static var ak_low: PackedScene
 static var shotgun_materials: Dictionary = {}
 static var grain: NoiseTexture2D
@@ -400,24 +621,10 @@ static func shared(key: String, world: bool = false) -> StandardMaterial3D:
 		result.metallic = 0.35
 	elif key == "polymer":
 		result.roughness = 0.62
-	elif key in ["glove", "sleeve", "pad"]:
-		# Leather on the gloves, twill on the sleeves, laid on in the weapon's own space so
-		# that they move with it (assets/surfaces/farm, tools/make_farm_surfaces.py).
-		var cloth := "fabric" if key == "sleeve" else "glove"
-		var base := "res://assets/surfaces/farm/" + cloth
-		result.albedo_texture = load(base + "_albedo.jpg")
-		result.normal_enabled = true
-		result.normal_texture = load(base + "_normal.jpg")
-		result.roughness_texture = load(base + "_roughness.jpg")
-		result.roughness = 1.0
-		result.uv1_triplanar = true
-		result.uv1_triplanar_sharpness = 4.0
-		result.uv1_scale = Vector3.ONE * (9.0 if key == "sleeve" else (22.0 if key == "glove" else 12.0))
-		result.normal_scale = 0.8 if key == "sleeve" else 0.6
-		if key == "pad":
-			# Moulded rubber: smoother and a little glossy.
-			result.roughness = 0.62
-			result.normal_scale = 0.3
+	elif key in ARM_PARTS:
+		# The hands, the arms and what is worn on them: dressed as the skin the player
+		# wears (see ARM_LOOKS), and dressed again in place when that changes (wear).
+		_dress(result, key)
 	if not world:
 		tune(result)
 	materials[slot] = result
@@ -521,6 +728,68 @@ static func _finger(batch: MeshBatch, knuckle: Vector3, joint: Vector3, tip: Vec
 	_segment(batch, "glove", mid, tip, 0.0097, 0.0088, GLOVE, 10)
 	_egg(batch, "glove", tip, Vector3.ONE * 0.0092, GLOVE, Basis.IDENTITY, 10, 6)
 	_egg(batch, "glove", knuckle, Vector3(0.0128, 0.0122, 0.0128), GLOVE_PAD, Basis.IDENTITY, 10, 6)
+	# What only some skins show (see ARM_PARTS): drawn as plain pieces over the baked
+	# surface. The finger bends about `bend`; its back (the nail's side) is where the
+	# middle joint stands out of the line from knuckle to tip.
+	var bend := (joint - knuckle).cross(tip - joint)
+	if bend.length() < 1e-6:
+		return
+	bend = bend.normalized()
+	# A glove's seams, down both sides of the finger.
+	for s: float in [-1.0, 1.0]:
+		var points := [knuckle + bend * s * 0.0113, joint + bend * s * 0.0104, mid + bend * s * 0.0096, tip + bend * s * 0.0086]
+		for i in range(3):
+			_gear_line(batch, "arm_seams", points[i], points[i + 1], 0.0008)
+	var along := (tip - mid).normalized()
+	var back := joint - (knuckle + tip) * 0.5
+	back = (back - along * back.dot(along))
+	if back.length() < 1e-4:
+		return
+	back = back.normalized()
+	# A bare hand's nail, flat on the back of the tip.
+	batch.ellipsoid(shared("arm_nails"), tip - along * 0.0035 + back * 0.0074, Vector3(0.0066, 0.0024, 0.0078), Color.WHITE, Basis(bend, back, along), 10, 5)
+
+## A smooth oval tube along `axis` from `base`, `length` long: `profile` gives its half widths
+## [share of the length, across, up] at a few places, eased in between. Normals come from
+## the oval itself, so that it shades round where the pieces of MeshBatch would show facets.
+static func _loft(batch: MeshBatch, key: String, base: Vector3, axis: Vector3, across: Vector3, lift: Vector3, length: float, profile: Array, rings: int = 18, sides: int = 22) -> void:
+	var surface := batch._surface(shared(key))
+	var first := surface.vertices.size()
+	var size_at := func(t: float) -> Vector2:
+		for i in range(profile.size() - 1):
+			var a: Array = profile[i]
+			var b: Array = profile[i + 1]
+			if t <= float(b[0]) or i == profile.size() - 2:
+				var w := smoothstep(float(a[0]), float(b[0]), t)
+				return Vector2(lerpf(a[1], b[1], w), lerpf(a[2], b[2], w))
+		return Vector2(profile[0][1], profile[0][2])
+	for ring in range(rings + 1):
+		var t := float(ring) / rings
+		var size: Vector2 = size_at.call(t)
+		var ahead: Vector2 = size_at.call(minf(t + 0.02, 1.0)) - size_at.call(maxf(t - 0.02, 0.0))
+		var slope := (ahead.x + ahead.y) * 0.5 / (0.04 * length)
+		var centre := base + axis * (length * t)
+		for i in range(sides + 1):
+			var angle := TAU * float(i) / sides
+			var c := cos(angle)
+			var s := sin(angle)
+			surface.vertices.append(centre + across * (c * size.x) + lift * (s * size.y))
+			var facing := across * (c / size.x) + lift * (s / size.y)
+			surface.normals.append((facing.normalized() - axis * slope).normalized())
+			surface.colors.append(Color.WHITE)
+	for ring in range(rings):
+		for i in range(sides):
+			var a := first + ring * (sides + 1) + i
+			var b := a + sides + 1
+			for index in [a, a + 1, b, a + 1, b + 1, b]:
+				surface.indices.append(index)
+
+## A thin round piece from `from` to `to` (seams, laces).
+static func _gear_line(batch: MeshBatch, key: String, from: Vector3, to: Vector3, radius: float) -> void:
+	var span := to - from
+	if span.length() < 1e-5:
+		return
+	batch.cylinder(shared(key), from, radius, radius, span.length(), Color.WHITE, 5, Basis(Quaternion(Vector3.UP, span.normalized())), false)
 
 ## Small numbers that are the same every time for the same place (folds of a sleeve).
 static func _jitter(at: Vector3, salt: float) -> float:
@@ -528,9 +797,9 @@ static func _jitter(at: Vector3, salt: float) -> float:
 	return (v - floor(v)) * 2.0 - 1.0
 
 ## The glove's cuff with its strap, then the sleeve up to the elbow: a ribbed cuff, an
-## oval forearm in uneven pieces with folds round it and a seam underneath. `watch`: a
-## wristwatch on the sleeve's cuff (the support hand's).
-static func _forearm(batch: MeshBatch, palm: Vector3, wrist: Vector3, reach: Vector3, watch: bool = false) -> void:
+## oval forearm in uneven pieces with folds round it and a seam underneath; over it what
+## some skins wear on their forearms (_arm_gear).
+static func _forearm(batch: MeshBatch, palm: Vector3, wrist: Vector3, reach: Vector3) -> void:
 	var axis := reach.normalized()
 	var across := axis.cross(Vector3.UP).normalized()
 	if across.length() < 0.5:
@@ -546,12 +815,6 @@ static func _forearm(batch: MeshBatch, palm: Vector3, wrist: Vector3, reach: Vec
 	# Ribbed cuff of the sleeve.
 	for k in range(3):
 		_tube(batch, "sleeve", start + axis * (k * 0.008), 0.0465, 0.0465, 0.007, SLEEVE_CUFF, 16, Basis(across, axis, lift), false)
-	if watch:
-		var band := start + axis * 0.03
-		batch.cylinder(shared("polymer"), band, 0.0495, 0.0495, 0.016, Color("161616"), 16, Basis(across, axis, lift), false)
-		var case := band + axis * 0.008 + lift * 0.048
-		batch.cylinder(shared("polymer"), case, 0.0125, 0.012, 0.008, Color("1e1f1f"), 14, Basis(across, lift, -axis))
-		batch.cylinder(shared("steel"), case + lift * 0.008, 0.0098, 0.0098, 0.0012, Color("10181a"), 14, Basis(across, lift, -axis))
 	# The sleeve: oval, a little wider towards the elbow, in pieces that are not quite in line.
 	var pieces := 5
 	var from := start + axis * 0.024
@@ -576,6 +839,51 @@ static func _forearm(batch: MeshBatch, palm: Vector3, wrist: Vector3, reach: Vec
 		_tube(batch, "sleeve", at, r, r * 0.99, 0.009, SLEEVE.darkened(0.06), 16, tilt * Basis(across * 1.08, axis, lift * 0.9), false)
 	# The seam down the underside.
 	_segment(batch, "sleeve", start + axis * 0.03 - lift * 0.0425, start + axis * length - lift * 0.054, 0.0022, 0.0022, SLEEVE_CUFF, 4)
+	_arm_gear(batch, start, axis, across, lift, length)
+
+## What some skins wear over the forearm (ARM_PARTS), for every skin alike: what the worn
+## one has not is cut away by its material (_dress), so that changing the skin needs no
+## new arms. `start`, `axis`, `across`, `lift` and `length` are the sleeve's (_forearm).
+static func _arm_gear(batch: MeshBatch, start: Vector3, axis: Vector3, across: Vector3, lift: Vector3, length: float) -> void:
+	# Where the sleeve's surface is, a share `t` of the way up the arm, and its radius there.
+	var at := func(t: float) -> Vector3: return start + axis * (0.024 + (length - 0.024) * t)
+	var radius := func(t: float) -> float: return lerpf(0.045, 0.057, t)
+	var oval := Basis(across * 1.1, axis, lift * 0.92)
+	# A bare forearm: slim at the wrist (where the cuff of the glove, or the bare wrist,
+	# ends), fuller where the muscles are, smooth all the way (the sleeve's folds would
+	# show on skin as creases).
+	_loft(batch, "arm_skin", start - axis * 0.012, axis, across, lift, length + 0.012, [[0.0, 0.04, 0.035], [0.1, 0.041, 0.036], [0.3, 0.048, 0.042], [0.5, 0.053, 0.046], [0.7, 0.054, 0.047], [1.0, 0.053, 0.047]])
+	# A sleeve rolled (or pushed) up: the bunched fabric half way to the elbow, the sleeve
+	# going on from there.
+	var roll: Vector3 = at.call(0.5)
+	var thick: float = radius.call(0.5)
+	for k in range(3):
+		var tilt := Basis(across, deg_to_rad(_jitter(roll, k) * 7.0)) * Basis(lift, deg_to_rad(_jitter(roll, k + 4.0) * 5.0))
+		batch.cylinder(shared("arm_roll"), roll + axis * (k * 0.013 - 0.02), thick * (1.2 + 0.03 * _jitter(roll, k + 7.0)), thick * (1.17 + 0.03 * _jitter(roll, k + 2.0)), 0.017, Color.WHITE, 18, tilt * oval, true)
+	batch.cylinder(shared("arm_roll"), roll + axis * 0.012, thick * 1.1, radius.call(1.0) * 1.1, length * 0.5, Color.WHITE, 18, oval, false)
+	# A hard shell over the top of the forearm, with a ridge along it.
+	var shell: Vector3 = at.call(0.25)
+	batch.ellipsoid(shared("arm_guard"), shell + lift * 0.02, Vector3(0.054, 0.036, 0.1), Color.WHITE, Basis(across, lift, axis), 18, 9)
+	batch.ellipsoid(shared("arm_guard"), shell + lift * 0.05, Vector3(0.013, 0.009, 0.088), Color.WHITE, Basis(across, lift, axis), 12, 6)
+	# Two straps round the forearm, each with its buckle on top.
+	for t: float in [0.06, 0.2]:
+		var band: Vector3 = at.call(t)
+		var wide: float = radius.call(t) * 1.07
+		batch.cylinder(shared("arm_straps"), band, wide, wide, 0.012, Color.WHITE, 18, oval, false)
+		batch.box(shared("arm_straps"), band + axis * 0.006 + lift * (wide * 0.92 + 0.002), Vector3(0.017, 0.005, 0.018), Color.WHITE, Basis(across, lift, axis))
+	# An arm warmer's laced opening along the top: the skin in the gap, the cord across it.
+	var count := 8
+	for k in range(count):
+		var t0 := 0.03 + 0.42 * k / count
+		var t1 := 0.03 + 0.42 * (k + 1) / count
+		var a: Vector3 = at.call(t0) + lift * (radius.call(t0) * 0.92 + 0.0004)
+		var b: Vector3 = at.call(t1) + lift * (radius.call(t1) * 0.92 + 0.0004)
+		var span := b - a
+		var dir := span.normalized()
+		var up := across.cross(dir).normalized()
+		batch.box(shared("arm_laces"), (a + b) * 0.5, Vector3(0.015, 0.003, span.length() + 0.001), Color.WHITE, Basis(across, up, dir))
+		_gear_line(batch, "arm_cord", a - across * 0.0095 + up * 0.002, b + across * 0.0095 + up * 0.002, 0.0011)
+		_gear_line(batch, "arm_cord", a + across * 0.0095 + up * 0.002, b - across * 0.0095 + up * 0.002, 0.0011)
 
 ## Gloved hand gripping a post-shaped grip around `grip`. `side` is +1 for the right hand.
 static func _grip_hand(batch: MeshBatch, grip: Vector3, side: float, trigger_finger: bool, reach: Vector3) -> void:
@@ -602,7 +910,7 @@ static func _grip_hand(batch: MeshBatch, grip: Vector3, side: float, trigger_fin
 	_egg(batch, "pad", grip + Vector3(side * 0.041, -0.001, -0.02), Vector3(0.0075, 0.046, 0.016), KNUCKLE, Basis.from_euler(Vector3(0.1, side * 0.25, 0)), 12, 6)
 	for finger in range(4):
 		_egg(batch, "pad", grip + Vector3(side * 0.044, 0.03 - finger * 0.021, -0.02), Vector3(0.006, 0.008, 0.009), KNUCKLE.lightened(0.04), Basis.IDENTITY, 8, 5)
-	_forearm(batch, grip + Vector3(side * 0.031, -0.02, 0.03), grip + Vector3(side * 0.036, -0.048, 0.052), reach, side < 0.0)
+	_forearm(batch, grip + Vector3(side * 0.031, -0.02, 0.03), grip + Vector3(side * 0.036, -0.048, 0.052), reach)
 
 ## Support hand cradling a round handguard from below.
 static func _cradle_hand(batch: MeshBatch, grip: Vector3, reach: Vector3) -> void:
@@ -616,7 +924,7 @@ static func _cradle_hand(batch: MeshBatch, grip: Vector3, reach: Vector3) -> voi
 	_segment(batch, "glove", thumb_joint, thumb_tip, 0.011, 0.0095, GLOVE)
 	_egg(batch, "glove", thumb_tip, Vector3.ONE * 0.0098, GLOVE, Basis.IDENTITY, 8, 5)
 	_egg(batch, "pad", grip + Vector3(0.036, -0.052, 0.0), Vector3(0.014, 0.0075, 0.046), KNUCKLE, Basis.from_euler(Vector3(0, 0, 0.5)), 12, 6)
-	_forearm(batch, grip + Vector3(-0.006, -0.046, 0.036), grip + Vector3(-0.018, -0.052, 0.07), reach, true)
+	_forearm(batch, grip + Vector3(-0.006, -0.046, 0.036), grip + Vector3(-0.018, -0.052, 0.07), reach)
 
 static func _finish(view: Node3D, batch: MeshBatch) -> void:
 	for mesh in batch.commit(view, "Part", false):
@@ -627,25 +935,9 @@ static func _finish(view: Node3D, batch: MeshBatch) -> void:
 	muzzle.position = VIEWS[String(view.name)].muzzle
 	view.add_child(muzzle)
 
+## The P90 is one of GUNS now (the model built by tools/blender_make_p90.py).
 static func build_p90() -> Node3D:
-	var view := Node3D.new()
-	view.name = "p90"
-	var mount := P90Visual.create()
-	mount.scale = Vector3.ONE * (P90_SCALE / 0.34)
-	view.add_child(mount)
-	for node in mount.find_children("*", "MeshInstance3D", true, false):
-		var mesh := node as MeshInstance3D
-		if p90_material == null:
-			p90_material = tune(mesh.mesh.surface_get_material(0).duplicate() as BaseMaterial3D)
-		mesh.material_override = p90_material
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mesh.layers = 2
-	var batch := MeshBatch.new()
-	# Firing hand on the grip behind the trigger, support hand on the front grip.
-	_grip_hand(batch, Vector3(0.0, -0.046, -0.036), 1.0, true, Vector3(0.1, -0.24, 0.24))
-	_grip_hand(batch, Vector3(0.0, -0.056, -0.129), -1.0, false, Vector3(-0.15, -0.24, 0.2))
-	_finish(view, batch)
-	return view
+	return build_gun("p90")
 
 ## Suppressed carbine: pistol grip in the firing hand, the support hand under the handguard.
 static func build_badger() -> Node3D:
@@ -742,7 +1034,16 @@ static func model_scene(id: String, view: bool) -> Node3D:
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		var mesh := node as MeshInstance3D
 		for surface in range(mesh.mesh.get_surface_count()):
-			mesh.set_surface_override_material(surface, shotgun_material(mesh.mesh.surface_get_material(surface), view, id + "/"))
+			var source := mesh.mesh.surface_get_material(surface) as BaseMaterial3D
+			if MODELS[id].get("baked", false) and source != null and source.albedo_texture != null:
+				# A model built with baked textures of its own (the minigun) keeps them: the
+				# grain laid on the plain models is mapped from the sides and would smear them.
+				var slot := id + "/" + source.resource_name + ("_view" if view else "")
+				if not gun_materials.has(slot):
+					gun_materials[slot] = tune(source.duplicate() as BaseMaterial3D) if view else source
+				mesh.set_surface_override_material(surface, gun_materials[slot])
+			else:
+				mesh.set_surface_override_material(surface, shotgun_material(source, view, id + "/"))
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		if view:
 			mesh.layers = 2
@@ -760,9 +1061,40 @@ static func build_model(id: String) -> Node3D:
 	model.position = mount
 	view.add_child(model)
 	var batch := MeshBatch.new()
-	_grip_hand(batch, mount, 1.0, true, Vector3(0.1, -0.24, 0.22))
+	if info.has("grip_lean"):
+		# A grip that leans otherwise than a pistol grip (the minigun's rises at the back,
+		# leaning forward): the right hand is drawn as on an upright grip, under a node of its
+		# own that leans it with the grip, all fingers closed round it.
+		var lean := Node3D.new()
+		lean.name = "HandGrip"
+		lean.transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(float(info.grip_lean))), mount + (info.get("grip", Vector3.ZERO) as Vector3))
+		view.add_child(lean)
+		var right := MeshBatch.new()
+		_grip_hand(right, Vector3.ZERO, 1.0, false, lean.basis.inverse() * Vector3(0.1, -0.24, 0.22))
+		for mesh in right.commit(lean, "Hand", false):
+			mesh.layers = 2
+			mesh.set_meta("view_hand", true)
+	else:
+		_grip_hand(batch, mount, 1.0, true, Vector3(0.1, -0.24, 0.22))
 	var hold: Vector3 = mount + (info.support as Vector3)
 	match str(info.hands):
+		"bar":
+			# A carry handle on top, along the gun: the hand over it, the back of the hand up
+			# and out, the fingers round its far side and under it - the hand of an upright
+			# grip laid onto the bar (its post along the barrel, the wrist behind) and rolled
+			# by bar_roll degrees, under a node of its own.
+			var turn := Basis(Vector3.BACK, deg_to_rad(float(info.get("bar_roll", -50.0)))) * Basis(Vector3.RIGHT, -PI / 2)
+			var over := Node3D.new()
+			over.name = "HandBar"
+			over.transform = Transform3D(turn, hold)
+			view.add_child(over)
+			var hand := MeshBatch.new()
+			# bar_reach: the way the forearm goes from the hand (out to the left, so that it
+			# does not lie across the gun in the picture).
+			_grip_hand(hand, Vector3.ZERO, -1.0, false, turn.inverse() * (info.get("bar_reach", Vector3(-0.17, -0.2, 0.22)) as Vector3))
+			for mesh in hand.commit(over, "Hand", false):
+				mesh.layers = 2
+				mesh.set_meta("view_hand", true)
 		"cup":
 			var support := Node3D.new()
 			support.name = "HandSupport"
@@ -954,10 +1286,24 @@ static func build_gun(id: String) -> Node3D:
 	for mesh in support.commit(hand, "Hand", false):
 		mesh.layers = 2
 	_gun_mods(view, id)
+	if gun.has("ring"):
+		_ring_reticle(view, mount + (gun.ring as Vector3))
 	var batch := MeshBatch.new()
 	_grip_hand(batch, mount, 1.0, true, Vector3(0.1, -0.24, 0.22))
 	_finish(view, batch)
+	Reticle.register(view)
 	return view
+
+## The reticle of a built-in ring sight (the P90's): a thin glowing ring with a dot in its
+## middle, hung in the front of its tunnel. Lit like tritium: faint, warm, seen by day and
+## by night.
+static func _ring_reticle(view: Node3D, at: Vector3) -> void:
+	var reticle := Node3D.new()
+	reticle.name = "Reticle"
+	view.add_child(reticle)
+	# (Colour, size and line strength are the player's: see Reticle.)
+	_view_quad(reticle, at, Vector2(0.0175, 0.0175), _view_ring("ring_reticle", Color(1.0, 0.32, 0.12, 0.9))).set_meta("reticle", "ring")
+	_view_quad(reticle, at + Vector3(0, 0, 0.0002), Vector2(0.0042, 0.0042), _view_glow("ring_dot", Color(1.6, 0.3, 0.1, 1.0), true)).set_meta("reticle", "core")
 
 static func build_ump() -> Node3D:
 	return build_gun("ump")
@@ -1012,13 +1358,12 @@ static func _sidearm_parts(view: Node3D, id: String) -> void:
 	twin.scale.x = -1.0
 	twin.hide()
 	view.add_child(twin)
+	Reticle.register(view)
 
 static func build(id: String) -> Node3D:
 	if id in ["usp", "g18", "deagle"]:
 		return build_sidearm(id)
 	match id:
-		"p90":
-			return build_p90()
 		"badger":
 			return build_badger()
 		"shotgun":
@@ -1116,7 +1461,7 @@ static func _view_glow(key: String, color: Color, additive: bool) -> StandardMat
 	materials[key] = tune(result)
 	return result
 
-static func _view_quad(parent: Node3D, at: Vector3, size: Vector2, material: Material) -> void:
+static func _view_quad(parent: Node3D, at: Vector3, size: Vector2, material: Material) -> MeshInstance3D:
 	var quad := QuadMesh.new()
 	quad.size = size
 	var node := MeshInstance3D.new()
@@ -1126,6 +1471,7 @@ static func _view_quad(parent: Node3D, at: Vector3, size: Vector2, material: Mat
 	node.layers = 2
 	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(node)
+	return node
 
 ## A round lens: faintly tinted glass in a disc that ends at its rim.
 static func _view_disc(key: String, color: Color) -> StandardMaterial3D:
@@ -1164,13 +1510,15 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 	var band := Gradient.new()
 	band.colors = PackedColorArray([Color(1, 1, 1, 0), Color(1, 1, 1, 0), Color(1, 1, 1, 1), Color(1, 1, 1, 0), Color(1, 1, 1, 0)])
 	band.offsets = PackedFloat32Array([0.0, 0.85, 0.895, 0.94, 1.0])
+	# (The player's line strength widens the band: Reticle.paint.)
+	Reticle.ring_band = band
 	var circle := GradientTexture2D.new()
 	circle.gradient = band
 	circle.fill = GradientTexture2D.FILL_RADIAL
 	circle.fill_from = Vector2(0.5, 0.5)
 	circle.fill_to = Vector2(0.5, 0.0)
-	circle.width = 96
-	circle.height = 96
+	circle.width = 192
+	circle.height = 192
 	result.albedo_texture = circle
 	materials[key] = tune(result)
 	return result
@@ -1284,8 +1632,9 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 	var lens_z := z - length * 0.2
 	var seen := (DOT_EYE * size + length * 0.7) / MARK_EYE
 	_view_quad(reflex, Vector3(0, centre, lens_z), Vector2(inner, inner) * 2.0, _view_disc("lens_round", Color(0.45, 0.72, 0.78, 0.06)))
-	_view_quad(reflex, Vector3(0, centre, lens_z + 0.0002), Vector2(0.02, 0.02) * seen, _view_glow("dot_halo", Color(1.0, 0.1, 0.05, 0.32), true))
-	_view_quad(reflex, Vector3(0, centre, lens_z + 0.0003), Vector2(0.0055, 0.0055) * seen, _view_glow("dot_bright", Color(1.85, 0.16, 0.08, 1.0), true))
+	# (Colour, size and line strength are the player's: see Reticle.)
+	_view_quad(reflex, Vector3(0, centre, lens_z + 0.0002), Vector2(0.02, 0.02) * seen, _view_glow("dot_halo", Color(1.0, 0.1, 0.05, 0.32), true)).set_meta("reticle", "halo")
+	_view_quad(reflex, Vector3(0, centre, lens_z + 0.0003), Vector2(0.0055, 0.0055) * seen, _view_glow("dot_bright", Color(1.85, 0.16, 0.08, 1.0), true)).set_meta("reticle", "core")
 	# --- Telescopic sight, four times: tube, bell and eyepiece on two rings.
 	var scope := Node3D.new()
 	scope.name = "Mod_scope"
@@ -1325,6 +1674,9 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 		mesh.layers = 2
 	for part in [reflex, scope, can]:
 		(part as Node3D).hide()
+	# --- Laser module: on the right side of the handguard (the guns of GUNS only).
+	if GUNS.has(id):
+		LaserSight.fit_module(view, id)
 
 ## Where the magazine and the hand that changes it are at a moment of the reload (0 to 1),
 ## as offsets from where they rest.
@@ -1333,17 +1685,23 @@ static func reload_step(id: String, done: float) -> Dictionary:
 		return {"magazine": Vector3.ZERO, "hand": Vector3.ZERO}
 	var gun: Dictionary = GUNS[id]
 	var out: Vector3 = (gun.magazine_out as Vector3) * 0.25
+	# Where the hand takes the empty one: out of the picture (after Henry: when the same
+	# magazine only went off and straight back on, it did not read as a change). Unless the
+	# gun names a place (magazine_away), on along the way it came out, a metre from the well.
+	var away: Vector3 = gun.get("magazine_away", gun.magazine_out)
 	var rest: Vector3 = gun.support
 	var foot: Vector3 = (gun.magazine_foot as Vector3) + Vector3(0.0, 0.035, 0.004) - rest
 	var handle: Vector3 = (gun.handle as Vector3) + Vector3(-0.016, 0.034, 0.0) - rest
-	# The hand lets go of the handguard and takes the magazine by its foot, pulls it out
-	# and down, comes back with a full one ...
+	# The hand lets go of the handguard and takes the magazine by its foot, pulls it out,
+	# carries it away out of the picture, comes back with a full one and seats it ...
 	var grab := smoothstep(0.0, 0.13, done) * (1.0 - smoothstep(0.66, 0.8, done))
-	var pull := smoothstep(0.14, 0.3, done) * (1.0 - smoothstep(0.46, 0.64, done))
+	var pull := smoothstep(0.14, 0.26, done) * (1.0 - smoothstep(0.55, 0.62, done))
+	var gone := smoothstep(0.27, 0.4, done) * (1.0 - smoothstep(0.43, 0.55, done))
+	var magazine := out * pull + (away - out) * gone
 	# ... and slaps the cocking handle on its way back to the handguard.
 	var up := smoothstep(0.66, 0.8, done) * (1.0 - smoothstep(0.9, 1.0, done))
 	var slap := smoothstep(0.8, 0.86, done) * (1.0 - smoothstep(0.86, 0.94, done))
-	return {"magazine": out * pull, "hand": foot * grab + out * pull + handle * up + Vector3(0.0, -0.022, 0.05) * slap}
+	return {"magazine": magazine, "hand": foot * grab + magazine + handle * up + Vector3(0.0, -0.022, 0.05) * slap, "away": gone}
 
 ## The starting carbine is built from primitives until it gets a model of its own.
 static func build_rifle() -> Node3D:

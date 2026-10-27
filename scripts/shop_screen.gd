@@ -237,7 +237,7 @@ func _list() -> Array:
 					tag = "VORHANDEN"
 					tone = SurvivalHUD.IVORY
 				out.append({"kind": "part", "id": id, "part": part, "title": str(data.label), "tag": tag, "tone": tone})
-		out.append({"head": "%sVisiere und Schalldämpfer gibt es für: %s." % ["" if out.size() > before else"Du trägst gerade keine Waffe, die Aufsätze nimmt.\n", ", ".join(takers)]})
+		out.append({"head": "%sVisiere, Schalldämpfer und Lasermodule gibt es für: %s." % ["" if out.size() > before else"Du trägst gerade keine Waffe, die Aufsätze nimmt.\n", ", ".join(takers)]})
 	for id in Survivor.GOODS:
 		if str(Survivor.GOODS[id].group) == tab:
 			var cost: int = game.item_price(id)

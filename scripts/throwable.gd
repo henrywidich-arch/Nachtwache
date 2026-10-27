@@ -32,6 +32,9 @@ var boost := 1.0
 ## Thrown by a companion: whatever it does, it does to the infected only - no survivor is
 ## hurt by its blast or burnt by its fire.
 var friendly := false
+## Fired from the launcher by this survivor: its blast hurts him alone of the survivors
+## (never a companion or the partner in a co-op match).
+var shooter: Node
 ## The heal grenade: 1 if its field also raises the fallen (the thrower's improvement).
 var level := 0
 var armed_in := 0.1
@@ -215,6 +218,8 @@ func _physics_process(delta: float) -> void:
 		game.heal_burst(global_position, level)
 	elif kind == "grenade" and hostile:
 		game.blast(global_position + Vector3(0, 0.15, 0), 6.0, 70.0, 110.0, "frag")
+	elif kind == "grenade" and impact and shooter != null:
+		game.shell_blast(global_position + Vector3(0, 0.15, 0), shooter, BLAST[0], float(BLAST[1]), BLAST[2] * boost)
 	elif kind == "grenade":
 		game.blast(global_position + Vector3(0, 0.15, 0), BLAST[0], 0.0 if friendly else float(BLAST[1]), BLAST[2] * boost)
 	elif hostile:

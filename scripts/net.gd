@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.77"
+const VERSION := "0.78"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
@@ -250,7 +250,7 @@ func broadcast_lobby() -> void:
 	if hosting and matched() and game.state == "menu":
 		_lobby.rpc_id(partner, {"mission": game.profile.mission, "level": game.profile.difficulty,
 			"label": game.profile.rules().label, "mode": game.profile.mode,
-			"modifiers": game.profile.modifiers, "bots": game.team_enabled, "company": game.profile.company})
+			"modifiers": game.profile.modifiers, "bots": game.team_enabled, "company": game.profile.company, "picks": game.profile.picks, "room": game.profile.room})
 
 @rpc("authority", "call_remote", "reliable")
 func _lobby(settings: Dictionary) -> void:
@@ -361,6 +361,9 @@ func _physics_process(delta: float) -> void:
 		state_left = STATE_INTERVAL
 		var player: Survivor = game.player
 		var flags := (1 if Input.is_action_pressed("aim") and player.controlled else 0) | (2 if player.reload_left > 0.0 else 0) | (4 if player.down else 0) | (8 if player.crouched else 0) | (16 if Input.is_action_pressed("interact") and player.controlled and not player.menu_open else 0)
+		# 32: a laser module is on the weapon in hand (the partner sees its dot).
+		if player.laser != null and player.laser.visible:
+			flags |= 32
 		_state.rpc_id(partner, player.global_position, player.rotation.y, player.camera.rotation.x, player.velocity, flags, player.health, game.kills)
 	board_left -= delta
 	if board_left <= 0.0:
@@ -924,6 +927,17 @@ func _hive_supply() -> void:
 		game.player.health = minf(100.0, game.player.health + game.healing(50.0))
 		game.player.resupply(Survivor.ROUND_AMMO)
 
+## A line of the companions' small talk on the maps of the rounds (SquadBanter): the guest reads
+## and hears it as the host does.
+func squad_said(said: Dictionary, at: Vector3) -> void:
+	if hosting and partner != 0:
+		_squad_said.rpc_id(partner, said, at)
+
+@rpc("authority", "call_remote", "reliable")
+func _squad_said(said: Dictionary, at: Vector3) -> void:
+	if game.banter != null:
+		game.banter.say(said, at)
+
 func hive_voice(said: Dictionary, at: Vector3) -> void:
 	if hosting and partner != 0:
 		_hive_voice.rpc_id(partner, said, at)
@@ -949,6 +963,7 @@ func _state(at: Vector3, yaw: float, pitch: float, velocity: Vector3, flags: int
 	remote.net_velocity = velocity
 	remote.aiming = flags & 1 != 0
 	remote.interacting = flags & 16 != 0
+	remote.laser_on = flags & 32 != 0
 	remote.set_reloading(flags & 2 != 0)
 	remote.set_down(flags & 4 != 0)
 	remote.set_crouched(flags & 8 != 0)

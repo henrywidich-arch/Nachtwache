@@ -1,0 +1,65 @@
+{
+  "bark": {
+    "contact": {
+      "cru": ["Eyes on! Fireteam, right there!"],
+      "cru2": ["Fireteam spotted. Engaging."],
+      "cru3": ["There you are. Finally."],
+      "cru4": ["Fireteam identified. Bounty confirmed."]
+    },
+    "flank": {
+      "cru": ["Around the side, go, go, go!"],
+      "cru2": ["Taking the long way. Keep them busy."],
+      "cru3": ["I will come from behind. Quiet."],
+      "cru4": ["Executing flanking route."]
+    },
+    "cover": {
+      "cru": ["Last mag! Cover me!"],
+      "cru2": ["Changing. Watch my sector."],
+      "cru3": ["Reloading. Do not let them breathe."],
+      "cru4": ["Reloading. Maintain fire."]
+    },
+    "frag": {
+      "cru": ["Grenade! Eat it!"],
+      "cru2": ["Frag out. Heads down."],
+      "cru3": ["Pieces. Lots of little pieces."],
+      "cru4": ["Explosive deployed."]
+    },
+    "man_down": {
+      "cru": ["No! Man down, man down!"],
+      "cru2": ["We lost another one."],
+      "cru3": ["More pay for the rest of us."],
+      "cru4": ["Unit strength reduced."]
+    },
+    "retreat": {
+      "cru": ["Too hot! Pull back!"],
+      "cru2": ["Breaking contact. Moving."],
+      "cru3": ["This is not over."],
+      "cru4": ["Tactical withdrawal."]
+    },
+    "taunt": {
+      "cru": ["Come out, Fireteam! We only want to talk!", "You are all alone out here!", "Helix pays double for your heads!"],
+      "cru2": ["Give it up. You are surrounded.", "Nobody is coming for you.", "Drop the weapon. Last warning."],
+      "cru3": ["I can smell your fear from here.", "Run. I like it when they run.", "Your friends screamed too."],
+      "cru4": ["Resistance is noted. And ignored.", "Termination is only a matter of time.", "Your odds of survival are falling."]
+    },
+    "lost": {
+      "cru": ["Where did they go?!", "Lost them! Eyes open!"],
+      "cru2": ["Lost visual.", "Target gone. Sweep the area."],
+      "cru3": ["Hiding? I will find you.", "Come out, come out..."],
+      "cru4": ["Visual contact lost.", "Target concealed. Searching."]
+    },
+    "hit": {
+      "cru": ["Ah! I am hit!", "They got me! Keep firing!"],
+      "cru2": ["Hit. Still in it.", "Took one. Fine."],
+      "cru3": ["Is that all you have?", "Ha. It only stings."],
+      "cru4": ["Armor holding.", "Minor damage. Continuing."]
+    },
+    "suppress": {
+      "cru": ["Suppressing fire! Keep their heads down!", "Light them up!"],
+      "cru2": ["Suppressing.", "Pinning them down."],
+      "cru3": ["Stay down. Stay dead.", "Eat lead."],
+      "cru4": ["Suppressive fire.", "Saturating the position."]
+    }
+  },
+  "line": {}
+}

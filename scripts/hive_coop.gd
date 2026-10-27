@@ -85,7 +85,7 @@ func export_state() -> Dictionary:
 		"goal": director.goal, "marker": director.marker, "use_at": director.use_at,
 		"use_key": director.use_key, "use_text": director.use_text,
 		"progress": director.progress, "progress_text": director.progress_text,
-		"summary": director.summary(), "markers": director.markers(), "done": director.done,
+		"summary": director.summary(false),"markers": director.markers(), "done": director.done,
 		"doors": doors, "locked": map.locked, "moods": moods, "alarm": map.alarm_on,
 		"forced": map.forced, "riding": map.riding, "crash": director.run.crash_id(),
 		"friends": bodies, "task": task, "tokyo": director.tokyo_tasks.export() if director.tokyo_tasks != null else {}}

@@ -7,11 +7,12 @@ const BASE_FOV := 74.0
 ## flash: size of the muzzle flash.
 const WEAPONS := {
 	"rifle": {"label": "M4A4", "slot": 1, "price": 0, "sound": "shot", "magazine": 30, "reserve_max": 180, "reload_time": 1.75, "interval": 0.115, "damage": 28.0, "head_multiplier": 2.7, "spread": 0.011, "kick": 0.011, "flash": 1.0, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
-	# The AK-47: harder hits, more kick. Parts: see ATTACHMENTS.
-	"ak": {"label": "AK-47", "slot": 1, "price": 300, "sound": "ak", "magazine": 30, "reserve_max": 180, "reload_time": 2.5, "interval": 0.1, "damage": 36.0, "head_multiplier": 2.6, "spread": 0.014, "kick": 0.014, "flash": 1.1, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
+	# The AK-47: harder hits, more kick. Parts: see ATTACHMENTS. cycle: its bolt carrier runs
+	# back with every shot and throws a rifle case from the port on the right (casing).
+	"ak": {"label": "AK-47", "slot": 1, "price": 300, "sound": "ak", "magazine": 30, "reserve_max": 180, "reload_time": 2.5, "interval": 0.1, "casing": "rifle", "cycle": true, "damage": 36.0, "head_multiplier": 2.6, "spread": 0.014, "kick": 0.014, "flash": 1.1, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	# The G36: the quickest and steadiest of the rifles, with a reload that sounds like no
-	# other's. Parts: see ATTACHMENTS.
-	"g36": {"label": "G36", "slot": 1, "price": 450, "sound": "g36", "magazine": 30, "reserve_max": 240, "reload_time": 2.2, "interval": 0.08, "damage": 35.0, "head_multiplier": 2.7, "spread": 0.0085, "kick": 0.009, "flash": 1.0, "cues": [[0.15, "g36_mag_out"], [0.62, "g36_mag_in"], [0.85, "g36_bolt"]]},
+	# other's. Parts: see ATTACHMENTS. casing: a rifle case flies from its port on the right.
+	"g36": {"label": "G36", "slot": 1, "price": 450, "sound": "g36", "magazine": 30, "reserve_max": 240, "reload_time": 2.2, "interval": 0.08, "casing": "rifle", "damage": 35.0, "head_multiplier": 2.7, "spread": 0.0085, "kick": 0.009, "flash": 1.0, "cues": [[0.15, "g36_mag_out"], [0.62, "g36_mag_in"], [0.85, "g36_bolt"]]},
 	# The WIRBEL (tools/blender_make_wirbel.py): a rifle whose magazine is a drum of 45 rounds
 	# lying along the barrel on top; it turns on by one of its eight flutes with every shot
 	# (rotor: steps to a turn, see _rotor). In its numbers it lies between the AK and the
@@ -36,7 +37,8 @@ const WEAPONS := {
 	# pellets: shots per blast, each doing `damage`. shells: loaded one at a time, `reload_time`
 	# each. punch: how hard the weapon slams back. settle: share of the muzzle climb that
 	# comes back down by itself. push: how fast a blast from close by throws back whoever
-	# it does not kill, in metres a second with every pellet on the body.
+	# it does not kill, in metres a second with every pellet on the body. slam: every shot also
+	# jolts the gun in the hands up, back and aside (the automatic shotgun).
 	# A shotgun is the weapon for a pack in a doorway. spread: the edge of its cone, which
 	# the pellets fill evenly (shot_pattern). carry: shot goes on through a soft body - the
 	# share of a pellet's force that reaches the next body behind, and the one behind that
@@ -54,7 +56,7 @@ const WEAPONS := {
 	# 320 a second while it fires, 480 a magazine (the G18: 360 and 432).
 	"hornet": {"label": "HORNISSE MP-9", "slot": 2, "price": 380, "group": "sidearms", "from_round": 3, "sound": "hornet", "magazine": 30, "reserve_max": 180, "reload_time": 1.7, "interval": 0.049, "damage": 16.0, "head_multiplier": 2.4, "spread": 0.022, "kick": 0.0075, "flash": 0.7, "casing": "9mm", "buzz": 1.0, "cues": [[0.15, "mag_out"], [0.62, "mag_in"], [0.85, "bolt"]]},
 	"revolver": {"label": ".44 MAGNUM", "slot": 2, "price": 220, "group": "sidearms", "sound": "revolver", "magazine": 6, "reserve_max": 60, "reload_time": 2.4, "interval": 0.5, "damage": 110.0, "head_multiplier": 2.4, "spread": 0.006, "kick": 0.05, "flash": 1.5, "punch": 2.0, "settle": 0.8},
-	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 12, "reserve_max": 72, "reload_time": 2.0, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.085, "kick": 0.038, "flash": 2.0, "pellets": 10, "carry": [0.65, 0.4], "punch": 2.1, "settle": 0.7, "push": 4.5},
+	"autoshotgun": {"label": "AUTO-SCHROTFLINTE", "slot": 3, "price": 500, "group": "heavy", "sound": "autoshotgun", "magazine": 12, "reserve_max": 72, "reload_time": 2.0, "interval": 0.3, "damage": 17.0, "head_multiplier": 1.5, "spread": 0.085, "kick": 0.038, "flash": 2.0, "pellets": 10, "carry": [0.65, 0.4], "punch": 3.4, "settle": 0.7, "push": 4.5, "slam": 1.0},
 	# scope: field of view through the sight. pierce: how many more bodies a bullet goes
 	# through. bolt: the action is worked by hand after every shot.
 	"sniper": {"label": "SCHARFSCHÜTZENGEWEHR", "slot": 3, "price": 450, "group": "heavy", "sound": "sniper", "magazine": 5, "reserve_max": 40, "reload_time": 2.6, "interval": 1.2, "damage": 260.0, "head_multiplier": 2.5, "spread": 0.03, "kick": 0.06, "flash": 1.6, "punch": 2.4, "settle": 0.85, "scope": 13.0, "pierce": 3, "bolt": true},
@@ -125,6 +127,10 @@ const PISTOL_PARTS := {
 	"silencer": {"label": "PISTOLENSCHALLDÄMPFER", "price": 170, "slot": "muzzle", "note": "Leiser Schuss und weniger Mündungsfeuer; der Mündungspunkt folgt dem Aufsatz.", "set": {"quiet": true, "flash": 0.25, "sound": "ump_sil"}, "scale": {"kick": 0.85}},
 	"akimbo": {"label": "AKIMBO", "price": 450, "slot": "style", "note": "Linke Maustaste: linke Pistole. Rechte Maustaste: rechte Pistole. Eigene Magazine und Schussfolgen, nur Hüftfeuer; mehr Streuung und längeres Nachladen.", "set": {"akimbo": true}, "scale": {"spread": 2.0, "kick": 1.15}}
 }
+## The laser module (LaserSight): clamped to the side of the handguard, it throws a dot where
+## the weapon points, in the colour of the reticle workshop - aimed from the hip without
+## the sights. hip_spread: how much of the scatter from the hip is left (current_spread).
+const LASER_PART := {"label": "LASERMODUL", "price": 150, "slot": "laser", "note": "Links am Handschutz: Ein Laserpunkt zeigt, wohin die Waffe zielt – genau schießen, ohne über Kimme und Korn zu gehen. Weniger Streuung aus der Hüfte. Farbe aus der Visier-Werkstatt.", "set": {"laser": true, "hip_spread": 0.7}}
 const REVOLVER_PARTS := {
 	"reddot": PISTOL_PARTS.reddot, "scope": PISTOL_PARTS.scope, "akimbo": PISTOL_PARTS.akimbo
 }
@@ -133,22 +139,26 @@ const ATTACHMENTS := {
 	"rifle": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: heller Leuchtpunkt im klaren Glas statt Kimme und Korn, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "badger", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "badger", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
+		"laser": LASER_PART
 	},
 	"g36": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier über Kimme und Korn: heller Leuchtpunkt im klaren Glas, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "g36_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "g36_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
+		"laser": LASER_PART
 	},
 	"ump": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: heller Leuchtpunkt, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ump_sil", "flash": 0.32, "quiet": true}, "scale": {"kick": 0.75, "spread": 0.9, "damage": 0.95}}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ump_sil", "flash": 0.32, "quiet": true}, "scale": {"kick": 0.75, "spread": 0.9, "damage": 0.95}},
+		"laser": LASER_PART
 	},
 	"ak": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: heller Leuchtpunkt, freie Sicht aufs Ziel, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: macht die AK zum Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "ak_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
+		"laser": LASER_PART
 	},
 	"hornet": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 110, "slot": "sight", "note": "Kleines Leuchtpunktvisier auf dem Schlitten: genauer beim Zielen", "set": {"zoom": 46.0, "aim_spread": 0.6}},
@@ -157,18 +167,23 @@ const ATTACHMENTS := {
 	"wirbel": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier auf der Schiene über der Trommel: heller Leuchtpunkt, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – nur die Trommel tickt noch", "set": {"sound": "wirbel_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 200, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – nur die Trommel tickt noch", "set": {"sound": "wirbel_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
+		"laser": LASER_PART
 	},
 	"falke": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier auf der langen Schiene: heller Leuchtpunkt, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung: mit dem schweren Kaliber das Gewehr für die Distanz", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 220, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "falke_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 220, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "falke_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
+		"laser": LASER_PART
 	},
 	"mp7": {
 		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier: Die MP7 hat weder Kimme noch Korn – damit zielst du genau", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
-		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "mp7_sil", "flash": 0.3, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}}
-	}
+		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "mp7_sil", "flash": 0.3, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
+		"laser": LASER_PART
+	},
+	# The P90 keeps its own ring sight and takes no other; the laser fits it.
+	"p90": {"laser": LASER_PART}
 }
 ## What the shop sells besides weapons. group: its tab in the shop. max: how many fit in
 ## the pockets. The mask is bought level by level.
@@ -233,6 +248,8 @@ var game: Node3D
 var camera: Camera3D
 var weapon: Node3D
 var flash: Node3D
+## The dot of a fitted laser module (_update_laser), made when it is first needed.
+var laser: LaserSight
 var flash_light: OmniLight3D
 var flash_mesh: MeshInstance3D
 ## The light of the weapon in the hands: the room's colour coming back, a rim in the dark,
@@ -497,7 +514,31 @@ func _torch_near(delta: float) -> void:
 		var gap := from.distance_to(hit.position)
 		want = clampf(remap(gap * gap, 0.16, 36.0, 0.13, 1.0), 0.13, 1.0)
 	torch_near = lerpf(torch_near, want, minf(1.0, delta * 10.0))
-	flashlight.light_energy = TORCH_ENERGY * torch_near
+	var share := _torch_map_share()
+	torch_map = share if torch_map < 0.0 else lerpf(torch_map, share, minf(1.0, delta * 3.0))
+	flashlight.light_energy = TORCH_ENERGY * torch_near * torch_map
+
+## (v0.78, Henry: in mission 2 the torch was too bright - a little less in the Tokyo
+## simulation hall, clearly less in the rest of the facility. Mission 1 and 3 keep it.)
+const TORCH_TOKYO := 0.82
+const TORCH_HIVE := 0.6
+## The share of TORCH_ENERGY the map the viewer is in allows (eased in _torch_near).
+var torch_map := -1.0
+
+func _torch_map_share() -> float:
+	if game == null:
+		return 1.0
+	var map = game.cabin
+	if map is TokyoMap:
+		return TORCH_TOKYO
+	if not map is HiveMap:
+		return 1.0
+	var hall: TokyoHall = (map as HiveMap).tokyo
+	if is_instance_valid(hall):
+		var at := global_position
+		if TokyoHall.plan_of(hall.origin).has_point(Vector2(at.x, at.z)) and at.y > hall.origin.y - 4.0 and at.y < hall.origin.y + TokyoHall.TK_CEILING:
+			return TORCH_TOKYO
+	return TORCH_HIVE
 
 func toggle_flashlight() -> void:
 	flashlight.visible = not flashlight.visible
@@ -526,6 +567,7 @@ func _ready() -> void:
 	camera.fov = BASE_FOV
 	add_child(camera)
 	_build_weapon()
+	dress_arms()
 	flashlight = SpotLight3D.new()
 	flashlight.name = "Flashlight"
 	flashlight.position = Vector3(0.12, -0.12, -0.1)
@@ -1586,6 +1628,7 @@ func _physics_process(delta: float) -> void:
 			_footstep(2.0 if sprint else 0.0)
 			step_time = 0.3 if sprint else 0.45
 	_animate_weapon(delta, aiming, sprint and moving, moving)
+	_update_laser()
 	_animate_throw(delta)
 	# Through the telescopic sight only the picture in the lens is left.
 	var sights: Dictionary = gun()
@@ -1697,6 +1740,7 @@ func _launch(data: Dictionary) -> void:
 	shell.game = game
 	shell.kind = "grenade"
 	shell.impact = true
+	shell.shooter = self
 	shell.boost = 1.0 + UPGRADE_SHARE * weapon_level + game.skills.value("damage_heavy")
 	game.ordnance.add_child(shell)
 	shell.global_position = camera.global_position - camera.global_basis.z * 0.7 - camera.global_basis.y * 0.12
@@ -2077,9 +2121,33 @@ func _visible_muzzle(source: Node3D = null) -> Vector3:
 	var ratio := tan(deg_to_rad(camera.fov) * 0.5) / tan(deg_to_rad(WeaponView.VIEW_FOV) * 0.5)
 	return camera.to_global(Vector3(local.x * ratio, local.y * ratio, local.z))
 
+## The laser module on the weapon in hand: its dot where the weapon points. That is the
+## middle of the screen while the weapon is held as usual; as the weapon is turned away from
+## that (a reload, a sprint, the recoil) the dot goes with it.
+func _update_laser() -> void:
+	var on := not down and not menu_open and is_instance_valid(weapon) and weapon.is_visible_in_tree() and inventory.has(current_weapon) and fitted("laser") == "laser"
+	if laser == null:
+		if not on:
+			return
+		laser = LaserSight.new()
+		laser.name = "LaserDot"
+		game.add_child(laser)
+	if not on:
+		laser.hide()
+		return
+	var view: Dictionary = WeaponView.VIEWS[current_weapon]
+	var aimed := smoothstep(0.0, 1.0, aim_blend)
+	var rest := (view.hip_angles as Vector3) * (PI / 180.0) * (1.0 - aimed)
+	if fitted("sight") == "":
+		rest += (view.get("aim_angles", Vector3.ZERO) as Vector3) * (PI / 180.0) * aimed
+	var turn := weapon.basis * Basis.from_euler(rest).inverse()
+	var mouth := weapon.find_child("LaserEmitter", true, false) as Node3D
+	var emitter := _visible_muzzle(mouth) if mouth != null else camera.global_position
+	laser.aim(camera.global_position, camera.global_basis * (turn * Vector3.FORWARD), emitter, camera.global_position, [get_rid()])
+
 func current_spread(aiming: bool = false) -> float:
 	var data := gun()
-	var aim_factor := (0.6 if data.has("pellets") else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else 1.0
+	var aim_factor := (0.6 if data.has("pellets") else 0.25) * float(data.get("aim_spread", 1.0)) if aiming else float(data.get("hip_spread", 1.0))
 	var motion_spread := 1.0 + clampf(Vector2(velocity.x, velocity.z).length() / 6.6, 0.0, 1.0) * 0.4
 	return float(data.spread) * aim_factor * motion_spread * (CROUCH_STEADY if crouched else 1.0)
 
@@ -2165,14 +2233,20 @@ func shoot(hand: int = 1) -> void:
 	if data.has("casing"):
 		slide_clock = 0.0
 		_eject_case()
+	# slam (the automatic shotgun): every shot throws the gun up and back into the shoulder,
+	# rolled a little aside - a hard jolt that the hands catch again before the next.
+	if data.has("slam"):
+		var jolt: float = float(data.slam) * (0.6 if aiming else 1.0)
+		weapon.rotation += Vector3(randf_range(0.85, 1.0) * 0.13, randf_range(-1.0, 1.0) * 0.03, randf_range(0.4, 1.0) * signf(randf() - 0.35) * 0.08) * jolt
+		weapon.position += Vector3(randf_range(-1.0, 1.0) * 0.004, 0.012, 0.045) * jolt
 	if data.has("buzz"):
 		var knock: float = float(data.buzz) * (0.45 if aiming else 1.0)
 		weapon.rotation += Vector3(randf_range(0.6, 1.0) * 0.045, randf_range(-1.0, 1.0) * 0.022, randf_range(-1.0, 1.0) * 0.035) * knock
 		weapon.position += Vector3(randf_range(-1.0, 1.0) * 0.002, 0.003, 0.014) * knock
 	if data.has("pellets"):
 		# The blast shoves the whole view; a pump gun has to be worked before the next shot.
-		trauma = minf(1.0, trauma + (0.44 if data.has("shells") else 0.24))
-		camera.fov += 4.4 if data.has("shells") else 2.3
+		trauma = minf(1.0, trauma + (0.44 if data.has("shells") else (0.38 if data.has("slam") else 0.24)))
+		camera.fov += 4.4 if data.has("shells") else (3.6 if data.has("slam") else 2.3)
 		if data.has("shells"):
 			pump_clock = 0.0
 			pump_cued = false
@@ -2502,7 +2576,15 @@ func get_up() -> void:
 func shake_from(source: Vector3, strength: float, reach: float) -> void:
 	trauma = minf(1.0, trauma + strength * clampf(1.0 - global_position.distance_to(source) / reach, 0.0, 1.0))
 
+## The arms in the first-person view in the skin this player wears (each machine its own:
+## a co-op partner sees this one from outside). Again at every start: the skin may have
+## been changed in the menu since.
+func dress_arms() -> void:
+	if game != null and "profile" in game:
+		WeaponView.wear(str(game.profile.skin))
+
 func reset_survivor() -> void:
+	dress_arms()
 	movement.reset()
 	ward_left = 0.0
 	throw_recover = 0.0

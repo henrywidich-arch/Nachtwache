@@ -81,6 +81,15 @@ var low := false
 var contact_wait := 0.0
 var push_wait := 6.0
 var block_wait := 0.0
+## The rest of what the rank and file call out (see _chatter): seconds until the next
+## taunt, "lost them", "I am hit" and "suppressing" of this soldier.
+var jeer_wait := 10.0
+var lost_wait := 0.0
+var ouch_wait := 0.0
+var suppress_wait := 0.0
+## How long the target was in sight the last time, and how long it has been hidden since.
+var sight_held := 0.0
+var hidden_for := 0.0
 
 func _ready() -> void:
 	super._ready()
@@ -97,6 +106,7 @@ func _ready() -> void:
 	think_left = randf() * 0.4
 	pause_wait = randf_range(0.5, 1.2)
 	grenade_wait = randf_range(4.0, 9.0)
+	jeer_wait = randf_range(8.0, 16.0)
 
 ## How sharp the unit is on this difficulty.
 func _tactics() -> float:
@@ -218,6 +228,11 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		retreating = randf_range(6.0, 9.0)
 		post_left = 0.0
 		say("retreat")
+	elif ouch_wait <= 0.0 and not role.get("operator", false):
+		# A hit he shrugs off is worth a curse now and then.
+		ouch_wait = randf_range(6.0, 10.0)
+		if randf() < 0.4:
+			say("hit")
 
 func _die(direction: Vector3, headshot: bool, source: Node = null, overkill: bool = false) -> void:
 	super._die(direction, headshot, source, overkill)
@@ -313,6 +328,7 @@ func _physics_process(delta: float) -> void:
 		contact_wait = 14.0
 		say("contact")
 	seen_for = seen_for + delta if sees else 0.0
+	_chatter(delta, sees)
 	if str(spec.role) == "commander":
 		push_wait -= delta
 		if push_wait <= 0.0:
@@ -399,11 +415,40 @@ func _physics_process(delta: float) -> void:
 			rounds_left = mini(ammo, randi_range(int(role.burst[0]), int(role.burst[1])))
 			shot_wait = 0.0
 			cue("volley", [rounds_left, float(role.interval), str(role.sound)])
+			# The machine gunner calls his long bursts; the others only now and then.
+			if suppress_wait <= 0.0 and not role.get("operator", false) and (str(spec.role) == "heavy" or randf() < 0.1):
+				suppress_wait = randf_range(12.0, 20.0)
+				say("suppress")
 		if rounds_left > 0 and shot_wait <= 0.0:
 			_fire(target, pace > 0.5)
 		throw_grenade(target, distance)
 	else:
 		rounds_left = 0
+
+## What a soldier calls out between the orders: a taunt now and then while he has the
+## target in his sights, and "lost them" when a target he watched for a while stays out of
+## sight. (The operators speak over the radio instead, see Operator.) The unit takes turns
+## in Game.bark, so a squad never talks over itself.
+func _chatter(delta: float, sees: bool) -> void:
+	jeer_wait -= delta
+	lost_wait -= delta
+	ouch_wait -= delta
+	suppress_wait -= delta
+	if role.get("operator", false) or retreating > 0.0:
+		return
+	if sees:
+		hidden_for = 0.0
+		sight_held = seen_for
+		if seen_for > 4.0 and jeer_wait <= 0.0:
+			jeer_wait = randf_range(16.0, 30.0)
+			if randf() < 0.6:
+				say("taunt")
+		return
+	hidden_for += delta
+	if sight_held > 1.5 and hidden_for > 3.0 and lost_wait <= 0.0:
+		sight_held = 0.0
+		lost_wait = randf_range(18.0, 28.0)
+		say("lost")
 
 func shot_reach() -> float:
 	return minf(48.0, float(role.range[1]) + (3.0 if int(role.pellets) > 1 else 6.0))

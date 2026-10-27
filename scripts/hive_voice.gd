@@ -98,6 +98,9 @@ static func _pending(d: HiveDirector) -> int:
 	var count := 0
 	var before := ""
 	for entry: Dictionary in d.lines:
+		# (The companions' small talk gives way: it does not count.)
+		if bool(entry.get("banter", false)):
+			continue
 		var tag := "%s:%s" % [entry.get("kind", ""), entry.get("cue", entry.get("id", ""))]
 		if tag != before:
 			count += 1

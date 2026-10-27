@@ -28,7 +28,25 @@ func _initialize() -> void:
 	file.store_string(JSON.stringify(WeaponView.dumped))
 	file.close()
 	var output: Array = []
-	var code := OS.execute("python3", [ProjectSettings.globalize_path("res://tools/bake_hands.py"), source, folder], output, true)
+	var code := -1
+	# python3 with numpy (and scikit-image, if it has it); NACHTWACHE_PYTHON names another;
+	# without either, the Python that comes with Blender has numpy, which is enough.
+	var pythons: Array = []
+	if OS.get_environment("NACHTWACHE_PYTHON") != "":
+		pythons.append(OS.get_environment("NACHTWACHE_PYTHON"))
+	pythons.append("python3")
+	var blenders := "C:/Program Files/Blender Foundation"
+	if DirAccess.dir_exists_absolute(blenders):
+		for blender in DirAccess.get_directories_at(blenders):
+			for version in DirAccess.get_directories_at(blenders.path_join(blender)):
+				var bundled := blenders.path_join(blender).path_join(version).path_join("python/bin/python.exe")
+				if FileAccess.file_exists(bundled):
+					pythons.append(bundled)
+	for python in pythons:
+		output.clear()
+		code = OS.execute(python, ["-I", ProjectSettings.globalize_path("res://tools/bake_hands.py"), source, folder], output, true)
+		if code == 0:
+			break
 	print("".join(output))
 	if code != 0:
 		print("HAND_BAKE_FAILED")

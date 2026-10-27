@@ -7,8 +7,8 @@ extends Infected
 ##      wave over the floor;
 ##   2  adds the laser of its eyes, swept across the hall, and roars for the infected;
 ##   3  enraged: faster, harder, shorter pauses.
-## Every attack is announced: a roar and a red line on the floor before the rush, the eyes
-## burning white before the laser, the crouch before the leap and slam. A rush that ends in
+## Every attack is announced: a roar and a red line on the floor before the rush, the hiss
+## and the wind-up of the laser, the crouch before the leap and slam. A rush that ends in
 ## a wall leaves it dazed for a moment, and then it takes more.
 ## Everything seen and heard goes through cue(), so the co-op guest's copy does the same;
 ## what the hall does to the survivors is reckoned on each machine (BossArena).

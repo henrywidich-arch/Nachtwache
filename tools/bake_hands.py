@@ -9,7 +9,8 @@ hand or arm; the shapes of a material (glove, pad, sleeve) are melted into one a
 a smooth union of their distance fields and the surface taken out with marching cubes.
 Writes <key>.bin per set: for each material its name, then positions, normals, colours
 (float32) and the triangle indices (int32), wound for Godot (clockwise is front).
-Needs numpy and scikit-image.
+Needs numpy; with scikit-image the surface is taken out by its marching cubes, without it
+by the surface nets below (numpy alone: Blender's own Python will do, see bake_hands.gd).
 """
 import json
 import os
@@ -17,7 +18,10 @@ import struct
 import sys
 
 import numpy as np
-from skimage.measure import marching_cubes
+try:
+    from skimage.measure import marching_cubes
+except ImportError:
+    marching_cubes = None
 
 # Size of a voxel and how softly shapes melt together, per material (metres).
 VOXEL = {"glove": 0.003, "pad": 0.0022, "sleeve": 0.0075}
@@ -100,6 +104,63 @@ def smooth_min(a, b, k):
     return np.minimum(a, b) - h * h * k * 0.25
 
 
+def surface_nets(field, voxel):
+    """Where the field is zero, without scikit-image: a vertex in every cell the surface
+    passes through (the mean of where it crosses the cell's edges), and a quad across every
+    edge of the grid it crosses, between the four cells round that edge. Vertices are in
+    the grid's own space (metres); the triangles come wound either way."""
+    nx, ny, nz = field.shape
+    field = field.astype(np.float64)
+    corners = {}
+    for dx in (0, 1):
+        for dy in (0, 1):
+            for dz in (0, 1):
+                corners[(dx, dy, dz)] = field[dx:nx - 1 + dx, dy:ny - 1 + dy, dz:nz - 1 + dz]
+    shape = (nx - 1, ny - 1, nz - 1)
+    total = np.zeros(shape + (3,))
+    count = np.zeros(shape, dtype=np.int32)
+    for a, fa in corners.items():
+        for axis in range(3):
+            if a[axis] == 1:
+                continue
+            b = list(a)
+            b[axis] = 1
+            fb = corners[tuple(b)]
+            cross = (fa < 0) != (fb < 0)
+            t = np.where(cross, fa / np.where(cross, fa - fb, 1.0), 0.0)
+            for d in range(3):
+                where = a[d] + (t if d == axis else 0.0)
+                total[..., d] += np.where(cross, where, 0.0)
+            count += cross
+    active = count > 0
+    index = -np.ones(shape, dtype=np.int64)
+    index[active] = np.arange(int(active.sum()))
+    cells = np.argwhere(active)
+    verts = (cells + total[active] / count[active][:, None]) * voxel
+    inside = field < 0
+    quads = []
+    for axis in range(3):
+        u, v = (axis + 1) % 3, (axis + 2) % 3
+        lo = tuple(slice(0, field.shape[d] - 1) if d == axis else slice(1, field.shape[d] - 1) for d in range(3))
+        hi = tuple(slice(1, field.shape[d]) if d == axis else slice(1, field.shape[d] - 1) for d in range(3))
+        edges = np.argwhere(inside[lo] != inside[hi])
+        if len(edges) == 0:
+            continue
+        edges[:, u] += 1
+        edges[:, v] += 1
+        ring = []
+        for du, dv in ((-1, -1), (0, -1), (0, 0), (-1, 0)):
+            cell = edges.copy()
+            cell[:, u] += du
+            cell[:, v] += dv
+            ring.append(index[cell[:, 0], cell[:, 1], cell[:, 2]])
+        quads.append(np.stack(ring, 1))
+    quads = np.concatenate(quads)
+    quads = quads[(quads >= 0).all(1)]
+    faces = np.concatenate([quads[:, [0, 1, 2]], quads[:, [0, 2, 3]]])
+    return verts, faces
+
+
 def bake_group(shapes, key):
     voxel = VOXEL[key]
     soft = SOFT[key]
@@ -120,15 +181,32 @@ def bake_group(shapes, key):
         field[i0[0]:i1[0], i0[1]:i1[1], i0[2]:i1[2]] = smooth_min(part, d, soft)
     if field.min() >= 0.0:
         return None
-    verts, faces, normals, _ = marching_cubes(-field, level=0.0, spacing=(voxel, voxel, voxel))
-    verts = verts + low
-    # Normals from the field itself, pointing out.
     def field_at(points):
         value = distance(shapes[0], points)
         for shape in shapes[1:]:
             value = smooth_min(value, distance(shape, points), soft)
         return value
     eps = voxel * 0.5
+    if marching_cubes is not None:
+        verts, faces, normals, _ = marching_cubes(-field, level=0.0, spacing=(voxel, voxel, voxel))
+        verts = verts + low
+    else:
+        verts, faces = surface_nets(field, voxel)
+        verts = verts + low
+        # The nets' vertices lie only near the surface: pulled onto it along the field's
+        # slope, twice, so that it is as round as the shapes are.
+        for _ in range(2):
+            slope = np.zeros_like(verts)
+            for d in range(3):
+                step = np.zeros(3)
+                step[d] = eps
+                slope[:, d] = (field_at(verts + step) - field_at(verts - step)) / (2 * eps)
+            length2 = np.maximum(np.einsum("ij,ij->i", slope, slope), 1e-12)
+            move = (field_at(verts) / length2)[:, None] * slope
+            # (Never more than half a voxel: where shapes meet the slope can mislead.)
+            size = np.linalg.norm(move, axis=1, keepdims=True)
+            verts = verts - move * np.minimum(1.0, voxel * 0.5 / np.maximum(size, 1e-12))
+    # Normals from the field itself, pointing out.
     grad = np.zeros_like(verts)
     for d in range(3):
         step = np.zeros(3)
@@ -141,7 +219,10 @@ def bake_group(shapes, key):
     # Wound clockwise as seen from outside (Godot's front faces).
     v0, v1, v2 = verts[faces[:, 0]], verts[faces[:, 1]], verts[faces[:, 2]]
     facing = np.einsum("ij,ij->i", np.cross(v1 - v0, v2 - v0), normals[faces[:, 0]])
-    if np.mean(facing > 0) > 0.5:
+    if marching_cubes is None:
+        # The surface nets' triangles come wound either way: each is turned on its own.
+        faces = np.where((facing > 0)[:, None], faces[:, [0, 2, 1]], faces)
+    elif np.mean(facing > 0) > 0.5:
         faces = faces[:, [0, 2, 1]]
     return verts.astype(np.float32), normals.astype(np.float32), colours.astype(np.float32), faces.astype(np.int32)
 

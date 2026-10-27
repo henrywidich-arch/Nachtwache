@@ -163,13 +163,38 @@ static func with_tokyo(night: Dictionary, on: bool) -> Dictionary:
 	out["key"] = key + ("+tokio" if on else "")
 	return out
 
+## The room a night must have (chosen before the second mission starts, Profile.room):
+## an area of POOL, or ROOM_TOKYO for the simulation hall; "" leaves it to chance.
+const ROOM_TOKYO := "tokio"
+
+## The rooms that can be chosen, in the order the menu goes through them ("" first).
+static func rooms() -> Array[String]:
+	var out: Array[String] = ["", ROOM_TOKYO]
+	out.append_array(pool())
+	return out
+
+## What a choosable room is called in the menu.
+static func room_label(id: String) -> String:
+	if id == "":
+		return "ZUFALL"
+	if id == ROOM_TOKYO:
+		return "TOKIO-SIMULATION"
+	if pool().has(id):
+		return str(info(id).get("label", id.to_upper()))
+	return id.to_upper()
+
 ## The night of a seed: the old route as its spine, chains of areas in some of its seams
-## (see SEAMS), and perhaps the simulation hall (tokyo_of).
-static func plan(seed_value: int) -> Dictionary:
-	return with_tokyo(_plan(seed_value), tokyo_of(seed_value))
+## (see SEAMS), and perhaps the simulation hall (tokyo_of). With `must` (an area of the
+## pool, or ROOM_TOKYO) that room is surely in it; the rest stays as the dice say.
+static func plan(seed_value: int, must: String = "") -> Dictionary:
+	if must == ROOM_TOKYO:
+		return with_tokyo(_plan(seed_value), true)
+	if not pool().has(must):
+		must = ""
+	return with_tokyo(_plan(seed_value, must), tokyo_of(seed_value))
 
 ## On a night with a crash the first chain begins in the tunnel.
-static func _plan(seed_value: int) -> Dictionary:
+static func _plan(seed_value: int, must: String = "") -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("hive-areale-%d" % seed_value)
 	var crash := rng.randf() < 0.5
@@ -178,13 +203,13 @@ static func _plan(seed_value: int) -> Dictionary:
 	var count := mini(_weighted(rng, AREA_COUNTS), order.size())
 	var per := seams_for(rng, crash, count)
 	for attempt in range(ATTEMPTS):
-		var night := _night(rng, seed_value, crash, per, order, false)
+		var night := _night(rng, seed_value, crash, per, order, false, must)
 		if not night.is_empty():
 			night.tries = attempt + 1
 			return night
 	# What can always be laid: corridors as straight as they can be.
 	for attempt in range(ATTEMPTS):
-		var night := _night(rng, seed_value, crash, per, order, true)
+		var night := _night(rng, seed_value, crash, per, order, true, must)
 		if not night.is_empty():
 			night.tries = ATTEMPTS + attempt + 1
 			return night
@@ -240,7 +265,7 @@ static func every_seam() -> Dictionary:
 	return night
 
 ## One try at a night. {} if a chain got stuck.
-static func _night(rng: RandomNumberGenerator, seed_value: int, crash: bool, per: Dictionary, order: Array, straight: bool) -> Dictionary:
+static func _night(rng: RandomNumberGenerator, seed_value: int, crash: bool, per: Dictionary, order: Array, straight: bool, must: String = "") -> Dictionary:
 	var pieces: Array = []
 	var links: Array = []
 	var chains: Array = []
@@ -255,6 +280,9 @@ static func _night(rng: RandomNumberGenerator, seed_value: int, crash: bool, per
 		var index := chains.size()
 		var at := Vector3(START.x + index * CHAIN_SPACING, BASE, START.z)
 		var want := {"chain": index, "count": count, "order": avail, "start_at": at}
+		# (The chosen room comes first in the first chain that is laid.)
+		if must != "" and not areas.has(must) and avail.has(must):
+			want.must = must
 		if seam == "s0":
 			want.start_def = "absturz"
 		else:
@@ -285,13 +313,15 @@ static func _night(rng: RandomNumberGenerator, seed_value: int, crash: bool, per
 			"seam": seam, "from": str(spec.from), "to": str(spec.to), "out": str(spec.out), "in": str(spec.in),
 			"first": str(made.pieces[0].id), "last": str(made.pieces[made.pieces.size() - 1].id), "areas": made.areas
 		})
+	if must != "" and not areas.has(must):
+		return {}
 	var index := 0
 	for piece: Dictionary in pieces:
 		if str(piece.kind) == "area":
 			piece.area_index = index
 			index += 1
 	return {
-		"classic": false, "seed": seed_value, "key": "s%d" % seed_value, "crash": crash, "arrival": "absturz" if crash else "terminal",
+		"classic": false, "seed": seed_value, "key": "s%d" % seed_value + ("+r_" + must if must != "" else ""), "must": must, "crash": crash, "arrival": "absturz" if crash else "terminal",
 		"chains": chains, "areas": areas, "lifts": lifts, "pieces": pieces, "links": links, "checkpoint": -1, "tries": 0
 	}
 
@@ -379,11 +409,14 @@ static func _chain(rng: RandomNumberGenerator, want: Dictionary, placed: Array, 
 	while true:
 		var final := placed_areas >= count
 		var choices: Array = [str(want.end_def)] if final else (order.slice(0, 1) if keep_order else order.duplicate())
+		var forced := not final and placed_areas == 0 and order.has(str(want.get("must", "")))
+		if forced:
+			choices = [str(want.must)]
 		var done := false
 		for tries in range(STEP_TRIES):
 			if choices.is_empty():
 				break
-			var def: String = str(choices[0]) if keep_order or final else str(choices[rng.randi() % choices.size()])
+			var def: String = str(choices[0]) if keep_order or final or forced else str(choices[rng.randi() % choices.size()])
 			var kind: String = str(kinds[step]) if step < kinds.size() else _pick_kind(rng, last_kind, stairs_used, straight)
 			var made := _join(rng, all, cursor, kind, def, 0, straight, int(want.get("end_side", -1)) if final else -1)
 			if made.is_empty():

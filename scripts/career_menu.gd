@@ -66,7 +66,7 @@ static func skins(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	wear.disabled = not unlocked or profile.skin == selected
 	actions.add_child(wear)
 	if bool(data.bot):
-		var in_squad: bool = profile.squad.has(selected)
+		var in_squad: bool = profile.picks.has(selected)
 		var join := hud._chip("IM TRUPP  ✓" if in_squad else "ALS BEGLEITER", hud._enlist.bind(selected), in_squad, 220)
 		join.disabled = not unlocked or in_squad
 		actions.add_child(join)

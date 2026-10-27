@@ -2983,9 +2983,35 @@ func _dress_shed() -> void:
 
 # ---------------------------------------------------------------- stations
 
+## The look of the counters that sell first aid and ammunition (made with
+## tools/blender_shop_prop.py: the middle of their foot at the origin, their front +z):
+## the table, and what stands on it.
+const SHOP_TABLE := "res://assets/models/shop/shop_table.glb"
+const SHOP_GOODS := {"health": "res://assets/models/shop/shop_medkit.glb", "ammo": "res://assets/models/shop/shop_ammo.glb"}
+## The table's size: deep (local x of a station), high, wide (local z).
+const SHOP_TABLE_SIZE := Vector3(0.78, 0.9, 1.55)
+
+## A model of the counters in the frame of a station (whose front is local +x): its foot
+## on `local`, turned by `turn` from looking out of the front.
+func _shop_model(path: String, frame: Transform3D, local: Vector3, turn: float = 0.0) -> Node3D:
+	if not model_scenes.has(path):
+		model_scenes[path] = load(path)
+	var piece: Node3D = (model_scenes[path] as PackedScene).instantiate()
+	piece.name = path.get_file().get_basename()
+	piece.transform = Transform3D(frame.basis * Basis(Vector3.UP, PI / 2 + turn), frame * local)
+	for part in piece.find_children("*", "MeshInstance3D", true, false):
+		var mesh := part as MeshInstance3D
+		mesh.visibility_range_end = 70.0
+		mesh.visibility_range_end_margin = 6.0
+	add_child(piece)
+	return piece
+
 ## Supply counter whose front faces local +x.
 func _station(kind: String, title: String, detail: String, pos: Vector3, yaw: float, color: Color) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	if SHOP_GOODS.has(kind) and ResourceLoader.exists(SHOP_TABLE) and ResourceLoader.exists(str(SHOP_GOODS[kind])):
+		_shop_station(kind, title, detail, pos, yaw, color, frame)
+		return
 	_placed(frame, "siding", Vector3(0, 0.46, 0), Vector3(0.78, 0.92, 1.45), Color("38443c"))
 	_placed(frame, "siding", Vector3(0.02, 0.95, 0), Vector3(0.86, 0.06, 1.55), Color("6b5a43"))
 	_glow_box(frame * Vector3(0.4, 0.78, 0), Vector3(0.02, 0.05, 1.25), color, 1.8, frame.basis)
@@ -3003,6 +3029,25 @@ func _station(kind: String, title: String, detail: String, pos: Vector3, yaw: fl
 			_placed(frame, "metal", Vector3(0, 1.08, 0.35), Vector3(0.3, 0.2, 0.36), Color("3a3d40"))
 			_placed(frame, "metal", Vector3(0.1, 1.02, -0.3), Vector3(0.08, 0.06, 0.5), Color("7d7f7c"))
 	_solid(pos + Vector3(0, 0.46, 0), Vector3(0.78, 0.92, 1.45), true, yaw)
+	stations.append({"kind": kind, "title": title, "detail": detail, "pos": pos, "color": color, "label": label})
+
+## First aid or ammunition: the sci-fi table, its light bar in the station's colour, and on it the medkit or two ammunition crates.
+func _shop_station(kind: String, title: String, detail: String, pos: Vector3, yaw: float, color: Color, frame: Transform3D) -> void:
+	var size := SHOP_TABLE_SIZE
+	_shop_model(SHOP_TABLE, frame, Vector3.ZERO)
+	# (Over the light bar of the table's front, which then shines in the station's colour.)
+	_glow_box(frame * Vector3(size.x * 0.5 - 0.02, 0.66, 0), Vector3(0.05, 0.035, 1.1), color, 1.8, frame.basis)
+	var label := lettering(title + "\n" + detail + " ◈", frame * Vector3(0.1, 1.85, 0), 30, color)
+	label.rotation.y = yaw + PI / 2
+	var goods := str(SHOP_GOODS[kind])
+	if kind == "ammo":
+		# (The three draws the old crates took of the dice, so that what follows is placed as before.)
+		var turns := [random.randf_range(-0.12, 0.12), random.randf_range(-0.12, 0.12), random.randf()]
+		_shop_model(goods, frame, Vector3(0.02, size.y, -0.36), float(turns[0]))
+		_shop_model(goods, frame, Vector3(-0.02, size.y, 0.36), float(turns[1]))
+	else:
+		_shop_model(goods, frame, Vector3(0.04, size.y, 0), -0.12)
+	_solid(pos + Vector3(0, size.y * 0.5, 0), size, true, yaw)
 	stations.append({"kind": kind, "title": title, "detail": detail, "pos": pos, "color": color, "label": label})
 
 ## A second ammunition cabinet in the house, up in the store loft: whoever holds the upper

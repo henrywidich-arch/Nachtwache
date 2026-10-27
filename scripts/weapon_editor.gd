@@ -1,7 +1,7 @@
 extends RefCounted
 ## Slot choices preview on the real model. Only the explicit action changes inventory.
-const SLOTS := {"sight": "VISIER", "muzzle": "MÜNDUNG", "style": "HANDHABUNG"}
-const SHORT := {"reddot": "ROTPUNKT", "scope": "FERNROHR", "silencer": "SCHALLDÄMPFER", "akimbo": "AKIMBO", "": "STANDARD"}
+const SLOTS := {"sight": "VISIER", "muzzle": "MÜNDUNG", "laser": "LASER", "style": "HANDHABUNG"}
+const SHORT := {"reddot": "ROTPUNKT", "scope": "FERNROHR", "silencer": "SCHALLDÄMPFER", "laser": "LASERMODUL", "akimbo": "AKIMBO", "": "STANDARD"}
 const ICONS = preload("res://scripts/shop_icons.gd")
 
 static func build(screen: ShopScreen, id: String, editing: bool) -> void:
@@ -35,7 +35,7 @@ static func build(screen: ShopScreen, id: String, editing: bool) -> void:
 		button.name = "Slot_" + slot
 		button.custom_minimum_size.y = 54
 		button.add_theme_font_size_override("font_size", 15)
-		button.icon = ICONS.for_entry("part", id, current if current != "" else {"sight": "scope", "muzzle": "silencer", "style": "akimbo"}[slot])
+		button.icon = ICONS.for_entry("part", id, current if current != "" else {"sight": "scope", "muzzle": "silencer", "laser": "laser", "style": "akimbo"}[slot])
 		button.expand_icon = true
 		button.add_theme_constant_override("icon_max_width", 34)
 		slots.add_child(button)
