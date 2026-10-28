@@ -110,7 +110,10 @@ const SKINS := {
 		"image": "res://assets/skins/sturmatlas_wirbel.png", "weapons": ["wirbel"], "flip": Vector2(1, 1)},
 	"vietnam": {"label": "VIETNAM-LIEBE", "rarity": "epic", "note": "Abgenutztes Oliv und Sand, rote Streifen mit gelben Sternen und ein Sticker: ein Junge mit Sonnenbrille, Daumen hoch.",
 		"boost": {"reload": 0.06, "reserve": 0.1}, "metal": 0.3, "rough": 0.55, "accent": Color("e8c13a"), "base": Color("4a5230"),
-		"image": "res://assets/skins/vietnam_badger.png", "weapons": ["badger"], "flip": Vector2(1, 1)}
+		"image": "res://assets/skins/vietnam_badger.png", "weapons": ["badger"], "flip": Vector2(1, 1)},
+	"fliegenpilz": {"label": "FLIEGENPILZ", "rarity": "epic", "note": "Rot, Grün und Creme: Fliegenpilze, Gänseblümchen und ein Gartenzaun, auf dem Gehäuse ein frecher Gartenzwerg.",
+		"boost": {"reload": 0.06, "damage": 0.04}, "metal": 0.3, "rough": 0.55, "accent": Color("d8262b"), "base": Color("4f7a35"),
+		"image": "res://assets/skins/fliegenpilz_launcher.png", "weapons": ["launcher"], "flip": Vector2(1, 1)}
 }
 ## How often a kill with a skin that has its own sound (kill_sound) plays it, and how long
 ## it then keeps quiet at least.
