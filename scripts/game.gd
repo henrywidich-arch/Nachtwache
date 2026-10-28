@@ -212,6 +212,11 @@ var gas: GasField
 ## Fire on the ground, from Molotov cocktails.
 var fire: FireField
 var heal: HealField
+## (v0.79) Medpacks set down on the floor (MedpackField), crates and the locker (Rewards).
+var medpacks: MedpackField
+var rewards := Rewards.new()
+## Whether the night just ended gave a crate (the end screen says so).
+var crate_won := false
 ## True while a blast is being worked out: a shield does not stop that.
 ## (Also set for a bullet that an ability lets through a shield.)
 var blasting := false
@@ -338,6 +343,10 @@ func _ready() -> void:
 	fire.name = "Fire"
 	fire.game = self
 	add_child(fire)
+	medpacks = MedpackField.new()
+	medpacks.name = "Medpacks"
+	medpacks.game = self
+	add_child(medpacks)
 	heal = HealField.new()
 	heal.name = "Heal"
 	heal.game = self
@@ -407,6 +416,8 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		profile.stored = false
 	profile.open()
+	rewards.stored = profile.stored
+	rewards.open()
 	skills.adopt(profile.skills, profile.skill_tree)
 	skills.adopt_wishes(profile.wishes)
 	profile.wishes = skills.wishes.duplicate()
@@ -443,7 +454,9 @@ func _ready() -> void:
 	interaction_outline = preload("res://scripts/interaction_focus.gd").new()
 	interaction_outline.game = self
 	add_child(interaction_outline)
-	hud.show_menu("main")
+	# A game started by hand opens on the login page; checks and tools go straight on.
+	var plain_start: bool = Array(OS.get_cmdline_user_args()).all(func(arg: String) -> bool: return arg == "--no-warm-up" or arg.begins_with("--mp-version="))
+	hud.show_menu("login" if plain_start and DisplayServer.get_name() != "headless" else "main")
 	if DisplayServer.get_name() != "headless" and not "--no-warm-up" in OS.get_cmdline_user_args():
 		_warm_up()
 	cabin.thunder.connect(_on_thunder)
@@ -702,7 +715,7 @@ const BINDINGS := {
 	"move_forward": [KEY_W], "move_left": [KEY_A], "move_back": [KEY_S], "move_right": [KEY_D], "sprint": [KEY_SHIFT], "jump": [KEY_SPACE], "crouch": [KEY_C],
 	"reload": [KEY_R], "interact": [KEY_E], "flashlight": [KEY_F], "melee": [KEY_V], "syringe": [KEY_Q],
 	"weapon_1": [KEY_1], "weapon_2": [KEY_2], "weapon_3": [KEY_3], "weapon_4": [KEY_4],
-	"throw_grenade": [KEY_G], "throw_flash": [KEY_T], "throw_molotov": [KEY_H], "throw_heal": [KEY_J], "place_claymore": [KEY_B],
+	"throw_grenade": [KEY_G], "throw_flash": [KEY_T], "throw_molotov": [KEY_H], "throw_heal": [KEY_J], "place_claymore": [KEY_B], "place_medpack": [KEY_K],
 	"squad_follow": [KEY_5], "squad_hold": [KEY_6, KEY_X], "squad_free": [KEY_7],
 	"next_wave": [KEY_N], "scoreboard": [KEY_TAB], "pause": [KEY_ESCAPE], "fullscreen": [KEY_F11], "test_menu": [KEY_F1], "skip_round": [KEY_F2]
 }
@@ -880,6 +893,7 @@ func _clear_match_nodes() -> void:
 	gas.clear()
 	fire.clear()
 	heal.clear()
+	medpacks.clear()
 	for key in squad_levels:
 		squad_levels[key] = 0
 	medic_round = 0
@@ -1000,6 +1014,8 @@ func start_run(test: bool = false) -> void:
 	state = "playing"
 	menu_light.hide()
 	player.reset_survivor()
+	# What the player took along from the locker (crates, v0.79).
+	rewards.equip(player)
 	player.controlled = true
 	player.camera.current = true
 	# On a map with a landing zone the squad arrives there by helicopter.
@@ -1696,6 +1712,15 @@ func gas_burst(center: Vector3) -> void:
 	if net.joined:
 		return
 	gas.burst(fx.floor_below(center + Vector3.UP * 0.3))
+
+## (v0.79) A medpack is set down: the host lays it for both (MedpackField).
+func medpack_drop(at: Vector3) -> void:
+	var floor_at := fx.floor_below(at + Vector3.UP * 0.4)
+	if net.joined:
+		net.request_medpack(floor_at)
+		return
+	medpacks.drop(floor_at)
+	net.send_medpack(floor_at)
 
 ## A heal grenade has come to rest: its field opens there (HealField). In a co-op match the
 ## host opens it for both. `level`: 1 if it also raises the fallen.
@@ -2692,6 +2717,10 @@ func finish(victory: bool) -> void:
 	# What the night was worth to the trees of abilities.
 	var after := Skills.experience(profile.totals)
 	last_gain = {"xp": after - before, "level": Skills.level_of(after), "raised": Skills.level_of(after) - Skills.level_of(before)}
+	# A won mission gives a crate, opened in the menu (KISTEN).
+	crate_won = victory
+	if victory:
+		rewards.grant_crate()
 	overlay = ""
 	player.menu_open = false
 	state = "win" if victory else "lose"

@@ -26,7 +26,7 @@ const SHOP_TABS := [["weapons", "WAFFEN"], ["sidearms", "PISTOLEN"], ["heavy", "
 ## What is carried in the pockets and used with one key: item, key, short name. The
 ## syringe is not counted: its tile shows the seconds until it is ready again.
 ## (The key is read from the game's bindings: item, the action of its key, short name.)
-const TILES := [["syringe", "syringe", "SPRITZE"], ["grenade", "throw_grenade", "FRAG"], ["flashbang", "throw_flash", "BLEND"], ["molotov", "throw_molotov", "BRAND"], ["heal", "throw_heal", "HEIL"], ["claymore", "place_claymore", "MINE"]]
+const TILES := [["syringe", "syringe", "SPRITZE"], ["grenade", "throw_grenade", "FRAG"], ["flashbang", "throw_flash", "BLEND"], ["molotov", "throw_molotov", "BRAND"], ["heal", "throw_heal", "HEIL"], ["claymore", "place_claymore", "MINE"], ["medpack", "place_medpack", "MED"]]
 ## The keys, as the settings list them: the actions of Game.BINDINGS whose keys a line
 ## names (key_rows writes the names from the bindings; "#..." is said as it stands - the
 ## mouse has no binding in that table), and what they do. Every action of the bindings
@@ -40,13 +40,13 @@ const KEY_HELP := [
 	[["weapon_1"], "Primärwaffen durchwechseln"], [["weapon_2"], "Schwere Waffen durchwechseln"],
 	[["weapon_3"], "Sekundärwaffen (ohne: Wurfzeug)"], [["weapon_4"], "Wurfzeug in die Hand nehmen"], [["#Mausrad"], "Nächste / vorige Waffe"], [["#Mittlere Maustaste"], "Weg zum Ziel einblenden"],
 	[["throw_grenade"], "Splittergranate (halten, loslassen)"], [["throw_flash"], "Blendgranate"], [["throw_molotov"], "Molotow"],
-	[["throw_heal"], "Heilgranate"], [["place_claymore"], "Mine legen"],
+	[["throw_heal"], "Heilgranate"], [["place_claymore"], "Mine legen"], [["place_medpack"], "Medpack hinlegen"],
 	[["squad_follow"], "Team: folgen"], [["squad_hold"], "Team: halten"], [["squad_free"], "Team: frei"],
 	[["next_wave"], "Nächste Runde (halten; auch F)"], [["pause"], "Pause"], [["fullscreen"], "Vollbild (auch Alt+Enter)"],
 	[["test_menu"], "Testmenü (nur im Testraum)"], [["skip_round"], "Runde überspringen (nur allein)"]
 ]
 ## What a throwable is called in the line of its group.
-const THROW_WORDS := {"grenade": "FRAG", "flashbang": "BLEND", "molotov": "BRAND", "heal": "HEIL", "claymore": "MINE"}
+const THROW_WORDS := {"grenade": "FRAG", "flashbang": "BLEND", "molotov": "BRAND", "heal": "HEIL", "claymore": "MINE", "medpack": "MED"}
 ## How much of the groups' lines stays on the screen while nothing changes (0 to 1).
 const LOADOUT_DIM := 0.6
 
@@ -135,7 +135,7 @@ var gain_left: Dictionary = {}
 var gain_count: Dictionary = {}
 const GAIN_TIME := 2.4
 ## The colour a tile lights up in when something of it is found (as on the crate).
-const GAIN_TINTS := {"grenade": Color("ffb35c"), "flashbang": Color("9fc4ff"), "molotov": Color("ff7a2e"), "heal": Color("6dffa8"), "claymore": Color("d8e07a"), "syringe": Color("7fe3b4")}
+const GAIN_TINTS := {"grenade": Color("ffb35c"), "flashbang": Color("9fc4ff"), "molotov": Color("ff7a2e"), "heal": Color("6dffa8"), "claymore": Color("d8e07a"), "medpack": Color("8cffb0"), "syringe": Color("7fe3b4")}
 ## Which list of the shop is open.
 var shop_tab := "weapons"
 var scope_rect: ColorRect
@@ -1399,7 +1399,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "reticle", "skins", "board", "skills", "test"]
+	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "reticle", "skins", "board", "skills", "test", "crates", "locker"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -1428,8 +1428,15 @@ func show_menu(mode: String) -> void:
 	match mode:
 		"main":
 			first = _menu_main(column)
+			preload("res://scripts/login_menu.gd").dress_main(self, column)
+		"login":
+			first = preload("res://scripts/login_menu.gd").build(self, column)
 		"play":
 			first = preload("res://scripts/play_menu.gd").build(self, column)
+		"crates":
+			first = preload("res://scripts/rewards_menu.gd").crates(self, column)
+		"locker":
+			first = preload("res://scripts/rewards_menu.gd").locker(self, column)
 		"career":
 			first = preload("res://scripts/career_menu.gd").build(self, column)
 		"changelog":
@@ -1501,14 +1508,15 @@ func _menu_main(column: VBoxContainer) -> Control:
 	_title(column, "NACHT\nWACHE", 96)
 	_gap(column, 22)
 	var first: Button
-	for entry in [["SPIELEN", "play", "play"], ["KARRIERE", "career", "class"], ["TESTRAUM", "test_room", "test"], ["EINSTELLUNGEN", "settings", "settings"], ["BESTENLISTE", "board", "board"], ["PATCHNOTES", "changelog", "notes"], ["BEENDEN", "quit", "exit"]]:
+	for entry in [["SPIELEN", "play", "play"], ["KARRIERE", "career", "class"], ["KISTEN", "crates", "crate"], ["SPIND", "locker", "locker"], ["TESTRAUM", "test_room", "test"], ["EINSTELLUNGEN", "settings", "settings"], ["BESTENLISTE", "board", "board"], ["PATCHNOTES", "changelog", "notes"], ["BEENDEN", "quit", "exit"]]:
 		var callback: Callable
 		match str(entry[1]):
 			"quit": callback = game.quit_game
 			"settings": callback = _open_settings.bind("main")
 			"test_room": callback = _start_test_room
 			_: callback = show_menu.bind(entry[1])
-		var button := _button(str(entry[0]), callback, entry[1] == "play")
+		var words := str(entry[0]) + ("  ·  %d" % game.rewards.crates if entry[1] == "crates" and game.rewards.crates > 0 else "")
+		var button := _button(words, callback, entry[1] == "play")
 		if entry[1] == "test_room":
 			button.name = "TestRoomButton"
 		button.custom_minimum_size = Vector2(390, 52)

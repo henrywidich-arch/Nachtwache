@@ -1,92 +1,162 @@
 extends RefCounted
-## Mission choices on the left; the room and both players form one lobby on the right.
+## SPIELEN (look of v0.79): on the left the map cards, the settings as rows of segment
+## buttons and the companions as tiles with their faces; on the right the lobby with both
+## seats, the room, a preview of the chosen mission and the big start button.
+## A guest sees the host's choices (NetLink.lobby_settings) and cannot change them.
 const SYMBOLS = preload("res://scripts/ui_symbols.gd")
+const UI = preload("res://scripts/ui_kit.gd")
+
+const LEFT := 720.0
+const RIGHT := 360.0
+
+## The picture, name, line under it and a few words about each mission.
+const CARDS := {
+	1: ["res://assets/menu/hof19.png", "HOF 19", "FARMHAUS", "Haus, Hof und Nebengebäude halten, Runde um Runde bis zum Morgen: zehn Runden oder endlos."],
+	2: ["res://assets/menu/villa.png", "DIE VILLA", "FORSCHUNGSANLAGE", "Von der Villa über den Bahnhof hinab in die Anlage, durch zufällige Areale bis zum Endboss in der Reaktorhalle."],
+	3: ["res://assets/menu/appenweier.png", "APPENWEIER", "DORFRAND", "Der Ortsrand an der Sander Straße, vom Haus 13a über die Feuerwehr bis zum Kreisverkehr: zehn Runden oder endlos."]
+}
 
 static func build(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var game: Node3D = hud.game
 	var net: NetLink = game.net
-	hud.page_header(column, "SPIELEN", "main")
+	UI.header(hud, column, "SPIELEN", "KARTE WÄHLEN UND SPIEL EINSTELLEN", "main")
 	var selected: int = int(net.lobby_settings.get("mission", game.profile.mission)) if net.joined else game.profile.mission
 	var columns := HBoxContainer.new()
-	columns.add_theme_constant_override("separation", 44)
+	columns.add_theme_constant_override("separation", 32)
 	column.add_child(columns)
 	var mission := VBoxContainer.new()
 	mission.name = "MissionSection"
-	mission.custom_minimum_size.x = 692
-	mission.add_theme_constant_override("separation", 12)
+	mission.custom_minimum_size.x = LEFT
+	mission.add_theme_constant_override("separation", 8)
 	columns.add_child(mission)
-	mission.add_child(hud.label("KARTE", 12, SurvivalHUD.MUTED, true))
+	UI.section(hud, mission, "KARTE")
 	var cards := HBoxContainer.new()
-	cards.add_theme_constant_override("separation", 16)
-	var numbers := [1, 2, 3]
-	for number in numbers:
-		cards.add_child(_card(hud, number, selected == number, numbers.size()))
+	cards.add_theme_constant_override("separation", 12)
+	for number in [1, 2, 3]:
+		cards.add_child(_card(hud, number, selected == number))
 	mission.add_child(cards)
-	hud._gap(mission, 8)
-	var options := GridContainer.new()
-	options.columns = 2
-	options.add_theme_constant_override("h_separation", 16)
-	options.add_theme_constant_override("v_separation", 14)
-	mission.add_child(options)
-	_setting(hud, options, "SCHWIERIGKEIT", str(net.lobby_settings.get("label", game.profile.rules().label) if net.joined else game.profile.rules().label), func() -> void:
-		hud._next_difficulty()
-		net.broadcast_lobby(), net.joined)
-	var mode: String = "MISSION" if selected == 2 else (str(net.lobby_settings.get("mode", game.profile.mode)) if net.joined else game.profile.mode)
-	_setting(hud, options, "MODUS", str({"story": "GESCHICHTE", "endless": "ENDLOS"}.get(mode, mode)), func() -> void:
-		hud._next_mode()
-		net.broadcast_lobby(), selected == 2 or net.joined)
-	var mods: bool = bool(net.lobby_settings.get("modifiers", game.profile.modifiers)) if net.joined else game.profile.modifiers
-	_setting(hud, options, "MODIFIKATOREN", "AN" if mods and selected == 1 else "AUS", func() -> void:
-		hud._toggle_modifiers()
-		net.broadcast_lobby(), selected != 1 or net.joined)
+	hud._gap(mission, 6)
+	UI.section(hud, mission, "SPIELEINSTELLUNGEN")
+	_settings(hud, mission, selected)
 	var bots: bool = bool(net.lobby_settings.get("bots", game.team_enabled)) if net.joined else game.team_enabled
-	_setting(hud, options, "BOTS", "DABEI" if bots else "OHNE", func() -> void:
-		game.team_enabled = not game.team_enabled
-		net.broadcast_lobby()
-		hud.show_menu("play"), net.joined)
-	# (The second mission: one room of the random part that is surely in the night. The
-	# host's choice counts; a guest sees it.)
-	if selected == 2:
-		var room: String = str(net.lobby_settings.get("room", game.profile.room)) if net.joined else str(game.profile.room)
-		_setting(hud, options, "RAUM GARANTIERT", HiveLayout.room_label(room), func() -> void:
-			game.profile.next_room()
-			net.broadcast_lobby()
-			hud.show_menu("play"), net.joined)
 	if bots:
+		hud._gap(mission, 4)
 		_companions(hud, mission, selected)
 	var lobby := VBoxContainer.new()
 	lobby.name = "LobbySection"
-	lobby.custom_minimum_size.x = 376
-	lobby.add_theme_constant_override("separation", 12)
+	lobby.custom_minimum_size.x = RIGHT
+	lobby.add_theme_constant_override("separation", 8)
 	columns.add_child(lobby)
-	lobby.add_child(hud.label("LOBBY", 12, SurvivalHUD.MUTED, true))
-	lobby.add_child(_seat(hud, net.player_name + "  ·  DU", "HOST" if net.hosting else ("GAST" if net.joined else "BEREIT"), true))
-	lobby.add_child(_seat(hud, net.partner_name if net.partner != 0 else "OFFENER PLATZ", "VERBUNDEN" if net.matched() else ("VERBINDET …" if net.partner != 0 else "KOOP · 2 SPIELER"), net.matched()))
-	hud._gap(lobby, 12)
-	if net.active:
-		lobby.add_child(hud._chip("VERBINDUNG ANSEHEN", hud.show_menu.bind("host" if net.hosting else "join"), false, 376))
-		lobby.add_child(hud._chip("RAUM VERLASSEN", func() -> void:
-			net.close()
-			hud.show_menu("play"), false, 376))
+	return _lobby(hud, lobby, selected)
+
+# ---------------------------------------------------------------- settings
+
+static func _settings(hud: SurvivalHUD, parent: VBoxContainer, selected: int) -> void:
+	var game: Node3D = hud.game
+	var net: NetLink = game.net
+	var profile: Profile = game.profile
+	var guest: bool = net.joined
+	var rows := VBoxContainer.new()
+	rows.add_theme_constant_override("separation", 5)
+	parent.add_child(rows)
+	var refresh := func() -> void:
+		profile.save()
+		net.broadcast_lobby()
+		hud.show_menu("play")
+	var level: String = str(net.lobby_settings.get("level", profile.difficulty)) if guest else profile.difficulty
+	var levels: Array = []
+	for id: String in Profile.ORDER:
+		levels.append([str(Profile.DIFFICULTIES[id].label), id])
+	UI.segments(hud, rows, "SCHWIERIGKEIT", levels, level, func(value: Variant) -> void:
+		profile.difficulty = str(value)
+		refresh.call(), guest)
+	var mode: String = str(net.lobby_settings.get("mode", profile.mode)) if guest else profile.mode
+	if selected == 2:
+		UI.segments(hud, rows, "MODUS", [["MISSION", "mission"]], "mission", func(_value: Variant) -> void: pass, true)
 	else:
-		var room := HBoxContainer.new()
-		room.add_theme_constant_override("separation", 12)
-		room.add_child(hud._chip("RAUM ÖFFNEN", func() -> void:
-			net.host(not game.check_mode)
-			hud.show_menu("play"), false, 182))
-		room.add_child(hud._chip("RAUM BEITRETEN", hud.show_menu.bind("join"), false, 182))
-		lobby.add_child(room)
-	hud._gap(lobby, 28)
-	var start := hud._button("WARTE AUF DEN HOST" if net.joined else ("KOOP STARTEN" if net.hosting else "MISSION STARTEN"), hud._start_night, true)
-	start.custom_minimum_size = Vector2(376, 52)
-	start.disabled = net.joined or (net.hosting and not net.matched())
-	lobby.add_child(start)
-	if net.clash != "":
-		var clash := hud.label("Versionen passen nicht: " + net.clash, 13, SurvivalHUD.DANGER)
-		clash.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		clash.custom_minimum_size.x = 376
-		lobby.add_child(clash)
-	return start
+		UI.segments(hud, rows, "MODUS", [["GESCHICHTE", "story"], ["ENDLOS", "endless"]], mode, func(value: Variant) -> void:
+			profile.mode = str(value)
+			refresh.call(), guest)
+	var mods: bool = bool(net.lobby_settings.get("modifiers", profile.modifiers)) if guest else profile.modifiers
+	UI.segments(hud, rows, "MODIFIKATOREN", [["AN", true], ["AUS", false]], mods and selected == 1, func(value: Variant) -> void:
+		profile.modifiers = bool(value)
+		refresh.call(), selected != 1 or guest)
+	var bots: bool = bool(net.lobby_settings.get("bots", game.team_enabled)) if guest else game.team_enabled
+	UI.segments(hud, rows, "BOTS", [["DABEI", true], ["OHNE", false]], bots, func(value: Variant) -> void:
+		game.team_enabled = bool(value)
+		refresh.call(), guest)
+	# (The second mission: one room of the random part that is surely in the night. The
+	# host's choice counts; a guest sees it.)
+	if selected == 2:
+		var room: String = str(net.lobby_settings.get("room", profile.room)) if guest else str(profile.room)
+		var row := HBoxContainer.new()
+		row.name = "RaumRow"
+		row.add_theme_constant_override("separation", 6)
+		var caption := hud.label("RAUM GARANTIERT", 13, SurvivalHUD.MUTED, true)
+		caption.custom_minimum_size.x = 168
+		caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(caption)
+		var step := func(by: int) -> void:
+			var list := HiveLayout.rooms()
+			profile.room = list[posmod(list.find(profile.room) + by, list.size())]
+			refresh.call()
+		var back := UI.flat_button(hud, "◀", step.bind(-1), false, 36, 30, 14)
+		back.disabled = guest
+		row.add_child(back)
+		var shown := UI.flat_button(hud, HiveLayout.room_label(room), step.bind(1), false, 380, 30, 14)
+		shown.add_theme_color_override("font_color", UI.GOLD)
+		shown.add_theme_color_override("font_disabled_color", UI.GOLD)
+		shown.name = "RAUM GARANTIERT"
+		shown.disabled = guest
+		row.add_child(shown)
+		var on := UI.flat_button(hud, "▶", step.bind(1), false, 36, 30, 14)
+		on.disabled = guest
+		row.add_child(on)
+		rows.add_child(row)
+
+# ---------------------------------------------------------------- map cards
+
+static func _card(hud: SurvivalHUD, mission: int, active: bool) -> Control:
+	var card := PanelContainer.new()
+	card.name = "MapCard%d" % mission
+	card.custom_minimum_size = Vector2(floorf((LEFT - 24.0) / 3.0), 116)
+	var info: Array = CARDS.get(mission, CARDS[1])
+	card.add_theme_stylebox_override("panel", UI.plate(active, 1.0, 0))
+	var canvas := Control.new()
+	canvas.clip_contents = true
+	card.add_child(canvas)
+	var shot := UI.picture(str(info[0]), canvas)
+	if not active:
+		shot.modulate = Color(0.72, 0.74, 0.78)
+	UI.fade(canvas, 0.0, 0.95, 0.2)
+	var number := hud.label("%02d" % mission, 12, UI.GOLD if active else SurvivalHUD.MUTED, true)
+	number.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	number.position = Vector2(14, -66)
+	canvas.add_child(number)
+	var title := hud.label(str(info[1]), 26, UI.GOLD if active else SurvivalHUD.IVORY, true)
+	title.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	title.position = Vector2(14, -52)
+	canvas.add_child(title)
+	var sub := hud.label(str(info[2]), 11, SurvivalHUD.MUTED, true)
+	sub.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	sub.position = Vector2(14, -22)
+	canvas.add_child(sub)
+	if active:
+		UI.corner_tick(hud, canvas, 32)
+	var select := Button.new()
+	select.flat = true
+	select.focus_mode = Control.FOCUS_NONE
+	select.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	select.disabled = hud.game.net.joined
+	select.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	select.pressed.connect(func() -> void:
+		hud.game.sounds.play_menu("click")
+		hud._choose_mission(mission)
+		hud.game.net.broadcast_lobby())
+	canvas.add_child(select)
+	return card
+
+# ---------------------------------------------------------------- companions
 
 ## Who comes along (v0.79): two of Profile.CANDIDATES are ticked; ticking a third lets the
 ## one ticked longest ago go. The operators come only in the second mission and join there
@@ -103,27 +173,14 @@ static func _companions(hud: SurvivalHUD, parent: VBoxContainer, selected: int) 
 	section.name = "CompanionSection"
 	section.add_theme_constant_override("separation", 6)
 	parent.add_child(section)
-	section.add_child(hud.label("BEGLEITER  ·  ZWEI ANHAKEN", 11, SurvivalHUD.MUTED, true))
+	UI.section(hud, section, "BEGLEITER  ·  ZWEI ANHAKEN")
 	var grid := GridContainer.new()
 	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 10)
-	grid.add_theme_constant_override("v_separation", 8)
+	grid.add_theme_constant_override("h_separation", 8)
+	grid.add_theme_constant_override("v_separation", 6)
 	section.add_child(grid)
 	for id: String in Profile.CANDIDATES:
-		var ticked := picks.has(id)
-		var operator := id in Profile.OPERATORS
-		var chip := hud._chip(("✓  " if ticked else "") + str(Profile.SKINS[id].label), func() -> void:
-			hud._pick_companion(id)
-			net.broadcast_lobby(), ticked, 164)
-		chip.name = "Pick_" + id
-		chip.custom_minimum_size.y = 34
-		chip.add_theme_font_size_override("font_size", 14)
-		chip.disabled = net.joined or not profile.may_pick(id) or (operator and selected != 2 and not ticked)
-		if not profile.may_pick(id):
-			chip.tooltip_text = profile.progress(id)
-		elif operator:
-			chip.tooltip_text = "Stößt am Bahnhof von Einsatz 2 dazu"
-		grid.add_child(chip)
+		grid.add_child(_companion(hud, id, picks.has(id), selected))
 	var operators: Array = picks.filter(func(id: Variant) -> bool: return str(id) in Profile.OPERATORS)
 	# (Who walks in an operator's place: one of the squad who was not ticked - the host's
 	# squad is not known to a guest, so he reads the rule only.)
@@ -136,103 +193,201 @@ static func _companions(hud: SurvivalHUD, parent: VBoxContainer, selected: int) 
 		note = "Phantom, Havoc und Ghost kommen nur in Einsatz 2 mit (ab dem Bahnhof)." + ("  Hier %s dafür %s mit." % ["gehen" if stand_in.size() > 1 else "geht", names] if not operators.is_empty() and names != "" else "")
 	var words := hud.label(note, 12, SurvivalHUD.MUTED)
 	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	words.custom_minimum_size.x = 686
+	words.custom_minimum_size.x = LEFT
 	section.add_child(words)
 
-static func _setting(hud: SurvivalHUD, parent: Control, title: String, value: String, callback: Callable, locked: bool) -> void:
-	var field := VBoxContainer.new()
-	field.add_theme_constant_override("separation", 5)
-	field.add_child(hud.label(title, 11, SurvivalHUD.MUTED, true))
-	var button := hud._chip(value, callback, false, 338)
-	button.name = title
-	button.custom_minimum_size.y = 38
-	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.disabled = locked
-	field.add_child(button)
-	parent.add_child(field)
-
-## The picture, name and line under it of each mission's card.
-const CARDS := {
-	1: ["res://assets/menu/hof19.png", "HOF 19", "01  ·  FARMHAUS"],
-	2: ["res://assets/menu/villa.png", "DIE VILLA", "02  ·  FORSCHUNGSANLAGE"],
-	3: ["res://assets/menu/appenweier.png", "APPENWEIER", "03  ·  DORFRAND"]
-}
-
-static func _card(hud: SurvivalHUD, mission: int, active: bool, count: int = 3) -> Control:
-	var card := PanelContainer.new()
-	# (The cards share the width of the column: 692 with a gap of 16 between them.)
-	card.custom_minimum_size = Vector2(floorf((692.0 - 16.0 * (count - 1)) / count), 224)
-	var info: Array = CARDS.get(mission, CARDS[1])
-	var narrow := count > 3
-	var plate := hud._flat(Color("10191e"), SurvivalHUD.AMBER if active else Color("34434b"), 0)
-	plate.content_margin_top = 0
-	plate.content_margin_right = 0
-	plate.content_margin_bottom = 0
-	plate.set_border_width_all(2 if active else 1)
-	card.add_theme_stylebox_override("panel", plate)
-	var canvas := Control.new()
-	card.add_child(canvas)
-	var path := str(info[0])
-	var thumbnail: Texture2D
-	if "--ui-review-check" in OS.get_cmdline_user_args() and FileAccess.file_exists(path):
-		# The capture run has just written fresh previews, before the editor can import them.
-		thumbnail = ImageTexture.create_from_image(Image.load_from_file(path))
-	elif ResourceLoader.exists(path):
-		thumbnail = load(path) as Texture2D
-	if thumbnail != null:
-		var picture := TextureRect.new()
-		picture.texture = thumbnail
-		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-		picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		canvas.add_child(picture)
-	var shade := TextureRect.new()
-	var fade := GradientTexture2D.new()
-	var gradient := Gradient.new()
-	gradient.colors = PackedColorArray([Color(0, 0, 0, 0.02), Color(0.015, 0.025, 0.03, 0.94)])
-	fade.gradient = gradient
-	fade.fill_from = Vector2(0, 0.1)
-	fade.fill_to = Vector2(0, 1)
-	shade.texture = fade
-	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	canvas.add_child(shade)
-	var title := hud.label(str(info[1]), 20 if narrow else 26, SurvivalHUD.AMBER if active else SurvivalHUD.IVORY, true)
-	title.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	title.position = Vector2(12 if narrow else 18, -64 if narrow else -68)
-	canvas.add_child(title)
-	var sub := hud.label(str(info[2]), 10 if narrow else 12, SurvivalHUD.MUTED, true)
-	sub.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-	sub.position = Vector2(12 if narrow else 18, -30)
-	canvas.add_child(sub)
-	var select := Button.new()
-	select.flat = true
-	select.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	select.disabled = hud.game.net.joined
-	select.pressed.connect(func() -> void:
-		hud._choose_mission(mission)
-		hud.game.net.broadcast_lobby())
-	canvas.add_child(select)
-	return card
-
-static func _seat(hud: SurvivalHUD, nickname: String, status: String, ready: bool) -> Control:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(376, 66)
-	panel.add_theme_stylebox_override("panel", hud._plate(0.35))
+## A tile of one companion: his face, his name, a box to tick. The Button carries the name
+## with a tick in front (checks read it); what is seen is drawn on it.
+static func _companion(hud: SurvivalHUD, id: String, ticked: bool, selected: int) -> Button:
+	var game: Node3D = hud.game
+	var net: NetLink = game.net
+	var profile: Profile = game.profile
+	var operator := id in Profile.OPERATORS
+	var tile := Button.new()
+	tile.name = "Pick_" + id
+	tile.text = ("✓  " if ticked else "") + str(Profile.SKINS[id].label)
+	tile.custom_minimum_size = Vector2(floorf((LEFT - 24.0) / 4.0), 44)
+	tile.clip_contents = true
+	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_disabled_color"]:
+		tile.add_theme_color_override(state, Color.TRANSPARENT)
+	var hover := UI.plate(true, 0.85, 0)
+	if not ticked:
+		hover.border_color = Color(UI.GOLD.r, UI.GOLD.g, UI.GOLD.b, 0.6)
+		hover.set_border_width_all(1)
+	tile.add_theme_stylebox_override("normal", UI.plate(ticked, 0.75, 0))
+	tile.add_theme_stylebox_override("hover", hover)
+	tile.add_theme_stylebox_override("pressed", hover)
+	tile.add_theme_stylebox_override("disabled", UI.plate(ticked, 0.45, 0))
+	tile.add_theme_stylebox_override("focus", UI.plate(true, 0.0, 0))
+	tile.disabled = net.joined or not profile.may_pick(id) or (operator and selected != 2 and not ticked)
+	if not profile.may_pick(id):
+		tile.tooltip_text = profile.progress(id)
+	elif operator:
+		tile.tooltip_text = "Stößt am Bahnhof von Einsatz 2 dazu"
+	tile.pressed.connect(func() -> void:
+		game.sounds.play_menu("click")
+		hud._pick_companion(id)
+		net.broadcast_lobby())
+	var face := UI.face(id)
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 14)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	row.offset_left = 2
+	row.offset_top = 2
+	row.offset_bottom = -2
+	row.offset_right = -10
+	row.add_theme_constant_override("separation", 8)
+	tile.add_child(row)
+	var picture := UI.icon_rect(face if face != null else UI.glyph("user"), 40)
+	picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	if tile.disabled and not ticked:
+		picture.modulate = Color(0.45, 0.45, 0.48)
+	row.add_child(picture)
+	var tone: Color = UI.GOLD if ticked else (SurvivalHUD.MUTED if tile.disabled else SurvivalHUD.IVORY)
+	var name_label := hud.label(str(Profile.SKINS[id].label), 14, tone, true)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	row.add_child(name_label)
+	# The box to tick, or a lock while the look is not earned.
+	if not profile.may_pick(id):
+		row.add_child(UI.icon_rect(UI.glyph("lock"), 16, SurvivalHUD.MUTED))
+		return tile
+	var box := Panel.new()
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.custom_minimum_size = Vector2(18, 18)
+	box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = UI.GOLD if ticked else Color(0, 0, 0, 0.3)
+	fill.border_color = UI.GOLD if ticked else Color(1, 1, 1, 0.35)
+	fill.set_border_width_all(1)
+	fill.set_corner_radius_all(2)
+	box.add_theme_stylebox_override("panel", fill)
+	if ticked:
+		var tick := hud.label("✓", 13, UI.INK, true)
+		tick.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+		tick.position = Vector2(4, -1)
+		box.add_child(tick)
+	row.add_child(box)
+	return tile
+
+# ---------------------------------------------------------------- lobby
+
+static func _lobby(hud: SurvivalHUD, lobby: VBoxContainer, selected: int) -> Control:
+	var game: Node3D = hud.game
+	var net: NetLink = game.net
+	UI.section(hud, lobby, "LOBBY")
+	lobby.add_child(_seat(hud, net.player_name, "DU  ·  " + ("HOST" if net.hosting else ("GAST" if net.joined else "SOLO")), true, game.profile.skin, not net.joined))
+	if net.partner != 0:
+		lobby.add_child(_seat(hud, net.partner_name, "MITSPIELER" if net.matched() else "VERBINDET …", net.matched(), net.partner_skin, net.joined))
+	else:
+		lobby.add_child(_seat(hud, "OFFENER PLATZ", "KOOP  ·  2 SPIELER", false, "", false))
+	var room := HBoxContainer.new()
+	room.add_theme_constant_override("separation", 8)
+	lobby.add_child(room)
+	var half := (RIGHT - 8.0) / 2.0
+	if net.active:
+		room.add_child(UI.flat_button(hud, "VERBINDUNG ANSEHEN", hud.show_menu.bind("host" if net.hosting else "join"), false, half, 38))
+		room.add_child(UI.flat_button(hud, "RAUM VERLASSEN", func() -> void:
+			net.close()
+			hud.show_menu("play"), false, half, 38))
+	else:
+		room.add_child(UI.flat_button(hud, "RAUM ÖFFNEN", func() -> void:
+			net.host(not game.check_mode)
+			hud.show_menu("play"), false, half, 38))
+		room.add_child(UI.flat_button(hud, "RAUM BEITRETEN", hud.show_menu.bind("join"), false, half, 38))
+	hud._gap(lobby, 4)
+	UI.section(hud, lobby, "MISSIONSVORSCHAU")
+	lobby.add_child(_preview(hud, selected))
+	hud._gap(lobby, 6)
+	var start := UI.big_button(hud, "WARTE AUF DEN HOST" if net.joined else ("KOOP STARTEN" if net.hosting else "MISSION STARTEN"), hud._start_night, RIGHT, 62)
+	start.name = "StartButton"
+	start.disabled = net.joined or (net.hosting and not net.matched())
+	lobby.add_child(start)
+	if net.clash != "":
+		var clash := hud.label("Versionen passen nicht: " + net.clash, 13, SurvivalHUD.DANGER)
+		clash.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		clash.custom_minimum_size.x = RIGHT
+		lobby.add_child(clash)
+	return start
+
+## A seat of the lobby: the face of the look, the name, a crown for the host, the state.
+static func _seat(hud: SurvivalHUD, nickname: String, status: String, ready: bool, look: String, host: bool) -> Control:
+	var panel := UI.panel(false, 0.8, 0)
+	panel.custom_minimum_size = Vector2(RIGHT, 58)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
 	panel.add_child(row)
-	var icon := TextureRect.new()
-	icon.texture = SYMBOLS.icon("team")
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	icon.custom_minimum_size = Vector2(23, 30)
-	icon.modulate = SurvivalHUD.MINT if ready else SurvivalHUD.MUTED
-	row.add_child(icon)
+	var face_box := PanelContainer.new()
+	face_box.custom_minimum_size = Vector2(58, 58)
+	var face_plate := StyleBoxFlat.new()
+	face_plate.bg_color = Color(1, 1, 1, 0.05)
+	face_box.add_theme_stylebox_override("panel", face_plate)
+	row.add_child(face_box)
+	var face: Texture2D = UI.face(look) if look != "" else null
+	if face != null:
+		var picture := UI.icon_rect(face, 58)
+		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		face_box.add_child(picture)
+	else:
+		face_box.add_child(UI.icon_rect(UI.glyph("plus" if look == "" else "user"), 24, SurvivalHUD.MUTED))
 	var names := VBoxContainer.new()
-	names.add_theme_constant_override("separation", 2)
-	names.add_child(hud.label(nickname, 17, SurvivalHUD.IVORY if ready else SurvivalHUD.MUTED, true))
-	names.add_child(hud.label(status, 11, SurvivalHUD.MINT if ready else SurvivalHUD.MUTED, true))
+	names.add_theme_constant_override("separation", 0)
+	names.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	names.alignment = BoxContainer.ALIGNMENT_CENTER
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", 6)
+	top.add_child(hud.label(nickname, 19, SurvivalHUD.IVORY if look != "" else SurvivalHUD.MUTED, true))
+	if host:
+		top.add_child(UI.icon_rect(UI.glyph("crown"), 16))
+	names.add_child(top)
+	names.add_child(hud.label(status, 11, SurvivalHUD.MUTED, true))
 	row.add_child(names)
+	if ready:
+		var badge := hud.label("BEREIT", 13, UI.MINT, true)
+		badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		row.add_child(badge)
+	var margin := Control.new()
+	margin.custom_minimum_size.x = 6
+	row.add_child(margin)
 	return panel
+
+## The chosen mission once more, large: its picture, its name and what is played.
+static func _preview(hud: SurvivalHUD, selected: int) -> Control:
+	var game: Node3D = hud.game
+	var net: NetLink = game.net
+	var info: Array = CARDS.get(selected, CARDS[1])
+	var box := UI.panel(false, 0.85, 0)
+	box.name = "MissionPreview"
+	var inside := VBoxContainer.new()
+	inside.add_theme_constant_override("separation", 0)
+	box.add_child(inside)
+	var shot := Control.new()
+	shot.custom_minimum_size = Vector2(RIGHT, 100)
+	shot.clip_contents = true
+	inside.add_child(shot)
+	UI.picture(str(info[0]), shot)
+	UI.fade(shot, 0.0, 0.85, 0.35)
+	var name_label := hud.label(str(info[1]), 24, SurvivalHUD.IVORY, true)
+	name_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
+	name_label.position = Vector2(12, -34)
+	shot.add_child(name_label)
+	var words := MarginContainer.new()
+	for side in ["left", "right"]:
+		words.add_theme_constant_override("margin_" + side, 12)
+	words.add_theme_constant_override("margin_top", 6)
+	words.add_theme_constant_override("margin_bottom", 10)
+	inside.add_child(words)
+	var lines := VBoxContainer.new()
+	lines.add_theme_constant_override("separation", 4)
+	words.add_child(lines)
+	var about := hud.label(str(info[3]), 13, SurvivalHUD.MUTED)
+	about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	about.custom_minimum_size.x = RIGHT - 24.0
+	lines.add_child(about)
+	var level: String = str(net.lobby_settings.get("label", game.profile.rules().label)) if net.joined else str(game.profile.rules().label)
+	var mode: String = str(net.lobby_settings.get("mode", game.profile.mode)) if net.joined else game.profile.mode
+	var facts := "%s  ·  %s" % [level, "MISSION" if selected == 2 else str({"story": "GESCHICHTE", "endless": "ENDLOS"}.get(mode, mode))]
+	lines.add_child(hud.label(facts, 12, UI.GOLD, true))
+	return box

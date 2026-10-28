@@ -1,5 +1,36 @@
 [
   {
+    "version": "0.79",
+    "title": "Neues Menü-Design, Kisten und Waffenskins",
+    "sections": [
+      {
+        "title": "Neues Menü-Design",
+        "items": [
+          "Neuer Look für alle Hauptseiten: dunkle Flächen mit dünnen Rahmen, Gold für alles, was gewählt ist, goldene Striche vor den Überschriften.",
+          "Login-Seite beim Start: eigener Rufname statt eines Zufallsnamens. Er wird gespeichert und in der Lobby und im Koop angezeigt. Dazu dein Aussehen, Einsätze, Siege, Abschüsse und was in dieser Version neu ist.",
+          "Hauptmenü: NACHTWACHE in einer Zeile, oben rechts dein Rufname mit Gesicht (Klick: Namen ändern), unten rechts die Neuerungen dieser Version mit Sprung zu den Patchnotes.",
+          "SPIELEN: Kartenkacheln mit goldenem Rahmen und Haken, Einstellungen als Knopfreihen (Schwierigkeit, Modus, Modifikatoren, Bots, Raum mit Pfeilen), Begleiter als Kacheln mit Gesicht und Häkchen, Lobby mit Gesichtern, Krone für den Host und BEREIT, dazu eine Missionsvorschau und ein großer MISSION-STARTEN-Knopf.",
+          "Waffenshop: Guthaben oben rechts, die Liste mit echten Bildern der Waffen, Reiter mit Symbolen, in der Mitte Name, Art-Abzeichen, Beschreibung und das große Waffenbild, rechts ein Werte-Feld mit goldenen Balken, Vergleich zur getragenen Waffe, Aufsatz-Punkten und dem, was du trägst.",
+          "Aufsätze als Kacheln: Visier, Mündung, Laser und Handhabung mit Bild; ein Klick öffnet „Aufsätze und Varianten“ mit Preis, ein zweiter schließt sie wieder.",
+          "Werkbank im selben Stil: jede Verbesserung als eigene Zeile mit Stufen-Punkten, Wirkung und goldenem Kauf-Knopf."
+        ]
+      },
+      {
+        "title": "Kisten, Waffenskins und Spind",
+        "items": [
+          "Jede gewonnene Mission bringt eine Kiste (auch im Koop, jeder seine eigene). Im Hauptmenü unter KISTEN öffnen: Ein Band mit Belohnungen läuft unter der goldenen Markierung durch, wird langsamer und bleibt auf deinem Gewinn stehen.",
+          "Was du gewinnst, gehört dir für 1, 3 oder 7 Tage. Dasselbe noch einmal verlängert die Zeit.",
+          "Drei Waffenskins für M4A4 (Startwaffe), M9 (Startpistole), AK-47, P90, UMP45, G36, MP7, Schrotflinte und Desert Eagle: ROTER DRACHE (legendär, roter Lack mit goldenem Drachen, +6 % Schaden, +5 % Stabilität), ORBITAL (episch, weiß-orange, 10 % schneller nachladen, +6 % Stabilität) und TIEFSEE (selten, nachtblau mit leuchtenden Linien, +10 % Magazin, +15 % Reserve).",
+          "SPIND: Skins auftragen, ansehen und Ausrüstung für den nächsten Einsatz anhaken. Eine Waffe aus dem Spind startet direkt mit dir und mit ihrem Skin, mit Rucksack zwei. Skins für Startwaffen gelten automatisch.",
+          "Gasmaske (Platzhalter, Modell folgt): Du startest mit Gasmaske, ihr Filter hält 50 % länger.",
+          "Medpack: mit K auf den Boden legen. Alle 2 Sekunden heilt es jeden in der Nähe, nach 10 Heilungen zerplatzt es. Du startest mit zweien.",
+          "Rucksack: ein Waffenplatz mehr für jede Waffenart, damit du Funde in der Villa aufheben kannst, ohne etwas fallen zu lassen.",
+          "Mission 2: In den Arealen tritt jetzt ab und zu Giftgas aus. Mit Gasmaske kommst du durch, sonst außen herum oder schnell durch."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.78",
     "title": "Eigene Waffen, Begleiter-Auswahl und neue Stimmen",
     "sections": [

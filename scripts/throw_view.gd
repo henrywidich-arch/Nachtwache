@@ -110,6 +110,18 @@ static func build(kind: String) -> Node3D:
 				leg.height = 0.05
 				var stand := _bit(prop, leg, Vector3(x, -0.022, -0.012), Color("2b2f27"), 0.6)
 				stand.rotation.z = 0.35 if x < 0.0 else -0.35
+		"medpack":
+			# (v0.79) A white case with a red cross and a dark handle, set down like the mine.
+			var case := BoxMesh.new()
+			case.size = Vector3(0.12, 0.075, 0.05)
+			_bit(prop, case, Vector3(-0.012, 0.03, -0.015), Color("e8e6e0"), 0.05)
+			for size in [Vector3(0.05, 0.014, 0.002), Vector3(0.014, 0.05, 0.002)]:
+				var bar := BoxMesh.new()
+				bar.size = size
+				_bit(prop, bar, Vector3(-0.012, 0.03, -0.041), Color("d42a2a"), 0.0)
+			var grip := BoxMesh.new()
+			grip.size = Vector3(0.05, 0.012, 0.014)
+			_bit(prop, grip, Vector3(-0.012, 0.074, -0.015), Color("2a2c2e"), 0.2)
 		_:
 			var other := CapsuleMesh.new()
 			other.radius = 0.034

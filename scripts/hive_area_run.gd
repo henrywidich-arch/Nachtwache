@@ -323,11 +323,31 @@ func enter(id: String) -> void:
 			var event: Dictionary = piece.get("event", {})
 			task = {"kind": str(event.get("kind", "hold")), "state": "reach", "time": 0.0, "event": event, "piece": piece}
 			_post(piece, str(task.kind) == "clear")
+			_maybe_leak(piece)
 			release_sharks(piece)
 			if director.checkpoints.has(id):
 				director._checkpoint(id, 350)
 			for said: String in (p_info.get("lines", {}) as Dictionary).get("enter", []):
 				_say(said)
+
+## (v0.79) Now and then gas leaks in an area as the squad comes in (GasField.leak): at one
+## or two open spots of it. The host decides; the guest gets it with the next report.
+## (Off in the checks, unless --gas-leaks asks for it in every area.)
+func _maybe_leak(piece: Dictionary) -> void:
+	var forced := "--gas-leaks" in OS.get_cmdline_user_args()
+	if game.net.joined or (game.check_mode and not forced):
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	if not forced and rng.randf() > GasField.LEAK_CHANCE:
+		return
+	var middle := _middle_of(map, piece)
+	var size: Vector2 = piece.get("size", Vector2(16, 16))
+	var places: Array = []
+	for i in range(1 if rng.randf() < 0.6 else 2):
+		var at := middle + Vector3(rng.randf_range(-0.3, 0.3) * size.x, 0, rng.randf_range(-0.3, 0.3) * size.y)
+		places.append(free_spot(map, at))
+	game.gas.leak(places)
 
 func _post(piece: Dictionary, keep: bool) -> void:
 	var kinds: Array = []

@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.78"
+const VERSION := "0.79"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
@@ -87,6 +87,10 @@ var port: int:
 
 func _ready() -> void:
 	player_name = "%s-%03d" % [["FALKE", "WOLF", "FUCHS", "RABE", "LUCHS", "OTTER"].pick_random(), randi_range(100, 999)]
+	# (The call sign chosen on the login page, if there is one.)
+	var chosen: String = preload("res://scripts/login_menu.gd").saved_name()
+	if chosen != "":
+		player_name = chosen
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
@@ -771,6 +775,24 @@ func send_heal(center: Vector3, level: int) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _heal(center: Vector3, level: int) -> void:
 	game.heal.open(center, level)
+
+## (v0.79) A guest set a medpack down: the host lays it for both (Game.medpack_drop).
+func request_medpack(at: Vector3) -> void:
+	if joined:
+		_medpack_request.rpc_id(1, at)
+
+@rpc("any_peer", "call_remote", "reliable")
+func _medpack_request(at: Vector3) -> void:
+	if hosting:
+		game.medpack_drop(at)
+
+func send_medpack(at: Vector3) -> void:
+	if hosting and partner != 0:
+		_medpack.rpc_id(partner, at)
+
+@rpc("authority", "call_remote", "reliable")
+func _medpack(at: Vector3) -> void:
+	game.medpacks.drop(at)
 
 ## A guest struck an enemy with his weapon: the host throws it back.
 func report_shove(enemy: Infected, direction: Vector3, damage: float) -> void:

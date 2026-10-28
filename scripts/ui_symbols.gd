@@ -28,7 +28,12 @@ const PATHS := {
 	"heal": '<path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/>',
 	"flashbang": '<path d="M9 7h7l3 14H7zM9 3h8v4M3 5L1 3M21 6l2-2M4 11H1"/>',
 	"molotov": '<path d="M11 3h4v7l5 10-3 2H7l-2-2 6-10zM15 5l5-3 2 3"/>',
-	"claymore": '<path d="M3 7h18v9H3zM7 16l-2 6M17 16l2 6M12 7V2M8 11h8"/>'
+	"claymore": '<path d="M3 7h18v9H3zM7 16l-2 6M17 16l2 6M12 7V2M8 11h8"/>',
+	"medpack": '<path d="M3 8h18v12H3zM9 8V5h6v3M12 11v6M9 14h6"/>',
+	"crate": '<path d="M3 8l9-5 9 5v9l-9 5-9-5zM3 8l9 5 9-5M12 13v9M7.5 5.5l9 5"/>',
+	"locker": '<path d="M5 2h14v20H5zM12 2v20M9 9v3M15 9v3M5 18h14"/>',
+	"mask": '<path d="M4 4h16l2 10-5 7H7l-5-7zM6 8h5v4H6zM13 8h5v4h-5zM10 17a2 2 0 104 0 2 2 0 00-4 0"/>',
+	"backpack": '<path d="M7 6h10a3 3 0 013 3v12H4V9a3 3 0 013-3zM9 6V3h6v3M8 13h8v5H8z"/>'
 }
 static var textures: Dictionary = {}
 

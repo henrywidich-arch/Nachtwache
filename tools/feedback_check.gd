@@ -148,7 +148,7 @@ func run(game: Node3D) -> void:
 	var buttons: Array[String] = []
 	for button in hud.modal.find_children("*", "Button", true, false):
 		buttons.append((button as Button).text)
-	expect(buttons == ["SPIELEN", "KARRIERE", "TESTRAUM", "EINSTELLUNGEN", "BESTENLISTE", "PATCHNOTES", "BEENDEN"], "The main menu places a full-sized test-room button between Career and Settings, and patch notes before quitting")
+	expect(buttons == ["SPIELEN", "KARRIERE", "KISTEN", "SPIND", "TESTRAUM", "EINSTELLUNGEN", "BESTENLISTE", "PATCHNOTES", "BEENDEN"], "The main menu places a full-sized test-room button between Career and Settings, crates and the locker after Career, and patch notes before quitting (%s)" % str(buttons))
 	await frames()
 	var menu_buttons := hud.modal.find_children("*", "Button", true, false)
 	expect((menu_buttons[-1] as Control).get_global_rect().end.y <= game.get_viewport().get_visible_rect().size.y - 20 and (hud.modal.find_child("TestRoomButton", true, false) as Button).size.y >= 52, "All seven main menu buttons remain visible, with the test room the same size as its neighbours")
@@ -352,7 +352,7 @@ func bench_previews(game: Node3D, shop: ShopScreen) -> void:
 		var stat: Dictionary = shop.bench_stats[affected[line]]
 		var delta: ColorRect = stat.delta
 		var bar: ProgressBar = stat.bar
-		expect(marked == 1 and delta.visible and is_equal_approx(delta.anchor_left, float(stat.share)) and delta.anchor_right > delta.anchor_left and (bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color == SurvivalHUD.IVORY and not (stat.difference as Label).text.is_empty(), "Hovering %s previews only the added segment of its affected stat, leaving the owned bar neutral" % line)
+		expect(marked == 1 and delta.visible and is_equal_approx(delta.anchor_left, float(stat.share)) and delta.anchor_right > delta.anchor_left and (bar.get_theme_stylebox("fill") as StyleBoxFlat).bg_color == ShopScreen.UI.GOLD and not (stat.difference as Label).text.is_empty(), "Hovering %s previews only the added segment of its affected stat, leaving the owned bar neutral" % line)
 		button.mouse_exited.emit()
 		expect((shop.bench_stats.values() as Array).all(func(row: Dictionary) -> bool: return not (row.delta as Control).visible), "Leaving the %s button restores the current statistics" % line)
 	expect(game.player.inventory == inventory and game.credits == credits, "Hover previews never buy an upgrade or mutate the player's weapon and wallet")

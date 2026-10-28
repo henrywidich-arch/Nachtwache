@@ -9875,8 +9875,9 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 		var refused: bool = not game.buy_weapon("ak") and not player.inventory.has("ak") and player.inventory.size() >= 2 and not game.sell_weapon("g36") and player.inventory.has("g36") and not game.may_switch_tree() and not game.choose_tree("breacher" if tree_then != "breacher" else "hunter") and game.skills.chosen == tree_then and not game.buy_upgrade("mags", "g36")
 		var before: int = game.credits
 		var part: String = "silencer" if station == rack else "scope"
-		var sold: bool = game.buy_item("grenade") and int(player.items.grenade) == 1 and game.buy_item("mask") and game.buy_item("squad_armor") and game.buy_part("g36", part) and player.owns_part("g36", part)
-		var spent: int = game.price(int(Survivor.GOODS.grenade.price)) + game.price(int(Survivor.GOODS.mask.prices[player.mask_level - 1])) + game.price(int(Survivor.GOODS.squad_armor.prices[int(game.squad_levels.squad_armor) - 1])) + game.price(int(Survivor.ATTACHMENTS.g36[part].price))
+		# (Squad supplies only sell with a squad: without one, KEIN TEAM, see ShopScreen.)
+		var sold: bool = game.buy_item("grenade") and int(player.items.grenade) == 1 and game.buy_item("mask") and (game.team.is_empty() or game.buy_item("squad_armor")) and game.buy_part("g36", part) and player.owns_part("g36", part)
+		var spent: int = game.price(int(Survivor.GOODS.grenade.price)) + game.price(int(Survivor.GOODS.mask.prices[player.mask_level - 1])) + (0 if game.team.is_empty() else game.price(int(Survivor.GOODS.squad_armor.prices[int(game.squad_levels.squad_armor) - 1]))) + game.price(int(Survivor.ATTACHMENTS.g36[part].price))
 		game.resume_run()
 		gear_ok = gear_ok and said.begins_with("[E] Ausrüstung") and seen and " ".join(PackedStringArray(chips)) == "WAFFEN PISTOLEN SCHWER AUSRÜSTUNG VERBRAUCH TEAM" and strays == 0 and refused and sold and game.credits == before - spent and game.state == "playing" and hud.shop_tab == "weapons" and game.locker_tab == ""
 	# (And a weapon locker is what it was.)
@@ -12314,3 +12315,10 @@ func _room_shell_slam(game: Node3D) -> void:
 	player.shoot()
 	var jolt: float = player.weapon.rotation.x - before.x
 	expect(player.current_weapon == "autoshotgun" and jolt > 0.1 and player.recoil >= 3.0, "The automatic shotgun jolts up and back with every shot (%.2f rad)" % jolt)
+
+## (v0.79) Crates, skins, the locker, the medpack and gas leaks: see rewards_check.gd.
+func _rewards(game: Node3D) -> void:
+	await preload("res://scripts/rewards_check.gd").run(self, game)
+
+func _rewards_shots(game: Node3D) -> void:
+	await preload("res://scripts/rewards_check.gd").shots(self, game)

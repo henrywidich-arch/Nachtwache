@@ -102,7 +102,7 @@ const KINDS := {
 ## laid, in the order the key steps through it. One of them is taken in hand and thrown
 ## (the mine: laid) with the trigger; each still has its own key as well (THROW_KEYS, B).
 const THROW_GROUP_KEY := 4
-const THROWABLES := ["grenade", "flashbang", "molotov", "heal", "claymore"]
+const THROWABLES := ["grenade", "flashbang", "molotov", "heal", "claymore", "medpack"]
 ## What the workbench does to a weapon, line by line. key: where the weapon's record keeps
 ## the level of the line ("level" is the damage, as it always was). prices: one for each
 ## level, before the difficulty's factor. step: what one level gives (damage: per shot;
@@ -288,7 +288,7 @@ var menu_open := false
 var down := false
 ## How much of his pace the survivor has in deep water (HiveAreale): 1 elsewhere.
 var wade := 1.0
-var items := {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0}
+var items := {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0, "medpack": 0}
 ## 1 once the improvement of the heal grenade is bought: its field raises the fallen.
 var heal_level := 0
 ## Seconds the survivor is still strengthened (a heal field has put him back on his feet):
@@ -322,7 +322,7 @@ var throw_model: Node3D
 var throw_recover := 0.0
 const THROW_AIM_AFTER := 0.2
 ## The key that readies and throws each thing.
-const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov", "heal": "throw_heal", "claymore": "place_claymore"}
+const THROW_KEYS := {"grenade": "throw_grenade", "flashbang": "throw_flash", "molotov": "throw_molotov", "heal": "throw_heal", "claymore": "place_claymore", "medpack": "place_medpack"}
 ## A blow with the weapon (key V): how far it reaches and how wide (the cosine of half its
 ## angle), what it does, how fast whoever is struck is thrown back and for how long he
 ## reels, and the seconds until the next blow.
@@ -422,6 +422,10 @@ var syringe_wait := 0.0
 var syringe_left := 0.0
 ## One sling for this night unlocks the third primary slot.
 var extra_slots := 0
+## (v0.79) The backpack from a crate (Rewards): one more place for every kind of weapon.
+var backpack := false
+## (v0.79) What the crate's gas mask adds to the filter, as a share (Rewards.MASK_BONUS).
+var mask_bonus := 0.0
 var crouched := false
 ## A held input owns the stance until release; scripted poses can still set it directly.
 var crouch_from_input := false
@@ -700,7 +704,9 @@ func _set_loaded(id: String, value: int) -> void:
 ## "steady", "mags" or "reserve". Rare weapons are found in the caches of the second
 ## mission (HiveCaches); the workbench's levels come on top.
 func rare(id: String, line: String) -> float:
-	return float((inventory[id].get("rare", {}) as Dictionary).get(line, 0.0)) if inventory.has(id) else 0.0
+	var own := float((inventory[id].get("rare", {}) as Dictionary).get(line, 0.0)) if inventory.has(id) else 0.0
+	# (v0.79) A skin from a crate gives a little of its own (WeaponSkins.SKINS boost).
+	return own + (game.rewards.boost(id, line) if game != null and "rewards" in game and game.rewards != null else 0.0)
 
 ## The level a line of the workbench has on a weapon.
 func upgrade(id: String, line: String) -> int:
@@ -752,7 +758,7 @@ func drum_time(step: String) -> float:
 	return float(DRUM[step][0]) * _quicker(current_weapon)
 
 func filter_capacity() -> float:
-	return MASK_SECONDS[mask_level] * (1.0 + game.skills.value("filter"))
+	return MASK_SECONDS[mask_level] * (1.0 + game.skills.value("filter") + mask_bonus)
 
 ## Takes what was bought at the shop counter.
 func take_item(id: String) -> void:
@@ -844,7 +850,7 @@ func _animate_throw(delta: float) -> void:
 		var recover := 1.0 - throw_recover / THROW_RECOVER
 		throw_model.position = release.lerp(Vector3(0.28, -0.55, -0.4), smoothstep(0.0, 1.0, recover))
 		throw_model.rotation = Vector3(-0.55, 0.05, -0.15).lerp(Vector3(0.4, 0.3, 0.2), recover)
-	elif throw_swing >= 0.0 and throw_kind == "claymore":
+	elif throw_swing >= 0.0 and throw_kind in ["claymore", "medpack"]:
 		# A mine is not thrown: it is set down a step ahead, the hand going down with it.
 		var lower := smoothstep(0.0, 1.0, clampf(1.0 - throw_swing / THROW_SWING, 0.0, 1.0))
 		throw_model.position = ready.lerp(Vector3(0.1, -0.52, -0.72), lower)
@@ -894,6 +900,8 @@ func _hold_throw(delta: float) -> void:
 			throw_in_hand = false
 			if kind == "claymore":
 				place_claymore()
+			elif kind == "medpack":
+				place_medpack()
 			else:
 				throw(kind)
 			if from_hand and game.hud != null:
@@ -1097,6 +1105,22 @@ func place_claymore() -> void:
 	mine.global_position = global_position + mine.facing * 0.9
 	game.sounds.play_sound("bolt", -2.0)
 
+
+## (v0.79) Sets a medpack from a crate down a step ahead (MedpackField): it heals whoever
+## stands at it, a little every few seconds, until its supply is used up.
+func place_medpack() -> void:
+	if down or int(items.get("medpack", 0)) <= 0 or throw_cooldown > 0.0 or not is_on_floor():
+		return
+	items.medpack = int(items.medpack) - 1
+	throw_cooldown = 0.7
+	throw_pose = 1.0
+	var facing := Vector3(-sin(rotation.y), 0, -cos(rotation.y))
+	game.medpack_drop(global_position + facing * 0.9)
+	game.sounds.play_sound("equip", -2.0, 0.8)
+
+## Whether a weapon wears a skin from a crate (its numbers are not the plain ones then).
+func _skinned(id: String) -> bool:
+	return game != null and "rewards" in game and game.rewards != null and game.rewards.skin_for(id) != ""
 func max_reserve() -> int:
 	return reserve_cap(current_weapon)
 
@@ -1115,7 +1139,7 @@ func data_for(id: String, preview: String = "") -> Dictionary:
 	var record: Dictionary = inventory[id]
 	var on: Dictionary = record.get("fitted", {})
 	var steadied := upgrade(id, "brace") + int(preview == "brace")
-	if on.is_empty() and steadied == 0 and not record.has("rare"):
+	if on.is_empty() and steadied == 0 and not record.has("rare") and not _skinned(id):
 		return WEAPONS[id]
 	if preview != "" or not record.has("tuned"):
 		var data: Dictionary = (WEAPONS[id] as Dictionary).duplicate()
@@ -1211,7 +1235,7 @@ func carried(kind: String) -> Array:
 	return ORDER.filter(func(id: String) -> bool: return inventory.has(id) and kind_of(id) == kind)
 
 func carry_limit(kind: String) -> int:
-	return 2 + clampi(extra_slots, 0, 1) if kind == "primary" else 1
+	return (2 + clampi(extra_slots, 0, 1) if kind == "primary" else 1) + int(backpack)
 
 ## True if another weapon can be carried beside what is carried already.
 func room_for(id: String) -> bool:
@@ -1471,6 +1495,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("place_claymore") and not event.is_echo():
 		# (Taken in the hand while B is held, set down when it is let go - as with G, T, H, J.)
 		ready_throw("claymore")
+	if event.is_action_pressed("place_medpack") and not event.is_echo():
+		ready_throw("medpack")
 	if event is InputEventMouseButton and event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 		_cycle(-1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
 
@@ -1505,7 +1531,7 @@ func _physics_process(delta: float) -> void:
 	_hold_throw(delta)
 	throw_pose = move_toward(throw_pose, 1.0 if throw_kind != "" else 0.0, delta * (9.0 if throw_kind != "" else 4.5))
 	# The line of the throw, once the key has been held for a moment.
-	if throw_kind != "" and throw_kind != "claymore" and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
+	if throw_kind != "" and not throw_kind in ["claymore", "medpack"] and throw_swing < 0.0 and throw_held > THROW_AIM_AFTER and controlled:
 		game.fx.show_arc(throw_path(throw_kind).slice(3))
 	elif controlled and not down and not menu_open and WEAPONS[current_weapon].has("grenade") and ammo > 0 and reload_left <= 0.0 and Input.is_action_pressed("aim"):
 		# Aiming with the launcher shows the arc of its shell.
@@ -2616,7 +2642,7 @@ func reset_survivor() -> void:
 	trauma = 0
 	mist_exposure = 0
 	mist_damage_left = 0
-	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0}
+	items = {"grenade": 0, "flashbang": 0, "molotov": 0, "claymore": 0, "revive": 0, "heal": 0, "medpack": 0}
 	trigger_held = false
 	dual_triggers = [false, false]
 	dual_cooldowns = Vector2.ZERO
@@ -2628,6 +2654,8 @@ func reset_survivor() -> void:
 	syringe_wait = 0.0
 	syringe_left = 0.0
 	extra_slots = 0
+	backpack = false
+	mask_bonus = 0.0
 	melee_cooldown = 0.0
 	melee_pose = 0.0
 	melee_left = 0.0

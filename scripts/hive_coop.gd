@@ -88,7 +88,8 @@ func export_state() -> Dictionary:
 		"summary": director.summary(false),"markers": director.markers(), "done": director.done,
 		"doors": doors, "locked": map.locked, "moods": moods, "alarm": map.alarm_on,
 		"forced": map.forced, "riding": map.riding, "crash": director.run.crash_id(),
-		"friends": bodies, "task": task, "tokyo": director.tokyo_tasks.export() if director.tokyo_tasks != null else {}}
+		"friends": bodies, "task": task, "tokyo": director.tokyo_tasks.export() if director.tokyo_tasks != null else {},
+		"gas": game.gas.export_state()}
 
 func adopt(state: Dictionary) -> void:
 	if not game.net.joined or not director.on:
@@ -108,6 +109,9 @@ func adopt(state: Dictionary) -> void:
 	director.progress_text = str(state.progress_text)
 	director.done = state.done
 	summary.assign(state.summary)
+	# (v0.79) Gas leaks in the areas (GasField.leak).
+	if state.has("gas"):
+		game.gas.adopt(state.gas)
 	markers = state.markers
 	for id: String in state.locked:
 		if bool(map.locked.get(id, false)) != bool(state.locked[id]):

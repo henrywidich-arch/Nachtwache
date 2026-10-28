@@ -10,8 +10,12 @@ extends VBoxContainer
 ## nothing here decides what something costs or whether it can be had.
 
 const WIDTH := 1112.0
-const LIST_WIDTH := 392.0
-const SHOW_HEIGHT := 206.0
+const LIST_WIDTH := 360.0
+const SHOW_HEIGHT := 178.0
+## The right half: the middle with the picture, and the panel of numbers beside it.
+const STATS_WIDTH := 286.0
+const MIDDLE_WIDTH := WIDTH - LIST_WIDTH - 26.0 - 28.0 - 16.0 - STATS_WIDTH - 28.0
+const UI = preload("res://scripts/ui_kit.gd")
 const SYMBOLS = preload("res://scripts/ui_symbols.gd")
 const ITEM_ICONS = preload("res://scripts/shop_icons.gd")
 ## What the kinds of weapon are called in the strip of what is carried.
@@ -42,6 +46,11 @@ var rows: VBoxContainer
 var detail: VBoxContainer
 var detail_scroll: ScrollContainer
 var statistics: VBoxContainer
+## Name, kind and words of what is picked, above its picture.
+var intro: VBoxContainer
+## A pictogram instead of the turning picture, for gear and what gets used up.
+var item_art: TextureRect
+var stat_panel: PanelContainer
 var editor_slot := ""
 var editor_part := ""
 var previous_bars: Dictionary = {}
@@ -55,26 +64,38 @@ var row_buttons: Array = []
 func _ready() -> void:
 	custom_minimum_size.x = WIDTH
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
-	add_theme_constant_override("separation", 20)
+	add_theme_constant_override("separation", 18)
+	# --- the head: X, the title with a line under it, the purse on the right
 	var head := HBoxContainer.new()
 	head.name = "ShopHeader"
 	head.add_theme_constant_override("separation", 18)
-	var close := hud._chip("", game.resume_run, false, 52)
+	var close := UI.flat_button(hud, "", game.resume_run, false, 52, 52)
 	close.name = "CloseShopButton"
-	close.custom_minimum_size.y = 52
 	close.icon = SYMBOLS.icon("close")
+	close.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	close.expand_icon = true
-	close.add_theme_constant_override("icon_max_width", 28)
+	close.add_theme_constant_override("icon_max_width", 26)
 	close.tooltip_text = "Schließen · Esc"
 	head.add_child(close)
+	var titles := VBoxContainer.new()
+	titles.add_theme_constant_override("separation", -4)
+	titles.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	titles.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(titles)
 	var title := hud.label("WERKBANK" if mode == "bench" else ("AUSRÜSTUNG" if _short() else "WAFFENSHOP"), 40, SurvivalHUD.IVORY, true)
 	title.name = "ShopTitle"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	head.add_child(title)
-	purse = hud.label("", 26, SurvivalHUD.AMBER, true)
-	purse.size_flags_vertical = Control.SIZE_SHRINK_END
-	head.add_child(purse)
+	titles.add_child(title)
+	titles.add_child(hud.label("JEDE STUFE GILT NUR FÜR DIESE WAFFE" if mode == "bench" else "AUSRÜSTEN, AUFSÄTZE ANBRINGEN, NACHKAUFEN", 13, SurvivalHUD.MUTED, true))
+	var wallet := VBoxContainer.new()
+	wallet.add_theme_constant_override("separation", -4)
+	wallet.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	var caption := hud.label("GUTHABEN", 11, SurvivalHUD.MUTED, true)
+	caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	wallet.add_child(caption)
+	purse = hud.label("", 30, UI.GOLD, true)
+	purse.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	wallet.add_child(purse)
+	head.add_child(wallet)
 	add_child(head)
 	strip = HBoxContainer.new()
 	strip.add_theme_constant_override("separation", 8)
@@ -84,6 +105,7 @@ func _ready() -> void:
 	tabs.name = "ShopTabs"
 	tabs.add_theme_constant_override("separation", 6)
 	add_child(tabs)
+	# --- the list on the left, the picked thing on the right
 	var halves := HBoxContainer.new()
 	halves.name = "ShopContent"
 	halves.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -99,39 +121,56 @@ func _ready() -> void:
 	rows.custom_minimum_size.x = LIST_WIDTH
 	scroll.add_child(rows)
 	var panel := PanelContainer.new()
-	var plate := hud._plate(0.62)
-	plate.content_margin_top = 8
+	var plate := UI.plate(false, 0.72, 14)
+	plate.content_margin_top = 10
 	plate.content_margin_bottom = 10
 	panel.add_theme_stylebox_override("panel", plate)
 	panel.custom_minimum_size.x = WIDTH - LIST_WIDTH - 26.0
 	panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	halves.add_child(panel)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 16)
+	panel.add_child(body)
+	# The middle: name, kind and words, the big picture, and below it the slots, the parts
+	# and what can be done (`detail`, which scrolls when it is long).
 	var inside := VBoxContainer.new()
-	inside.add_theme_constant_override("separation", 3)
-	panel.add_child(inside)
+	inside.add_theme_constant_override("separation", 4)
+	inside.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.add_child(inside)
+	intro = VBoxContainer.new()
+	intro.name = "ShopIntro"
+	intro.add_theme_constant_override("separation", 3)
+	inside.add_child(intro)
 	stage = WeaponShow.new()
 	stage.custom_minimum_size = Vector2(0, SHOW_HEIGHT)
-	if mode == "bench":
-		var showcase := HBoxContainer.new()
-		showcase.add_theme_constant_override("separation", 14)
-		inside.add_child(showcase)
-		stage.custom_minimum_size.x = 280
-		showcase.add_child(stage)
-		statistics = VBoxContainer.new()
-		statistics.add_theme_constant_override("separation", 3)
-		statistics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		showcase.add_child(statistics)
-	else:
-		inside.add_child(stage)
+	inside.add_child(stage)
+	item_art = TextureRect.new()
+	item_art.custom_minimum_size = Vector2(0, SHOW_HEIGHT * 0.8)
+	item_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	item_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	item_art.modulate = Color(1, 1, 1, 0.85)
+	item_art.hide()
+	inside.add_child(item_art)
 	detail = VBoxContainer.new()
-	detail.add_theme_constant_override("separation", 3)
+	detail.add_theme_constant_override("separation", 6)
 	detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	detail.custom_minimum_size.x = WIDTH - LIST_WIDTH - 84.0
+	detail.custom_minimum_size.x = MIDDLE_WIDTH
 	detail_scroll = ScrollContainer.new()
 	detail_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	detail_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	inside.add_child(detail_scroll)
 	detail_scroll.add_child(detail)
+	# The right: the numbers of what is picked, with gold bars.
+	stat_panel = PanelContainer.new()
+	stat_panel.name = "StatPanel"
+	var stat_plate := UI.plate(false, 0.55, 14)
+	stat_panel.add_theme_stylebox_override("panel", stat_plate)
+	stat_panel.custom_minimum_size.x = STATS_WIDTH
+	body.add_child(stat_panel)
+	statistics = VBoxContainer.new()
+	statistics.add_theme_constant_override("separation", 8)
+	statistics.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	stat_panel.add_child(statistics)
 	# At the workbench the weapon in hand is the one to begin with.
 	if mode == "bench":
 		picked = {"kind": "bench", "id": game.player.current_weapon, "part": ""}
@@ -337,15 +376,30 @@ func _row(entry: Dictionary) -> Button:
 	# lines, so long names and quick-buy prices cannot cover one another.
 	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_disabled_color"]:
 		button.add_theme_color_override(state, Color.TRANSPARENT)
-	var lit := hud._flat(Color(1.0, 0.76, 0.3, 0.2), SurvivalHUD.AMBER)
+	var normal := UI.plate(false, 0.7, 12)
+	var hover := UI.plate(false, 0.85, 12)
+	hover.border_color = Color(UI.GOLD.r, UI.GOLD.g, UI.GOLD.b, 0.55)
+	var lit := UI.plate(true, 0.9, 12)
+	lit.bg_color = Color(0.16, 0.13, 0.05, 0.92)
+	lit.set_border_width_all(1)
+	lit.border_width_left = 4
+	button.add_theme_stylebox_override("normal", normal)
+	button.add_theme_stylebox_override("hover", hover)
 	button.add_theme_stylebox_override("pressed", lit)
+	button.add_theme_stylebox_override("hover_pressed", lit)
+	button.add_theme_stylebox_override("focus", UI.plate(false, 0.0, 12))
 	button.set_pressed_no_signal(_same(entry, picked))
+	# A firearm shows its real side picture where there is one.
+	var picture: Texture2D = UI.weapon_picture(str(entry.id)) if str(entry.kind) in ["weapon", "bench"] else null
+	if picture != null:
+		button.icon = picture
+		button.add_theme_constant_override("icon_max_width", 112)
 	var words := VBoxContainer.new()
 	words.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	words.alignment = BoxContainer.ALIGNMENT_CENTER
 	words.add_theme_constant_override("separation", 2)
 	words.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	words.offset_left = 88
+	words.offset_left = 140 if picture != null else 88
 	words.offset_right = -12
 	words.offset_top = 8
 	words.offset_bottom = -8
@@ -485,23 +539,33 @@ func _fill_tabs() -> void:
 	for tab in SurvivalHUD.SHOP_TABS:
 		if short and str(tab[0]) not in HiveStations.TABS:
 			continue
-		var chip := hud._chip(str(tab[1]), open_tab.bind(tab[0]), hud.shop_tab == tab[0], 0)
-		chip.custom_minimum_size = Vector2(0, 44)
+		var active: bool = hud.shop_tab == tab[0]
+		var chip := UI.flat_button(hud, str(tab[1]), open_tab.bind(tab[0]), active, 0, 44, 17)
 		chip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		chip.add_theme_font_size_override("font_size", 17)
 		chip.icon = SYMBOLS.icon(str(tab[0]))
 		chip.expand_icon = true
 		chip.add_theme_constant_override("icon_max_width", 20)
 		chip.add_theme_constant_override("h_separation", 8)
+		if active:
+			for state in ["icon_normal_color", "icon_hover_color", "icon_pressed_color", "icon_focus_color"]:
+				chip.add_theme_color_override(state, UI.INK)
 		chip.focus_mode = Control.FOCUS_NONE
 		tabs.add_child(chip)
 
 # ---------------------------------------------------------------- the right half
 
-func _fill_detail() -> void:
-	for child in detail.get_children():
-		detail.remove_child(child)
+func _clear(box: Container) -> void:
+	for child in box.get_children():
+		box.remove_child(child)
 		child.queue_free()
+
+func _fill_detail() -> void:
+	_clear(detail)
+	_clear(intro)
+	if mode != "bench":
+		_clear(statistics)
+	stat_panel.show()
+	item_art.hide()
 	action = null
 	match str(picked.get("kind", "")):
 		"melee":
@@ -516,7 +580,32 @@ func _fill_detail() -> void:
 			_detail_bench(str(picked.id))
 		_:
 			stage.hide()
+			stat_panel.hide()
 			detail.add_child(hud.label("Hier gibt es gerade nichts.", 16, SurvivalHUD.MUTED))
+	if mode == "shop" and stat_panel.visible:
+		_carried()
+
+## At the foot of the panel of numbers: what is carried, by key.
+func _carried() -> void:
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	statistics.add_child(filler)
+	_stat_title("DU TRÄGST")
+	var player: Survivor = game.player
+	for kind in Survivor.KINDS:
+		var line := HBoxContainer.new()
+		line.add_theme_constant_override("separation", 8)
+		line.add_child(_badge(str(int(Survivor.KINDS[kind].key)), SurvivalHUD.MUTED))
+		var carried: Array = player.carried(kind)
+		var names := "  ·  ".join(PackedStringArray(carried.map(func(id: Variant) -> String: return str(Survivor.WEAPONS[str(id)].label))))
+		var words := hud.label(names if names != "" else "–", 14, SurvivalHUD.IVORY if names != "" else SurvivalHUD.MUTED, true)
+		words.clip_text = true
+		words.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		line.add_child(words)
+		statistics.add_child(line)
+	if player.extra_slots > 0:
+		statistics.add_child(hud.label("+1 PRIMÄRPLATZ  ·  WAFFENGURT", 11, SurvivalHUD.MUTED, true))
 
 func _detail_melee(id: String) -> void:
 	var data: Dictionary = Survivor.MELEE_WEAPONS[id]
@@ -528,51 +617,128 @@ func _detail_melee(id: String) -> void:
 		stage.show_weapon(game.player.current_weapon)
 	else:
 		stage.show_melee(id)
-	_headline(str(data.label), "AKTIV  ✓" if active else ("DABEI" if owned else _money(cost)), SurvivalHUD.MINT if owned else SurvivalHUD.AMBER)
-	_words("Mit [V] %s." % ("mit der gehaltenen Waffe wegstoßen" if id == "bash" else "zuschlagen"), 16, SurvivalHUD.IVORY)
-	var values := GridContainer.new()
-	values.columns = 2
-	values.add_theme_constant_override("h_separation", 30)
-	values.add_theme_constant_override("v_separation", 5)
-	detail.add_child(values)
-	for stat in [["SCHADEN", "%d" % int(data.damage)], ["REICHWEITE", "%.1f m" % float(data.reach)], ["AUSHOLEN", "%.2f s" % game.player.melee_windup(id)], ["SCHLAGABSTAND", "%.2f s" % float(data.gap)], ["RÜCKSTOSS", "%.1f m/s" % float(data.push)], ["ZIELE", str(data.targets)]]:
-		values.add_child(hud.label(str(stat[0]), 14, SurvivalHUD.MUTED, true))
-		values.add_child(hud.label(str(stat[1]), 18, SurvivalHUD.IVORY, true))
-	var filler := Control.new()
-	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail.add_child(filler)
-	action = _act("AKTIV" if active else ("AUSRÜSTEN" if owned else "KAUFEN  " + _money(cost)), game.buy_melee.bind(id), not active and (owned or game.credits >= cost))
-	detail.add_child(action)
+	_headline(str(data.label), "AKTIV  ✓" if active else ("DABEI" if owned else _money(cost)), SurvivalHUD.MINT if owned else SurvivalHUD.AMBER, "NAHKAMPF")
+	_note("Mit [V] %s." % ("mit der gehaltenen Waffe wegstoßen" if id == "bash" else "zuschlagen"))
+	_stat_title("WERTE")
+	_stat(statistics, "damage", "SCHADEN", float(data.damage) / 260.0, "%d" % int(data.damage))
+	_stat(statistics, "range", "REICHWEITE", float(data.reach) / 4.0, "%.1f m" % float(data.reach))
+	_stat(statistics, "rate", "AUSHOLEN", 1.0 - game.player.melee_windup(id) / 1.2, "%.2f s" % game.player.melee_windup(id))
+	_stat(statistics, "reload", "SCHLAGABSTAND", 1.0 - float(data.gap) / 2.0, "%.2f s" % float(data.gap))
+	_stat(statistics, "precision", "RÜCKSTOSS", float(data.push) / 12.0, "%.1f m/s" % float(data.push))
+	_stat(statistics, "parts", "ZIELE", float(data.targets) / 4.0, str(data.targets))
+	_foot("Nahkampf mit [V], ohne die Waffe zu wechseln.", "AKTIV" if active else ("AUSRÜSTEN" if owned else "KAUFEN  " + _money(cost)), game.buy_melee.bind(id), not active and (owned or game.credits >= cost))
 
-## Name on the left, a price or a state on the right.
-func _headline(title: String, tag: String, tone: Color) -> void:
+## Above the picture: the name big, badges of its kind, and the price or state on the right.
+func _headline(title: String, tag: String, tone: Color, kind: String = "") -> void:
 	var line := HBoxContainer.new()
-	var name_label := hud.label(title, 28, SurvivalHUD.IVORY, true)
+	line.add_theme_constant_override("separation", 12)
+	var name_label := hud.label(title, 34 if title.length() <= 16 else 24, SurvivalHUD.IVORY, true)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	name_label.clip_text = true
+	name_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	line.add_child(name_label)
 	var tag_label := hud.label(tag, 22, tone, true)
 	tag_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	line.add_child(tag_label)
-	detail.add_child(line)
+	intro.add_child(line)
+	if kind != "":
+		var badges := HBoxContainer.new()
+		badges.add_theme_constant_override("separation", 6)
+		for word in kind.split("|"):
+			badges.add_child(_badge(word))
+		intro.add_child(badges)
+
+## A small framed word: the kind of a weapon, a key, a slot.
+func _badge(word: String, tone: Color = UI.GOLD) -> PanelContainer:
+	var box := PanelContainer.new()
+	var frame := StyleBoxFlat.new()
+	frame.bg_color = Color(tone.r, tone.g, tone.b, 0.1)
+	frame.border_color = Color(tone.r, tone.g, tone.b, 0.7)
+	frame.set_border_width_all(1)
+	frame.set_corner_radius_all(2)
+	frame.content_margin_left = 8
+	frame.content_margin_right = 8
+	frame.content_margin_top = 1
+	frame.content_margin_bottom = 1
+	box.add_theme_stylebox_override("panel", frame)
+	box.add_child(hud.label(word, 12, tone, true))
+	box.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	return box
+
+## A line of words under the name.
+func _note(text: String, tone: Color = SurvivalHUD.MUTED) -> Label:
+	var words := hud.label(text, 14, tone)
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.custom_minimum_size.x = MIDDLE_WIDTH
+	intro.add_child(words)
+	return words
 
 func _words(text: String, size: int = 14, tone: Color = SurvivalHUD.MUTED) -> Label:
 	var words := hud.label(text, size, tone)
 	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	words.custom_minimum_size.x = WIDTH - LIST_WIDTH - 84.0
+	words.custom_minimum_size.x = MIDDLE_WIDTH
 	detail.add_child(words)
 	return words
 
-## The button that does what the right half is about. Returns it.
+## The button that does what the right half is about: gold when it can be done. Returns it.
 func _act(text: String, callback: Callable, usable: bool, bright: bool = true) -> Button:
-	var button := hud._chip(text, callback, bright and usable, 250)
-	button.custom_minimum_size = Vector2(250, 40)
-	button.add_theme_font_size_override("font_size", 18)
+	var button := UI.flat_button(hud, text, callback, bright and usable, 230, 46, 19)
 	button.disabled = not usable
 	return button
+
+## The foot of the middle: a line of help on the left, the button on the right.
+func _foot(help: String, text: String, callback: Callable, usable: bool, bright: bool = true) -> HBoxContainer:
+	var filler := Control.new()
+	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	detail.add_child(filler)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 12)
+	detail.add_child(line)
+	var hint := hud.label(help, 12, SurvivalHUD.MUTED)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	line.add_child(hint)
+	action = _act(text, callback, usable, bright)
+	line.add_child(action)
+	return line
 
 func _parts_on(id: String) -> Array:
 	var player: Survivor = game.player
 	return (player.inventory[id].get("fitted", {}) as Dictionary).values() if player.inventory.has(id) else []
+
+# --- the panel of numbers
+
+func _stat_title(text: String) -> void:
+	UI.section(hud, statistics, text, 14)
+
+## One number of the panel: its sign, its name, how it differs from what is carried
+## (`better` > 0: green, < 0: red) and the value, and a gold bar under it.
+func _stat(parent: VBoxContainer, glyph: String, title: String, share: float, text: String, differs: String = "", better: float = 0.0) -> ProgressBar:
+	var block := VBoxContainer.new()
+	block.add_theme_constant_override("separation", 3)
+	parent.add_child(block)
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 8)
+	block.add_child(line)
+	line.add_child(UI.icon_rect(UI.glyph(glyph), 16, Color(1, 1, 1, 0.7)))
+	var name_label := hud.label(title, 13, SurvivalHUD.MUTED, true)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(name_label)
+	if differs != "":
+		line.add_child(hud.label(differs, 12, SurvivalHUD.MINT if better > 0.0 else (SurvivalHUD.DANGER if better < 0.0 else SurvivalHUD.MUTED), true))
+	line.add_child(hud.label(text, 15, SurvivalHUD.IVORY, true))
+	var bar := UI.bar(STATS_WIDTH - 30.0, 0.0, 6)
+	var target := clampf(share, 0.0, 1.0) * 100.0
+	var key := str(picked.get("id", "")) + "/" + title
+	bar.value = float(previous_bars.get(key, target))
+	if not is_equal_approx(bar.value, target):
+		bar.ready.connect(func() -> void:
+			bar.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT).tween_property(bar, "value", target, 0.45), CONNECT_ONE_SHOT)
+	previous_bars[key] = target
+	block.add_child(bar)
+	return bar
 
 # --- a weapon
 
@@ -591,11 +757,10 @@ static func figures(id: String) -> Dictionary:
 		reload = float(Survivor.DRUM.open[0]) + float(Survivor.DRUM.load[0]) * int(data.magazine) + float(Survivor.DRUM.close[0])
 	return {"harm": harm, "rate": 60.0 / float(data.interval), "magazine": int(data.magazine), "reserve": int(data.reserve_max), "reload": reload, "tight": clampf(1.0 - float(data.spread) / 0.07, 0.0, 1.0)}
 
-## One line of the comparison: a name, a bar, the number, and how it differs from what is
-## carried (`better` > 0: green, < 0: red).
+## One line of the workbench's comparison: a name, a bar, the number, and how it differs.
 func _figure(grid: GridContainer, title: String, share: float, text: String, differs: String, better: float, width: float = 210.0) -> ProgressBar:
 	grid.add_child(hud.label(title, 13, SurvivalHUD.MUTED, true))
-	var bar := hud._bar(SurvivalHUD.IVORY, width, 7)
+	var bar := hud._bar(UI.GOLD, width, 7)
 	var target := clampf(share, 0.0, 1.0) * 100.0
 	var key := str(picked.get("id", "")) + "/" + title
 	bar.value = float(previous_bars.get(key, target))
@@ -605,7 +770,7 @@ func _figure(grid: GridContainer, title: String, share: float, text: String, dif
 			if mode != "bench":
 				fill.bg_color = SurvivalHUD.MINT
 			bar.create_tween().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT).tween_property(bar, "value", target, 0.45)
-			bar.create_tween().tween_property(fill, "bg_color", SurvivalHUD.IVORY, 0.75), CONNECT_ONE_SHOT)
+			bar.create_tween().tween_property(fill, "bg_color", UI.GOLD, 0.75), CONNECT_ONE_SHOT)
 	previous_bars[key] = target
 	bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	grid.add_child(bar)
@@ -626,16 +791,20 @@ func _detail_weapon(id: String) -> void:
 	stage.show()
 	stage.show_weapon(id, _parts_on(id))
 	var state := weapon_state(id, swap)
-	_headline(str(data.label), "PREIS  %s" % state[0] if str(state[0]).is_valid_int() else str(state[0]), state[1])
-	if owned and editor_slot != "" and Survivor.ATTACHMENTS.has(id):
-		preload("res://scripts/weapon_editor.gd").build(self, id, true)
-		return
 	var kind := Survivor.kind_of(id)
+	var group := str(Survivor.WEAPONS[id].get("group", "weapons"))
+	var group_word := "WAFFE"
+	for tab in SurvivalHUD.SHOP_TABS:
+		if tab[0] == group:
+			group_word = str(tab[1])
+	var badges := "%s|%s  ·  TASTE %d" % [group_word, KIND_WORDS[kind], int(Survivor.KINDS[kind].key)]
+	var tree := Skills.weapon_tree(id)
+	if tree != "":
+		badges += "|KLASSE  ·  " + str(Skills.TREES[tree].label)
+	_headline(str(data.label), str(state[0]), state[1], badges)
 	var note := str(SurvivalHUD.SHOP_NOTES.get(id, ""))
-	if not owned:
-		_words(note)
-	if owned and player.inventory[id].has("rare"):
-		_words(HiveCaches.rare_title(id, player.inventory[id].rare), 14, HiveCaches.GOLD)
+	if note != "":
+		_note(note)
 	# --- the numbers, beside those of the weapon it would take the place of
 	var goes: String = "" if owned else game.outgoing(id, swap)
 	var versus := goes
@@ -646,43 +815,33 @@ func _detail_weapon(id: String) -> void:
 	if owned:
 		mine = live_figures(id)
 	var theirs: Dictionary = figures(versus) if versus != "" else {}
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 14)
-	grid.add_theme_constant_override("v_separation", 1)
 	var harm_text := "%d × %d" % [int(data.pellets), int(round(mine.harm / int(data.pellets)))] if data.has("pellets") else ("%d / s" % int(round(mine.harm)) if data.has("flame") else str(int(round(mine.harm))))
-	var rate_text := "Einzelschuss" if data.get("semi", false) else ("Dauerstrahl" if data.has("flame") else "%d / min" % (int(round(mine.rate / 10.0)) * 10))
-	_figure(grid, "SCHADEN", sqrt(mine.harm / 520.0), harm_text, "" if theirs.is_empty() else _signed(mine.harm - theirs.harm), 0.0 if theirs.is_empty() else mine.harm - theirs.harm)
-	_figure(grid, "FEUERRATE", mine.rate / 1200.0, rate_text, "" if theirs.is_empty() else _signed(mine.rate - theirs.rate), 0.0 if theirs.is_empty() else mine.rate - theirs.rate)
-	_figure(grid, "MAGAZIN", sqrt(mine.magazine / 200.0), "%d  /  %d" % [mine.magazine, mine.reserve], "" if theirs.is_empty() else _signed(mine.magazine - theirs.magazine), 0.0 if theirs.is_empty() else float(mine.magazine - theirs.magazine))
-	_figure(grid, "NACHLADEN", 1.0 - (mine.reload - 0.8) / 3.4, ("%.1f s" % mine.reload).replace(".", ","), "" if theirs.is_empty() else _signed(theirs.reload - mine.reload, " s"), 0.0 if theirs.is_empty() else theirs.reload - mine.reload)
-	_figure(grid, "PRÄZISION", mine.tight, "%d %%" % int(round(mine.tight * 100.0)), "" if theirs.is_empty() else _signed((mine.tight - theirs.tight) * 100.0), 0.0 if theirs.is_empty() else mine.tight - theirs.tight)
-	detail.add_child(grid)
-	if not owned:
-		detail.add_child(hud.label("%s  ·  Taste %d%s%s" % [KIND_WORDS[kind], int(Survivor.KINDS[kind].key), "  ·  nimmt Aufsätze" if Survivor.ATTACHMENTS.has(id) else "", "" if versus == "" else "  ·  verglichen mit %s" % Survivor.WEAPONS[versus].label], 12, SurvivalHUD.MUTED))
+	var rate_text := "Einzeln" if data.get("semi", false) else ("Strahl" if data.has("flame") else "%d / min" % (int(round(mine.rate / 10.0)) * 10))
+	_stat_title("WERTE" if versus == "" else "WERTE  ·  GEGEN %s" % Survivor.WEAPONS[versus].label)
+	_stat(statistics, "damage", "SCHADEN", sqrt(mine.harm / 520.0), harm_text, "" if theirs.is_empty() else _signed(mine.harm - theirs.harm), 0.0 if theirs.is_empty() else mine.harm - theirs.harm)
+	_stat(statistics, "rate", "FEUERRATE", mine.rate / 1200.0, rate_text, "" if theirs.is_empty() else _signed(mine.rate - theirs.rate), 0.0 if theirs.is_empty() else mine.rate - theirs.rate)
+	_stat(statistics, "magazine", "MAGAZIN", sqrt(mine.magazine / 200.0), "%d / %d" % [mine.magazine, mine.reserve], "" if theirs.is_empty() else _signed(mine.magazine - theirs.magazine), 0.0 if theirs.is_empty() else float(mine.magazine - theirs.magazine))
+	_stat(statistics, "reload", "NACHLADEN", 1.0 - (mine.reload - 0.8) / 3.4, ("%.1f s" % mine.reload).replace(".", ","), "" if theirs.is_empty() else _signed(theirs.reload - mine.reload, " s"), 0.0 if theirs.is_empty() else theirs.reload - mine.reload)
+	_stat(statistics, "precision", "PRÄZISION", mine.tight, "%d %%" % int(round(mine.tight * 100.0)), "" if theirs.is_empty() else _signed((mine.tight - theirs.tight) * 100.0), 0.0 if theirs.is_empty() else mine.tight - theirs.tight)
+	_part_dots(id)
+	if owned and player.inventory[id].has("rare"):
+		_words(HiveCaches.rare_title(id, player.inventory[id].rare), 14, HiveCaches.GOLD)
+	if owned and editor_slot != "" and Survivor.ATTACHMENTS.has(id):
+		preload("res://scripts/weapon_editor.gd").build(self, id, true)
+		return
 	if owned and Survivor.ATTACHMENTS.has(id):
 		preload("res://scripts/weapon_editor.gd").build(self, id, false)
 	if owned and _short():
 		return
-	var tree := Skills.weapon_tree(id)
 	if tree != "":
 		var barred: String = game.skills.weapon_barred(id)
-		detail.add_child(hud.label("KLASSENWAFFE  ·  %s%s" % [Skills.TREES[tree].label, "" if barred == "" else "  ·  " + barred], 13, SurvivalHUD.MINT if barred == "" else SurvivalHUD.AMBER, true))
-	var filler := Control.new()
-	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail.add_child(filler)
+		if barred != "":
+			detail.add_child(hud.label("KLASSENWAFFE  ·  %s  ·  %s" % [Skills.TREES[tree].label, barred], 13, SurvivalHUD.AMBER, true))
 	# --- what can be done
-	var line := HBoxContainer.new()
-	line.add_theme_constant_override("separation", 10)
-	detail.add_child(line)
 	if owned:
 		var worth: int = game.trade_in(id)
 		var last: bool = player.inventory.size() < 2 or id == "pistol"
-		action = _act("STANDARDWAFFE" if id == "pistol" else ("LETZTE WAFFE" if last else "VERKAUFEN   +" + _money(worth)), game.sell_weapon.bind(id), not last, false)
-		line.add_child(action)
-		var hint := hud.label("Aufsätze und Werkbank-Stufen gehen mit ihr.", 13, SurvivalHUD.MUTED)
-		hint.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		line.add_child(hint)
+		_foot("Aufsätze und Werkbank-Stufen gehen mit ihr.", "STANDARDWAFFE" if id == "pistol" else ("LETZTE WAFFE" if last else "VERKAUFEN   +" + _money(worth)), game.sell_weapon.bind(id), not last)
 		return
 	var cost: int = game.weapon_cost(id, swap)
 	var offer := "KAUFEN   %s" % _money(cost)
@@ -690,23 +849,40 @@ func _detail_weapon(id: String) -> void:
 		offer = "TAUSCHEN   %s" % _money(cost)
 	if not state[2]:
 		offer = "ZU WENIG   " + _money(cost) if state[1] == SurvivalHUD.DANGER else str(state[0])
-	action = _act(offer, game.buy_weapon.bind(id, swap), state[2])
-	line.add_child(action)
 	# Without room for it something has to go: which one is the buyer's choice.
 	var choices: Array = player.replaceable(id)
 	if not choices.is_empty():
-		var given := hud.label("DAFÜR GEHT", 13, SurvivalHUD.MUTED, true)
-		given.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		line.add_child(given)
+		var given := HBoxContainer.new()
+		given.add_theme_constant_override("separation", 6)
+		var words := hud.label("DAFÜR GEHT", 12, SurvivalHUD.MUTED, true)
+		words.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		given.add_child(words)
 		for other in choices:
-			var chip := hud._chip("%s  +%s" % [Survivor.WEAPONS[other].label, _money(game.trade_in(other))], _choose_swap.bind(other), other == goes, 0)
-			chip.custom_minimum_size = Vector2(0, 34)
-			chip.add_theme_font_size_override("font_size", 14)
+			var chip := UI.flat_button(hud, "%s  +%s" % [Survivor.WEAPONS[other].label, _money(game.trade_in(other))], _choose_swap.bind(other), other == goes, 0, 32, 13)
 			chip.disabled = choices.size() == 1
 			if chip.disabled:
 				chip.add_theme_stylebox_override("disabled", chip.get_theme_stylebox("normal"))
-				chip.add_theme_color_override("font_disabled_color", SurvivalHUD.INK)
-			line.add_child(chip)
+			given.add_child(chip)
+		detail.add_child(given)
+	_foot("%s  ·  Taste %d%s" % [KIND_WORDS[kind], int(Survivor.KINDS[kind].key), "  ·  nimmt Aufsätze" if Survivor.ATTACHMENTS.has(id) else ""], offer, game.buy_weapon.bind(id, swap), state[2])
+
+## How many attachment slots a weapon has, as dots: gold for each filled one.
+func _part_dots(id: String) -> void:
+	if not Survivor.ATTACHMENTS.has(id):
+		return
+	var slots: Array = []
+	for data: Dictionary in (Survivor.ATTACHMENTS[id] as Dictionary).values():
+		if not slots.has(str(data.slot)):
+			slots.append(str(data.slot))
+	var fitted: int = _parts_on(id).size()
+	var line := HBoxContainer.new()
+	line.add_theme_constant_override("separation", 8)
+	line.add_child(UI.icon_rect(UI.glyph("parts"), 16, Color(1, 1, 1, 0.7)))
+	var name_label := hud.label("AUFSÄTZE", 13, SurvivalHUD.MUTED, true)
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	line.add_child(name_label)
+	line.add_child(hud.label("●".repeat(fitted) + "○".repeat(maxi(0, slots.size() - fitted)), 15, UI.GOLD, true))
+	statistics.add_child(line)
 
 # --- a part for a weapon
 
@@ -725,13 +901,10 @@ func _detail_part(id: String, part: String) -> void:
 	stage.show_weapon(id, shown)
 	var cost: int = game.price(int(data.price))
 	var own: bool = player.owns_part(id, part)
-	_headline("%s" % data.label, "ANGEBRACHT  ✓" if fitted else ("VORHANDEN" if own else _money(cost)), SurvivalHUD.MINT if fitted else (SurvivalHUD.IVORY if own else (SurvivalHUD.AMBER if game.credits >= cost else SurvivalHUD.DANGER)))
-	detail.add_child(hud.label("für %s" % Survivor.WEAPONS[id].label, 14, SurvivalHUD.AMBER, true))
-	_words(str(data.note), 15)
+	_headline("%s" % data.label, "ANGEBRACHT  ✓" if fitted else ("VORHANDEN" if own else _money(cost)), SurvivalHUD.MINT if fitted else (SurvivalHUD.IVORY if own else (SurvivalHUD.AMBER if game.credits >= cost else SurvivalHUD.DANGER)), "AUFSATZ|FÜR %s" % Survivor.WEAPONS[id].label)
+	_note(str(data.note))
+	stat_panel.hide()
 	_words("Einmal gekauft, bleibt es bei dieser Waffe: anbringen und abnehmen kostet nichts. In jedem Platz (Visier, Mündung) sitzt ein Teil.", 13)
-	var filler := Control.new()
-	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail.add_child(filler)
 	var offer := "KAUFEN   " + _money(cost)
 	var usable := true
 	if fitted:
@@ -741,8 +914,7 @@ func _detail_part(id: String, part: String) -> void:
 	elif game.credits < cost:
 		offer = "ZU WENIG   " + _money(cost)
 		usable = false
-	action = _act(offer, game.buy_part.bind(id, part), usable, not fitted)
-	detail.add_child(action)
+	_foot("für %s" % Survivor.WEAPONS[id].label, offer, game.buy_part.bind(id, part), usable, not fitted)
 
 # --- gear and what gets used up
 
@@ -750,6 +922,8 @@ func _detail_good(id: String) -> void:
 	var player: Survivor = game.player
 	var goods: Dictionary = Survivor.GOODS[id]
 	stage.hide()
+	item_art.texture = ITEM_ICONS.for_entry("good", id)
+	item_art.show()
 	var cost: int = game.item_price(id)
 	var have := ""
 	if id == "mask":
@@ -766,19 +940,25 @@ func _detail_good(id: String) -> void:
 		have = "3 Primärwaffenplätze  ·  Gurt angelegt" if player.extra_slots > 0 else "2 Primärwaffenplätze  ·  mit Gurt: 3"
 	else:
 		have = "Du hast %d von %d" % [int(player.items[id]), int(goods.max)]
-	_headline(str(goods.label), "VOLL  ✓" if cost < 0 else _money(cost), SurvivalHUD.MUTED if cost < 0 else (SurvivalHUD.AMBER if game.credits >= cost else SurvivalHUD.DANGER))
-	_words(str(goods.note), 16, SurvivalHUD.IVORY)
-	detail.add_child(hud.label(have, 15, SurvivalHUD.MINT, true))
-	var filler := Control.new()
-	filler.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail.add_child(filler)
+	var group := str(goods.group)
+	var group_word := ""
+	for tab in SurvivalHUD.SHOP_TABS:
+		if tab[0] == group:
+			group_word = str(tab[1])
+	_headline(str(goods.label), "VOLL  ✓" if cost < 0 else _money(cost), SurvivalHUD.MUTED if cost < 0 else (SurvivalHUD.AMBER if game.credits >= cost else SurvivalHUD.DANGER), group_word)
+	_note(str(goods.note), SurvivalHUD.IVORY)
+	_stat_title("BESTAND")
+	statistics.add_child(hud.label(stock(id), 22, UI.GOLD, true))
+	var owned := hud.label(have, 14, SurvivalHUD.MINT, true)
+	owned.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	owned.custom_minimum_size.x = STATS_WIDTH - 30.0
+	statistics.add_child(owned)
 	var offer := "KAUFEN   " + _money(cost)
 	if cost < 0:
 		offer = "KEIN TEAM" if game.squad_levels.has(id) and game.team.is_empty() else "VOLL  ✓"
 	elif game.credits < cost:
 		offer = "ZU WENIG   " + _money(cost)
-	action = _act(offer, game.buy_item.bind(id), cost >= 0 and game.credits >= cost)
-	detail.add_child(action)
+	_foot("", offer, game.buy_item.bind(id), cost >= 0 and game.credits >= cost)
 
 # --- the workbench
 
@@ -862,10 +1042,9 @@ func _detail_bench(id: String) -> void:
 	var data: Dictionary = Survivor.WEAPONS[id]
 	stage.show()
 	stage.show_weapon(id, _parts_on(id))
-	for child in statistics.get_children():
-		statistics.remove_child(child)
-		child.queue_free()
-	statistics.add_child(hud.label(str(data.label), 22, SurvivalHUD.IVORY, true))
+	_clear(statistics)
+	_headline(str(data.label), "IN DER HAND" if id == player.current_weapon else "", SurvivalHUD.MINT, "WERKBANK")
+	_stat_title("WERTE")
 	bench_stats.clear()
 	bench_preview = ""
 	var now := live_figures(id)
@@ -876,7 +1055,7 @@ func _detail_bench(id: String) -> void:
 	stats.add_theme_constant_override("v_separation", 1)
 	statistics.add_child(stats)
 	for row: Array in _bench_rows(now):
-		var bar := _figure(stats, str(row[0]), float(row[2]), str(row[3]), "", 0.0, 110)
+		var bar := _figure(stats, str(row[0]), float(row[2]), str(row[3]), "", 0.0, 96)
 		var delta := ColorRect.new()
 		delta.name = "UpgradeDelta"
 		delta.color = SurvivalHUD.MINT
@@ -889,10 +1068,9 @@ func _detail_bench(id: String) -> void:
 	# (A rare weapon, found in a cache of the second mission: what it has of its own.)
 	if player.inventory[id].has("rare"):
 		_words(HiveCaches.rare_title(id, player.inventory[id].rare), 14, HiveCaches.GOLD)
-	var grid := GridContainer.new()
-	grid.columns = 4
-	grid.add_theme_constant_override("h_separation", 12)
-	grid.add_theme_constant_override("v_separation", 5)
+	UI.section(hud, detail, "VERBESSERUNGEN", 14)
+	var grid := VBoxContainer.new()
+	grid.add_theme_constant_override("separation", 6)
 	detail.add_child(grid)
 	action = null
 	for line in Survivor.UPGRADES:
@@ -900,17 +1078,25 @@ func _detail_bench(id: String) -> void:
 		var levels: int = (info.prices as Array).size()
 		var have: int = player.upgrade(id, line)
 		var fits: bool = Survivor.upgrade_fits(id, line)
-		var title := hud.label(str(info.label), 19, SurvivalHUD.IVORY if fits else SurvivalHUD.MUTED, true)
-		title.custom_minimum_size.x = 112
-		grid.add_child(title)
-		grid.add_child(hud.label("●".repeat(have) + "○".repeat(levels - have) if fits else "–", 15, SurvivalHUD.AMBER))
+		# One tile for each line: its name and levels, what it makes of the weapon, the button.
+		var tile := PanelContainer.new()
+		tile.add_theme_stylebox_override("panel", UI.plate(false, 0.6, 8))
+		grid.add_child(tile)
+		var tile_row := HBoxContainer.new()
+		tile_row.add_theme_constant_override("separation", 10)
+		tile.add_child(tile_row)
 		var words := VBoxContainer.new()
-		words.add_theme_constant_override("separation", -3)
+		words.add_theme_constant_override("separation", -2)
 		words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		words.custom_minimum_size.x = 260
-		words.add_child(hud.label(line_effect(id, line) if fits else "nichts für diese Waffe", 15, SurvivalHUD.IVORY if fits else SurvivalHUD.MUTED, true))
-		words.add_child(hud.label(str(LINES[line]), 12, SurvivalHUD.MUTED))
-		grid.add_child(words)
+		tile_row.add_child(words)
+		var top := HBoxContainer.new()
+		top.add_theme_constant_override("separation", 8)
+		top.add_child(hud.label(str(info.label), 17, SurvivalHUD.IVORY if fits else SurvivalHUD.MUTED, true))
+		top.add_child(hud.label("●".repeat(have) + "○".repeat(levels - have) if fits else "–", 14, UI.GOLD))
+		words.add_child(top)
+		var effect := hud.label(line_effect(id, line) if fits else "nichts für diese Waffe", 13, SurvivalHUD.IVORY if fits else SurvivalHUD.MUTED, true)
+		effect.tooltip_text = str(LINES[line])
+		words.add_child(effect)
 		var cost: int = game.upgrade_price(id, line)
 		var offer := "+   " + _money(cost)
 		if not fits:
@@ -920,12 +1106,12 @@ func _detail_bench(id: String) -> void:
 		elif game.credits < cost:
 			offer = _money(cost) + "  ·  ZU WENIG"
 		var usable: bool = cost >= 0 and game.credits >= cost
-		var buy := hud._chip(offer, game.buy_upgrade.bind(line, id), usable, 150)
+		var buy := UI.flat_button(hud, offer, game.buy_upgrade.bind(line, id), usable, 120, 36, 15)
 		buy.name = "Upgrade_" + line
-		buy.custom_minimum_size = Vector2(140, 38)
+		buy.tooltip_text = str(LINES[line])
 		buy.disabled = not usable
 		buy.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		grid.add_child(buy)
+		tile_row.add_child(buy)
 		if fits and cost >= 0:
 			buy.mouse_entered.connect(preview_upgrade.bind(id, line))
 			buy.focus_entered.connect(preview_upgrade.bind(id, line))

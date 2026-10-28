@@ -177,10 +177,11 @@ func toxic_at(pos: Vector3) -> bool:
 	var cabin: CabinMap = game.cabin
 	if flood_strength > BITE and absf(pos.x) < CabinMap.HX and absf(pos.z) < CabinMap.HZ and pos.y > -0.6 and pos.y < 2.0:
 		return true
-	if pos.y < -0.6 or pos.y > 2.6:
+	# (Under the villa (mission 2) the floors lie deep: there only the height above a patch counts.)
+	if not _deep() and (pos.y < -0.6 or pos.y > 2.6):
 		return false
 	for pocket in pockets:
-		if float(pocket.strength) > BITE and Vector2(pos.x - pocket.pos.x, pos.z - pocket.pos.z).length() < float(pocket.radius) - 0.8 and absf(pos.y - float(pocket.pos.y)) < 2.6:
+		if float(pocket.strength) > BITE and Vector2(pos.x - pocket.pos.x, pos.z - pocket.pos.z).length() < float(pocket.radius) - 0.8 and pos.y - float(pocket.pos.y) > -0.6 and pos.y - float(pocket.pos.y) < 2.6:
 			if bool(pocket.indoors) or not cabin.is_indoors(pos):
 				return true
 	return false
@@ -497,3 +498,32 @@ func adopt(state: Array) -> void:
 			else:
 				_add(entry[0], 9999.0, 0.0)
 			game.sounds.play_at("hiss", (entry[0] as Vector3) + Vector3(0, 1.0, 0), -3.0)
+			if entry.size() > 2 and is_equal_approx(float(entry[2]), LEAK_RADIUS):
+				_tell_leak()
+
+# ---------------------------------------------------------------- leaks in mission 2
+
+## (v0.79) Now and then gas leaks in an area of the second mission (HiveAreaRun.enter): one
+## or two patches somewhere in it, for a while. Without a mask (or one from a crate,
+## Rewards) the way leads round them - or quickly through.
+const LEAK_CHANCE := 0.4
+const LEAK_RADIUS := 5.5
+const LEAK_SECONDS := Vector2(70.0, 110.0)
+
+func _deep() -> bool:
+	return game != null and "hive" in game and game.hive != null and game.hive.on
+
+## The host lets gas leak at these places (on the floor). Returns how many patches came.
+func leak(places: Array) -> int:
+	if game.net.joined or places.is_empty():
+		return 0
+	for at: Vector3 in places:
+		_add(at, random.randf_range(LEAK_SECONDS.x, LEAK_SECONDS.y), 0.0, LEAK_RADIUS, true)
+		if game.sounds != null:
+			game.sounds.play_at("hiss", at + Vector3(0, 1.0, 0), 2.0)
+	_tell_leak()
+	return places.size()
+
+func _tell_leak() -> void:
+	if game.hud != null and game.hud.has_method("announce"):
+		game.hud.announce("GASLECK", "Giftgas im Bereich  ·  Gasmaske oder schnell durch", 3.5)
