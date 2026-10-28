@@ -107,7 +107,10 @@ const SKINS := {
 		"image": "res://assets/skins/strassenkunst_ump.png", "weapons": ["ump"], "flip": Vector2(1, 1)},
 	"sturmatlas": {"label": "STURMATLAS", "rarity": "rare", "note": "Petrol mit weißen Windlinien, einer goldenen Kompassrose und silbernen Kanten.",
 		"boost": {"steady": 0.06}, "metal": 0.4, "rough": 0.35, "accent": Color("d4ad4c"), "base": Color("0f4a52"),
-		"image": "res://assets/skins/sturmatlas_wirbel.png", "weapons": ["wirbel"], "flip": Vector2(1, 1)}
+		"image": "res://assets/skins/sturmatlas_wirbel.png", "weapons": ["wirbel"], "flip": Vector2(1, 1)},
+	"vietnam": {"label": "VIETNAM-LIEBE", "rarity": "epic", "note": "Abgenutztes Oliv und Sand, rote Streifen mit gelben Sternen und ein Sticker: ein Junge mit Sonnenbrille, Daumen hoch.",
+		"boost": {"reload": 0.06, "reserve": 0.1}, "metal": 0.3, "rough": 0.55, "accent": Color("e8c13a"), "base": Color("4a5230"),
+		"image": "res://assets/skins/vietnam_badger.png", "weapons": ["badger"], "flip": Vector2(1, 1)}
 }
 ## How often a kill with a skin that has its own sound (kill_sound) plays it, and how long
 ## it then keeps quiet at least.

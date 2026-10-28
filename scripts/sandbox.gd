@@ -8,7 +8,7 @@ extends Node
 ## that asks whether there is a story or a last round answers as it does there.
 
 ## What can be put on the field, in the order of the menu: [kind, name on the button].
-const INFECTED := [["mauler", "MAULER"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"], ["prowler_elite", "PROWLER (GEFRESSEN)"], ["boss", "SUBJEKT NULL (ENDBOSS)"]]
+const INFECTED := [["mauler", "MAULER"], ["weedzombie", "WEED-ZOMBIE"], ["charger", "CHARGER"], ["striker", "STRIKER"], ["ripper", "RIPPER"], ["leech", "LEECH"], ["healer", "MEDIC"], ["stalker", "STALKER"], ["crusher", "CRUSHER"], ["prowler", "PROWLER"], ["prowler_elite", "PROWLER (GEFRESSEN)"], ["boss", "SUBJEKT NULL (ENDBOSS)"]]
 ## The sharks, which only live in water: a click takes the survivor to the test pool
 ## (SharkPool) and puts them into it. [look, name on the button]
 const SHARKS := [["shark1", "HAI (VERSEUCHT)"], ["shark2", "HAI (BLAU)"]]
@@ -239,6 +239,10 @@ func _one(kind: String, at: Vector3) -> Infected:
 		mission.stalker_health = -1.0
 		enemy = game.spawn_stalker(at, "hunt", player)
 		mission.stalker = enemy
+	elif kind == "weedzombie":
+		# (v0.82) A Mauler in the Weed zombie's body: it bursts into its cloud when it falls.
+		enemy = game.spawn_enemy("mauler", "weedzombie")
+		enemy.position = at + Vector3(0, 0.08, 0)
 	elif kind == "prowler_elite":
 		# The Prowler as it looks once it has fed (HiveProwler.ELITE_FROM).
 		enemy = game.spawn_enemy("prowler", "prowler_elite")

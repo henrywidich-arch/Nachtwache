@@ -1,5 +1,18 @@
 [
   {
+    "version": "0.82",
+    "title": "Skin VIETNAM-LIEBE und Weed-Zombie im Testraum",
+    "sections": [
+      {
+        "title": "Neu",
+        "items": [
+          "Neuer epischer Skin VIETNAM-LIEBE für den Honey Badger: abgenutztes Oliv und Sand, rote Streifen mit gelben Sternen und ein Sticker von einem Jungen mit Sonnenbrille. Er kommt aus den Kisten und lässt sich im Testraum ausprobieren.",
+          "Im Testraum kann jetzt auch der Weed-Zombie gespawnt werden (unter INFIZIERTE). Fällt er, platzt seine Wolke wie im Einsatz."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.81",
     "title": "Ruhigere Bots",
     "sections": [

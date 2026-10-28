@@ -193,6 +193,13 @@ static func run(v: Node, game: Node3D) -> void:
 		if tester.current_weapon != gun or model == null or str(model.get_meta("skin", "")) != skin or picture.get_width() <= 8:
 			tried.append(skin)
 	v.expect(tried.is_empty(), "Every skin goes on its own weapon in the test room, with its picture (wrong: %s)" % str(tried))
+	# (v0.82) The Weed zombie can be called into the test room like the others.
+	var weeds: Array = sandbox.spawn("weedzombie")
+	var weed_ok: bool = not weeds.is_empty() and (weeds as Array).all(func(e: Variant) -> bool: return is_instance_valid(e) and (e as Infected).kind == "mauler" and str((e as Infected).visual_kind) == "weedzombie")
+	v.expect(weed_ok, "The test room spawns the Weed zombie (%d)" % weeds.size())
+	for e: Variant in weeds:
+		if is_instance_valid(e):
+			(e as Node).queue_free()
 	# The two skins with a sound of their own play it on a kill now and then, the others never.
 	var sounds: FieldAudio = game.sounds
 	var plays_rose: bool = sounds.skin_kill("eisernerose", true)
