@@ -2344,8 +2344,85 @@ func _clear_enemies() -> void:
 		node.queue_free()
 	game.alive_count = 0
 	game.boss = null
+	loiterers.clear()
+	loiter_left = 8.0
 
 # ---------------------------------------------------------------- enemies
+
+## (v0.87, after Henry) Somewhere ahead on the way, where the squad is not yet and does not
+## look, a few infected already stand about (Infected.loiter): the place is not empty when
+## it gets there. Every LOITER_EVERY seconds a group of LOITER_GROUP comes, as long as fewer
+## than LOITER_MOST stand about and the stage has room left; who still stands about far
+## behind the squad is taken off again.
+const LOITER_EVERY := Vector2(10.0, 18.0)
+const LOITER_GROUP := Vector2i(1, 3)
+const LOITER_MOST := 6
+const LOITER_AHEAD := Vector2(24.0, 42.0)
+const LOITER_FORGET := 60.0
+const LOITER_KINDS := ["mauler", "mauler", "mauler", "striker"]
+var loiterers: Array = []
+var loiter_left := 8.0
+
+func _run_loiterers(delta: float) -> void:
+	var standing := 0
+	var kept: Array = []
+	var here: Vector3 = game.player.global_position
+	for enemy: Variant in loiterers:
+		if not is_instance_valid(enemy) or (enemy as Infected).dead or not (enemy as Infected).loiter:
+			continue
+		var body := enemy as Infected
+		if body.global_position.distance_to(here) > LOITER_FORGET and not _sees(here + Vector3(0, 1.6, 0), body.global_position + Vector3(0, 1.3, 0)):
+			body._retire()
+			body.queue_free()
+			game.alive_count = maxi(0, game.alive_count - 1)
+			continue
+		kept.append(body)
+		standing += 1
+	loiterers = kept
+	# (Not in the checks, whose numbers of enemies are counted, unless one asks: --loiter.)
+	if game.check_mode and not "--loiter" in OS.get_cmdline_user_args():
+		return
+	loiter_left -= delta
+	if loiter_left > 0.0:
+		return
+	loiter_left = randf_range(LOITER_EVERY.x, LOITER_EVERY.y)
+	if not pressure.has(stage) or _holding() or safe_now or stage in ["ride", "board", "nadja", "deal", "exit"] or standing >= LOITER_MOST:
+		return
+	var room: int = _crowd() - int(game.alive_count) - entries.coming() - 2
+	if room <= 0:
+		return
+	var spot := _loiter_spot()
+	if spot == Vector3.INF:
+		return
+	for index in range(mini(room, randi_range(LOITER_GROUP.x, LOITER_GROUP.y))):
+		var enemy := _place(pick(LOITER_KINDS), spot + Vector3(randf_range(-2.0, 2.0), 0, randf_range(-2.0, 2.0)))
+		if enemy == null:
+			continue
+		enemy.loiter = true
+		enemy.loiter_moan = randf_range(2.0, 10.0)
+		# (Turned any way: they are not waiting for the squad.)
+		enemy.model.rotation.y = randf() * TAU
+		loiterers.append(enemy)
+
+## A place on the way to the marker, LOITER_AHEAD along it, that the survivor does not see;
+## else one somewhere around that he does not see either.
+func _loiter_spot() -> Vector3:
+	var here: Vector3 = game.player.global_position
+	var eye := here + Vector3(0, 1.6, 0)
+	var goal := use_at if use_at != Vector3.INF else marker
+	if goal != Vector3.INF:
+		var way: PackedVector3Array = map.path_between(here, goal)
+		var walked := 0.0
+		var wanted := randf_range(LOITER_AHEAD.x, LOITER_AHEAD.y)
+		for index in range(1, way.size()):
+			walked += way[index - 1].distance_to(way[index])
+			if walked < wanted:
+				continue
+			var spot: Vector3 = way[index]
+			if spot.distance_to(goal) < 6.0 or _sees(eye, spot + Vector3(0, 1.3, 0)):
+				continue
+			return spot
+	return _hidden_spot(LOITER_AHEAD.x, LOITER_AHEAD.y)
 
 ## The look of an infected of the stage that runs: for a plain one, as often as STAFF
 ## says, one of the people who worked here; otherwise "" - one of the looks its kind has
@@ -2913,3 +2990,4 @@ func _process(delta: float) -> void:
 	_run_leavers(delta)
 	_run_overrun()
 	_run_pressure(delta)
+	_run_loiterers(delta)

@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.87",
+    "title": "Infizierte stehen schon herum",
+    "sections": [
+      {
+        "title": "Einsatz 2",
+        "items": [
+          "Auf dem Weg zum nächsten Ziel stehen jetzt schon Infizierte herum, an Stellen, die du noch nicht siehst. Sie bemerken dich erst, wenn du ihnen nahe kommst oder in ihr Blickfeld läufst, wenn du auf sie schießt oder einer aus ihrer Gruppe aufwacht. Dann greifen sie an."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.86",
     "title": "Bahnhof, Tokio-Pflichtweg und Kisten-Timer",
     "sections": [

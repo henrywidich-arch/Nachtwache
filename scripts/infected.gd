@@ -382,6 +382,15 @@ var growl_left := 3.0
 var last_step := 0
 ## Maulers shamble until they notice a survivor, get shot or lose patience.
 var alert := true
+## (v0.87) Standing about where nobody was yet (HiveDirector's loiterers): it does not
+## move until a survivor comes within LOITER_SEE in its view or LOITER_HEAR at all, it is
+## hit, or one of its kind close by wakes; then it comes like any other.
+var loiter := false
+var loiter_check := 0.0
+var loiter_moan := 0.0
+const LOITER_SEE := 12.0
+const LOITER_HEAR := 5.0
+const LOITER_PACK := 7.0
 var lurk_left := 0.0
 ## Seconds the infected cannot act: staggered by gunfire or screaming.
 var held_left := 0.0
@@ -712,6 +721,42 @@ func _low_ceiling(at: Vector3) -> bool:
 
 ## With `bodies` the line also ends at what stops bodies but not bullets or claws:
 ## railings, fences and window sills.
+## Stands where it stands, now and then a sound, until somebody comes near (see loiter).
+## True while it still does.
+func _loiter(delta: float) -> bool:
+	velocity = Vector3.ZERO
+	loiter_moan -= delta
+	if loiter_moan <= 0.0:
+		loiter_moan = randf_range(6.0, 14.0)
+		if str(voices.get("idle", "")) != "":
+			game.sounds.play_at(str(voices.idle), mouth(), -6.0)
+	loiter_check -= delta
+	if loiter_check > 0.0:
+		return true
+	loiter_check = 0.25
+	var near: Node3D = game.nearest_survivor(global_position, null)
+	if near == null:
+		return true
+	var gap := global_position.distance_to(near.global_position)
+	var same_floor := absf(near.global_position.y - global_position.y) < 1.4
+	if same_floor and (gap < LOITER_HEAR or (gap < LOITER_SEE and _clear_line(near.global_position))):
+		rouse()
+		return false
+	return true
+
+## Stops standing about and comes, and so do those of its kind standing close by.
+func rouse() -> void:
+	if not loiter:
+		return
+	loiter = false
+	lurk_left = 0.0
+	alert = false
+	repath_left = 0.0
+	for node in get_tree().get_nodes_in_group("infected"):
+		var other := node as Infected
+		if other != null and other.loiter and not other.dead and other.global_position.distance_to(global_position) < LOITER_PACK:
+			other.rouse()
+
 func _clear_line(target: Vector3, bodies: bool = false) -> bool:
 	var eye := minf(1.1, float(spec.height) * 0.6)
 	var query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * eye, target + Vector3.UP * 1.1, 17 if bodies else 1)
@@ -865,6 +910,8 @@ func _physics_process(delta: float) -> void:
 	# Animate first: a clip that carries the body reports how far it moves this frame.
 	var moved := get_real_velocity()
 	model.animate(delta, Vector2(moved.x, moved.z).length())
+	if loiter and _loiter(delta):
+		return
 	cooldown -= delta
 	repath_left -= delta
 	pain_left -= delta
@@ -1404,6 +1451,8 @@ func receive_damage(amount: float, from: Vector3, _cause: String = "", _by: Stri
 func receive_hit(amount: float, direction: Vector3, headshot: bool = false, source: Node = null) -> void:
 	if dead:
 		return
+	if loiter:
+		rouse()
 	if kind == "stalker":
 		# Shot while it watches or sprints, it is simply gone. While it hunts it can be
 		# driven off, and worn down over the night.
