@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.85",
+    "title": "Alle Skins im Testraum erreichbar",
+    "sections": [
+      {
+        "title": "Behoben",
+        "items": [
+          "Testraum: Die Skin-Knöpfe liefen unten aus der Seite, die letzten Skins waren nicht zu sehen. Die Liste ist jetzt ein eigenes Feld zum Scrollen, so kommst du an alle Skins."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.84",
     "title": "FLIEGENPILZ ersetzt GARTENZWERG",
     "sections": [

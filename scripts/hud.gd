@@ -1660,7 +1660,16 @@ func _test_player(column: VBoxContainer, room: Sandbox) -> void:
 		chip.name = "TrySkin_" + skin
 		chip.tooltip_text = WeaponSkins.boost_words(skin)
 		skins.append(chip)
-	_test_row(column, "SKINS AUSPROBIEREN  ·  AUF DER WAFFE IN DER HAND", skins)
+	# (v0.85) With 30 and more skins the buttons ran off the page: they scroll in a box.
+	_section(column, "SKINS AUSPROBIEREN  ·  AUF DER WAFFE IN DER HAND  ·  SCROLLEN FÜR MEHR")
+	var skin_scroll := ScrollContainer.new()
+	skin_scroll.name = "TrySkins"
+	skin_scroll.custom_minimum_size = Vector2(900, 214)
+	skin_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var skin_box := VBoxContainer.new()
+	skin_scroll.add_child(skin_box)
+	_test_row(skin_box, "", skins)
+	column.add_child(skin_scroll)
 	_gap(column, 4)
 	_text(column, "Im Testraum kostet nichts etwas: Shop und Werkbank öffnen sich von überall, und jede\nKlassenwaffe ist frei. „Alle Waffen“: Mit 1, 2 und 3 gehst du durch alle Primär-,\nSekundär- und schweren Waffen. Mit unendlichem Leben siehst und hörst du Treffer\nweiterhin, verlierst aber nichts. Ohne: Fällst du, stehst du sofort wieder.", 15)
 
