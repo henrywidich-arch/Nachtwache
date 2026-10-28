@@ -182,6 +182,30 @@ static func run(v: Node, game: Node3D) -> void:
 	var other_gun := str(WeaponSkins.SKINS[other_skin].weapons[0]) if other_skin != "" else ""
 	sandbox.try_skin(other_skin)
 	var on_hand: bool = other_skin != "" and tester.current_weapon == other_gun and str(tester.weapon_models[other_gun].get_meta("skin", "")) == other_skin
+	# (v0.80) Every skin, one after the other, in the test room: it lands on its weapon,
+	# and its picture is found (no magenta stand-in).
+	var tried: Array[String] = []
+	for skin: String in WeaponSkins.SKINS:
+		var gun := str(WeaponSkins.SKINS[skin].weapons[0])
+		sandbox.try_skin(skin)
+		var model: Node = tester.weapon_models.get(gun)
+		var picture := WeaponSkins.texture(skin)
+		if tester.current_weapon != gun or model == null or str(model.get_meta("skin", "")) != skin or picture.get_width() <= 8:
+			tried.append(skin)
+	v.expect(tried.is_empty(), "Every skin goes on its own weapon in the test room, with its picture (wrong: %s)" % str(tried))
+	# The two skins with a sound of their own play it on a kill now and then, the others never.
+	var sounds: FieldAudio = game.sounds
+	var plays_rose: bool = sounds.skin_kill("eisernerose", true)
+	var plays_winkel: bool = sounds.skin_kill("toterwinkel", true)
+	var quiet: bool = not sounds.skin_kill("kintsugi", true) and not sounds.skin_kill("eisernerose")
+	var rare := 0
+	for i in range(400):
+		sounds.skin_heard = -1000.0
+		rare += int(sounds.skin_kill("eisernerose"))
+	if sounds.skin_voice != null:
+		sounds.skin_voice.stop()
+	v.expect(plays_rose and plays_winkel and quiet and rare > 15 and rare < 100,
+		"EISERNE ROSE and TOTER WINKEL have kill sounds that come seldom (%d of 400 kills) and not right after each other; other skins have none" % rare)
 	hud.show_menu("test")
 	game.sandbox.tab = "player"
 	hud.show_menu("test")

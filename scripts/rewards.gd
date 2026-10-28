@@ -13,8 +13,12 @@ const DAY := 86400
 ## The weapons skins come for: the two every survivor starts with, and the favourites.
 const SKIN_WEAPONS := ["rifle", "pistol", "ak", "p90", "ump", "g36", "mp7", "shotgun", "deagle"]
 ## How often a crate gives each skin, and gear: weights.
-const SKIN_WEIGHTS := {"toxin": 14, "vektor": 14, "neon": 14, "mondnacht": 6, "sakura": 6, "drache": 6}
-const GEAR_WEIGHT := 32
+## (v0.80) By rarity: a rare skin 12, an epic one 8, a legendary one 5.
+const SKIN_WEIGHTS := {"toxin": 8, "vektor": 8, "neon": 8, "mondnacht": 5, "sakura": 5, "drache": 5,
+	"rotelinie": 5, "eisernerose": 5, "toterwinkel": 5,
+	"kintsugi": 8, "horizont": 8, "frostwurm": 8, "tarot": 8, "oni": 8, "pfau": 8, "pharao": 8, "koi": 8, "jade": 8, "feuerzwerg": 8, "gartenzwerg": 8,
+	"giftbluete": 12, "sonnenfalke": 12, "cyberbluete": 12, "reaktor": 12, "spielhalle": 12, "zuckerschaedel": 12, "donnertiger": 12, "vulkan": 12, "strassenkunst": 12, "sturmatlas": 12}
+const GEAR_WEIGHT := 84
 ## Gear. icon: the symbol (ShopIcons/UiSymbols). model: what is shown once it exists.
 const GEAR := {
 	"gasmaske": {"label": "GASMASKE", "icon": "mask", "model": "res://assets/models/gasmaske.glb",
@@ -76,7 +80,7 @@ func read(parsed: Dictionary) -> void:
 	worn.clear()
 	if parsed.get("worn") is Dictionary:
 		for weapon: String in parsed.worn:
-			if WeaponSkins.SKINS.has(str(parsed.worn[weapon])) and weapon in SKIN_WEAPONS:
+			if known("%s/%s" % [parsed.worn[weapon], weapon]):
 				worn[weapon] = str(parsed.worn[weapon])
 	taken.clear()
 	if parsed.get("taken") is Array:

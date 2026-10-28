@@ -1,5 +1,22 @@
 [
   {
+    "version": "0.80",
+    "title": "24 neue Waffenskins",
+    "sections": [
+      {
+        "title": "Neue Skins in den Kisten",
+        "items": [
+          "24 neue Skins, jeder nach einem gemalten Entwurf genau auf seine Waffe gelegt. Fast jede Waffe hat jetzt einen eigenen Skin: AK-47, Honey Badger, M107, Scharfschützengewehr, .44 Magnum, M21E, Doppelbüchse, Maschinengewehr, P90, M14, Flammenwerfer, M32 Granatwerfer, Auto-Schrotflinte, Falke, G36, Minigun, MP7, M9 Pistole, M4A4, Schrotflinte, UMP45 und Wirbel.",
+          "Drei neue legendäre Skins: ROTE LINIE und EISERNE ROSE für die AK-47, TOTER WINKEL für den Honey Badger. Wer EISERNE ROSE oder TOTER WINKEL trägt, hört bei einem Kill ab und zu einen eigenen Sound.",
+          "Elf neue epische Skins: KINTSUGI-DRACHE (AK-47), EREIGNISHORIZONT (M107), FROSTWURM (Scharfschützengewehr), MITTERNACHTSTAROT (.44 Magnum), ROTER ONI (M21E), KÖNIGSPFAU (Doppelbüchse), WÜSTENPHARAO (Maschinengewehr), KOI-TEICH (P90), JADE-DYNASTIE (M14), FEUERZWERG (Flammenwerfer) und GARTENZWERG (Granatwerfer).",
+          "Zehn neue seltene Skins: GIFTBLÜTE (Auto-Schrotflinte), SONNENFALKE (Falke), CYBER-KIRSCHBLÜTE (G36), REAKTOR (Minigun), SPIELHALLENRAUSCH (MP7), ZUCKERSCHÄDEL (M9), DONNERTIGER (M4A4), VULKAN (Schrotflinte), STRASSENKUNST (UMP45) und STURMATLAS (Wirbel).",
+          "Die Chancen richten sich jetzt nach der Seltenheit: Seltene Skins kommen am häufigsten, legendäre am seltensten. Ausrüstung kommt etwa in jeder vierten Kiste.",
+          "WAS DRIN SEIN KANN zeigt alle neuen Skins mit Bild, Waffe, Bonus und Chance. Im Testraum lässt sich jeder neue Skin ausprobieren."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.79",
     "title": "Neues Menü-Design, Kisten und Waffenskins",
     "sections": [

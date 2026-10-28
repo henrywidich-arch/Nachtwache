@@ -871,6 +871,9 @@ func kill_feed(what: String, points: int, headshot: bool, dim: bool = false) -> 
 	# it): the fuller answer follows the tick he heard when he fired.
 	if not dim and points > 0 and game.net.joined:
 		game.sounds.confirm_kill()
+	# (v0.80) A skin with a sound of its own on the weapon in hand plays it now and then.
+	if not dim and points > 0 and game.player != null:
+		game.sounds.skin_kill(game.rewards.skin_for(game.player.current_weapon))
 	var kind := "headshot" if headshot else ("kill" if points > 0 else ("team" if dim else "use"))
 	_feed_entry(text, kind, MUTED if dim else (ORANGE if headshot else (MINT if points == 0 else IVORY)), dim)
 

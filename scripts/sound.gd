@@ -541,6 +541,28 @@ func confirm_kill() -> void:
 		play_sound("hit_kill", -8.0)
 		play_sound(DING + "_kill")
 
+## (v0.80) A kill with a weapon whose skin has a sound of its own (WeaponSkins kill_sound):
+## now and then that sound plays, never twice within a short time.
+var skin_voice: AudioStreamPlayer
+var skin_heard := -1000.0
+
+func skin_kill(skin: String, forced: bool = false) -> bool:
+	var path := str(WeaponSkins.SKINS.get(skin, {}).get("kill_sound", ""))
+	if hush or path == "" or not ResourceLoader.exists(path):
+		return false
+	var now := Time.get_ticks_msec() * 0.001
+	if not forced and (now - skin_heard < WeaponSkins.KILL_SOUND_PAUSE or rng.randf() >= WeaponSkins.KILL_SOUND_CHANCE):
+		return false
+	skin_heard = now
+	if skin_voice == null:
+		skin_voice = AudioStreamPlayer.new()
+		skin_voice.bus = "SFX"
+		skin_voice.volume_db = -3.0
+		add_child(skin_voice)
+	skin_voice.stream = _speech(path)
+	skin_voice.play()
+	return true
+
 ## Plays a sound at a place in the world so its direction and distance can be heard.
 func play_at(kind: String, where: Vector3, volume: float = 0.0, pitch: float = 1.0) -> void:
 	if hush:
