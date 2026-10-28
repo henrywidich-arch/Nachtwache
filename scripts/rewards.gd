@@ -15,7 +15,7 @@ const DURATIONS := [[1, 62], [3, 28], [7, 10]]
 ## The weapons skins come for: the two every survivor starts with, and the favourites.
 const SKIN_WEAPONS := ["rifle", "pistol", "ak", "p90", "ump", "g36", "mp7", "shotgun", "deagle"]
 ## How often a crate gives each skin, and gear: weights.
-const SKIN_WEIGHTS := {"tiefsee": 34, "orbital": 22, "drache": 12}
+const SKIN_WEIGHTS := {"tiefsee": 34, "orbital": 22, "drache": 12, "mondnacht": 6}
 const GEAR_WEIGHT := 32
 ## Gear. icon: the symbol (ShopIcons/UiSymbols). model: what is shown once it exists.
 const GEAR := {
@@ -91,7 +91,7 @@ static func known(id: String) -> bool:
 	if GEAR.has(id):
 		return true
 	var parts := id.split("/")
-	return parts.size() == 2 and WeaponSkins.SKINS.has(parts[0]) and parts[1] in SKIN_WEAPONS
+	return parts.size() == 2 and WeaponSkins.SKINS.has(parts[0]) and parts[1] in WeaponSkins.SKINS[parts[0]].get("weapons", SKIN_WEAPONS)
 
 static func skin_of(id: String) -> String:
 	return id.split("/")[0] if "/" in id else ""
@@ -166,8 +166,9 @@ func grant_crate() -> void:
 static func pool() -> Array:
 	var out: Array = []
 	for skin: String in SKIN_WEIGHTS:
-		for weapon: String in SKIN_WEAPONS:
-			out.append(["%s/%s" % [skin, weapon], float(SKIN_WEIGHTS[skin]) / SKIN_WEAPONS.size()])
+		var weapons: Array = WeaponSkins.SKINS[skin].get("weapons", SKIN_WEAPONS)
+		for weapon: String in weapons:
+			out.append(["%s/%s" % [skin, weapon], float(SKIN_WEIGHTS[skin]) / weapons.size()])
 	for id: String in GEAR:
 		out.append([id, float(GEAR_WEIGHT) / GEAR.size()])
 	return out

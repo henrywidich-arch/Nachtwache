@@ -16,7 +16,13 @@ const SKINS := {
 	"orbital": {"label": "ORBITAL", "rarity": "epic", "note": "Weiß-orange Raumfahrt-Lackierung mit Plattenfugen.",
 		"boost": {"reload": 0.1, "steady": 0.06}, "metal": 0.1, "rough": 0.5, "scale": 1.0, "accent": Color("f2701d"), "base": Color("e9e6df")},
 	"tiefsee": {"label": "TIEFSEE", "rarity": "rare", "note": "Nachtblau mit leuchtenden Höhenlinien.",
-		"boost": {"mags": 0.1, "reserve": 0.15}, "metal": 0.3, "rough": 0.45, "scale": 1.6, "accent": Color("35d0e0"), "base": Color("0f2747")}
+		"boost": {"mags": 0.1, "reserve": 0.15}, "metal": 0.3, "rough": 0.45, "scale": 1.6, "accent": Color("35d0e0"), "base": Color("0f2747")},
+	# A painted picture of one weapon from its left side (tools/skin_templates.gd shows the
+	# view): it is laid on exactly that weapon, edge to edge (image, weapons). flip: which of
+	# the picture's axes run against the weapon's.
+	"mondnacht": {"label": "MONDNACHT", "rarity": "legendary", "note": "Schwarz und Gold: Vollmond, Kiefer und Wolken.",
+		"boost": {"damage": 0.05, "reload": 0.06}, "metal": 0.45, "rough": 0.35, "accent": Color("d9b05a"), "base": Color("15130f"),
+		"image": "res://assets/skins/mondnacht_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)}
 }
 const RARITIES := {
 	"rare": {"label": "SELTEN", "color": Color("4f8dff")},
@@ -46,6 +52,9 @@ static func texture(skin: String) -> Texture2D:
 	if textures.has(skin):
 		return textures[skin]
 	var image := Image.new()
+	if SKINS.has(skin) and SKINS[skin].has("image"):
+		textures[skin] = _picture(str(SKINS[skin].image))
+		return textures[skin]
 	var code: String = {"drache": _dragon(), "orbital": _orbital(), "tiefsee": _deep()}.get(skin, "")
 	if code == "" or image.load_svg_from_string(code, 1.0) != OK:
 		image = Image.create(8, 8, false, Image.FORMAT_RGBA8)
@@ -73,6 +82,14 @@ static func apply(view: Node, skin: String) -> void:
 		var part: AABB = frame * mesh.mesh.get_aabb()
 		box = part if box.size == Vector3.ZERO else box.merge(part)
 	var tiles := float(SKINS.get(skin, {}).get("scale", 1.0)) / maxf(box.size.z, 0.15)
+	# A picture of the weapon lies on it edge to edge: its width over the length, its height
+	# over the height, the middle on the middle.
+	var picture: bool = SKINS.has(skin) and SKINS[skin].has("image")
+	if picture:
+		# (The picture shows the whole weapon, its iron sights too: so is it measured.)
+		box = _whole(view)
+	var flip: Vector2 = SKINS.get(skin, {}).get("flip", Vector2.ONE)
+	var fit := Vector3(1.0 / maxf(box.size.z, 0.01), flip.y / maxf(box.size.y, 0.01), flip.x / maxf(box.size.z, 0.01))
 	for entry: Array in parts:
 		var mesh: MeshInstance3D = entry[0]
 		var frame: Transform3D = entry[1]
@@ -88,14 +105,19 @@ static func apply(view: Node, skin: String) -> void:
 			if source == null or not _paintable(source):
 				continue
 			# (In the part's own space: its units, and where the middle of the weapon lies.)
+			if picture:
+				var across: Vector3 = fit * frame.basis.get_scale().x
+				var centre: Vector3 = frame.affine_inverse() * box.get_center()
+				mesh.set_surface_override_material(surface, painted_from(source, skin, across, Vector3(0.5, 0.5, 0.5) - centre * across))
+				continue
 			var size := frame.basis.get_scale().x * tiles
 			var middle: Vector3 = frame.affine_inverse() * (box.get_center() + Vector3(0, box.size.y * UPPER, 0))
-			mesh.set_surface_override_material(surface, painted_from(source, skin, size, Vector3(0.5, 0.5, 0.5) - middle * size))
+			mesh.set_surface_override_material(surface, painted_from(source, skin, Vector3.ONE * size, Vector3(0.5, 0.5, 0.5) - middle * size))
 	view.set_meta("skin", skin)
 
 ## The painted twin of a material (made once for each size and place of the pattern).
-static func painted_from(source: BaseMaterial3D, skin: String, size: float = 1.0, offset: Vector3 = Vector3.ZERO) -> BaseMaterial3D:
-	var slot := "%d|%s|%.3f|%.2v" % [source.get_instance_id(), skin, size, offset]
+static func painted_from(source: BaseMaterial3D, skin: String, size: Vector3 = Vector3.ONE, offset: Vector3 = Vector3.ZERO) -> BaseMaterial3D:
+	var slot := "%d|%s|%.3v|%.2v" % [source.get_instance_id(), skin, size, offset]
 	if painted.has(slot):
 		return painted[slot]
 	var data: Dictionary = SKINS[skin]
@@ -107,7 +129,10 @@ static func painted_from(source: BaseMaterial3D, skin: String, size: float = 1.0
 	paint.uv2_triplanar = true
 	paint.uv2_world_triplanar = false
 	paint.uv2_triplanar_sharpness = 4.0
-	paint.uv2_scale = Vector3.ONE * size
+	paint.uv2_scale = size
+	# (A picture covers the weapon once; a sharper blend keeps the sides from smearing.)
+	if data.has("image"):
+		paint.uv2_triplanar_sharpness = 12.0
 	paint.uv2_offset = offset
 	# (What colours the vertices of a built weapon would tint the paint: it lies on top.)
 	paint.vertex_color_use_as_albedo = false
@@ -252,3 +277,61 @@ static func _frame_in(mesh: Node3D, view: Node) -> Transform3D:
 			frame = (at as Node3D).transform * frame
 		at = at.get_parent()
 	return frame
+
+## A painted picture of a weapon as a skin: cut to the weapon (the background, the colour
+## of its corners, is cut away round it and darkened where it shows between the parts).
+static func _picture(path: String) -> Texture2D:
+	var source := load(path) as Texture2D
+	if source == null:
+		var blank := Image.create(8, 8, false, Image.FORMAT_RGBA8)
+		blank.fill(Color.MAGENTA)
+		return ImageTexture.create_from_image(blank)
+	var image := source.get_image()
+	if image.is_compressed():
+		image.decompress()
+	image.convert(Image.FORMAT_RGBA8)
+	var back := image.get_pixel(2, 2)
+	var w := image.get_width()
+	var h := image.get_height()
+	var low := Vector2i(w, h)
+	var high := Vector2i(-1, -1)
+	for y in range(0, h, 2):
+		for x in range(0, w, 2):
+			if _apart(image.get_pixel(x, y), back):
+				low = Vector2i(mini(low.x, x), mini(low.y, y))
+				high = Vector2i(maxi(high.x, x), maxi(high.y, y))
+	if high.x <= low.x or high.y <= low.y:
+		return source
+	var cut := image.get_region(Rect2i(low, high - low + Vector2i.ONE))
+	var dark := Color(0.08, 0.075, 0.065)
+	for y in range(cut.get_height()):
+		for x in range(cut.get_width()):
+			if not _apart(cut.get_pixel(x, y), back):
+				cut.set_pixel(x, y, dark)
+	cut.generate_mipmaps()
+	return ImageTexture.create_from_image(cut)
+
+static func _apart(a: Color, b: Color) -> bool:
+	return absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b) > 0.09
+
+## What the whole weapon takes up, as a picture of it shows it: every part that is shown,
+## but not the hands and arms.
+static func _whole(view: Node) -> AABB:
+	var box := AABB()
+	for node in view.find_children("*", "MeshInstance3D", true, false):
+		var mesh := node as MeshInstance3D
+		if mesh.mesh == null:
+			continue
+		var shown := true
+		var hand := false
+		var at: Node = mesh
+		while at != null and at != view:
+			var title := str(at.name)
+			hand = hand or title == "Support" or title.begins_with("Hand") or bool(at.get_meta("view_hand", false)) or (title.begins_with("Part") and at.get_parent() == view) or title in ["Flash", "LeftFlash"]
+			shown = shown and (not (at is Node3D) or (at as Node3D).visible)
+			at = at.get_parent()
+		if hand or not shown:
+			continue
+		var part: AABB = _frame_in(mesh, view) * mesh.mesh.get_aabb()
+		box = part if box.size == Vector3.ZERO else box.merge(part)
+	return box
