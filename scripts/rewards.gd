@@ -5,6 +5,8 @@ extends RefCounted
 ## (WeaponSkins) or a piece of gear. What is held lies in the locker (SPIND): a skin is put
 ## on its weapon there, and what is ticked to come along is what the survivor starts the
 ## next mission with (equip). The same thing won again adds its days.
+## (v0.86) What a crate gives waits in the locker until it is ACTIVATED - put on, or
+## ticked to come along: only from then on do its days run (waiting).
 ## Stored apart from the profile, as JSON in user://nachtwache_rewards.json. In a co-op
 ## match each player has his own crates and his own locker.
 
@@ -43,6 +45,8 @@ var crates := 0
 var opened := 0
 ## What is held: item -> until when (unix seconds). Items: "<skin>/<weapon>" or a gear id.
 var owned: Dictionary = {}
+## Won but not activated yet: item -> how many seconds it will last once it is (v0.86).
+var waiting: Dictionary = {}
 ## Weapon -> the skin it wears.
 var worn: Dictionary = {}
 ## Items ticked to come along.
@@ -77,6 +81,11 @@ func read(parsed: Dictionary) -> void:
 		for id: String in parsed.owned:
 			if known(id):
 				owned[id] = int(parsed.owned[id])
+	waiting.clear()
+	if parsed.get("waiting") is Dictionary:
+		for id: String in parsed.waiting:
+			if known(id) and int(parsed.waiting[id]) > 0:
+				waiting[id] = int(parsed.waiting[id])
 	worn.clear()
 	if parsed.get("worn") is Dictionary:
 		for weapon: String in parsed.worn:
@@ -94,7 +103,7 @@ func save() -> void:
 		return
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"crates": crates, "stock": stock, "opened": opened, "owned": owned, "worn": worn, "taken": taken}, "\t"))
+		file.store_string(JSON.stringify({"crates": crates, "stock": stock, "opened": opened, "owned": owned, "waiting": waiting, "worn": worn, "taken": taken}, "\t"))
 
 # ---------------------------------------------------------------- items
 
@@ -130,8 +139,35 @@ func left(id: String) -> int:
 func holds(id: String) -> bool:
 	return left(id) > 0
 
+## Whether an item lies in the locker: running, or still waiting to be activated.
+func has_item(id: String) -> bool:
+	return holds(id) or waiting.has(id)
+
+## Whether an item still waits to be activated.
+func dormant(id: String) -> bool:
+	return waiting.has(id) and not holds(id)
+
+## Starts the days of an item that waits (v0.86). Nothing happens to one that runs.
+func activate(id: String) -> void:
+	if not waiting.has(id):
+		return
+	owned[id] = maxi(now(), int(owned.get(id, 0))) + int(waiting[id])
+	waiting.erase(id)
+	save()
+
+## The items of the locker: running ones and those that wait.
+func items() -> Array:
+	var out: Array = owned.keys()
+	for id: String in waiting:
+		if not out.has(id):
+			out.append(id)
+	return out
+
 ## How long is left, in words: "2 T 5 Std", "3 Std 10 Min".
 func left_words(id: String) -> String:
+	if dormant(id):
+		var days := int(waiting[id]) / DAY
+		return "nicht aktiviert  ·  %s" % ("%d %s" % [days, "Tag" if days == 1 else "Tage"] if days > 0 else "%d Std" % (int(waiting[id]) / 3600))
 	var seconds := left(id)
 	if seconds <= 0:
 		return "abgelaufen"
@@ -149,22 +185,23 @@ func prune() -> void:
 	for weapon: String in worn.keys():
 		if not holds("%s/%s" % [worn[weapon], weapon]):
 			worn.erase(weapon)
+	for id: String in waiting.keys():
+		if not known(id):
+			waiting.erase(id)
 	taken = taken.filter(func(id: Variant) -> bool: return holds(str(id)) and not weapon_of(str(id)) in START)
 	if taken.filter(func(id: Variant) -> bool: return "/" in str(id)).size() > weapon_slots():
 		_trim_weapons()
 
-## Gives an item for `days` (more days if it is held already). A new skin goes on its
-## weapon at once if that weapon wears none; new gear and the first weapon come along.
+## Gives an item for `days`. One that runs already gets the days on top; a new one waits
+## in the locker and its days start only when it is activated (v0.86: put on or ticked to
+## come along, see wear and take).
 func add(id: String, days: int) -> void:
 	if not known(id):
 		return
-	var fresh := not holds(id)
-	owned[id] = maxi(now(), int(owned.get(id, 0))) + days * DAY
-	if fresh:
-		if "/" in id and not worn.has(weapon_of(id)):
-			worn[weapon_of(id)] = skin_of(id)
-		if GEAR.has(id) and not taken.has(id):
-			taken.append(id)
+	if holds(id):
+		owned[id] = int(owned[id]) + days * DAY
+	else:
+		waiting[id] = int(waiting.get(id, 0)) + days * DAY
 	save()
 
 # ---------------------------------------------------------------- crates
@@ -283,7 +320,10 @@ func skin_for(weapon: String) -> String:
 
 ## Puts a held skin on its weapon (or takes it off, if it is on).
 func wear(id: String) -> void:
-	if not holds(id) or not "/" in id:
+	if not "/" in id:
+		return
+	activate(id)
+	if not holds(id):
 		return
 	if skin_for(weapon_of(id)) == skin_of(id):
 		worn.erase(weapon_of(id))
@@ -297,7 +337,10 @@ func weapon_slots() -> int:
 ## Ticks an item to come along, or unticks it. A third weapon (a second without the
 ## backpack) lets the one ticked longest ago go. Taking a weapon puts the skin on it.
 func take(id: String) -> void:
-	if not holds(id) or weapon_of(id) in START:
+	if weapon_of(id) in START:
+		return
+	activate(id)
+	if not holds(id):
 		return
 	if taken.has(id):
 		taken.erase(id)

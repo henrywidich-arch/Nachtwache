@@ -1,5 +1,38 @@
 [
   {
+    "version": "0.86",
+    "title": "Bahnhof, Tokio-Pflichtweg und Kisten-Timer",
+    "sections": [
+      {
+        "title": "Einsatz 2",
+        "items": [
+          "Die drei Operatoren am Bahnhof schießen jetzt schon dort auf die Infizierten, solange sie auf dem Bahnsteig stehen. Ghost an der Funkanlage wehrt sich ebenfalls weiter.",
+          "Hat die Nacht die Tokio-Simulation (gewählt oder gewürfelt), ist sie Pflicht: Der Leitstand im Terminal bleibt gesperrt, bis der Datenkern geborgen ist. Der Zielmarker führt erst in die Halle und danach zurück zum Leitstand.",
+          "Im Gang vor der Tokio-Halle regnet es nicht mehr. Der Regen fällt nur in der Halle selbst.",
+          "Die Begleiter reden deutlich weniger: längere Pausen zwischen Sprüchen und Gesprächen, seltener Kommentare zu Arealen und Zielen."
+        ]
+      },
+      {
+        "title": "Zielmarker",
+        "items": [
+          "Von mehreren gleichen Zielen (Benzinkanister, Sicherungen, Schalter, Codes, Terminals) wird nur noch das nächste markiert, nicht alle auf einmal. Wer einen Kanister trägt, sieht nur den Tank."
+        ]
+      },
+      {
+        "title": "Kisten und Spind",
+        "items": [
+          "Was aus einer Kiste kommt, wartet im Spind, bis du es aktivierst. Die 1, 3 oder 7 Tage laufen erst ab dem Auftragen oder Mitnehmen."
+        ]
+      },
+      {
+        "title": "Behoben",
+        "items": [
+          "Einsatz 1: Am Funkmast schwebte ein leuchtender Würfel vor der Steuerung. Die Statuslampe sitzt jetzt auf dem Schaltkasten."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.85",
     "title": "Alle Skins im Testraum erreichbar",
     "sections": [

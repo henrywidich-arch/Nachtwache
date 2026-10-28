@@ -28,6 +28,9 @@ const TAGS := {
 ## Seconds of quiet before the first exchange of a night, and between two.
 const FIRST := Vector2(55.0, 85.0)
 const BETWEEN := Vector2(95.0, 150.0)
+## (v0.86) In the second mission, which has its own talks, small talk comes this much
+## more seldom.
+const HIVE_SLOWER := 1.8
 ## How long after a fight an exchange of that moment fits, and how soon one may come then.
 const AFTER := 35.0
 const AFTER_SOON := 7.0
@@ -100,6 +103,8 @@ func _process(delta: float) -> void:
 	if mission != last_mission:
 		last_mission = mission
 		reset()
+		if mission == 2:
+			wait *= HIVE_SLOWER
 	_watch_fights(delta)
 	if not playing.is_empty():
 		_go_on(delta)
@@ -117,7 +122,7 @@ func _process(delta: float) -> void:
 		wait = randf_range(BETWEEN.x, BETWEEN.y) * 0.5
 		return
 	start(id)
-	wait = randf_range(BETWEEN.x, BETWEEN.y)
+	wait = randf_range(BETWEEN.x, BETWEEN.y) * (HIVE_SLOWER if game.hive.on else 1.0)
 
 ## After a fight (several enemies, then none near for a moment) the next exchange comes soon,
 ## and may be one of that moment.

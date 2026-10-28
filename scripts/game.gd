@@ -197,6 +197,7 @@ const URGENT_CALLS := ["down", "grenade", "leech", "gas", "hurt", "leader_down",
 ## What cannot wait (URGENT_CALLS) is only held back by a voice still speaking.
 const SQUAD_QUIET := 9.0
 const MATE_QUIET := 20.0
+const HIVE_QUIET := 1.6
 const CALL_REST_DEFAULT := 30.0
 const CALL_REST := {
 	"kill": 60.0, "big_kill": 45.0, "multi_kill": 45.0, "reload": 45.0, "low_ammo": 40.0,
@@ -1126,7 +1127,25 @@ func show_way() -> void:
 ## The places the HUD and the map in the corner point at.
 func markers() -> Array:
 	# (In the second mission also the side goals: the weapon caches the survivor knows of.)
-	return hive.markers() + hive.caches.markers() if hive.on else mission.markers()
+	var all: Array = hive.markers() + hive.caches.markers() if hive.on else mission.markers()
+	return nearest_of_each(all, player.global_position if is_instance_valid(player) else Vector3.INF)
+
+## Of several markers with the same word (canisters, fuses, switches, things to pick up)
+## only the nearest one is shown (v0.86): the one to go to next, not all of them at once.
+static func nearest_of_each(all: Array, here: Vector3) -> Array:
+	if here == Vector3.INF:
+		return all
+	var best := {}
+	for index in range(all.size()):
+		var word := str(all[index].get("text", ""))
+		var spot: Vector3 = all[index].pos
+		if not best.has(word) or here.distance_squared_to(spot) < here.distance_squared_to(all[int(best[word])].pos):
+			best[word] = index
+	var out: Array = []
+	for index in range(all.size()):
+		if int(best[str(all[index].get("text", ""))]) == index:
+			out.append(all[index])
+	return out
 
 ## The second mission again, from the last checkpoint that was reached.
 func retry_checkpoint() -> void:
@@ -2281,8 +2300,10 @@ func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0, script
 	bark_until[key] = now + int((length + (1.6 if unit else 0.5)) * 1000.0)
 	if rationed and length > 0.0:
 		var after := now + int(length * 1000.0)
-		bark_until["quiet_squad"] = after + int(SQUAD_QUIET * 1000.0)
-		bark_until[own_key] = after + int(MATE_QUIET * 1000.0)
+		# (v0.86) The second mission has much talk of its own: the squad keeps quieter there.
+		var slower := HIVE_QUIET if hive.on else 1.0
+		bark_until["quiet_squad"] = after + int(SQUAD_QUIET * slower * 1000.0)
+		bark_until[own_key] = after + int(MATE_QUIET * slower * 1000.0)
 		bark_until[cue_key] = after + int(float(CALL_REST.get(cue, CALL_REST_DEFAULT)) * 1000.0)
 	return length > 0.0
 

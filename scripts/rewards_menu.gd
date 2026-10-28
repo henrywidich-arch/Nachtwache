@@ -221,7 +221,7 @@ static func _reveal(hud: SurvivalHUD, result: HBoxContainer, prize: Dictionary) 
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	note.custom_minimum_size.x = 520
 	words.add_child(note)
-	words.add_child(hud.label("Im Spind: noch %s" % rewards.left_words(id), 13, UI.MINT, true))
+	words.add_child(hud.label("Im Spind  ·  %s  ·  die Zeit läuft erst, wenn du es dort aufträgst oder mitnimmst" % rewards.left_words(id) if rewards.dormant(id) else "Im Spind: noch %s" % rewards.left_words(id), 13, UI.MINT, true))
 
 ## A prize large: the weapon in its skin, turning (WeaponShow), or the gear's symbol.
 static func _show(id: String, size: Vector2) -> Control:
@@ -247,7 +247,7 @@ static func locker(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var game: Node3D = hud.game
 	var rewards: Rewards = game.rewards
 	rewards.prune()
-	UI.header(hud, column, "SPIND", "WAS DU ANHAKST, NIMMST DU IN DIE NÄCHSTE MISSION MIT  ·  SKINS GELTEN, SOBALD DU DIE WAFFE TRÄGST", "main")
+	UI.header(hud, column, "SPIND", "WAS DU ANHAKST, NIMMST DU IN DIE NÄCHSTE MISSION MIT  ·  DIE LAUFZEIT STARTET ERST BEIM AUFTRAGEN ODER MITNEHMEN", "main")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 30)
 	column.add_child(row)
@@ -255,7 +255,7 @@ static func locker(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	left.add_theme_constant_override("separation", 8)
 	left.custom_minimum_size.x = 600
 	row.add_child(left)
-	var ids: Array = rewards.owned.keys()
+	var ids: Array = rewards.items()
 	ids.sort_custom(func(a: String, b: String) -> bool: return ("/" in a) and not ("/" in b) or (("/" in a) == ("/" in b) and a < b))
 	var first: Control = null
 	if ids.is_empty():
@@ -266,7 +266,7 @@ static func locker(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 		first = UI.flat_button(hud, "ZU DEN KISTEN  (%d)" % rewards.crates, hud.show_menu.bind("crates"), rewards.crates > 0, 300, 40)
 		left.add_child(first)
 		return first
-	if not rewards.owned.has(pick):
+	if not ids.has(pick):
 		pick = str(ids[0])
 	UI.section(hud, left, "IM SPIND  ·  %d" % ids.size())
 	var scroll := ScrollContainer.new()
@@ -335,7 +335,7 @@ static func _row(hud: SurvivalHUD, rewards: Rewards, id: String) -> Control:
 	var top := hud.label(str(Survivor.WEAPONS[Rewards.weapon_of(id)].label) if "/" in id else str(Rewards.GEAR[id].label), 15, SurvivalHUD.IVORY, true)
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	names.add_child(top)
-	var under := hud.label((str(WeaponSkins.SKINS[Rewards.skin_of(id)].label) + "  ·  " if "/" in id else "") + "noch " + rewards.left_words(id), 12, tint, true)
+	var under := hud.label((str(WeaponSkins.SKINS[Rewards.skin_of(id)].label) + "  ·  " if "/" in id else "") + ("" if rewards.dormant(id) else "noch ") + rewards.left_words(id), 12, tint, true)
 	under.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	names.add_child(under)
 	look.add_child(names)
@@ -347,6 +347,8 @@ static func _row(hud: SurvivalHUD, rewards: Rewards, id: String) -> Control:
 			pick = id
 			hud.show_menu("locker"), on, 150, 34, 13)
 		wear.name = "Wear"
+		if rewards.dormant(id):
+			wear.tooltip_text = "Aktiviert den Skin: ab jetzt läuft seine Zeit."
 		line.add_child(wear)
 	else:
 		var spacer := Control.new()
@@ -358,6 +360,8 @@ static func _row(hud: SurvivalHUD, rewards: Rewards, id: String) -> Control:
 		pick = id
 		hud.show_menu("locker"), taken, 150, 34, 13)
 	take.name = "Take"
+	if rewards.dormant(id):
+		take.tooltip_text = "Aktiviert es: ab jetzt läuft seine Zeit."
 	# (The rifle and the pistol every survivor has anyway: their skin only has to be on.)
 	if Rewards.weapon_of(id) in Rewards.START:
 		take.text = "STARTWAFFE"

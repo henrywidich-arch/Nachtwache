@@ -66,6 +66,9 @@ const RUNNERS := {
 const START_CUES := {"module": "", "hack": "", "rescue": "", "evac": "evac_start"}
 const DONE_CUES := {"module": "hack_picked", "hack": "cellar_open", "rescue": "nadja_free", "evac": ""}
 const USE_RANGE := 2.4
+## Where the lamp of the radio mast's task sits, from the place of the task (CabinMap's
+## "antenna" point, in front of the mast's control box): on the face of that box.
+const ANTENNA_TAG := Vector3(0.843, 1.36, 0.08)
 const PICKUPS := ["corpse", "case", "drive", "module"]
 ## What the squad takes over once the player has learnt to send it (an ability in each of
 ## the trees of Skills): the key of the ability -> the kinds of thing its members then see
@@ -391,7 +394,10 @@ func _start_task(kind: String) -> Dictionary:
 		"crate":
 			task.items.append(_item("crate", _spot(taken, 10.0, 2)))
 		"antenna":
-			task.items.append(_item("antenna", cabin.points.antenna))
+			# (Turned as the yard is: its lamp sits on the face of the control box.)
+			var mast := _item("antenna", cabin.points.antenna)
+			mast.yaw = 0.0
+			task.items.append(mast)
 		"zone":
 			task.items.append(_item("zone", _spot(taken, 16.0, 3)))
 		"drives":
@@ -1438,9 +1444,10 @@ func _build_prop(item: Dictionary) -> Node3D:
 			chute.position = Vector3(0, 5.2, 0)
 			prop.add_child(chute)
 		"antenna":
-			# The mast stands in the yard; this is the lamp on its control box.
-			_box(prop, Vector3(0.12, 0.12, 0.05), Vector3(0, 1.25, 0), Color("e2503c"), 3.0).name = "Tag"
-			_lamp(prop, Vector3(0, 1.5, 0.3), Color("e2503c"), 0.9, 5.0)
+			# The mast stands in the yard; this is the lamp on its control box. (v0.86: on the
+			# face of the box, not a glowing cube in the air in front of it.)
+			_box(prop, Vector3(0.012, 0.07, 0.07), ANTENNA_TAG, Color("e2503c"), 3.0).name = "Tag"
+			_lamp(prop, ANTENNA_TAG + Vector3(-0.5, 0.2, 0), Color("e2503c"), 0.9, 5.0)
 		"zone":
 			var ring := MeshInstance3D.new()
 			ring.name = "Ring"

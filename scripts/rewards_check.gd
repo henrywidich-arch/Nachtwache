@@ -16,8 +16,14 @@ static func run(v: Node, game: Node3D) -> void:
 	var outcome: Dictionary = rewards.open_crate(rng)
 	var prize: Dictionary = outcome.get("prize", {})
 	var id := str(prize.get("id", ""))
-	v.expect(none.is_empty() and rewards.crates == 1 and rewards.opened == 1 and rewards.holds(id) and (outcome.strip as Array)[int(outcome.at)] == prize and int(prize.days) in [1, 3, 7] and absi(rewards.left(id) - int(prize.days) * Rewards.DAY) < 5,
-		"A crate opens only when there is one, gives one prize for 1, 3 or 7 days and the strip stops on it (%s, %d days)" % [id, int(prize.get("days", 0))])
+	# (v0.86) The prize waits in the locker; its days start only once it is activated.
+	var waits := rewards.dormant(id) and not rewards.holds(id) and rewards.has_item(id) and int(rewards.waiting.get(id, 0)) == int(prize.get("days", 0)) * Rewards.DAY
+	rewards.clock_shift = 5 * Rewards.DAY
+	var still_waits := rewards.dormant(id)
+	rewards.clock_shift = 0
+	rewards.activate(id)
+	v.expect(none.is_empty() and rewards.crates == 1 and rewards.opened == 1 and waits and still_waits and rewards.holds(id) and not rewards.dormant(id) and (outcome.strip as Array)[int(outcome.at)] == prize and int(prize.days) in [1, 3, 7] and absi(rewards.left(id) - int(prize.days) * Rewards.DAY) < 5,
+		"A crate opens only when there is one, gives one prize for 1, 3 or 7 days and the strip stops on it; the prize's days only start when it is activated (%s, %d days)" % [id, int(prize.get("days", 0))])
 	var counts := {}
 	var days := {}
 	for i in range(3000):
@@ -45,20 +51,25 @@ static func run(v: Node, game: Node3D) -> void:
 		"EASY and NORMAL seldom give a crate and it holds only one-day things without legendaries; SCHWER and ALBTRAUM always give one, the best opens first, ALBTRAUM's last longer (%d of 1000 on easy, %d long)" % [easy_won, long_days])
 	# --- time
 	rewards.owned.clear()
+	rewards.waiting.clear()
 	rewards.worn.clear()
 	rewards.taken.clear()
 	rewards.add("vektor/rifle", 1)
+	var not_on_yet := rewards.skin_for("rifle") == ""
+	rewards.wear("vektor/rifle")
 	rewards.add("vektor/rifle", 3)
 	var extended := absi(rewards.left("vektor/rifle") - 4 * Rewards.DAY) < 5
-	var worn_at_once := rewards.skin_for("rifle") == "vektor"
+	var worn_at_once := not_on_yet and rewards.skin_for("rifle") == "vektor"
 	rewards.add("toxin/rifle", 1)
+	rewards.activate("toxin/rifle")
 	rewards.clock_shift = 2 * Rewards.DAY
 	rewards.prune()
 	v.expect(extended and worn_at_once and not rewards.holds("toxin/rifle") and not rewards.owned.has("toxin/rifle") and rewards.skin_for("rifle") == "vektor" and rewards.holds("vektor/rifle") and rewards.left_words("vektor/rifle").begins_with("2 T") and not Rewards.known("drache/ak"),
-		"The same prize again adds its days, a new skin goes on its weapon, what has run out is gone, and skins that were taken out of the game are not known any more")
+		"The same prize again adds its days, a skin goes on its weapon when it is put on, what has run out is gone, and skins that were taken out of the game are not known any more")
 	rewards.clock_shift = 0
 	# --- the loadout: weapons from the locker, backpack, mask, medpacks
 	rewards.owned.clear()
+	rewards.waiting.clear()
 	rewards.worn.clear()
 	rewards.taken.clear()
 	# (Two skins for weapons nobody starts with, and one for the M4A4.)
@@ -73,10 +84,14 @@ static func run(v: Node, game: Node3D) -> void:
 	var wb := Rewards.weapon_of(second_id)
 	for item in [first_id, second_id, "vektor/rifle", "gasmaske", "medpack"]:
 		rewards.add(item, 3)
+	rewards.wear("vektor/rifle")
+	rewards.take("gasmaske")
+	rewards.take("medpack")
 	rewards.take(first_id)
 	rewards.take(second_id)
 	var one_slot: bool = rewards.weapons_taken() == [wb]
 	rewards.add("rucksack", 1)
+	rewards.take("rucksack")
 	rewards.take(first_id)
 	var two_slots: bool = rewards.weapons_taken().size() == 2 and rewards.weapon_slots() == 2
 	game.profile.mission = 1
@@ -148,7 +163,7 @@ static func run(v: Node, game: Node3D) -> void:
 	await v.wait(0.2)
 	var open := hud.modal.find_child("OpenCrate", true, false) as Button
 	var ready: bool = open != null and not open.disabled
-	var held_before := rewards.owned.size()
+	var held_before := rewards.items().size()
 	if open != null:
 		open.pressed.emit()
 	await v.wait(0.6)
@@ -162,7 +177,7 @@ static func run(v: Node, game: Node3D) -> void:
 	var shown_pool := 0
 	for skin: String in WeaponSkins.SKINS:
 		shown_pool += int(hud.modal.find_child("Pool_" + skin, true, false) != null)
-	v.expect(listed and ready and revealed and rows == rewards.owned.size() and rows >= held_before and shown_pool == WeaponSkins.SKINS.size(),
+	v.expect(listed and ready and revealed and rows == rewards.items().size() and rows >= held_before and shown_pool == WeaponSkins.SKINS.size(),
 		"KISTEN and SPIND are in the main menu; a crate opens with its strip and shows the prize, the locker lists what is held (%d rows), and WAS DRIN SEIN KANN shows every skin (%d)" % [rows, shown_pool])
 	hud.show_menu("main")
 

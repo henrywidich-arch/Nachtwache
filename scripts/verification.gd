@@ -5700,7 +5700,8 @@ func _company(game: Node3D) -> void:
 	var out_of_it := true
 	for leaver: Dictionary in hive.leavers:
 		var stayer: Teammate = leaver.node
-		out_of_it = out_of_it and stayer.unarmed and not game.team.has(stayer) and not game.survivors.has(stayer) and str(stayer.order) == "hold" and not stayer.name_tag.visible
+		# (v0.86: who keeps the relay on the platform stays armed; who goes into the tunnel is not.)
+		out_of_it = out_of_it and stayer.unarmed != bool(leaver.keep) and not game.team.has(stayer) and not game.survivors.has(stayer) and str(stayer.order) == "hold" and not stayer.name_tag.visible
 	first = first and _looks(game.team) == ["phantom", "havoc"] and armed and out_of_it and game.team[1].gun == Teammate.GUNS.shotgun and game.extra_guns() == 2 and hive.stayed == ["viper", "scorpion"] and _posts(hive) == ["viper:tunnel", "scorpion:tunnel", "ghost:relay"] and hive.puppets.is_empty()
 	# Later only the one who stayed calls over the radio.
 	hive.lines.clear()

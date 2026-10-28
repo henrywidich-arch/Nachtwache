@@ -28,6 +28,10 @@ func _run() -> void:
 		print("TOKYO TASKS FAILED: no objectives in a night with the hall")
 		quit(1)
 		return
+	# (v0.86) The hall is the way on: the control room stays locked and the marker leads to it.
+	var hive: HiveDirector = game.hive
+	if hive.stage == "terminal" and (hive.use_key == "control" or hive.marker.distance_to(hive._point("tokyo_lock")) > 0.5):
+		faults.append("the control room was open before the hall was done (key %s)" % hive.use_key)
 	for mate: Teammate in game.team:
 		mate.set_physics_process(false)
 		mate.set_process(false)
@@ -75,6 +79,10 @@ func _run() -> void:
 	var gained: int = game.credits - credits
 	if not taken or str(tasks.core.state) != "taken" or gained < TokyoTasks.REWARD + 3 * TokyoTasks.STEP_REWARD:
 		faults.append("the core was not taken for its reward (taken %s, state %s, +%d)" % [taken, tasks.core.state, gained])
+	for i in range(5):
+		await physics_frame
+	if hive.stage == "terminal" and hive.use_key != "control":
+		faults.append("the control room did not open once the core was taken (key %s)" % hive.use_key)
 	var state := tasks.export()
 	if str(state.core) != "taken" or (state.terms as Array).size() != 3:
 		faults.append("the snapshot for the partner is wrong: %s" % state)

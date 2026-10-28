@@ -272,6 +272,11 @@ var call_wait := 0.0
 ## Seconds until somebody of the squad may make small talk again.
 var idle_left := 45.0
 var puppets: Array = []
+## How far an operator at the station shoots, and what one of his shots does (v0.86).
+const PUPPET_REACH := 32.0
+## The goal of the terminal while the simulation hall still holds its gate (v0.86).
+const TOKYO_GOAL := "Erst die Tokio-Simulation stabilisieren  ·  der Leitstand ist bis dahin gesperrt"
+const PUPPET_DAMAGE := 14.0
 ## Who goes on with the survivor from the station: "fireteam", or two of the three
 ## operators (Profile.COMPANIES; read from the profile when the night begins) - and the
 ## looks of those two (none with the squad).
@@ -797,7 +802,14 @@ func _enter(id: String) -> void:
 			map.set_door("car_b", true)
 			_checkpoint("terminal", 300)
 			talk("m2_arrived")
-			_use("control", "control", "[E] Tor zur Anlage öffnen")
+			# (v0.86) On a night with the simulation hall it is the way on: the control room
+			# stays locked until its data core has been taken (see _tokyo_gate).
+			if _tokyo_pending():
+				goal = TOKYO_GOAL
+				marker = _point("tokyo_lock")
+				game.hud.announce("LEITSTAND GESPERRT", "Die Tokio-Simulation hält das Tor zur Anlage zu. Stabilisiert sie und bergt den Datenkern - dann öffnet der Leitstand.", 7)
+			else:
+				_use("control", "control", "[E] Tor zur Anlage öffnen")
 			var hall := _point("terminal")
 			_post(["mauler", "mauler", "striker", "mauler", "charger"], [hall + Vector3(-14, 0, -8), hall + Vector3(12, 0, -10), hall + Vector3(0, 0, -14), hall + Vector3(18, 0, -4), hall + Vector3(-22, 0, -3)], false)
 			_post(["striker", "mauler"], [_point("control") + Vector3(-14, 0, 0.5), _point("control") + Vector3(-24, 0, 0.5)], false)
@@ -870,10 +882,24 @@ func _enter(id: String) -> void:
 				run.enter(id)
 	HiveVoice.entered(self, id)
 
+## Whether the night has the simulation hall and its data core has not been taken yet.
+func _tokyo_pending() -> bool:
+	return tokyo_tasks != null and not tokyo_tasks.terminals.is_empty() and str(tokyo_tasks.core.get("state", "")) != "taken"
+
+## The control room of the terminal opens once the simulation hall is done (v0.86).
+func _tokyo_gate() -> void:
+	if stage != "terminal" or use_key != "" or _tokyo_pending():
+		return
+	goal = str(stages["terminal"][1])
+	marker = _point("control")
+	_use("control", "control", "[E] Tor zur Anlage öffnen")
+	game.hud.announce("LEITSTAND FREI", "Die Simulation hält. Zurück zum Leitstand im Terminal: das Tor zur Anlage öffnen.", 6)
+
 func _update(delta: float) -> void:
 	var player: Survivor = game.player
 	if tokyo_tasks != null:
 		tokyo_tasks.update(delta)
+		_tokyo_gate()
 	var here: Vector3 = coop.position_near(marker)
 	var room: Dictionary = map.room_at(here)
 	var room_id := "" if room.is_empty() else str(room.id)
@@ -888,7 +914,7 @@ func _update(delta: float) -> void:
 	# When it has been quiet for a while, somebody of the squad has something to say.
 	idle_left -= delta
 	if idle_left <= 0.0 and game.alive_count == 0 and _silent_for(6.0) and not stage in ["nadja", "deal", "ride"]:
-		idle_left = randf_range(70.0, 110.0)
+		idle_left = randf_range(150.0, 220.0)
 		var chatter: Teammate = game.squad_voice()
 		if chatter != null:
 			game.bark(chatter, chatter.look, "idle")
@@ -1316,10 +1342,13 @@ func _run_puppets(delta: float) -> void:
 			speed = gap.normalized() * 2.6
 			body.global_position += speed * delta
 			body.rotation.y = atan2(-speed.x, -speed.z)
-		elif not bool(puppet.leaving) and not bool(puppet.work):
+		var aiming := false
+		if not bool(puppet.leaving):
+			aiming = _puppet_fight(puppet, body, delta, gap.length() <= 0.25)
+		if not aiming and gap.length() <= 0.25 and not bool(puppet.leaving) and not bool(puppet.work):
 			var to: Vector3 = game.player.global_position - body.global_position
 			body.rotation.y = lerp_angle(body.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 4.0))
-		body.animate(delta, speed, false, false)
+		body.animate(delta, speed, aiming, aiming)
 		if bool(puppet.leaving):
 			puppet.left = float(puppet.left) + delta
 			# (He is not gone while he still has something to say.)
@@ -1328,6 +1357,71 @@ func _run_puppets(delta: float) -> void:
 				gone.append(puppet)
 	for puppet: Dictionary in gone:
 		puppets.erase(puppet)
+
+## An operator standing at the station (v0.86) does not watch the infected come: he turns
+## to the nearest one he can see and shoots it in short bursts, as a companion would.
+## True while he has somebody in his sights.
+func _puppet_fight(puppet: Dictionary, body: SoldierVisual, delta: float, standing: bool) -> bool:
+	puppet.look_wait = float(puppet.get("look_wait", 0.0)) - delta
+	puppet.shot_wait = float(puppet.get("shot_wait", 0.0)) - delta
+	var foe: Infected = puppet.get("foe") as Infected if is_instance_valid(puppet.get("foe")) else null
+	if foe != null and (foe.dead or foe.absent):
+		foe = null
+	var eye := body.global_position + Vector3(0, 1.5, 0)
+	if float(puppet.look_wait) <= 0.0:
+		puppet.look_wait = 0.3
+		foe = null
+		var best := PUPPET_REACH
+		for node in get_tree().get_nodes_in_group("infected"):
+			var enemy := node as Infected
+			if enemy == null or enemy.dead or enemy.absent:
+				continue
+			var gap := enemy.global_position.distance_to(body.global_position)
+			if gap >= best:
+				continue
+			var query := PhysicsRayQueryParameters3D.create(eye, enemy.global_position + Vector3(0, float(enemy.spec.height) * 0.6, 0), 1)
+			if body.get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+				best = gap
+				foe = enemy
+	puppet.foe = foe
+	if foe == null:
+		return false
+	var aim_point := foe.global_position + Vector3(0, float(foe.spec.height) * 0.6, 0)
+	var to := aim_point - body.global_position
+	body.rotation.y = lerp_angle(body.rotation.y, atan2(-to.x, -to.z), minf(1.0, delta * 8.0))
+	if standing and float(puppet.shot_wait) <= 0.0:
+		var burst := int(puppet.get("burst", 0)) - 1
+		if burst <= 0:
+			burst = randi_range(3, 7)
+			puppet.shot_wait = randf_range(0.25, 0.6)
+		else:
+			puppet.shot_wait = 0.14
+		puppet.burst = burst
+		_puppet_shot(body, aim_point)
+	return true
+
+## One shot of an operator at the station (see _puppet_fight).
+func _puppet_shot(body: SoldierVisual, aim_point: Vector3) -> void:
+	var muzzle := body.muzzle_position()
+	var direction := ((aim_point - muzzle).normalized() + Vector3(randf_range(-0.022, 0.022), randf_range(-0.022, 0.022), randf_range(-0.022, 0.022))).normalized()
+	var endpoint := muzzle + direction * 80.0
+	var hit := body.get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(muzzle, endpoint, 1 | 4 | 8))
+	if not hit.is_empty():
+		endpoint = hit.position
+		var struck: Object = hit.collider
+		var head_zone: bool = struck.has_meta("infected")
+		if head_zone:
+			struck = struck.get_meta("infected")
+		if struck is Infected:
+			var enemy := struck as Infected
+			var headshot := enemy.head_struck(head_zone, hit.position)
+			game.fx.blood(endpoint, direction, headshot)
+			enemy.receive_hit(PUPPET_DAMAGE * (maxf(1.0, 2.0 * float(enemy.spec.head_factor)) if headshot else 1.0), direction, headshot, null)
+		elif not struck is CharacterBody3D:
+			game.holes.add(hit.position, hit.normal)
+	game.fx.tracer(muzzle, endpoint)
+	body.shot()
+	game.sounds.play_at(body.shot_sound, muzzle, -7.0)
 
 ## The roads part at the station. Whoever goes on with the survivor is at his side from
 ## here on: the squad as it was, or two of the operators in its two places - companions
@@ -1469,7 +1563,9 @@ func _settled_parts() -> Array:
 func _stay(mate: Teammate, relay: bool) -> void:
 	if mate.down:
 		mate.revive(true)
-	mate.unarmed = true
+	# (Ghost at the relay stays on the platform and keeps shooting; who goes into the
+	# tunnel has his weapon down.)
+	mate.unarmed = not relay
 	mate.target = null
 	mate.name_tag.hide()
 	var post := _point("radio") if relay else _point("ops_from") + Vector3(0, 0, 1.4 * (leavers.size() % 3 - 1))
@@ -2560,7 +2656,8 @@ func _speak(entry: Dictionary) -> float:
 		"call":
 			var caller: Teammate = game.squad_voice()
 			game.talk_until = 0
-			if caller == null or not game.bark(caller, caller.look, cue, 0.0, true):
+			# (v0.86) A call is small talk like the squad's own: it is rationed (Game.bark).
+			if caller == null or not game.bark(caller, caller.look, cue, 0.0, false):
 				return 0.0
 			return maxf(0.0, (int(game.bark_until.get(caller.get_instance_id(), 0)) - Time.get_ticks_msec()) / 1000.0)
 		"game":
@@ -2737,14 +2834,21 @@ func markers() -> Array:
 	var hall_marks: Array = tokyo_tasks.markers() if tokyo_tasks != null and intro_left <= 0.0 else []
 	if at == Vector3.INF or intro_left > 0.0:
 		return hall_marks
+	# (Inside the simulation hall its own marks lead; the way in is not marked any more.)
+	if stage == "terminal" and _tokyo_pending() and tokyo_tasks.told:
+		return run.markers() + hall_marks
 	var fuses: Array = []
 	if stage in FUSE_STAGES:
 		for index in range(FUSES.size()):
 			if not done.has("fuse_%d" % index):
 				fuses.append({"pos": fuse_at(index) + Vector3(0, 0.9, 0), "text": "SICHERUNG"})
 		# The fuel: what still stands, and the tank while some of it is carried.
+		# (While the survivor carries one, only the tank is marked.)
+		var hands_full := _fuel_carried(_my_tag()) >= 0
 		if _fuel_in() < FUEL_NEEDED:
 			for index in range(FUEL.size()):
+				if hands_full:
+					break
 				if not done.has("can_%d" % index):
 					fuses.append({"pos": fuel_at(index) + Vector3(0, 0.9, 0), "text": "BENZIN"})
 			if _fuel_on_way() > 0:

@@ -171,9 +171,11 @@ static func _area(d: HiveDirector, def: String) -> void:
 	_line(d, "m2_area_" + def)
 	if _pending(d) >= OPTIONAL_LIMIT:
 		return
-	if _chance(0.5):
+	# (v0.86) Often nobody has a word of his own for the area: the squad talked too much.
+	var roll_area := randf() if roll < 0.0 else roll
+	if roll_area < 0.45:
 		_line(d, "m2_n_area_" + def, false, true)
-	else:
+	elif roll_area >= 0.7:
 		_talk(d, "m2_area_" + def, true)
 
 ## The objective of an area is done (its stage is "<stage>_out" now).

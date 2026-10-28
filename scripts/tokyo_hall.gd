@@ -19,6 +19,8 @@ extends Node3D
 const TK_HALL := 72.0
 const TK_CITY := 62.0
 const TK_CEILING := 50.0
+## Half the width of the box the rain falls in (see _tk_rain).
+const RAIN_HALF := 28.0
 const TK_DECK := 5.4
 ## The blocks between the streets, along x and along z alike: the main avenues are 16 m
 ## wide (|x| < 8 and |z| < 8), the side streets 8 m (around +-34).
@@ -826,10 +828,17 @@ func _process(_delta: float) -> void:
 	# The hall's own look (LOOK) while the eye is in it; the facility's again outside.
 	var in_hall := plan.has_point(Vector2(at.x, at.z)) and at.y > origin.y - 4.0 and at.y < origin.y + TK_CEILING
 	_look(in_hall or not door)
+	# (v0.86) It rains only in the hall itself, not in the passage before its lock: the
+	# drops fall in a box around the eye that is kept inside the hall's walls.
 	if rain != null:
-		rain.visible = near or not door
+		rain.visible = in_hall or not door
 		if rain.visible:
-			rain.global_position = at + Vector3(0, 13, 0)
+			var spot := at
+			if door:
+				var inner := plan.grow(-RAIN_HALF)
+				spot.x = clampf(spot.x, inner.position.x, inner.end.x)
+				spot.z = clampf(spot.z, inner.position.y, inner.end.y)
+			rain.global_position = spot + Vector3(0, 13, 0)
 
 ## The look of the hall: strong bloom on neon and screens, the haze lit magenta and cyan,
 ## deeper darks between the islands of light, colours pushed. Laid over the facility's
@@ -3462,7 +3471,7 @@ func _tk_rain() -> void:
 	rain.visibility_aabb = AABB(Vector3(-40, -30, -40), Vector3(80, 50, 80))
 	var process := ParticleProcessMaterial.new()
 	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(28, 1, 28)
+	process.emission_box_extents = Vector3(RAIN_HALF, 1, RAIN_HALF)
 	process.direction = Vector3(0.05, -1, 0.02)
 	process.spread = 2.0
 	process.initial_velocity_min = 20.0
