@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.84",
+    "title": "FLIEGENPILZ ersetzt GARTENZWERG",
+    "sections": [
+      {
+        "title": "Geändert",
+        "items": [
+          "Der Granatwerfer-Skin GARTENZWERG ist raus: FLIEGENPILZ ersetzt ihn mit demselben Gartenzwerg-Thema in schärferer Auflösung. Wer GARTENZWERG noch im Spind hatte, verliert ihn."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.83",
     "title": "Skin FLIEGENPILZ für den Granatwerfer",
     "sections": [
