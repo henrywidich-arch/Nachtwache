@@ -87,7 +87,7 @@ static func build(hud: SurvivalHUD, column: VBoxContainer, mode: String) -> Cont
 		column.add_child(earned)
 	# (v0.79) A won mission gives a crate (Rewards).
 	if win and game.crate_won:
-		var crate := hud.label("+1 KISTE   ·   im Hauptmenü unter KISTEN öffnen  (%d bereit)" % game.rewards.crates, 16, Color("f5c542"), true)
+		var crate := hud.label("+1 %s   ·   im Hauptmenü unter KISTEN öffnen  (%d bereit)" % [str(Rewards.TIERS[Rewards.TIER_OF.get(game.level, "hard")].label), game.rewards.crates], 16, Color("f5c542"), true)
 		crate.name = "CrateEarned"
 		column.add_child(crate)
 	hud._gap(column, 4)

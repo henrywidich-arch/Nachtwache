@@ -2717,10 +2717,9 @@ func finish(victory: bool) -> void:
 	# What the night was worth to the trees of abilities.
 	var after := Skills.experience(profile.totals)
 	last_gain = {"xp": after - before, "level": Skills.level_of(after), "raised": Skills.level_of(after) - Skills.level_of(before)}
-	# A won mission gives a crate, opened in the menu (KISTEN).
-	crate_won = victory
-	if victory:
-		rewards.grant_crate()
+	# A won mission may give a crate, opened in the menu (KISTEN): seldom on the easy
+	# levels, always on the hard ones (Rewards.earn).
+	crate_won = victory and rewards.earn(level)
 	overlay = ""
 	player.menu_open = false
 	state = "win" if victory else "lose"

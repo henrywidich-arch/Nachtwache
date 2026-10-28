@@ -10,12 +10,10 @@ extends RefCounted
 
 const PATH := "user://nachtwache_rewards.json"
 const DAY := 86400
-## How long a prize lasts, and how often each comes: [days, weight].
-const DURATIONS := [[1, 62], [3, 28], [7, 10]]
 ## The weapons skins come for: the two every survivor starts with, and the favourites.
 const SKIN_WEAPONS := ["rifle", "pistol", "ak", "p90", "ump", "g36", "mp7", "shotgun", "deagle"]
 ## How often a crate gives each skin, and gear: weights.
-const SKIN_WEIGHTS := {"tiefsee": 34, "orbital": 22, "drache": 12, "mondnacht": 6}
+const SKIN_WEIGHTS := {"tiefsee": 34, "orbital": 22, "toxin": 9, "drache": 12, "mondnacht": 6}
 const GEAR_WEIGHT := 32
 ## Gear. icon: the symbol (ShopIcons/UiSymbols). model: what is shown once it exists.
 const GEAR := {
@@ -59,7 +57,14 @@ func open() -> void:
 		read(parsed)
 
 func read(parsed: Dictionary) -> void:
-	crates = maxi(0, int(parsed.get("crates", 0)))
+	# (A file from before the kinds of crate: what it counted are crates of SCHWER.)
+	stock = {"plain": 0, "hard": 0, "nightmare": 0}
+	if parsed.get("stock") is Dictionary:
+		for tier: String in stock:
+			stock[tier] = maxi(0, int(parsed.stock.get(tier, 0)))
+	else:
+		stock.hard = maxi(0, int(parsed.get("crates", 0)))
+	crates = _count()
 	opened = maxi(0, int(parsed.get("opened", 0)))
 	owned.clear()
 	if parsed.get("owned") is Dictionary:
@@ -83,7 +88,7 @@ func save() -> void:
 		return
 	var file := FileAccess.open(PATH, FileAccess.WRITE)
 	if file != null:
-		file.store_string(JSON.stringify({"crates": crates, "opened": opened, "owned": owned, "worn": worn, "taken": taken}, "\t"))
+		file.store_string(JSON.stringify({"crates": crates, "stock": stock, "opened": opened, "owned": owned, "worn": worn, "taken": taken}, "\t"))
 
 # ---------------------------------------------------------------- items
 
@@ -158,14 +163,56 @@ func add(id: String, days: int) -> void:
 
 # ---------------------------------------------------------------- crates
 
-func grant_crate() -> void:
-	crates += 1
+## (Henry, v0.79) Crates are worth more on the two hard levels: on EASY and NORMAL a won
+## mission seldom gives one, and that plain crate gives only things for one day and no
+## legendary skin; SCHWER always gives a crate with everything for 1, 3 or 7 days, and
+## ALBTRAUM a crate whose prizes last longer.
+const CRATE_CHANCE := {"easy": 0.1, "normal": 0.2, "hard": 1.0, "nightmare": 1.0}
+const TIER_OF := {"easy": "plain", "normal": "plain", "hard": "hard", "nightmare": "nightmare"}
+const TIERS := {
+	"plain": {"label": "EINFACHE KISTE", "durations": [[1, 1]], "legendary": false},
+	"hard": {"label": "SCHWERE KISTE", "durations": [[1, 62], [3, 28], [7, 10]], "legendary": true},
+	"nightmare": {"label": "ALBTRAUM-KISTE", "durations": [[1, 35], [3, 40], [7, 25]], "legendary": true}
+}
+## How many crates of each kind wait (the best is opened first).
+var stock := {"plain": 0, "hard": 0, "nightmare": 0}
+
+## A won mission on a level: whether it gives a crate (its chance) - and then which.
+func earn(level: String, rng: RandomNumberGenerator = null) -> bool:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	if rng.randf() >= float(CRATE_CHANCE.get(level, 0.2)):
+		return false
+	grant_crate(str(TIER_OF.get(level, "plain")))
+	return true
+
+func grant_crate(tier: String = "hard") -> void:
+	if not stock.has(tier):
+		tier = "hard"
+	stock[tier] = int(stock[tier]) + 1
+	crates = _count()
 	save()
 
+func _count() -> int:
+	var all := 0
+	for tier: String in stock:
+		all += int(stock[tier])
+	return all
+
+## The kind of crate that is opened next: the best that waits ("" for none).
+func next_tier() -> String:
+	for tier: String in ["nightmare", "hard", "plain"]:
+		if int(stock.get(tier, 0)) > 0:
+			return tier
+	return ""
+
 ## Everything a crate can give, as [item, weight] (a skin's weight is shared by its weapons).
-static func pool() -> Array:
+static func pool(tier: String = "hard") -> Array:
 	var out: Array = []
 	for skin: String in SKIN_WEIGHTS:
+		if WeaponSkins.SKINS[skin].rarity == "legendary" and not bool(TIERS.get(tier, TIERS.hard).legendary):
+			continue
 		var weapons: Array = WeaponSkins.SKINS[skin].get("weapons", SKIN_WEAPONS)
 		for weapon: String in weapons:
 			out.append(["%s/%s" % [skin, weapon], float(SKIN_WEIGHTS[skin]) / weapons.size()])
@@ -173,8 +220,8 @@ static func pool() -> Array:
 		out.append([id, float(GEAR_WEIGHT) / GEAR.size()])
 	return out
 
-static func draw(rng: RandomNumberGenerator) -> Dictionary:
-	var entries := pool()
+static func draw(rng: RandomNumberGenerator, tier: String = "hard") -> Dictionary:
+	var entries := pool(tier)
 	var total := 0.0
 	for entry: Array in entries:
 		total += float(entry[1])
@@ -185,34 +232,38 @@ static func draw(rng: RandomNumberGenerator) -> Dictionary:
 		if pick <= 0.0:
 			id = str(entry[0])
 			break
+	var durations: Array = TIERS.get(tier, TIERS.hard).durations
 	var weight := 0
-	for step: Array in DURATIONS:
+	for step: Array in durations:
 		weight += int(step[1])
 	var roll := rng.randi() % weight
 	var days := 1
-	for step: Array in DURATIONS:
+	for step: Array in durations:
 		roll -= int(step[1])
 		if roll < 0:
 			days = int(step[0])
 			break
 	return {"id": id, "days": days}
 
-## Opens a crate: what it gives is held at once. Returns the prize and the strip of things
-## that runs past in the animation (`strip`, the prize at `at`). Empty when there is none.
+## Opens a crate (the best that waits): what it gives is held at once. Returns the prize,
+## the kind of crate and the strip of things that runs past in the animation (`strip`, the
+## prize at `at`). Empty when there is none.
 func open_crate(rng: RandomNumberGenerator = null, length: int = 48, at: int = 40) -> Dictionary:
-	if crates <= 0:
+	var tier := next_tier()
+	if tier == "":
 		return {}
 	if rng == null:
 		rng = RandomNumberGenerator.new()
 		rng.randomize()
-	crates -= 1
+	stock[tier] = int(stock[tier]) - 1
+	crates = _count()
 	opened += 1
-	var prize := draw(rng)
+	var prize := draw(rng, tier)
 	var strip: Array = []
 	for i in range(length):
-		strip.append(prize if i == at else draw(rng))
+		strip.append(prize if i == at else draw(rng, tier))
 	add(str(prize.id), int(prize.days))
-	return {"prize": prize, "strip": strip, "at": at}
+	return {"prize": prize, "strip": strip, "at": at, "tier": tier}
 
 # ---------------------------------------------------------------- locker and loadout
 

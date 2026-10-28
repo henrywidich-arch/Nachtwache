@@ -26,6 +26,23 @@ static func run(v: Node, game: Node3D) -> void:
 		days[int(drawn.days)] = int(days.get(int(drawn.days), 0)) + 1
 	v.expect(int(counts.get("legendary", 0)) < int(counts.get("epic", 0)) and int(counts.get("epic", 0)) < int(counts.get("rare", 0)) and int(counts.get("gear", 0)) > 600 and int(days.get(7, 0)) < int(days.get(3, 0)) and int(days.get(3, 0)) < int(days.get(1, 0)),
 		"The dragon is rarer than Orbital, Orbital rarer than Tiefsee; 7 days rarer than 3, 3 rarer than 1 (%s, %s)" % [str(counts), str(days)])
+	# --- kinds of crate: seldom and plain on the easy levels, the good ones on the hard
+	var tiers := Rewards.new()
+	tiers.stored = false
+	var easy_won := 0
+	for i in range(1000):
+		easy_won += int(tiers.earn("easy", rng))
+	var plain_ok := true
+	for i in range(400):
+		var drawn := Rewards.draw(rng, "plain")
+		plain_ok = plain_ok and int(drawn.days) == 1 and Rewards.rarity(str(drawn.id)) != "legendary"
+	var hard_always := tiers.earn("hard", rng) and tiers.earn("nightmare", rng)
+	var best_first: bool = tiers.next_tier() == "nightmare"
+	var long_days := 0
+	for i in range(1000):
+		long_days += int(int(Rewards.draw(rng, "nightmare").days) > 1)
+	v.expect(easy_won > 50 and easy_won < 160 and plain_ok and hard_always and best_first and long_days > 500,
+		"EASY and NORMAL seldom give a crate and it holds only one-day things without legendaries; SCHWER and ALBTRAUM always give one, the best opens first, ALBTRAUM's last longer (%d of 1000 on easy, %d long)" % [easy_won, long_days])
 	# --- time
 	rewards.owned.clear()
 	rewards.worn.clear()
@@ -103,6 +120,7 @@ static func run(v: Node, game: Node3D) -> void:
 	v.expect(made == 1 and bites and told, "A gas leak lies where it was let out, bites inside its edge and not beyond, and goes to the co-op guest as a leak")
 	# --- a won mission gives a crate
 	var crates_before := rewards.crates
+	game.level = "hard"
 	game.finish(true)
 	await v.wait(0.2)
 	var shown: bool = hud.modal.find_child("CrateEarned", true, false) != null

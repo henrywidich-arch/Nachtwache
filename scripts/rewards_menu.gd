@@ -24,7 +24,7 @@ static var spinning := false
 static func crates(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var game: Node3D = hud.game
 	var rewards: Rewards = game.rewards
-	UI.header(hud, column, "KISTEN", "JEDE GEWONNENE MISSION BRINGT EINE KISTE  ·  BELOHNUNGEN HALTEN 1, 3 ODER 7 TAGE", "main")
+	UI.header(hud, column, "KISTEN", "SCHWER UND ALBTRAUM: JEDER SIEG EINE KISTE, BELOHNUNGEN FÜR 1, 3 ODER 7 TAGE  ·  LEICHT UND NORMAL: SELTEN, NUR 1 TAG", "main")
 	var top := HBoxContainer.new()
 	top.add_theme_constant_override("separation", 24)
 	column.add_child(top)
@@ -38,6 +38,9 @@ static func crates(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var opened := hud.label("%d bisher geöffnet" % rewards.opened, 12, SurvivalHUD.MUTED)
 	opened.name = "CratesOpened"
 	words.add_child(opened)
+	var kinds := hud.label(_kinds(rewards), 12, SurvivalHUD.IVORY)
+	kinds.name = "CrateKinds"
+	words.add_child(kinds)
 	count.add_child(words)
 	top.add_child(count)
 	var actions := VBoxContainer.new()
@@ -68,7 +71,7 @@ static func crates(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 79
 	for i in range(9):
-		idle.append(Rewards.draw(rng))
+		idle.append(Rewards.draw(rng, rewards.next_tier() if rewards.next_tier() != "" else "hard"))
 	for prize: Dictionary in idle:
 		strip.add_child(_card(hud, rewards, prize))
 	strip.modulate.a = 0.35
@@ -156,6 +159,9 @@ static func _spin(hud: SurvivalHUD, open: Button, locker: Button, strip: HBoxCon
 	var opened := number.get_parent().get_node_or_null("CratesOpened") as Label
 	if opened != null:
 		opened.text = "%d bisher geöffnet" % rewards.opened
+	var kinds := number.get_parent().get_node_or_null("CrateKinds") as Label
+	if kinds != null:
+		kinds.text = _kinds(rewards)
 	for child in result.get_children():
 		child.queue_free()
 	for child in strip.get_children():
@@ -354,3 +360,11 @@ static func _row(hud: SurvivalHUD, rewards: Rewards, id: String) -> Control:
 		take.tooltip_text = "Hat jeder von Anfang an dabei – der aufgetragene Skin gilt automatisch."
 	line.add_child(take)
 	return panel
+
+## Which crates wait, and which is opened next.
+static func _kinds(rewards: Rewards) -> String:
+	var said: Array[String] = []
+	for tier: String in ["nightmare", "hard", "plain"]:
+		if int(rewards.stock.get(tier, 0)) > 0:
+			said.append("%d× %s" % [int(rewards.stock[tier]), str(Rewards.TIERS[tier].label)])
+	return "\n".join(said) if not said.is_empty() else "keine Kiste bereit"

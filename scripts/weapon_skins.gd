@@ -22,7 +22,10 @@ const SKINS := {
 	# the picture's axes run against the weapon's.
 	"mondnacht": {"label": "MONDNACHT", "rarity": "legendary", "note": "Schwarz und Gold: Vollmond, Kiefer und Wolken.",
 		"boost": {"damage": 0.05, "reload": 0.06}, "metal": 0.45, "rough": 0.35, "accent": Color("d9b05a"), "base": Color("15130f"),
-		"image": "res://assets/skins/mondnacht_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)}
+		"image": "res://assets/skins/mondnacht_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)},
+	"toxin": {"label": "TOXIN", "rarity": "epic", "note": "Biogefahr: Warnstreifen und Giftgrün auf schmutzigem Schwarz.",
+		"boost": {"steady": 0.08, "reserve": 0.1}, "metal": 0.3, "rough": 0.55, "accent": Color("c8e021"), "base": Color("1d1d16"),
+		"image": "res://assets/skins/toxin_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)}
 }
 const RARITIES := {
 	"rare": {"label": "SELTEN", "color": Color("4f8dff")},
