@@ -2560,7 +2560,7 @@ func _speak(entry: Dictionary) -> float:
 		"call":
 			var caller: Teammate = game.squad_voice()
 			game.talk_until = 0
-			if caller == null or not game.bark(caller, caller.look, cue):
+			if caller == null or not game.bark(caller, caller.look, cue, 0.0, true):
 				return 0.0
 			return maxf(0.0, (int(game.bark_until.get(caller.get_instance_id(), 0)) - Time.get_ticks_msec()) / 1000.0)
 		"game":

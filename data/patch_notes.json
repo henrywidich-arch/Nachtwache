@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.81",
+    "title": "Ruhigere Bots",
+    "sections": [
+      {
+        "title": "Teammates",
+        "items": [
+          "Die Bot-Teammates reden deutlich seltener. Nach jedem Spruch bleibt das ganze Team ein paar Sekunden still, jeder Bot spricht höchstens alle 20 Sekunden etwas Eigenes, und denselben Spruch (Kill, Nachladen, Gegner gesichtet) wiederholt ein Bot erst nach 30 bis 120 Sekunden.",
+          "Wichtige Rufe kommen weiterhin sofort: wenn ein Bot zu Boden geht, schwer verletzt ist, Hilfe braucht, eine Granate wirft oder heilt.",
+          "Die Gespräche aus der Geschichte von Mission 2 sind davon nicht betroffen."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.80",
     "title": "24 neue Waffenskins",
     "sections": [

@@ -5426,6 +5426,21 @@ func _spoken(game: Node3D) -> void:
 		_wipe_all(game)
 		viper.order = "follow"
 		expect(coming and not scorpion.leader_called and packed and Radio.BARKS.has("low_ammo") and Radio.BARKS.leader_down.has("ghost"), "When the survivor goes down the one who comes for him calls it out, once; a pack around one of the squad is called out, and not again right away")
+		# The squad's small talk is rationed: after one call the others keep quiet a while, the
+		# same voice does not say the same thing again soon, and a cry for help still comes.
+		game.sounds.stop_all()
+		game.bark_until.clear()
+		game.talk_until = 0
+		var first_call: bool = game.bark(scorpion, scorpion.look, "kill")
+		var kept_quiet: bool = not game.bark(viper, viper.look, "reload")
+		var cried: bool = game.bark(viper, viper.look, "down")
+		var rest_ms: int = int(game.bark_until.get("quiet_%d_kill" % scorpion.get_instance_id(), 0)) - Time.get_ticks_msec()
+		game.bark_until.erase(scorpion.get_instance_id())
+		game.bark_until.erase("quiet_squad")
+		game.bark_until.erase("quiet_%d" % scorpion.get_instance_id())
+		var no_repeat: bool = not game.bark(scorpion, scorpion.look, "kill")
+		game.bark_until.clear()
+		expect(first_call and kept_quiet and cried and no_repeat and rest_ms > int(float(game.CALL_REST.kill) * 1000.0) - 500, "The squad calls things out seldom: after one call the others keep quiet, the same word comes again only after a long while, a cry for help comes all the same")
 		hive.set_process(true)
 	# --- the arrival is filmed: what command says meanwhile is read on the lower bar
 	game.story_in_checks = true

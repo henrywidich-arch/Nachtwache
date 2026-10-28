@@ -191,6 +191,18 @@ var bark_until: Dictionary = {}
 ## dialogue is being said (the second mission). What cannot wait is called out all the same.
 var talk_until := 0
 const URGENT_CALLS := ["down", "grenade", "leech", "gas", "hurt", "leader_down", "thanks", "rescue", "frag", "molotov", "heal"]
+## The squad's own calls are few: after any of them the whole squad keeps quiet for
+## SQUAD_QUIET seconds, each member says something of his own at most every MATE_QUIET
+## seconds, and the same thing again only after CALL_REST (or CALL_REST_DEFAULT) seconds.
+## What cannot wait (URGENT_CALLS) is only held back by a voice still speaking.
+const SQUAD_QUIET := 9.0
+const MATE_QUIET := 20.0
+const CALL_REST_DEFAULT := 30.0
+const CALL_REST := {
+	"kill": 60.0, "big_kill": 45.0, "multi_kill": 45.0, "reload": 45.0, "low_ammo": 40.0,
+	"round": 90.0, "special": 35.0, "medic": 35.0, "cru": 40.0, "shield": 40.0,
+	"arms_up": 120.0, "idle": 90.0, "mate_rescue": 25.0, "praise": 40.0,
+}
 ## A kill of the survivor's that is worth a word to whoever of the squad stands within
 ## PRAISE_REACH of him: how often a shot to the head is, how often one of the special
 ## infected brought down, and the seconds until the squad says such a thing again.
@@ -2242,7 +2254,7 @@ func speak_radio(cue: String, seconds: float, intruder: String = "", tint: Color
 
 ## Somebody who stands in the world calls something out: a squad member, a C.R.U. soldier,
 ## the shopkeeper. Nobody talks over himself, and the C.R.U. take turns.
-func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0) -> bool:
+func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0, scripted: bool = false) -> bool:
 	# The soldiers of the C.R.U. have several voices and take turns as one.
 	var unit := speaker.begins_with("cru")
 	var key: Variant = "cru" if unit else who.get_instance_id()
@@ -2252,6 +2264,13 @@ func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0) -> boo
 	# While the mission's own dialogue is heard, the squad keeps its small talk to itself.
 	if who is Teammate and now < talk_until and not cue in URGENT_CALLS:
 		return false
+	# The squad's small talk is rationed (SQUAD_QUIET, MATE_QUIET, CALL_REST); lines of the
+	# mission's own script are not.
+	var rationed: bool = who is Teammate and not scripted and not cue in URGENT_CALLS
+	var own_key := "quiet_%d" % who.get_instance_id()
+	var cue_key := "quiet_%d_%s" % [who.get_instance_id(), cue]
+	if rationed and (now < int(bark_until.get("quiet_squad", 0)) or now < int(bark_until.get(own_key, 0)) or now < int(bark_until.get(cue_key, 0))):
+		return false
 	var line := Radio.bark(speaker, cue)
 	# A voice that has not recorded a line leaves it to the first voice of the unit.
 	if unit and (line.is_empty() or str(line.sound) == ""):
@@ -2260,6 +2279,11 @@ func bark(who: Node3D, speaker: String, cue: String, volume: float = 0.0) -> boo
 		return false
 	var length := sounds.speak_at(str(line.sound), who.global_position + Vector3(0, 1.6, 0), volume)
 	bark_until[key] = now + int((length + (1.6 if unit else 0.5)) * 1000.0)
+	if rationed and length > 0.0:
+		var after := now + int(length * 1000.0)
+		bark_until["quiet_squad"] = after + int(SQUAD_QUIET * 1000.0)
+		bark_until[own_key] = after + int(MATE_QUIET * 1000.0)
+		bark_until[cue_key] = after + int(float(CALL_REST.get(cue, CALL_REST_DEFAULT)) * 1000.0)
 	return length > 0.0
 
 ## The member of the squad nearest to a place calls something out about it, if one stands
