@@ -25,7 +25,13 @@ const SKINS := {
 		"image": "res://assets/skins/mondnacht_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)},
 	"toxin": {"label": "TOXIN", "rarity": "epic", "note": "Biogefahr: Warnstreifen und Giftgrün auf schmutzigem Schwarz.",
 		"boost": {"steady": 0.08, "reserve": 0.1}, "metal": 0.3, "rough": 0.55, "accent": Color("c8e021"), "base": Color("1d1d16"),
-		"image": "res://assets/skins/toxin_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)}
+		"image": "res://assets/skins/toxin_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)},
+	"sakura": {"label": "SAKURA", "rarity": "legendary", "note": "Weiß, Schwarz und Pink: Kirschblüten und ein gemaltes Gesicht auf dem Gehäuse.",
+		"boost": {"damage": 0.04, "steady": 0.06}, "metal": 0.2, "rough": 0.4, "accent": Color("ff4fa3"), "base": Color("e9e3e6"),
+		"image": "res://assets/skins/sakura_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)},
+	"vektor": {"label": "VEKTOR", "rarity": "epic", "note": "Weiß mit orangen und schwarzen Schrägbalken.",
+		"boost": {"reload": 0.08, "mags": 0.1}, "metal": 0.15, "rough": 0.45, "accent": Color("f2701d"), "base": Color("e6e2da"),
+		"image": "res://assets/skins/vektor_rifle.png", "weapons": ["rifle"], "flip": Vector2(-1, 1)}
 }
 const RARITIES := {
 	"rare": {"label": "SELTEN", "color": Color("4f8dff")},

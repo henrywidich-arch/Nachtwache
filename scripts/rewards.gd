@@ -13,7 +13,7 @@ const DAY := 86400
 ## The weapons skins come for: the two every survivor starts with, and the favourites.
 const SKIN_WEAPONS := ["rifle", "pistol", "ak", "p90", "ump", "g36", "mp7", "shotgun", "deagle"]
 ## How often a crate gives each skin, and gear: weights.
-const SKIN_WEIGHTS := {"tiefsee": 34, "orbital": 22, "toxin": 9, "drache": 12, "mondnacht": 6}
+const SKIN_WEIGHTS := {"tiefsee": 46, "orbital": 22, "toxin": 9, "vektor": 9, "drache": 12, "mondnacht": 6, "sakura": 6}
 const GEAR_WEIGHT := 32
 ## Gear. icon: the symbol (ShopIcons/UiSymbols). model: what is shown once it exists.
 const GEAR := {
