@@ -1013,7 +1013,7 @@ func _process(delta: float) -> void:
 	if player.throw_kind != "" and player.items.has(player.throw_kind):
 		ammo_label.text = "%d" % int(player.items[player.throw_kind])
 		ammo_label.modulate = AMBER
-		reserve_label.text = str(Survivor.GOODS[player.throw_kind].label)
+		reserve_label.text = Survivor.item_label(player.throw_kind)
 	rifle_label.text = ""
 	interaction_label.text = game.interaction_prompt()
 	var held: float = game.interaction_progress()
@@ -1399,7 +1399,7 @@ func show_menu(mode: String) -> void:
 	modal.show()
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	# Dark on the left where the menu stands, the scene showing through on the right.
-	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "reticle", "skins", "board", "skills", "test", "crates", "locker"]
+	var wide: bool = mode in ["play", "career", "changelog", "shop", "bench", "settings", "controls", "graphics", "reticle", "skins", "board", "skills", "test", "crates", "locker", "crate_pool"]
 	var background := TextureRect.new()
 	var gradient := Gradient.new()
 	gradient.colors = PackedColorArray([Color(0.02, 0.026, 0.032, 0.97), Color(0.02, 0.026, 0.032, 0.9 if wide else 0.72), Color(0.02, 0.026, 0.032, 0.3 if wide else 0.04)])
@@ -1435,6 +1435,8 @@ func show_menu(mode: String) -> void:
 			first = preload("res://scripts/play_menu.gd").build(self, column)
 		"crates":
 			first = preload("res://scripts/rewards_menu.gd").crates(self, column)
+		"crate_pool":
+			first = preload("res://scripts/rewards_menu.gd").pool(self, column)
 		"locker":
 			first = preload("res://scripts/rewards_menu.gd").locker(self, column)
 		"career":
@@ -1651,7 +1653,7 @@ func _test_player(column: VBoxContainer, room: Sandbox) -> void:
 	var skins: Array = [_chip("OHNE SKIN", _test_skin.bind(""), worn_now == "", 130)]
 	for skin: String in WeaponSkins.SKINS:
 		var only: Array = WeaponSkins.SKINS[skin].get("weapons", [])
-		var chip := _chip(str(WeaponSkins.SKINS[skin].label) + ("  (M4A4)" if only == ["rifle"] else ""), _test_skin.bind(skin), worn_now == skin, 170)
+		var chip := _chip(str(WeaponSkins.SKINS[skin].label) + ("  (%s)" % str(Survivor.WEAPONS[str(only[0])].label) if only.size() == 1 else ""), _test_skin.bind(skin), worn_now == skin, 190)
 		chip.name = "TrySkin_" + skin
 		chip.tooltip_text = WeaponSkins.boost_words(skin)
 		skins.append(chip)

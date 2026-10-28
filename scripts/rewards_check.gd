@@ -24,8 +24,8 @@ static func run(v: Node, game: Node3D) -> void:
 		var drawn := Rewards.draw(rng)
 		counts[Rewards.rarity(str(drawn.id))] = int(counts.get(Rewards.rarity(str(drawn.id)), 0)) + 1
 		days[int(drawn.days)] = int(days.get(int(drawn.days), 0)) + 1
-	v.expect(int(counts.get("legendary", 0)) < int(counts.get("epic", 0)) and int(counts.get("epic", 0)) < int(counts.get("rare", 0)) and int(counts.get("gear", 0)) > 600 and int(days.get(7, 0)) < int(days.get(3, 0)) and int(days.get(3, 0)) < int(days.get(1, 0)),
-		"The dragon is rarer than Orbital, Orbital rarer than Tiefsee; 7 days rarer than 3, 3 rarer than 1 (%s, %s)" % [str(counts), str(days)])
+	v.expect(int(counts.get("legendary", 0)) < int(counts.get("epic", 0)) and int(counts.get("gear", 0)) > 600 and int(days.get(7, 0)) < int(days.get(3, 0)) and int(days.get(3, 0)) < int(days.get(1, 0)),
+		"Legendary skins are rarer than epic ones; 7 days rarer than 3, 3 rarer than 1 (%s, %s)" % [str(counts), str(days)])
 	# --- kinds of crate: seldom and plain on the easy levels, the good ones on the hard
 	var tiers := Rewards.new()
 	tiers.stored = false
@@ -47,27 +47,37 @@ static func run(v: Node, game: Node3D) -> void:
 	rewards.owned.clear()
 	rewards.worn.clear()
 	rewards.taken.clear()
-	rewards.add("drache/ak", 1)
-	rewards.add("drache/ak", 3)
-	var extended := absi(rewards.left("drache/ak") - 4 * Rewards.DAY) < 5
-	var worn_at_once := rewards.skin_for("ak") == "drache"
-	rewards.add("orbital/rifle", 1)
+	rewards.add("vektor/rifle", 1)
+	rewards.add("vektor/rifle", 3)
+	var extended := absi(rewards.left("vektor/rifle") - 4 * Rewards.DAY) < 5
+	var worn_at_once := rewards.skin_for("rifle") == "vektor"
+	rewards.add("toxin/rifle", 1)
 	rewards.clock_shift = 2 * Rewards.DAY
 	rewards.prune()
-	v.expect(extended and worn_at_once and not rewards.holds("orbital/rifle") and not rewards.owned.has("orbital/rifle") and rewards.skin_for("rifle") == "" and rewards.holds("drache/ak") and rewards.left_words("drache/ak").begins_with("2 T"),
-		"The same prize again adds its days, a new skin goes on its weapon, and what has run out is gone")
+	v.expect(extended and worn_at_once and not rewards.holds("toxin/rifle") and not rewards.owned.has("toxin/rifle") and rewards.skin_for("rifle") == "vektor" and rewards.holds("vektor/rifle") and rewards.left_words("vektor/rifle").begins_with("2 T") and not Rewards.known("drache/ak"),
+		"The same prize again adds its days, a new skin goes on its weapon, what has run out is gone, and skins that were taken out of the game are not known any more")
 	rewards.clock_shift = 0
-	# --- the loadout: a weapon from the locker, backpack, mask, medpacks
+	# --- the loadout: weapons from the locker, backpack, mask, medpacks
 	rewards.owned.clear()
 	rewards.worn.clear()
 	rewards.taken.clear()
-	for item in ["drache/ak", "orbital/pistol", "tiefsee/p90", "gasmaske", "medpack"]:
+	# (Two skins for weapons nobody starts with, and one for the M4A4.)
+	var extra: Array = []
+	for skin: String in WeaponSkins.SKINS:
+		var weapon := str(WeaponSkins.SKINS[skin].weapons[0])
+		if not weapon in Rewards.START and not extra.any(func(other: String) -> bool: return Rewards.weapon_of(other) == weapon):
+			extra.append("%s/%s" % [skin, weapon])
+	var first_id := str(extra[0]) if extra.size() > 0 else "vektor/rifle"
+	var second_id := str(extra[1]) if extra.size() > 1 else "vektor/rifle"
+	var wa := Rewards.weapon_of(first_id)
+	var wb := Rewards.weapon_of(second_id)
+	for item in [first_id, second_id, "vektor/rifle", "gasmaske", "medpack"]:
 		rewards.add(item, 3)
-	rewards.take("drache/ak")
-	rewards.take("tiefsee/p90")
-	var one_slot: bool = rewards.weapons_taken() == ["p90"]
+	rewards.take(first_id)
+	rewards.take(second_id)
+	var one_slot: bool = rewards.weapons_taken() == [wb]
 	rewards.add("rucksack", 1)
-	rewards.take("drache/ak")
+	rewards.take(first_id)
 	var two_slots: bool = rewards.weapons_taken().size() == 2 and rewards.weapon_slots() == 2
 	game.profile.mission = 1
 	game.profile.mode = "story"
@@ -77,17 +87,20 @@ static func run(v: Node, game: Node3D) -> void:
 	game.preparation_left = 9999.0
 	await v.wait(0.2)
 	var player: Survivor = game.player
-	var carried: bool = player.inventory.has("ak") and player.inventory.has("p90") and player.inventory.has("rifle") and player.inventory.has("pistol")
+	var carried: bool = extra.size() >= 2 and player.inventory.has(wa) and player.inventory.has(wb) and player.inventory.has("rifle") and player.inventory.has("pistol")
 	var limits: bool = player.backpack and player.carry_limit("primary") == 3 and player.carry_limit("heavy") == 2
-	var skinned: bool = str(player.weapon_models["ak"].get_meta("skin", "")) == "drache" and str(player.weapon_models["pistol"].get_meta("skin", "")) == "orbital" and str(player.weapon_models["rifle"].get_meta("skin", "")) == ""
-	var stronger: bool = is_equal_approx(player.damage_of("ak"), 36.0 * 1.06) and is_equal_approx(player.reload_of("pistol"), float(Survivor.WEAPONS.pistol.reload_time) * 0.9) and player.magazine_of("p90") == 55
+	var skinned: bool = str(player.weapon_models[wa].get_meta("skin", "")) == Rewards.skin_of(first_id) and str(player.weapon_models["rifle"].get_meta("skin", "")) == "vektor" and str(player.weapon_models["pistol"].get_meta("skin", "")) == ""
+	var stronger := true
+	for line: String in WeaponSkins.SKINS[Rewards.skin_of(first_id)].boost:
+		stronger = stronger and is_equal_approx(player.rare(wa, line), float(WeaponSkins.SKINS[Rewards.skin_of(first_id)].boost[line]))
+	stronger = stronger and player.magazine_of("rifle") == int(round(30 * 1.1))
 	var masked: bool = player.mask_level == Rewards.MASK_LEVEL and is_equal_approx(player.filter_capacity(), Survivor.MASK_SECONDS[2] * (1.0 + game.skills.value("filter") + Rewards.MASK_BONUS)) and player.filter_left > 0.0
 	v.expect(one_slot and two_slots and carried and limits and skinned and stronger and masked and int(player.items.medpack) == Rewards.MEDPACKS,
-		"From the locker the survivor starts with the skinned AK and P90 (two with the backpack, one without), a place more for each kind, the crate's mask and two medpacks; skins give their small boost (carried %s limits %s skinned %s stronger %s masked %s)" % [carried, limits, skinned, stronger, masked])
+		"From the locker the survivor starts with the skinned %s and %s (two with the backpack, one without), a place more for each kind, the crate's mask and two medpacks; skins give their small boost (carried %s limits %s skinned %s stronger %s masked %s)" % [wa, wb, carried, limits, skinned, stronger, masked])
 	# A skin can be taken off again; the plain look comes back.
-	var painted: bool = player.weapon_models["ak"].find_children("*", "MeshInstance3D", true, false).any(func(m: Node) -> bool: return (m as MeshInstance3D).get_surface_override_material(0) is BaseMaterial3D and ((m as MeshInstance3D).get_surface_override_material(0) as BaseMaterial3D).detail_enabled)
-	WeaponSkins.apply(player.weapon_models["ak"], "")
-	var plain: bool = not player.weapon_models["ak"].find_children("*", "MeshInstance3D", true, false).any(func(m: Node) -> bool: return (m as MeshInstance3D).get_surface_override_material(0) is BaseMaterial3D and ((m as MeshInstance3D).get_surface_override_material(0) as BaseMaterial3D).detail_enabled)
+	var painted: bool = player.weapon_models[wa].find_children("*", "MeshInstance3D", true, false).any(func(m: Node) -> bool: return (m as MeshInstance3D).get_surface_override_material(0) is BaseMaterial3D and ((m as MeshInstance3D).get_surface_override_material(0) as BaseMaterial3D).detail_enabled)
+	WeaponSkins.apply(player.weapon_models[wa], "")
+	var plain: bool = not player.weapon_models[wa].find_children("*", "MeshInstance3D", true, false).any(func(m: Node) -> bool: return (m as MeshInstance3D).get_surface_override_material(0) is BaseMaterial3D and ((m as MeshInstance3D).get_surface_override_material(0) as BaseMaterial3D).detail_enabled)
 	v.expect(painted and plain, "A skin paints the body of the weapon and comes off again without a trace")
 	# --- the medpack
 	player.global_position = Vector3(0, 0.05, 22.0)
@@ -144,8 +157,13 @@ static func run(v: Node, game: Node3D) -> void:
 	hud.show_menu("locker")
 	await v.wait(0.2)
 	var rows := hud.modal.find_children("Item_*", "", true, false).size()
-	v.expect(listed and ready and revealed and rows == rewards.owned.size() and rows >= held_before,
-		"KISTEN and SPIND are in the main menu; a crate opens with its strip and shows the prize, the locker lists what is held (%d rows)" % rows)
+	hud.show_menu("crate_pool")
+	await v.wait(0.1)
+	var shown_pool := 0
+	for skin: String in WeaponSkins.SKINS:
+		shown_pool += int(hud.modal.find_child("Pool_" + skin, true, false) != null)
+	v.expect(listed and ready and revealed and rows == rewards.owned.size() and rows >= held_before and shown_pool == WeaponSkins.SKINS.size(),
+		"KISTEN and SPIND are in the main menu; a crate opens with its strip and shows the prize, the locker lists what is held (%d rows), and WAS DRIN SEIN KANN shows every skin (%d)" % [rows, shown_pool])
 	hud.show_menu("main")
 
 	# --- every skin can be tried on in the test room, and nothing of it stays
@@ -157,8 +175,13 @@ static func run(v: Node, game: Node3D) -> void:
 	sandbox.try_skin("mondnacht")
 	var to_rifle: bool = tester.current_weapon == "rifle" and str(tester.weapon_models["rifle"].get_meta("skin", "")) == "mondnacht" and is_equal_approx(tester.damage_of("rifle"), 28.0 * 1.05)
 	tester.equip_weapon("pistol", true)
-	sandbox.try_skin("drache")
-	var on_hand: bool = tester.current_weapon == "pistol" and str(tester.weapon_models["pistol"].get_meta("skin", "")) == "drache"
+	var other_skin := ""
+	for skin: String in WeaponSkins.SKINS:
+		if str(WeaponSkins.SKINS[skin].weapons[0]) != "rifle":
+			other_skin = skin
+	var other_gun := str(WeaponSkins.SKINS[other_skin].weapons[0]) if other_skin != "" else ""
+	sandbox.try_skin(other_skin)
+	var on_hand: bool = other_skin != "" and tester.current_weapon == other_gun and str(tester.weapon_models[other_gun].get_meta("skin", "")) == other_skin
 	hud.show_menu("test")
 	game.sandbox.tab = "player"
 	hud.show_menu("test")
@@ -191,10 +214,10 @@ static func shots(v: Node, game: Node3D) -> void:
 	rewards.stored = false
 	game.rewards = rewards
 	game.check_mode = false
-	for item in ["drache/rifle", "orbital/ak", "tiefsee/p90", "drache/pistol", "gasmaske", "medpack", "rucksack"]:
-		rewards.add(item, [1, 3, 7][item.length() % 3])
-	rewards.take("drache/rifle")
-	rewards.take("orbital/ak")
+	for skin: String in WeaponSkins.SKINS:
+		rewards.add("%s/%s" % [skin, WeaponSkins.SKINS[skin].weapons[0]], [1, 3, 7][skin.length() % 3])
+	for item in ["gasmaske", "medpack", "rucksack"]:
+		rewards.add(item, 3)
 	for i in range(3):
 		rewards.grant_crate()
 	var hud: SurvivalHUD = game.hud
@@ -215,6 +238,8 @@ static func shots(v: Node, game: Node3D) -> void:
 	menu.pick = "gasmaske"
 	hud.show_menu("locker")
 	await _snap(v, folder.path_join("spind_maske.png"))
+	game.hud.show_menu("crate_pool")
+	await _snap(v, folder.path_join("kisten_inhalt.png"))
 	game.check_mode = true
 
 static func _snap(v: Node, path: String) -> void:

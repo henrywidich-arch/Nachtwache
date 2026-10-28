@@ -157,7 +157,7 @@ const LOOKS := {
 }
 ## Points of each weapon measured from where the firing hand holds it (-Z is forward).
 const WEAPONS := {
-	"badger": {"mount": Vector3(0, -0.0697, -0.1251), "support": Vector3(0, 0.102, -0.226), "muzzle": Vector3(0, 0.102, -0.488)},
+	"badger": {"mount": Vector3.ZERO, "support": Vector3(0, 0.1, -0.325), "muzzle": Vector3(0, 0.13, -0.468)},
 	"rifle": {"mount": Vector3(0, 0.075, -0.076), "support": Vector3(0, 0.087, -0.326), "muzzle": Vector3(0, 0.081, -0.756)},
 	"shotgun": {"mount": Vector3.ZERO, "support": Vector3(0, 0.05, -0.43), "muzzle": Vector3(0, 0.105, -0.703)},
 	"ak": {"mount": Vector3.ZERO, "support": Vector3(0, 0.055, -0.325), "muzzle": Vector3(0, 0.0764, -0.6253)}
@@ -493,7 +493,6 @@ func _build_weapon() -> void:
 	var model: Node3D
 	if weapon_id == "badger":
 		model = BadgerVisual.create()
-		model.scale = Vector3.ONE * WeaponView.BADGER_SCALE
 	elif weapon_id == "shotgun":
 		model = WeaponView.shotgun_model(false)
 		(model.find_child("Shell", true, false) as Node3D).hide()

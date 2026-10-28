@@ -51,9 +51,15 @@ static func crates(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	open.name = "OpenCrate"
 	open.disabled = rewards.crates <= 0
 	actions.add_child(open)
-	var locker := UI.flat_button(hud, "ZUM SPIND", hud.show_menu.bind("locker"), false, 360, 36)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	actions.add_child(row)
+	var contents := UI.flat_button(hud, "WAS DRIN SEIN KANN", hud.show_menu.bind("crate_pool"), false, 176, 36)
+	contents.name = "CratePool"
+	row.add_child(contents)
+	var locker := UI.flat_button(hud, "ZUM SPIND", hud.show_menu.bind("locker"), false, 176, 36)
 	locker.name = "ToLocker"
-	actions.add_child(locker)
+	row.add_child(locker)
 	hud._gap(column, 18)
 	# The strip: a window with the cards in it and the marker in the middle.
 	var window := Panel.new()
@@ -131,10 +137,9 @@ static func _swatch(id: String, size: Vector2) -> Control:
 	picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if "/" in id:
-		var cut := AtlasTexture.new()
-		cut.atlas = WeaponSkins.texture(Rewards.skin_of(id))
-		cut.region = Rect2(380, 380, 560, 300)
-		picture.texture = cut
+		# (The painted picture the skin was made from: the weapon in it, as it will look.)
+		var path := str(WeaponSkins.SKINS[Rewards.skin_of(id)].get("image", ""))
+		picture.texture = (load(path) as Texture2D) if ResourceLoader.exists(path) else WeaponSkins.texture(Rewards.skin_of(id))
 		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	else:
 		picture.texture = SYMBOLS.icon({"gasmaske": "mask", "medpack": "medpack", "rucksack": "backpack"}.get(id, "use"))
@@ -368,3 +373,70 @@ static func _kinds(rewards: Rewards) -> String:
 		if int(rewards.stock.get(tier, 0)) > 0:
 			said.append("%d× %s" % [int(rewards.stock[tier]), str(Rewards.TIERS[tier].label)])
 	return "\n".join(said) if not said.is_empty() else "keine Kiste bereit"
+
+# ---------------------------------------------------------------- WAS DRIN SEIN KANN
+
+## What the crates can give: every skin with its picture, rarity, weapon, boost and the
+## levels whose crates have it, how often each comes, and the gear.
+static func pool(hud: SurvivalHUD, column: VBoxContainer) -> Control:
+	UI.header(hud, column, "WAS DRIN SEIN KANN", "SCHWER UND ALBTRAUM: ALLES, FÜR 1, 3 ODER 7 TAGE  ·  LEICHT UND NORMAL: KEINE LEGENDÄREN SKINS, NUR 1 TAG", "crates")
+	var total := 0.0
+	for entry: Array in Rewards.pool("hard"):
+		total += float(entry[1])
+	var grid := GridContainer.new()
+	grid.name = "PoolGrid"
+	grid.columns = 3
+	grid.add_theme_constant_override("h_separation", 14)
+	grid.add_theme_constant_override("v_separation", 14)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(1120, 470)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.add_child(grid)
+	column.add_child(scroll)
+	var skins: Array = Rewards.SKIN_WEIGHTS.keys()
+	var order := ["legendary", "epic", "rare"]
+	skins.sort_custom(func(a: String, b: String) -> bool: return order.find(WeaponSkins.SKINS[a].rarity) < order.find(WeaponSkins.SKINS[b].rarity))
+	for skin: String in skins:
+		var data: Dictionary = WeaponSkins.SKINS[skin]
+		var weapons: Array = data.get("weapons", Rewards.SKIN_WEAPONS)
+		var legendary: bool = data.rarity == "legendary"
+		var share := float(Rewards.SKIN_WEIGHTS[skin]) / total * 100.0
+		var names: Array[String] = []
+		for weapon: String in weapons:
+			names.append(str(Survivor.WEAPONS[weapon].label))
+		grid.add_child(_pool_card(hud, "%s/%s" % [skin, weapons[0]], str(data.label), ", ".join(names),
+			WeaponSkins.boost_words(skin), "nur SCHWER und ALBTRAUM" if legendary else "alle Schwierigkeiten", share))
+	for id: String in Rewards.GEAR:
+		var share := float(Rewards.GEAR_WEIGHT) / Rewards.GEAR.size() / total * 100.0
+		grid.add_child(_pool_card(hud, id, str(Rewards.GEAR[id].label), "Ausrüstung", str(Rewards.GEAR[id].note), "alle Schwierigkeiten", share))
+	return column.get_child(0) as Control
+
+static func _pool_card(hud: SurvivalHUD, id: String, title: String, weapon: String, boost: String, where: String, share: float) -> Control:
+	var tint: Color = WeaponSkins.RARITIES[Rewards.rarity(id)].color
+	var card := PanelContainer.new()
+	card.name = "Pool_" + id.split("/")[0]
+	card.custom_minimum_size = Vector2(360, 0)
+	var style := UI.plate(false, 0.9, 10)
+	style.border_color = Color(tint.r, tint.g, tint.b, 0.6)
+	style.border_width_bottom = 4
+	card.add_theme_stylebox_override("panel", style)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 3)
+	card.add_child(box)
+	var picture := _swatch(id, Vector2(340, 118))
+	(picture as TextureRect).stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	box.add_child(picture)
+	var top := HBoxContainer.new()
+	top.add_child(hud.label(title, 18, SurvivalHUD.IVORY, true))
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(spacer)
+	top.add_child(hud.label(str(WeaponSkins.RARITIES[Rewards.rarity(id)].label), 12, tint, true))
+	box.add_child(top)
+	box.add_child(hud.label(weapon, 12, SurvivalHUD.MUTED, true))
+	var words := hud.label(boost, 12, UI.MINT if "/" in id else SurvivalHUD.MUTED)
+	words.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	words.custom_minimum_size.x = 340
+	box.add_child(words)
+	box.add_child(hud.label("%s  ·  etwa %.0f %% je Kiste" % [where, share] if share >= 1.0 else "%s  ·  unter 1 %% je Kiste" % where, 11, SurvivalHUD.MUTED))
+	return card

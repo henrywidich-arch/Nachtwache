@@ -599,7 +599,7 @@ func arsenal_revision(game: Node3D) -> void:
 	for id: String in ["knife", "bat", "crowbar", "hammer"]:
 		expect(game.buy_melee(id) and player.melee_owned.has(id), "%s can be bought and equipped from the melee shelf" % id)
 	for id: String in ["usp", "deagle", "g18"]:
-		expect(game.buy_weapon(id) and player.inventory.has(id) and player.weapon_models[id].get_node_or_null("Body00") != null, "%s is a purchasable sidearm with its own model" % id)
+		expect(game.buy_weapon(id) and player.inventory.has(id) and player.weapon_models[id].find_child("Body", true, false) is MeshInstance3D, "%s is a purchasable sidearm with its own model" % id)
 	var shop: ShopScreen = hud.counter
 	shop.open_tab("sidearms")
 	shop.pick("weapon", "g18")

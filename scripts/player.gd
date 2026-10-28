@@ -606,7 +606,7 @@ func _build_weapon() -> void:
 	weapon_models["mg2"] = WeaponView.build_gun("mg2")
 	weapon_models["g36"] = WeaponView.build_gun("g36")
 	weapon_models["p90"] = WeaponView.build_p90()
-	weapon_models["badger"] = WeaponView.build_badger()
+	weapon_models["badger"] = WeaponView.build_gun("badger")
 	weapon_models["shotgun"] = WeaponView.build_shotgun()
 	weapon_models["ump"] = WeaponView.build_gun("ump")
 	weapon_models["ak"] = WeaponView.build_gun("ak")
@@ -616,8 +616,6 @@ func _build_weapon() -> void:
 	weapon_models["falke"] = WeaponView.build_gun("falke")
 	for id in WeaponView.MODELS:
 		weapon_models[id] = WeaponView.build_model(id)
-	for id in ["usp", "g18", "deagle"]:
-		weapon_models[id] = WeaponView.build_sidearm(id)
 	for id in weapon_models:
 		var view: Node3D = weapon_models[id]
 		camera.add_child(view)
@@ -1105,6 +1103,13 @@ func place_claymore() -> void:
 	mine.global_position = global_position + mine.facing * 0.9
 	game.sounds.play_sound("bolt", -2.0)
 
+
+## What a thing in the pockets is called: from the shop's list, or (the medpack, which
+## comes only from crates) from the crates' gear.
+static func item_label(kind: String) -> String:
+	if GOODS.has(kind):
+		return str(GOODS[kind].label)
+	return str(Rewards.GEAR.get(kind, {}).get("label", kind.to_upper()))
 
 ## (v0.79) Sets a medpack from a crate down a step ahead (MedpackField): it heals whoever
 ## stands at it, a little every few seconds, until its supply is used up.

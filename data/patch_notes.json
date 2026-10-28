@@ -20,14 +20,23 @@
         "items": [
           "Gewonnene Missionen bringen Kisten (auch im Koop, jeder seine eigenen). Im Hauptmenü unter KISTEN öffnen: Ein Band mit Belohnungen läuft unter der goldenen Markierung durch, wird langsamer und bleibt auf deinem Gewinn stehen.",
           "Auf SCHWER gibt jeder Sieg eine Kiste mit Belohnungen für 1, 3 oder 7 Tage, auf ALBTRAUM halten sie meist länger. Auf LEICHT und NORMAL gibt es nur selten eine einfache Kiste: Sie enthält nur Sachen für 1 Tag und keine legendären Skins. Dasselbe noch einmal verlängert die Zeit.",
-          "Drei Waffenskins für M4A4 (Startwaffe), M9 (Startpistole), AK-47, P90, UMP45, G36, MP7, Schrotflinte und Desert Eagle: ROTER DRACHE (legendär, roter Lack mit goldenem Drachen, +6 % Schaden, +5 % Stabilität), ORBITAL (episch, weiß-orange, 10 % schneller nachladen, +6 % Stabilität) und TIEFSEE (selten, nachtblau mit leuchtenden Linien, +10 % Magazin, +15 % Reserve).",
-          "Dazu vier Skins nur für die M4A4, nach gemalten Entwürfen genau auf die Waffe gelegt: MONDNACHT (legendär, schwarz-gold mit Vollmond, Kiefer und Wolken, +5 % Schaden, 6 % schneller nachladen), SAKURA (legendär, Kirschblüten und ein gemaltes Gesicht in Weiß, Schwarz und Pink, +4 % Schaden, +6 % Stabilität), TOXIN (episch, Giftgrün mit Biogefahr-Zeichen und Warnstreifen, +8 % Stabilität, +10 % Reserve) und VEKTOR (episch, weiß mit orangen und schwarzen Schrägbalken, 8 % schneller nachladen, +10 % Magazin).",
-          "Im Testraum (DU & WAFFEN) lässt sich jeder Skin ausprobieren: auf der Waffe in der Hand, M4A4-Skins direkt auf der M4A4. Beim Verlassen ist alles wieder wie vorher. VOLLE AUSRÜSTUNG gibt jetzt auch Medpacks.",
+          "Sechs Waffenskins, nach gemalten Entwürfen genau auf ihre Waffe gelegt: für die M4A4 (Startwaffe) MONDNACHT (legendär, schwarz-gold mit Vollmond, Kiefer und Wolken, +5 % Schaden, 6 % schneller nachladen), SAKURA (legendär, Kirschblüten und ein gemaltes Gesicht in Weiß, Schwarz und Pink, +4 % Schaden, +6 % Stabilität), TOXIN (episch, Giftgrün mit Biogefahr-Zeichen und Warnstreifen, +8 % Stabilität, +10 % Reserve) und VEKTOR (episch, weiß mit orangen und schwarzen Schrägbalken, 8 % schneller nachladen, +10 % Magazin); für die P90 ROTER DRACHE (legendär, schwarz-rot mit Drache und Wolken, +5 % Schaden, +10 % Magazin); für die WIRBEL NEONPULS (episch, Cyan- und Magenta-Streifen, 8 % schneller nachladen, +6 % Stabilität).",
+          "KISTEN → WAS DRIN SEIN KANN zeigt jeden Skin mit Bild, Seltenheit, Waffe, Bonus, auf welchen Schwierigkeiten es ihn gibt und wie oft er kommt.",
+          "Im Testraum (DU & WAFFEN) lässt sich jeder Skin ausprobieren: er kommt direkt auf seine Waffe. Beim Verlassen ist alles wieder wie vorher. VOLLE AUSRÜSTUNG gibt jetzt auch Medpacks.",
           "SPIND: Skins auftragen, ansehen und Ausrüstung für den nächsten Einsatz anhaken. Eine Waffe aus dem Spind startet direkt mit dir und mit ihrem Skin, mit Rucksack zwei. Skins für Startwaffen gelten automatisch.",
           "Gasmaske (Platzhalter, Modell folgt): Du startest mit Gasmaske, ihr Filter hält 50 % länger.",
           "Medpack: mit K auf den Boden legen. Alle 2 Sekunden heilt es jeden in der Nähe, nach 10 Heilungen zerplatzt es. Du startest mit zweien.",
           "Rucksack: ein Waffenplatz mehr für jede Waffenart, damit du Funde in der Villa aufheben kannst, ohne etwas fallen zu lassen.",
           "Mission 2: In den Arealen tritt jetzt ab und zu Giftgas aus. Mit Gasmaske kommst du durch, sonst außen herum oder schnell durch."
+        ]
+      },
+      {
+        "title": "Neue Pistolen und Honey Badger",
+        "items": [
+          "Alle Pistolen selbst neu gebaut, mit echten Texturen, Beschriftung und abgenutzten Kanten: M9 mit offenem Schlitten und sichtbarem Lauf, USP .45, G18 mit langem Magazin und Feuerwahlhebel, Desert Eagle in Edelstahl mit Schiene auf dem Lauf und die .44 Magnum mit Holzgriff, geriffelter Trommel und belüfteter Laufschiene.",
+          "USP, G18 und Desert Eagle waren vorher nur grobe Klötze: Jetzt sehen sie im Laden, in der Hand und mit Rotpunkt, Pistolenvisier, Schalldämpfer oder Akimbo aus wie die anderen Waffen.",
+          "Der Honey Badger ist neu gebaut: schlanker sandfarbener Handschutz über dem eingebauten Schalldämpfer, Schiene über die ganze Länge, PDW-Schiebeschaft und Klappvisier. Er wird jetzt wie die M4A4 gehalten und gezielt, und beim Nachladen kommt das Magazin wirklich heraus.",
+          "Die C.R.U.-Soldaten tragen den neuen Honey Badger, und er hängt auch im Laden an der Wand."
         ]
       }
     ]

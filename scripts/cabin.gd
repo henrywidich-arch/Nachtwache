@@ -3085,13 +3085,13 @@ func _build_stations() -> void:
 	display.rotation.y = PI / 2
 	display.scale = Vector3.ONE * 0.9
 	add_child(display)
+	# (The built Honey Badger is at its real size; its origin is in its grip.)
 	var carbine := BadgerVisual.create()
-	carbine.position = shop_pos + Vector3(-0.38, 1.6, -0.2)
+	carbine.position = shop_pos + Vector3(-0.38, 1.7, -0.2)
 	carbine.rotation.y = PI / 2
-	carbine.scale = Vector3.ONE * 0.4
 	add_child(carbine)
-	# The two models have 1.4 million triangles between them. Hanging in the stall they
-	# throw no shadow worth drawing them again for every lamp in the hall.
+	# Hanging in the stall the two models throw no shadow worth drawing them again for
+	# every lamp in the hall.
 	for model in [display, carbine]:
 		for mesh in model.find_children("*", "MeshInstance3D", true, false):
 			(mesh as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

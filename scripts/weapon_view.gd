@@ -5,8 +5,6 @@ extends RefCounted
 ## and a depth scale, so the weapon keeps its shape and never pokes through walls.
 
 const VIEW_FOV := 52.0
-## The Honey Badger model is 1.9 units long; this makes it a 72 cm carbine.
-const BADGER_SCALE := 0.379
 const SHOTGUN_SCENE := "res://assets/models/shotgun.glb"
 ## Where the shotgun's pistol grip (its origin) sits in weapon space.
 const SHOTGUN_MOUNT := Vector3(0, -0.09, 0.07)
@@ -65,6 +63,16 @@ const GUNS := {
 	# The hand works the bolt catch on the left of the lower.
 	"rifle": {
 		"scene": "res://assets/models/m4a4_built.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.13, -0.607), "bore": 0.0112,
+		"rail": 0.16, "optic": -0.125, "irons": 0.1958, "folding": true,
+		"support": Vector3(0, 0.119, -0.3251), "handle": Vector3(-0.017, 0.087, -0.108),
+		"magazine_out": Vector3(0, -0.985, -0.17), "magazine_foot": Vector3(0, -0.076, -0.174)
+	},
+	# The HONEY BADGER (tools/blender_make_badger.py, which prints these places): built by us
+	# on the M4A4's core (the supplied honey_badger.fbx stays in the folder unused), so its
+	# grip, magazine, flip-up sights and the place of the left hand are the rifle's; a slim
+	# handguard over the built-in suppressor, a PDW stock.
+	"badger": {
+		"scene": "res://assets/models/badger_built.glb", "mount": Vector3(0, -0.08, 0.08), "muzzle": Vector3(0, 0.13, -0.468), "bore": 0.0112,
 		"rail": 0.16, "optic": -0.125, "irons": 0.1958, "folding": true,
 		"support": Vector3(0, 0.119, -0.3251), "handle": Vector3(-0.017, 0.087, -0.108),
 		"magazine_out": Vector3(0, -0.985, -0.17), "magazine_foot": Vector3(0, -0.076, -0.174)
@@ -381,9 +389,12 @@ static func _dress(target: StandardMaterial3D, key: String) -> void:
 
 ## Hip and aimed positions are in camera space; angles are degrees.
 const VIEWS := {
-	"usp": {"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.05, -0.47), "muzzle": Vector3(0, 0.015, -0.145)},
-	"g18": {"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.045, -0.47), "muzzle": Vector3(0, 0.01, -0.13)},
-	"deagle": {"hip": Vector3(0.11, -0.14, -0.48), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.06, -0.45), "muzzle": Vector3(0, 0.025, -0.185)},
+	# The handguns built by tools/blender_make_pistols.py (see MODELS; it prints these places):
+	# aimed, the line over the rear notch and the front sight's tip runs through the middle
+	# of the screen.
+	"usp": {"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.0263, -0.5), "muzzle": Vector3(0, 0.005, -0.095)},
+	"g18": {"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.025, -0.5), "muzzle": Vector3(0, 0.006, -0.083)},
+	"deagle": {"hip": Vector3(0.11, -0.14, -0.48), "hip_angles": Vector3(0.5, 5.0, -2.0), "aim": Vector3(0, -0.035, -0.48), "muzzle": Vector3(0, 0.009, -0.156)},
 	# The M4A4 (build_gun): aimed, the eye is on the line through its aperture and its front
 	# post, 13 cm behind the aperture.
 	"rifle": {
@@ -424,9 +435,11 @@ const VIEWS := {
 		"aim": Vector3(0.0, -0.021, -0.284), "muzzle": Vector3(0, -0.054, -0.125),
 		"reload_low": Vector3(-0.07, 0.05, -0.1), "reload_turn": Vector3(0.35, 0.3, 0.25)
 	},
+	# The Honey Badger (build_gun): held and aimed as the M4A4 whose core it shares.
 	"badger": {
-		"hip": Vector3(0.13, -0.158, -0.5), "hip_angles": Vector3(0.5, 6.5, -2.5),
-		"aim": Vector3(0.0, -0.062, -0.25), "muzzle": Vector3(0, 0.012, -0.412)
+		"hip": Vector3(0.12, -0.155, -0.35), "hip_angles": Vector3(0.5, 6.0, -2.5),
+		"aim": Vector3(0.0, -0.1158, -0.1915), "muzzle": Vector3(0, 0.05, -0.388),
+		"reload_low": Vector3(-0.02, 0.05, 0.04), "reload_turn": Vector3(0.35, 0.25, -0.8)
 	},
 	"shotgun": {
 		"hip": Vector3(0.13, -0.165, -0.4), "hip_angles": Vector3(0.5, 6.0, -2.5),
@@ -436,11 +449,11 @@ const VIEWS := {
 	# on the middle of the screen, muzzle is mount + the model's muzzle.
 	"pistol": {
 		"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0),
-		"aim": Vector3(0.0, -0.0258, -0.511), "muzzle": Vector3(0, 0.005, -0.1035)
+		"aim": Vector3(0.0, -0.0256, -0.511), "muzzle": Vector3(0, 0.005, -0.096)
 	},
 	"revolver": {
 		"hip": Vector3(0.11, -0.13, -0.5), "hip_angles": Vector3(0.5, 5.0, -2.0),
-		"aim": Vector3(0.0, -0.0395, -0.4875), "muzzle": Vector3(0, 0.011, -0.161)
+		"aim": Vector3(0.0, -0.0353, -0.4875), "muzzle": Vector3(0, 0.011, -0.161)
 	},
 	"autoshotgun": {
 		"hip": Vector3(0.13, -0.165, -0.38), "hip_angles": Vector3(0.5, 6.0, -2.5),
@@ -553,8 +566,14 @@ const VIEWS := {
 ## on the model. hands: "cup" wraps it round the firing hand, "cradle" lays it under a
 ## handguard, "grip" closes it round a foregrip or handle.
 const MODELS := {
-	"pistol": {"scene": "res://assets/models/pistol.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.033, 0.0145), "hands": "cup"},
-	"revolver": {"scene": "res://assets/models/revolver.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.04, 0.0), "hands": "cup"},
+	# The five handguns are built by tools/blender_make_pistols.py in the frame of the M9
+	# model they replace (pistol.glb and revolver.glb stay in the folder unused), each with
+	# its own baked textures.
+	"pistol": {"scene": "res://assets/models/pistol_built.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.033, 0.0145), "hands": "cup", "baked": true},
+	"usp": {"scene": "res://assets/models/usp_built.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.033, 0.0145), "hands": "cup", "baked": true},
+	"g18": {"scene": "res://assets/models/g18_built.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.033, 0.0145), "hands": "cup", "baked": true},
+	"deagle": {"scene": "res://assets/models/deagle_built.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.035, 0.0145), "hands": "cup", "baked": true, "metal": 0.55},
+	"revolver": {"scene": "res://assets/models/revolver_built.glb", "mount": Vector3(0, -0.075, 0.076), "support": Vector3(-0.004, -0.04, 0.0), "hands": "cup", "baked": true},
 	"autoshotgun": {"scene": "res://assets/models/autoshotgun.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.056, -0.273), "hands": "cradle"},
 	"sniper": {"scene": "res://assets/models/sniper.glb", "mount": Vector3(0, -0.09, 0.07), "support": Vector3(0, 0.034, -0.355), "hands": "cradle"},
 	# The launcher is the M32 (tools/blender_make_m32.py), with a view of its own: see build_m32.
@@ -588,7 +607,6 @@ const M32 := {
 
 static var materials: Dictionary = {}
 static var holo_material: BaseMaterial3D
-static var badger_material: BaseMaterial3D
 static var gun_materials: Dictionary = {}
 ## The AK-47 as soldiers carry it: a light copy of the model (tools/blender_make_ak47.py
 ## writes both). Loaded once and kept.
@@ -939,28 +957,6 @@ static func _finish(view: Node3D, batch: MeshBatch) -> void:
 static func build_p90() -> Node3D:
 	return build_gun("p90")
 
-## Suppressed carbine: pistol grip in the firing hand, the support hand under the handguard.
-static func build_badger() -> Node3D:
-	var view := Node3D.new()
-	view.name = "badger"
-	var mount := BadgerVisual.create()
-	mount.scale = Vector3.ONE * BADGER_SCALE
-	# Puts the barrel axis and the pistol grip where the rifle has them.
-	mount.position = Vector3(0, -0.1597, -0.0491)
-	view.add_child(mount)
-	if badger_material == null:
-		badger_material = tune(BadgerVisual.material().duplicate() as BaseMaterial3D)
-	for node in mount.find_children("*", "MeshInstance3D", true, false):
-		var mesh := node as MeshInstance3D
-		mesh.material_override = badger_material
-		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		mesh.layers = 2
-	var batch := MeshBatch.new()
-	_grip_hand(batch, Vector3(0.0, -0.09, 0.076), 1.0, true, Vector3(0.1, -0.24, 0.22))
-	_cradle_hand(batch, Vector3(0.0, 0.012, -0.15), Vector3(-0.13, -0.27, 0.17))
-	_finish(view, batch)
-	return view
-
 ## The shotgun's surfaces are plain colours; a fine grain keeps them from looking like
 ## plastic toys. `view` materials are for the first-person weapon.
 static func shotgun_material(source: Material, view: bool, family: String = "") -> BaseMaterial3D:
@@ -1041,6 +1037,10 @@ static func model_scene(id: String, view: bool) -> Node3D:
 				var slot := id + "/" + source.resource_name + ("_view" if view else "")
 				if not gun_materials.has(slot):
 					gun_materials[slot] = tune(source.duplicate() as BaseMaterial3D) if view else source
+					# metal: bright steel that mirrored the dark sky is taken down a little.
+					if MODELS[id].has("metal"):
+						gun_materials[slot] = (gun_materials[slot] as BaseMaterial3D).duplicate() if not view else gun_materials[slot]
+						(gun_materials[slot] as BaseMaterial3D).metallic = float(MODELS[id].metal)
 				mesh.set_surface_override_material(surface, gun_materials[slot])
 			else:
 				mesh.set_surface_override_material(surface, shotgun_material(source, view, id + "/"))
@@ -1308,44 +1308,6 @@ static func _ring_reticle(view: Node3D, at: Vector3) -> void:
 static func build_ump() -> Node3D:
 	return build_gun("ump")
 
-## The first-person view of any weapon: the model and the hands that hold it.
-static func build_sidearm(id: String) -> Node3D:
-	var view := Node3D.new()
-	view.name = id
-	var batch := MeshBatch.new()
-	var steel := shared("steel")
-	var dark := Color("23282b")
-	var slide := Color("9da8ac") if id == "deagle" else Color("424a4f")
-	var length := 0.25 if id == "deagle" else (0.2 if id == "usp" else 0.18)
-	var width := 0.047 if id == "deagle" else 0.035
-	batch.box(steel, Vector3(0, 0.014, -length * 0.3), Vector3(width, 0.052, length), slide)
-	batch.box(steel, Vector3(0, -0.018, -0.035), Vector3(width * 0.92, 0.026, length * 0.7), dark)
-	batch.box(steel, Vector3(0, -0.067, 0.025), Vector3(0.033, 0.105, 0.047), Color("302e29"), Basis(Vector3.RIGHT, -0.15))
-	batch.box(steel, Vector3(0, -0.045, -0.04), Vector3(0.027, 0.008, 0.052), dark)
-	batch.box(steel, Vector3(0, -0.029, -0.065), Vector3(0.027, 0.035, 0.008), dark)
-	batch.box(steel, Vector3(0, 0.046 if id == "deagle" else 0.038, -length * 0.65), Vector3(0.008, 0.012, 0.009), dark)
-	for x in [-0.014, 0.014]:
-		batch.box(steel, Vector3(x, 0.043, length * 0.15), Vector3(0.008, 0.012, 0.012), dark)
-	for z in [0.0, 0.009, 0.018, 0.027]:
-		batch.box(steel, Vector3(width * 0.51, 0.014, z), Vector3(0.003, 0.034, 0.004), dark)
-	if id == "g18":
-		batch.box(steel, Vector3(0, -0.141, 0.02), Vector3(0.029, 0.072, 0.036), dark)
-		batch.box(steel, Vector3(-0.021, 0.008, 0.018), Vector3(0.007, 0.017, 0.012), slide)
-	for mesh in batch.commit(view, "Body", false):
-		mesh.layers = 2
-	batch = MeshBatch.new()
-	_grip_hand(batch, Vector3(0, -0.045, 0.035), 1.0, true, Vector3(0.12, -0.25, 0.24))
-	_finish(view, batch)
-	var support := Node3D.new()
-	support.name = "HandSupport"
-	view.add_child(support)
-	batch = MeshBatch.new()
-	_grip_hand(batch, Vector3(-0.015, -0.06, 0.04), -1.0, false, Vector3(-0.16, -0.23, 0.23))
-	for mesh in batch.commit(support, "Hand", false):
-		mesh.layers = 2
-	_sidearm_parts(view, id)
-	return view
-
 static func _sidearm_parts(view: Node3D, id: String) -> void:
 	_gun_mods(view, id)
 	var twin := view.duplicate() as Node3D
@@ -1361,13 +1323,8 @@ static func _sidearm_parts(view: Node3D, id: String) -> void:
 	Reticle.register(view)
 
 static func build(id: String) -> Node3D:
-	if id in ["usp", "g18", "deagle"]:
-		return build_sidearm(id)
-	match id:
-		"badger":
-			return build_badger()
-		"shotgun":
-			return build_shotgun()
+	if id == "shotgun":
+		return build_shotgun()
 	return build_gun(id) if GUNS.has(id) else build_model(id)
 
 ## A weapon by itself, to be looked at (the shop, the workbench): the model of the view
@@ -1527,15 +1484,14 @@ static func _view_ring(key: String, color: Color) -> StandardMaterial3D:
 ## brings its height with it (its window stands well above any iron sights); the telescopic
 ## sight is set just clear of them, so that they do not stand in the picture.
 const MOD_MOUNTS := {
-	"pistol": {"mount": Vector3.ZERO, "rail": 0.0122, "optic": -0.02, "irons": 0.027, "holo": 0.45, "muzzle": Vector3(0, 0.005, -0.1035)},
-	# (Measured on the models with rays from above: the revolver's frame is flat on top over
-	# the cylinder at 3.25 cm, from 1 cm before to 5 cm behind the middle of its grip, its
-	# rear sight 3.7 cm high; the pistol's slide is flat at 1.2 cm from 5 cm before to 1 cm
-	# behind it, its front sight 2.7 cm high.)
-	"revolver": {"mount": Vector3.ZERO, "rail": 0.0325, "optic": 0.02, "irons": 0.0372, "holo": 0.45, "muzzle": Vector3(0, 0.011, -0.161)},
-	"usp": {"mount": Vector3.ZERO, "rail": 0.05, "optic": -0.04, "irons": 0.05, "holo": 0.45, "muzzle": Vector3(0, 0.015, -0.145)},
-	"g18": {"mount": Vector3.ZERO, "rail": 0.045, "optic": -0.04, "irons": 0.045, "holo": 0.45, "muzzle": Vector3(0, 0.01, -0.13)},
-	"deagle": {"mount": Vector3.ZERO, "rail": 0.06, "optic": -0.05, "irons": 0.06, "holo": 0.5, "muzzle": Vector3(0, 0.025, -0.185)}
+	# (The handguns of tools/blender_make_pistols.py, which prints these places: rail is the
+	# top of the slide - on the Desert Eagle the rail on its barrel, on the revolver the top
+	# strap over the cylinder -, irons the tip of the front sight.)
+	"pistol": {"mount": Vector3.ZERO, "rail": 0.019, "optic": -0.02, "irons": 0.0268, "holo": 0.45, "muzzle": Vector3(0, 0.005, -0.096)},
+	"revolver": {"mount": Vector3.ZERO, "rail": 0.0275, "optic": 0.035, "irons": 0.0365, "holo": 0.45, "muzzle": Vector3(0, 0.011, -0.161)},
+	"usp": {"mount": Vector3.ZERO, "rail": 0.02, "optic": -0.02, "irons": 0.0275, "holo": 0.45, "muzzle": Vector3(0, 0.005, -0.095)},
+	"g18": {"mount": Vector3.ZERO, "rail": 0.019, "optic": -0.02, "irons": 0.0262, "holo": 0.45, "muzzle": Vector3(0, 0.006, -0.083)},
+	"deagle": {"mount": Vector3.ZERO, "rail": 0.0345, "optic": -0.084, "irons": 0.0362, "holo": 0.5, "muzzle": Vector3(0, 0.009, -0.156)}
 }
 
 static func mod_mount(id: String) -> Dictionary:

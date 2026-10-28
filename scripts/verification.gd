@@ -12071,7 +12071,7 @@ func _fp_feel(game: Node3D) -> void:
 		var model: Node3D = player.throw_model
 		var prop: Node3D = model.get_node_or_null("Prop") if model != null else null
 		game.hud._process(0.05)
-		right = right and model != null and model.visible and str(model.get_meta("kind", "")) == held and prop != null and prop.get_child_count() >= 2 and game.hud.reserve_label.text == str(Survivor.GOODS[held].label) and game.hud.ammo_label.text == "1" and not player.weapon.visible
+		right = right and model != null and model.visible and str(model.get_meta("kind", "")) == held and prop != null and prop.get_child_count() >= 2 and game.hud.reserve_label.text == Survivor.item_label(held) and game.hud.ammo_label.text == "1" and not player.weapon.visible
 		# (What a model is made of tells them apart.)
 		var made: Array = []
 		for part in prop.get_children():
