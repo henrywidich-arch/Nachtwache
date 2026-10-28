@@ -148,6 +148,29 @@ static func run(v: Node, game: Node3D) -> void:
 		"KISTEN and SPIND are in the main menu; a crate opens with its strip and shows the prize, the locker lists what is held (%d rows)" % rows)
 	hud.show_menu("main")
 
+	# --- every skin can be tried on in the test room, and nothing of it stays
+	game.start_run(true)
+	await v.wait(0.3)
+	var sandbox: Sandbox = game.sandbox
+	var tester: Survivor = game.player
+	tester.equip_weapon("pistol", true)
+	sandbox.try_skin("mondnacht")
+	var to_rifle: bool = tester.current_weapon == "rifle" and str(tester.weapon_models["rifle"].get_meta("skin", "")) == "mondnacht" and is_equal_approx(tester.damage_of("rifle"), 28.0 * 1.05)
+	tester.equip_weapon("pistol", true)
+	sandbox.try_skin("drache")
+	var on_hand: bool = tester.current_weapon == "pistol" and str(tester.weapon_models["pistol"].get_meta("skin", "")) == "drache"
+	hud.show_menu("test")
+	game.sandbox.tab = "player"
+	hud.show_menu("test")
+	var chips := 0
+	for skin: String in WeaponSkins.SKINS:
+		chips += int(hud.modal.find_child("TrySkin_" + skin, true, false) != null)
+	game.return_to_menu()
+	await v.wait(0.2)
+	v.expect(to_rifle and on_hand and chips == WeaponSkins.SKINS.size() and game.rewards.trial.is_empty() and not rewards.holds("mondnacht/rifle"),
+		"In the test room every skin can be tried: on the weapon in hand, a skin made for the M4A4 on the M4A4, with its boost - and nothing of it stays afterwards (to_rifle %s, on_hand %s, %d buttons)" % [to_rifle, on_hand, chips])
+	hud.show_menu("main")
+
 static func _has_text(node: Node, text: String) -> bool:
 	if node is Button and text in (node as Button).text:
 		return true
@@ -199,3 +222,21 @@ static func _snap(v: Node, path: String) -> void:
 	await RenderingServer.frame_post_draw
 	v.get_viewport().get_texture().get_image().save_png(path)
 	print("saved ", path)
+
+## A picture of the test room's page with the skins (needs graphics).
+static func test_shot(v: Node, game: Node3D) -> void:
+	var folder := "user://rewards_shots"
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--out="):
+			folder = arg.trim_prefix("--out=")
+	DirAccess.make_dir_recursive_absolute(folder)
+	game.start_run(true)
+	await v.wait(0.5)
+	game.sandbox.try_skin("sakura")
+	game.sandbox.tab = "player"
+	game.pause_run()
+	game.hud.show_menu("test")
+	await _snap(v, folder.path_join("testraum_skins.png"))
+	game.resume_run()
+	await v.wait(0.5)
+	await _snap(v, folder.path_join("testraum_sakura.png"))

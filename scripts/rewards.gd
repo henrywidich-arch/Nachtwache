@@ -45,6 +45,8 @@ var worn: Dictionary = {}
 var taken: Array = []
 ## Seconds added to the clock (the checks let days pass with it).
 var clock_shift := 0
+## Skins tried on in the test room, weapon -> skin (never saved; cleared when it is left).
+var trial: Dictionary = {}
 
 func now() -> int:
 	return int(Time.get_unix_time_from_system()) + clock_shift
@@ -269,6 +271,9 @@ func open_crate(rng: RandomNumberGenerator = null, length: int = 48, at: int = 4
 
 ## The skin a weapon wears now ("" for none).
 func skin_for(weapon: String) -> String:
+	# (A skin tried on in the test room comes first while it is on: Sandbox.try_skin.)
+	if trial.has(weapon):
+		return str(trial[weapon])
 	var skin := str(worn.get(weapon, ""))
 	return skin if skin != "" and holds("%s/%s" % [skin, weapon]) else ""
 

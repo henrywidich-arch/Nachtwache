@@ -113,6 +113,8 @@ func end() -> void:
 	set_daylight(false)
 	set_slow(1.0)
 	Radio.hijacked = false
+	# (Skins tried on here are taken off again.)
+	game.rewards.trial.clear()
 
 func _process(delta: float) -> void:
 	_keep_look(delta)
@@ -338,6 +340,7 @@ func kit() -> void:
 	var player: Survivor = game.player
 	for item in ["grenade", "flashbang", "molotov", "claymore", "revive", "heal"]:
 		player.items[item] = int(Survivor.GOODS[item].max)
+	player.items["medpack"] = Rewards.MEDPACKS
 	player.armor = 100.0
 	player.plate_level = Survivor.PLATE_SHARES.size() - 1
 	player.mask_level = Survivor.MASK_SECONDS.size() - 1
@@ -616,3 +619,23 @@ func hush() -> void:
 	if game.sounds.radio_voice != null:
 		game.sounds.radio_voice.stop()
 	game.hud.test_line()
+
+## (v0.79) Tries a skin on (WeaponSkins): on the weapon in hand, or - for a skin made for
+## one weapon only - on that one, which is handed over if need be. "" takes the skin off the
+## weapon in hand. It counts like a won one (its boost too) until the test room is left.
+func try_skin(skin: String) -> void:
+	var player: Survivor = game.player
+	var weapon := player.current_weapon
+	if skin != "" and WeaponSkins.SKINS[skin].has("weapons") and not weapon in WeaponSkins.SKINS[skin].weapons:
+		weapon = str(WeaponSkins.SKINS[skin].weapons[0])
+		if not player.inventory.has(weapon):
+			player.inventory[weapon] = {"ammo": int(Survivor.WEAPONS[weapon].magazine), "reserve": player.reserve_cap(weapon), "level": 0}
+		player.equip_weapon(weapon, true)
+	if skin == "":
+		game.rewards.trial[weapon] = ""
+	else:
+		game.rewards.trial[weapon] = skin
+	if player.inventory.has(weapon):
+		(player.inventory[weapon] as Dictionary).erase("tuned")
+	WeaponSkins.apply(player.weapon_models.get(weapon), game.rewards.skin_for(weapon))
+	game.hud.loadout()

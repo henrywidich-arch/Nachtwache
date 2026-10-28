@@ -1646,6 +1646,16 @@ func _test_player(column: VBoxContainer, room: Sandbox) -> void:
 		_chip("VOLLE AUSRÜSTUNG", _test_do.bind("kit"), false, 210),
 		_chip("WAFFENSHOP", _test_do.bind("shop"), false, 170),
 		_chip("WERKBANK", _test_do.bind("bench"), false, 150)])
+	# (v0.79) Every skin of the crates, tried on the weapon in hand (Sandbox.try_skin).
+	var worn_now: String = game.rewards.skin_for(game.player.current_weapon)
+	var skins: Array = [_chip("OHNE SKIN", _test_skin.bind(""), worn_now == "", 130)]
+	for skin: String in WeaponSkins.SKINS:
+		var only: Array = WeaponSkins.SKINS[skin].get("weapons", [])
+		var chip := _chip(str(WeaponSkins.SKINS[skin].label) + ("  (M4A4)" if only == ["rifle"] else ""), _test_skin.bind(skin), worn_now == skin, 170)
+		chip.name = "TrySkin_" + skin
+		chip.tooltip_text = WeaponSkins.boost_words(skin)
+		skins.append(chip)
+	_test_row(column, "SKINS AUSPROBIEREN  ·  AUF DER WAFFE IN DER HAND", skins)
 	_gap(column, 4)
 	_text(column, "Im Testraum kostet nichts etwas: Shop und Werkbank öffnen sich von überall, und jede\nKlassenwaffe ist frei. „Alle Waffen“: Mit 1, 2 und 3 gehst du durch alle Primär-,\nSekundär- und schweren Waffen. Mit unendlichem Leben siehst und hörst du Treffer\nweiterhin, verlierst aber nichts. Ohne: Fällst du, stehst du sofort wieder.", 15)
 
@@ -2207,3 +2217,8 @@ func _update_scoreboard() -> void:
 		scoreboard.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		scoreboard.grow_vertical = Control.GROW_DIRECTION_BOTH
 		play_ui.add_child(scoreboard)
+
+## (v0.79) Tries a skin on in the test room and goes back in to look at it.
+func _test_skin(skin: String) -> void:
+	game.sandbox.try_skin(skin)
+	game.resume_run()

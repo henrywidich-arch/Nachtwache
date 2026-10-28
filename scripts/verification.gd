@@ -12322,3 +12322,6 @@ func _rewards(game: Node3D) -> void:
 
 func _rewards_shots(game: Node3D) -> void:
 	await preload("res://scripts/rewards_check.gd").shots(self, game)
+
+func _rewards_test_shot(game: Node3D) -> void:
+	await preload("res://scripts/rewards_check.gd").test_shot(self, game)
