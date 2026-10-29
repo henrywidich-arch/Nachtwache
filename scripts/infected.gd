@@ -398,6 +398,27 @@ var loiter_moan := 0.0
 const LOITER_SEE := 12.0
 const LOITER_HEAR := 5.0
 const LOITER_PACK := 7.0
+## (v0.89) Standing about is no standing still: it shuffles to a spot near where it was
+## put (within LOITER_ROAM), stands, turns, kneels to feed or writhes, and goes on.
+const LOITER_ROAM := 3.5
+const LOITER_PACE := Vector2(0.3, 0.55)
+var loiter_home := Vector3.INF
+var loiter_goal := Vector3.INF
+var loiter_wait := 0.0
+var loiter_pace := 0.4
+var loiter_yaw := 0.0
+var loiter_stuck := 0.0
+## (v0.89) Charging over open ground, the quick ones jink aside now and then, and a shot
+## can make them duck away: seconds left of the step, its side, and seconds to the next.
+const JUKE_KINDS := ["mauler", "striker"]
+const JUKE_TIME := 0.42
+const JUKE_SPEED := 4.2
+const JUKE_RANGE := Vector2(5.0, 22.0)
+const JUKE_EVERY := Vector2(2.5, 6.5)
+const JUKE_ON_HIT := 0.35
+var juke_left := 0.0
+var juke_side := 1.0
+var juke_wait := 2.0
 var lurk_left := 0.0
 ## Seconds the infected cannot act: staggered by gunfire or screaming.
 var held_left := 0.0
@@ -731,28 +752,98 @@ func _low_ceiling(at: Vector3) -> bool:
 
 ## With `bodies` the line also ends at what stops bodies but not bullets or claws:
 ## railings, fences and window sills.
-## Stands where it stands, now and then a sound, until somebody comes near (see loiter).
+## Stays about its spot, now and then a sound, until somebody comes near (see loiter).
 ## True while it still does.
 func _loiter(delta: float) -> bool:
-	velocity = Vector3.ZERO
 	loiter_moan -= delta
 	if loiter_moan <= 0.0:
 		loiter_moan = randf_range(6.0, 14.0)
 		if str(voices.get("idle", "")) != "":
 			game.sounds.play_at(str(voices.idle), mouth(), -6.0)
 	loiter_check -= delta
-	if loiter_check > 0.0:
-		return true
-	loiter_check = 0.25
-	var near: Node3D = game.nearest_survivor(global_position, null)
-	if near == null:
-		return true
-	var gap := global_position.distance_to(near.global_position)
-	var same_floor := absf(near.global_position.y - global_position.y) < 1.4
-	if same_floor and (gap < LOITER_HEAR or (gap < LOITER_SEE and _clear_line(near.global_position))):
-		rouse()
-		return false
+	if loiter_check <= 0.0:
+		loiter_check = 0.25
+		var near: Node3D = game.nearest_survivor(global_position, null)
+		if near != null:
+			var gap := global_position.distance_to(near.global_position)
+			var same_floor := absf(near.global_position.y - global_position.y) < 1.4
+			if same_floor and (gap < LOITER_HEAR or (gap < LOITER_SEE and _clear_line(near.global_position))):
+				rouse()
+				return false
+	_roam(delta)
 	return true
+
+## Shuffling about while it stands about: to a spot, a pause, a turn, a clip.
+func _roam(delta: float) -> void:
+	if loiter_home == Vector3.INF:
+		loiter_home = global_position
+		loiter_yaw = model.rotation.y
+		loiter_wait = randf_range(0.5, 3.5)
+	var direction := Vector3.ZERO
+	if model.state == "move" and held_left <= 0.0:
+		if loiter_goal != Vector3.INF:
+			var to := Vector3(loiter_goal.x - global_position.x, 0, loiter_goal.z - global_position.z)
+			var moved := get_real_velocity()
+			if to.length() > 0.3 and Vector2(moved.x, moved.z).length() < loiter_pace * 0.3:
+				loiter_stuck += delta
+			else:
+				loiter_stuck = 0.0
+			if to.length() < 0.3 or loiter_stuck > 1.2:
+				loiter_goal = Vector3.INF
+				loiter_stuck = 0.0
+				loiter_yaw = model.rotation.y
+				loiter_wait = randf_range(1.5, 5.0)
+			else:
+				direction = to.normalized()
+		else:
+			loiter_wait -= delta
+			if loiter_wait <= 0.0:
+				_roam_next()
+	else:
+		held_left -= delta
+	velocity.x = direction.x * loiter_pace
+	velocity.z = direction.z * loiter_pace
+	if not is_on_floor():
+		velocity.y -= delta * GRAVITY
+	else:
+		velocity.y = 0.0
+	move_and_slide()
+	var yaw := atan2(-direction.x, -direction.z) if direction != Vector3.ZERO else loiter_yaw
+	model.rotation.y = lerp_angle(model.rotation.y, yaw, minf(1.0, delta * 2.6))
+	head_box.global_position = model.skull_position()
+
+func _roam_next() -> void:
+	var roll := randf()
+	if roll < 0.45:
+		# A few steps to somewhere near home that has floor at the same height and nothing between.
+		for attempt in range(5):
+			var turn := randf() * TAU
+			var spot := loiter_home + Vector3(sin(turn), 0, cos(turn)) * randf_range(0.8, LOITER_ROAM)
+			if spot.distance_to(global_position) < 0.7:
+				continue
+			var down := PhysicsRayQueryParameters3D.create(spot + Vector3.UP * 1.0, spot + Vector3.DOWN * 1.2, 1)
+			var ground := get_world_3d().direct_space_state.intersect_ray(down)
+			if ground.is_empty() or absf((ground.position as Vector3).y - global_position.y) > 0.35:
+				continue
+			var low := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.6, spot + Vector3.UP * 0.6, 17)
+			if not get_world_3d().direct_space_state.intersect_ray(low).is_empty():
+				continue
+			loiter_goal = spot
+			loiter_pace = randf_range(LOITER_PACE.x, LOITER_PACE.y)
+			return
+		loiter_wait = randf_range(1.0, 2.5)
+	elif roll < 0.72:
+		loiter_yaw = model.rotation.y + randf_range(-2.4, 2.4)
+		loiter_wait = randf_range(2.0, 5.0)
+	else:
+		var clip: String = model.idle_pick()
+		if clip == "":
+			loiter_wait = randf_range(2.0, 4.0)
+			return
+		var hold: float = model.idle_length(clip)
+		cue("idle_act", [clip, hold])
+		held_left = hold
+		loiter_wait = randf_range(1.0, 3.0)
 
 ## Stops standing about and comes, and so do those of its kind standing close by.
 func rouse() -> void:
@@ -762,6 +853,10 @@ func rouse() -> void:
 	lurk_left = 0.0
 	alert = false
 	repath_left = 0.0
+	# Up from feeding or writhing at once.
+	if model.state == "scream":
+		held_left = 0.0
+		cue("wake")
 	for node in get_tree().get_nodes_in_group("infected"):
 		var other := node as Infected
 		if other != null and other.loiter and not other.dead and other.global_position.distance_to(global_position) < LOITER_PACK:
@@ -794,6 +889,13 @@ func show_cue(action: String, args: Array) -> void:
 				game.sounds.play_at(str(voices.strike), mouth(), 0.0, 1.2 if voices.strike == "growl_female" else 1.0)
 		"hit":
 			model.hit(float(args[0]), float(args[1]))
+		"idle_act":
+			model.idle_act(str(args[0]), float(args[1]))
+		"wake":
+			model.wake()
+		"dodge":
+			if model.has_method("dodge"):
+				model.dodge(float(args[0]))
 		"buff":
 			model.set_buffed(bool(args[0]))
 			if bool(args[0]):
@@ -1071,9 +1173,10 @@ func _physics_process(delta: float) -> void:
 				dodge_side = -1.0 if (other.global_position - global_position).dot(right) > 0.0 else 1.0
 	if dodge_left > 0.0 and pace > 0.5:
 		direction = (direction + right * dodge_side * 1.5).normalized()
+	var juke := _juke(delta, distance, pace, direction, same_floor)
 	knock = knock.move_toward(Vector3.ZERO, delta * 16.0)
-	velocity.x = direction.x * pace + push.x + knock.x
-	velocity.z = direction.z * pace + push.z + knock.z
+	velocity.x = direction.x * pace + push.x + knock.x + juke.x
+	velocity.z = direction.z * pace + push.z + knock.z + juke.z
 	if not is_on_floor():
 		velocity.y -= delta * GRAVITY
 	else:
@@ -1081,6 +1184,26 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	var look := direction if pace > 0.1 and direction.length() > 0.1 else Vector3(offset.x, 0, offset.y).normalized()
 	_ambient(delta, look, distance > 0.05 and held_left <= 0.0)
+
+## A quick step aside while charging (see JUKE_KINDS): the speed it adds this frame. The
+## body leans into it by itself (InfectedVisual.lean).
+func _juke(delta: float, distance: float, pace: float, direction: Vector3, same_floor: bool) -> Vector3:
+	juke_wait -= delta
+	if not kind in JUKE_KINDS:
+		return Vector3.ZERO
+	if juke_left <= 0.0:
+		if juke_wait > 0.0 or not alert or held_left > 0.0 or attack_clock >= 0.0 or pace < 2.0 or not same_floor or distance < JUKE_RANGE.x or distance > JUKE_RANGE.y:
+			return Vector3.ZERO
+		juke_wait = randf_range(JUKE_EVERY.x, JUKE_EVERY.y)
+		juke_left = JUKE_TIME
+		juke_side = -1.0 if randf() < 0.5 else 1.0
+		cue("dodge", [juke_side])
+	if direction == Vector3.ZERO or held_left > 0.0 or attack_clock >= 0.0:
+		juke_left = 0.0
+		return Vector3.ZERO
+	juke_left -= delta
+	var right := Vector3(-direction.z, 0, direction.x)
+	return right * juke_side * JUKE_SPEED * sin(PI * clampf(1.0 - juke_left / JUKE_TIME, 0.0, 1.0))
 
 ## The Leech jumps on a human survivor and holds on. Returns true while it hangs there.
 func _cling(delta: float, target: Vector3, distance: float, same_floor: bool) -> bool:
@@ -1538,9 +1661,12 @@ func receive_hit(amount: float, direction: Vector3, headshot: bool = false, sour
 		var heavy := burst >= max_health * STAGGER_SHARE
 		if heavy or (headshot and amount >= max_health * 0.2):
 			_stagger(heavy and reaction == "stumble")
+	# A shot that does not stop it may make it duck aside (if it is far enough off, see _juke).
+	if kind in JUKE_KINDS and juke_left <= 0.0 and juke_wait < 4.0 and randf() < JUKE_ON_HIT:
+		juke_wait = 0.0
 
 func _stagger(heavy: bool) -> void:
-	cue("stagger", ["stumble" if heavy else model.pick_flinch()])
+	cue("stagger", [(model.pick_stumble() if model.has_method("pick_stumble") else "stumble") if heavy else model.pick_flinch()])
 	held_left = model.busy_left
 	stagger_cooldown = held_left + 2.2
 	burst = 0.0

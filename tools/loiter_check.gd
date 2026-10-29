@@ -1,6 +1,6 @@
 extends SceneTree
 ## The infected that stand about ahead in the second mission (v0.87, Infected.loiter): one
-## stands still while the survivor is far, wakes when he comes close, and wakes those of
+## stays about its spot (v0.89: shuffling, turning, feeding) while the survivor is far, wakes when he comes close, and wakes those of
 ## its kind close by; the director puts some ahead on the way. Headless:
 ##   Godot --headless --fixed-fps 60 --path . -s res://tools/loiter_check.gd -- --loiter
 
@@ -38,10 +38,20 @@ func _run() -> void:
 	# (Far enough that neither sees nor hears him.)
 	player.global_position = first.global_position + Vector3(0, 0, 40)
 	var start := first.global_position
-	for i in range(120):
+	# (v0.89) Within ten seconds it does something: a few steps, a turn or a clip.
+	var lively := false
+	var yaw: float = first.model.rotation.y
+	var furthest := 0.0
+	for i in range(600):
 		await physics_frame
-	if not first.loiter or first.global_position.distance_to(start) > 0.3:
-		faults.append("it moved or woke with nobody near (%.2f m, loiter %s)" % [first.global_position.distance_to(start), first.loiter])
+		furthest = maxf(furthest, first.global_position.distance_to(start))
+		if furthest > 0.4 or absf(angle_difference(yaw, first.model.rotation.y)) > 0.3 or first.model.state != "move":
+			lively = true
+	if not lively:
+		faults.append("it stood frozen for ten seconds")
+	print("LOITER roam: furthest %.2f m, state %s" % [furthest, first.model.state])
+	if not first.loiter or first.global_position.distance_to(start) > Infected.LOITER_ROAM + 0.6:
+		faults.append("it strayed or woke with nobody near (%.2f m, loiter %s)" % [first.global_position.distance_to(start), first.loiter])
 	player.global_position = first.global_position + Vector3(0, 0.05, 3.0)
 	for i in range(30):
 		await physics_frame

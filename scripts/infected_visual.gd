@@ -31,6 +31,17 @@ const CLIPS := {
 	"headbutt": {"file": "anim_attack_headbutt", "strike": 0.42, "end": 1.5, "set": "zombie"},
 	"swipe_left": {"mirror": "swipe", "set": "zombie"},
 	"punch_left": {"mirror": "punch", "set": "zombie"},
+	# (v0.89) Mirrored gaits and blows: every individual limps, leans and lunges on a side
+	# of its own (see _ready and pick_attack), so a horde does not move like one body.
+	"shamble_left": {"mirror": "shamble", "set": "zombie"},
+	"drag_left": {"mirror": "drag", "set": "zombie"},
+	"creep_left": {"mirror": "creep", "set": "zombie"},
+	"run_left": {"mirror": "run", "set": "zombie"},
+	"feral_left": {"mirror": "feral", "set": "zombie"},
+	"kick_left": {"mirror": "kick", "set": "zombie"},
+	"recoil_left": {"mirror": "recoil", "set": "zombie"},
+	# Kneeling over the floor and tearing at it: what one standing about does now and then.
+	"feed": {"file": "anim_attack_bite", "loop": true, "set": "zombie"},
 	"flinch": {"file": "anim_hit_flinch", "end": 1.3, "set": "zombie"},
 	"recoil": {"file": "anim_hit_react_a", "end": 1.4, "set": "zombie"},
 	"flinch_left": {"mirror": "flinch", "set": "zombie"},
@@ -70,6 +81,39 @@ const MORE := {
 	"death_bow_forward": {"file": "anim_death_bow_forward", "fall": true, "set": "zombie"},
 	"death_back_headshot": {"file": "anim_death_back_headshot", "fall": true, "set": "zombie"}
 }
+## (v0.89) Clips each read on the rig they were downloaded with (the file itself), so any
+## Mixamo character will do; a file that is not there is left out.
+## "flip": also a mirrored copy under that name. Downloaded 2026-10-29 on Y Bot.
+const OWN := {
+	"zidle_alert": {"file": "mx_idle_alert", "loop": true, "set": "zombie"},
+	"zidle_look": {"file": "mx_idle_look", "loop": true, "set": "zombie"},
+	"zidle_twitch": {"file": "mx_idle_twitch", "loop": true, "set": "zombie"},
+	"zidle_stand": {"file": "mx_idle_stand", "loop": true, "set": "zombie"},
+	"zidle_scratch": {"file": "mx_idle_scratch", "loop": true, "set": "zombie"},
+	"zidle_upright": {"file": "mx_idle_upright", "loop": true, "set": "zombie"},
+	"zwalk": {"file": "mx_walk_a", "loop": true, "rooted": true, "speed": 0.33, "set": "zombie", "flip": "zwalk_left"},
+	"zwalk_lurch": {"file": "mx_walk_b", "loop": true, "rooted": true, "speed": 0.54, "set": "zombie", "flip": "zwalk_lurch_left"},
+	"zwalk_limp": {"file": "mx_walk_injured", "loop": true, "rooted": true, "speed": 0.54, "set": "zombie", "flip": "zwalk_limp_left"},
+	"zrun": {"file": "mx_run_a", "loop": true, "rooted": true, "speed": 2.97, "set": "zombie", "flip": "zrun_left"},
+	"zrun_limp": {"file": "mx_walk_injured2", "loop": true, "rooted": true, "speed": 1.23, "set": "zombie", "flip": "zrun_limp_left"},
+	"zjab": {"file": "mx_attack_jab", "strike": 0.67, "set": "zombie", "flip": "zjab_left"},
+	"zpunch": {"file": "mx_attack_punch2", "strike": 1.27, "end": 2.1, "set": "zombie", "flip": "zpunch_left"},
+	"zkick": {"file": "mx_attack_snapkick", "strike": 0.87, "end": 1.9, "set": "zombie", "flip": "zkick_left"},
+	"zswipe": {"file": "mx_attack_swipe2", "strike": 1.07, "end": 2.0, "set": "zombie", "flip": "zswipe_left"},
+	"ztwohand": {"file": "mx_attack_twohand", "strike": 1.47, "end": 2.6, "set": "zombie"},
+	"zgrab": {"file": "mx_attack_grab", "strike": 1.43, "end": 2.3, "set": "zombie"},
+	"zflinch": {"file": "mx_hit_flinch2", "end": 1.4, "set": "zombie", "flip": "zflinch_left"},
+	"zhit_back": {"file": "mx_hit_back", "end": 1.9, "travel": true, "set": "zombie", "flip": "zhit_back_left"},
+	"zdodge_right": {"file": "mx_dodge_right", "rooted": true, "set": "zombie", "flip": "zdodge_left"},
+	"zscream": {"file": "mx_scream2", "set": "zombie"}
+}
+static var own_sets: Array = []
+## (v0.89) What the new clips add to the old pools: stands for every zombie, gaits and
+## blows for those that walk, run and strike like the ordinary ones.
+const OWN_IDLES := ["idle", "zidle_alert", "zidle_look", "zidle_twitch", "zidle_stand", "zidle_scratch", "zidle_upright"]
+const OWN_WALKS := ["zwalk", "zwalk_lurch", "zwalk_limp"]
+const OWN_RUNS := ["zrun", "zrun_limp"]
+const OWN_ATTACKS := ["zjab", "zpunch", "zkick", "zswipe", "ztwohand", "zgrab"]
 ## Which death fits which shot. Sides are the infected's own left and right.
 const DEATHS := {
 	"front": ["death_back", "death_drop_back", "death_from_front", "death_side", "death_side_left", "death_dying_back", "death_fall_back"],
@@ -482,6 +526,26 @@ var still_for := 0.0
 var fell_from := 0.0
 ## Bones torn off (sever): their parts are gone, and nothing loose drives them again.
 var cut_bones: Array[int] = []
+## (v0.89) Life while it stands: how much it is standing (0 walking, 1 still), the head's
+## twitch (where it jerks to, where it is now, seconds to the next), and how far it leans
+## into a quick step sideways (-1..1, from how it really moves, so a guest sees it too).
+var still := 0.0
+var twitch_goal := Vector3.ZERO
+var twitch_now := Vector3.ZERO
+var twitch_left := 2.0
+var lean := 0.0
+var last_spot := Vector3.INF
+## (v0.89) The streaks the glowing eyes draw: world-space points [time, left, right] of the
+## last TRAIL_TIME seconds, drawn as two fading ribbons with a glow round each eye.
+const TRAIL_TIME := 0.35
+const TRAIL_RANGE := 45.0
+static var trail_materials: Dictionary = {}
+static var trail_texture: GradientTexture2D
+var trail: MeshInstance3D
+var trail_mesh: ImmediateMesh
+var trail_points: Array = []
+## Clips one standing about may play now and then (see idle_act).
+const IDLE_ACTS := ["feed", "writhe", "scream", "flinch", "recoil_left", "zidle_scratch", "zidle_look", "zidle_twitch", "zscream"]
 
 func _ready() -> void:
 	config = KINDS[kind]
@@ -523,7 +587,30 @@ func _ready() -> void:
 	# Advanced by hand so the procedural layer can be applied right after each step.
 	player.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
 	_build_eyes()
+	_build_trail()
+	# (v0.89) Each one stands its own way; the ordinary ones may walk, run and strike with
+	# the newer clips too (see OWN_*).
+	var stands: Array = OWN_IDLES.filter(func(c): return player.has_animation(c))
+	moves["idle"] = stands.pick_random() if not stands.is_empty() else "idle"
+	if str(moves.walk) in ["shamble", "drag", "creep"] and randf() < 0.45:
+		var walks: Array = OWN_WALKS.filter(func(c): return player.has_animation(c))
+		if not walks.is_empty():
+			moves["walk"] = walks.pick_random()
+	if str(moves.run) in ["run", "feral"] and randf() < 0.35:
+		var runs: Array = OWN_RUNS.filter(func(c): return player.has_animation(c))
+		if not runs.is_empty():
+			moves["run"] = runs.pick_random()
+	if (moves.attacks as Array).has("swipe"):
+		var blows: Array = OWN_ATTACKS.filter(func(c): return player.has_animation(c))
+		blows.shuffle()
+		moves["attacks"] = (moves.attacks as Array) + blows.slice(0, 3)
+	# Half of them walk, run and kick off the other foot (the mirrored clips).
+	for move_kind in ["walk", "run"]:
+		var flipped := str(moves[move_kind]) + "_left"
+		if randf() < 0.5 and player.has_animation(flipped):
+			moves[move_kind] = flipped
 	phase = randf() * TAU
+	twitch_left = randf_range(0.5, 3.0)
 	player.play("idle")
 	player.seek(randf() * player.current_animation_length, true)
 
@@ -722,13 +809,22 @@ static func _prepare_source() -> void:
 	if source.is_empty():
 		source = sample(RIG_SCENE, CLIPS)
 		more = sample(MORE_RIG, MORE)
+		own_sets.clear()
+		for clip_name in OWN:
+			var path: String = CLIP_FOLDER + str(OWN[clip_name].file) + ".fbx"
+			if ResourceLoader.exists(path):
+				var table := {clip_name: OWN[clip_name]}
+				if OWN[clip_name].has("flip"):
+					table[str(OWN[clip_name].flip)] = {"mirror": clip_name, "set": str(OWN[clip_name].get("set", ""))}
+				own_sets.append(sample(path, table))
 
-## Adds the clips of MORE to a library that was built for this skeleton.
+## Adds the clips of MORE and OWN to a library that was built for this skeleton.
 static func _add_more(library: AnimationLibrary, skel: Skeleton3D, rig: Dictionary, clip_set: String, only: Array = []) -> void:
 	_prepare_source()
-	var extra := _bake(skel, rig, clip_set, more, only)
-	for clip_name in extra.get_animation_list():
-		library.add_animation(clip_name, extra.get_animation(clip_name))
+	for from in [more] + own_sets:
+		var extra := _bake(skel, rig, clip_set, from, only)
+		for clip_name in extra.get_animation_list():
+			library.add_animation(clip_name, extra.get_animation(clip_name))
 
 ## Samples every clip of `table` on the rig it was made for: per limb role, how far the
 ## bone has turned away from its rest pose in model space, plus the movement of the hips.
@@ -1112,6 +1208,125 @@ func _build_eyes() -> void:
 		eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		attachment.add_child(eye)
 
+## The streaks behind the eyes: one mesh in world space, rebuilt every step.
+func _build_trail() -> void:
+	trail_mesh = ImmediateMesh.new()
+	trail = MeshInstance3D.new()
+	trail.name = "EyeTrail"
+	trail.mesh = trail_mesh
+	trail.top_level = true
+	trail.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(trail)
+	trail.global_transform = Transform3D.IDENTITY
+
+## One additive material per colour of eye: bright in the middle, soft at the edges.
+static func _trail_material(colour: Color) -> StandardMaterial3D:
+	var key := colour.to_html()
+	if trail_materials.has(key):
+		return trail_materials[key]
+	if trail_texture == null:
+		var fade := Gradient.new()
+		fade.set_color(0, Color.WHITE)
+		fade.add_point(0.35, Color(1, 1, 1, 0.45))
+		fade.set_color(fade.get_point_count() - 1, Color(1, 1, 1, 0))
+		trail_texture = GradientTexture2D.new()
+		trail_texture.gradient = fade
+		trail_texture.fill = GradientTexture2D.FILL_RADIAL
+		trail_texture.fill_from = Vector2(0.5, 0.5)
+		trail_texture.fill_to = Vector2(0.5, 0.0)
+		trail_texture.width = 64
+		trail_texture.height = 64
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow.cull_mode = BaseMaterial3D.CULL_DISABLED
+	glow.vertex_color_use_as_albedo = true
+	glow.albedo_texture = trail_texture
+	glow.albedo_color = Color(colour.r, colour.g, colour.b, 1.0)
+	glow.disable_receive_shadows = true
+	trail_materials[key] = glow
+	return glow
+
+## Records where the eyes are and draws the streaks of the last TRAIL_TIME seconds: thin
+## ribbons that fade from the eye backwards, and a soft glow round each eye that flickers
+## a little. Only near a camera and while the eyes burn.
+func _trail_step() -> void:
+	if trail_mesh == null:
+		return
+	trail_mesh.clear_surfaces()
+	var lit: Array = []
+	if eyes != null and eyes.visible and is_visible_in_tree():
+		for eye in eyes.get_children():
+			if eye is MeshInstance3D and (eye as MeshInstance3D).visible:
+				lit.append(eye)
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if lit.size() < 2 or camera == null:
+		trail_points.clear()
+		return
+	var left: Vector3 = (lit[0] as Node3D).global_position
+	var right: Vector3 = (lit[1] as Node3D).global_position
+	var view := camera.global_position
+	if view.distance_to(left) > TRAIL_RANGE:
+		trail_points.clear()
+		return
+	# A jump (a teleport, a guest's copy catching up) starts a new streak instead of drawing one.
+	if not trail_points.is_empty() and (trail_points[0][1] as Vector3).distance_to(left) > 0.5:
+		trail_points.clear()
+	trail_points.push_front([clock, left, right])
+	while trail_points.size() > 2 and clock - float(trail_points.back()[0]) > TRAIL_TIME:
+		trail_points.pop_back()
+	var shown := lit[0] as MeshInstance3D
+	var colour: Color = (shown.material_override as StandardMaterial3D).albedo_color if shown.material_override is StandardMaterial3D else Color(1, 0.13, 0.05)
+	var size := float(config.eye_size) * model_scale * shown.scale.x
+	var width := size * 1.4
+	var flicker := 0.86 + 0.14 * sin(clock * 23.0 + phase) * sin(clock * 7.0 + phase * 2.0)
+	trail_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _trail_material(colour))
+	for side in [1, 2]:
+		var count := trail_points.size()
+		for i in range(count - 1):
+			var a: Vector3 = trail_points[i][side]
+			var b: Vector3 = trail_points[i + 1][side]
+			if a.distance_squared_to(b) < 0.000004:
+				continue
+			var fade_a := 1.0 - clampf((clock - float(trail_points[i][0])) / TRAIL_TIME, 0.0, 1.0)
+			var fade_b := 1.0 - clampf((clock - float(trail_points[i + 1][0])) / TRAIL_TIME, 0.0, 1.0)
+			var across := (b - a).cross(view - a)
+			if across.length_squared() < 0.0000001:
+				continue
+			across = across.normalized()
+			var wa := across * width * (0.4 + 0.6 * fade_a)
+			var wb := across * width * (0.4 + 0.6 * fade_b)
+			var ca := Color(1, 1, 1, fade_a * fade_a * flicker)
+			var cb := Color(1, 1, 1, fade_b * fade_b * flicker)
+			_vertex(a - wa, Vector2(0.5, 0.0), ca)
+			_vertex(a + wa, Vector2(0.5, 1.0), ca)
+			_vertex(b + wb, Vector2(0.5, 1.0), cb)
+			_vertex(a - wa, Vector2(0.5, 0.0), ca)
+			_vertex(b + wb, Vector2(0.5, 1.0), cb)
+			_vertex(b - wb, Vector2(0.5, 0.0), cb)
+	# The glow round each eye, a little towards the camera so the face does not cut it; it
+	# grows a little with distance, so far off the eyes still burn in the dark.
+	var view_basis := camera.global_transform.basis
+	for eye_spot in [left, right]:
+		var spot: Vector3 = eye_spot + (view - eye_spot).normalized() * 0.03
+		var radius := maxf(size * 5.0, view.distance_to(spot) * 0.0022)
+		var x := view_basis.x * radius
+		var y := view_basis.y * radius
+		var c := Color(1, 1, 1, 0.75 * flicker)
+		_vertex(spot - x - y, Vector2(0, 1), c)
+		_vertex(spot + x - y, Vector2(1, 1), c)
+		_vertex(spot + x + y, Vector2(1, 0), c)
+		_vertex(spot - x - y, Vector2(0, 1), c)
+		_vertex(spot + x + y, Vector2(1, 0), c)
+		_vertex(spot - x + y, Vector2(0, 0), c)
+	trail_mesh.surface_end()
+
+func _vertex(at: Vector3, uv: Vector2, colour: Color) -> void:
+	trail_mesh.surface_set_color(colour)
+	trail_mesh.surface_set_uv(uv)
+	trail_mesh.surface_add_vertex(at)
+
 ## Shows or takes away the marks of a Medic's gas.
 func set_buffed(on: bool) -> void:
 	if on == buffed or mesh_instance == null:
@@ -1231,12 +1446,21 @@ func _shell_step(delta: float) -> void:
 # ---------------------------------------------------------------- animation
 
 func _clip(clip_name: String) -> Dictionary:
-	return source.clips[clip_name] if source.clips.has(clip_name) else more.clips[clip_name]
+	if source.clips.has(clip_name):
+		return source.clips[clip_name]
+	if more.clips.has(clip_name):
+		return more.clips[clip_name]
+	for from: Dictionary in own_sets:
+		if from.clips.has(clip_name):
+			return from.clips[clip_name]
+	return source.clips.idle
 
 ## Advances the animation. `speed` is how fast the body really moves, so the stride
 ## matches the ground instead of sliding over it.
 func animate(delta: float, speed: float) -> void:
 	clock += delta
+	_trail_step()
+	_life_step(delta)
 	flinch = maxf(0.0, flinch - delta * 4.5)
 	travel = 0.0
 	if shell_skin != null:
@@ -1272,7 +1496,7 @@ func animate(delta: float, speed: float) -> void:
 func _stride(speed: float, delta: float) -> void:
 	var paced := speed / (model_scale * stride_scale)
 	move = clampf(paced, 0.0, 1.0)
-	var wanted := "idle"
+	var wanted := str(moves.get("idle", "idle"))
 	var rate := 1.0
 	if paced > 0.12:
 		var walk: Dictionary = _clip(moves.walk)
@@ -1286,12 +1510,66 @@ func _stride(speed: float, delta: float) -> void:
 		player.play(wanted, 0.22)
 	player.speed_scale = rate
 
+## How much it stands, where the head jerks to, and how it leans into a step sideways.
+func _life_step(delta: float) -> void:
+	var standing := 1.0 if state == "move" and not dying and move < 0.12 else 0.0
+	still = move_toward(still, standing, delta * 2.5)
+	# Now and then the head jerks somewhere and sinks back slowly; standing it does so
+	# more often and further.
+	twitch_left -= delta
+	if twitch_left <= 0.0:
+		twitch_left = randf_range(1.2, 3.5) if still > 0.5 else randf_range(2.5, 6.0)
+		var reach := 1.0 if still > 0.5 else 0.45
+		twitch_goal = Vector3(randf_range(-0.28, 0.32), randf_range(-0.7, 0.7), randf_range(-0.45, 0.45)) * reach
+	twitch_now = twitch_now.lerp(twitch_goal, minf(1.0, delta * 16.0))
+	twitch_goal = twitch_goal.move_toward(Vector3.ZERO, delta * 0.55)
+	# Sideways speed, in the body's own frame: from where it really went, so it works on a
+	# guest's copy as well.
+	var here := global_position
+	var sideways := 0.0
+	if last_spot != Vector3.INF and delta > 0.0:
+		var went := (here - last_spot) / delta
+		sideways = went.dot(global_transform.basis.x)
+	last_spot = here
+	var wanted := clampf(sideways / 3.5, -1.0, 1.0) if not dying else 0.0
+	lean = lerpf(lean, wanted, minf(1.0, delta * 12.0))
+
+## Standing still is no statue: the back sways and breathes, the arms hang and swing a
+## little, the head jerks now and then. A quick step aside leans the whole body into it.
+func _life() -> void:
+	if loose_body or dying or skeleton == null or not rig.has("spine"):
+		return
+	var spine: Array = rig.spine
+	var n := float(maxi(1, spine.size()))
+	var w := still * (0.0 if guard > 0.01 else 1.0)
+	if w > 0.01:
+		var breath := sin(clock * 1.7 + phase) * 0.035
+		var sway := sin(clock * 0.75 + phase) * 0.09 + sin(clock * 0.31 + phase * 1.7) * 0.05
+		var roll := sin(clock * 0.55 + phase * 0.6) * 0.07
+		for bone in spine:
+			_nudge(bone.index, Vector3(breath + 0.06, sway, roll) * w / n)
+		if rig.has("arms"):
+			var side := 0
+			for arm in rig.arms:
+				var swing := sin(clock * 1.1 + phase + side * 2.1) * 0.12
+				_nudge(int(arm.upper.index), Vector3(swing, 0, 0) * w)
+				side += 1
+	var head_w := 0.35 + 0.65 * still
+	if guard <= 0.01 and state in ["move", "scream"]:
+		_nudge(rig.head.index, twitch_now * head_w)
+	if absf(lean) > 0.02:
+		# Skeleton space: the model faces +Z there and its +X is the body's left.
+		for bone in spine:
+			_nudge(bone.index, Vector3(0.12 * absf(lean), 0, lean * 0.42) / n)
+		_nudge(rig.head.index, Vector3(0, 0, -lean * 0.2))
+
 ## Rotates a bone in model space on top of whatever the clip just posed.
 func _nudge(index: int, euler: Vector3) -> void:
 	var global := skeleton.get_bone_global_pose(index).basis.get_rotation_quaternion()
 	skeleton.set_bone_pose_rotation(index, skeleton.get_bone_pose_rotation(index) * (global.inverse() * Quaternion.from_euler(euler) * global))
 
 func _overlay() -> void:
+	_life()
 	if flinch > 0.01:
 		var spine: Array = rig.spine
 		for bone in spine:
@@ -1472,7 +1750,7 @@ func stagger(heavy: bool, clip_name: String = "") -> float:
 	if clip_name == "":
 		clip_name = "stumble" if heavy else pick_flinch()
 	var rate := 1.4
-	var hold := (1.75 if clip_name == "stumble" else 0.85) / rate
+	var hold := (1.75 if clip_name == "stumble" else (1.6 if clip_name.begins_with("zhit_back") else 0.85)) / rate
 	_begin(clip_name, 0.07, rate, 0.0, hold, "stagger")
 	travel_clip = clip_name
 	travel_last = 0.0
@@ -1480,7 +1758,7 @@ func stagger(heavy: bool, clip_name: String = "") -> float:
 
 func pick_flinch() -> String:
 	var options := ["flinch"]
-	for clip_name in ["recoil", "flinch_left"]:
+	for clip_name in ["recoil", "flinch_left", "recoil_left", "zflinch", "zflinch_left"]:
 		if player.has_animation(clip_name):
 			options.append(clip_name)
 	return options.pick_random()
@@ -1832,7 +2110,68 @@ func _freeze() -> void:
 	loose.erase(self)
 
 func pick_attack() -> String:
-	return (moves.attacks as Array).pick_random()
+	var clip_name: String = (moves.attacks as Array).pick_random()
+	# A blow may come off either side.
+	if not clip_name.ends_with("_left") and randf() < 0.5 and player.has_animation(clip_name + "_left"):
+		clip_name += "_left"
+	return clip_name
+
+## The clip of a heavy hit: stumbling on or knocked back.
+func pick_stumble() -> String:
+	var options := ["stumble"]
+	for clip_name in ["zhit_back", "zhit_back_left"]:
+		if player.has_animation(clip_name):
+			options.append(clip_name)
+	return options.pick_random()
+
+## The step aside of a juke (Infected._juke): +1 to its right.
+func dodge(side: float) -> void:
+	var clip_name := "zdodge_right" if side > 0.0 else "zdodge_left"
+	if dying or state != "move" or not player.has_animation(clip_name):
+		return
+	_begin(clip_name, 0.08, 2.4, 0.15, 0.52, "dodge")
+
+## A clip that fits one standing about, or "" for none.
+func idle_pick() -> String:
+	var options: Array = []
+	for clip_name in IDLE_ACTS:
+		if player.has_animation(clip_name):
+			options.append(clip_name)
+	# Feeding is the most usual by far.
+	if options.has("feed"):
+		options.append("feed")
+		options.append("feed")
+	return "" if options.is_empty() else options.pick_random()
+
+## Plays an idle clip for `hold` seconds (a loop such as feeding goes on that long), then
+## goes back to standing. Interrupted by anything else.
+func idle_act(clip_name: String, hold: float) -> void:
+	if dying or not player.has_animation(clip_name):
+		return
+	match clip_name:
+		"feed": _begin(clip_name, 0.45, randf_range(0.85, 1.1), randf() * 2.0, hold, "scream")
+		"scream": _begin(clip_name, 0.25, 0.8, 0.35, hold, "scream")
+		_: _begin(clip_name, 0.25, 0.85, 0.0, hold, "scream")
+
+## How long an idle clip lasts when played by itself (a loop: as long as wanted).
+func idle_length(clip_name: String) -> float:
+	match clip_name:
+		"feed": return randf_range(4.0, 9.0)
+		"scream": return 1.6
+		"writhe": return 2.6
+		"zidle_scratch": return randf_range(3.5, 5.0)
+		"zidle_look": return randf_range(3.0, 4.5)
+		"zidle_twitch": return randf_range(2.5, 4.0)
+		"zscream": return 2.4
+	return 1.3
+
+## Leaves whatever it does to stand and come (woken while feeding).
+func wake() -> void:
+	if dying or state != "scream":
+		return
+	state = "move"
+	busy_left = 0.0
+	gait = ""
 
 ## Only the Ripper leaps; everyone else ignores the call.
 func pounce() -> void:
