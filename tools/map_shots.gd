@@ -48,6 +48,10 @@ const VIEWS := {
 	"yard_gate": [Vector3(0.5, 1.62, 45), Vector3(0, 3, 9)],
 	# (v0.91) The rain in the yard: splashes, rings in the puddles, spray, the porch lamp.
 	"rain_yard": [Vector3(-3, 1.62, 22), Vector3(-1, 0.2, 15)],
+	# (v0.91) The hay bales as a model: in the south yard, close up, by the barn, the tractor.
+	"bales_yard": [Vector3(-3.6, 1.62, 28.4), Vector3(-6.3, 0.4, 25.2)],
+	"bales_close": [Vector3(-5.2, 1.1, 27.0), Vector3(-6.1, 0.45, 25.2)],
+	"bales_east": [Vector3(22.4, 1.62, -6.6), Vector3(25.2, 0.5, -9.8)],
 	"yard_from_porch": [Vector3(0, 1.62, 11.2), Vector3(1, 1.6, 40)],
 	"yard_north": [Vector3(-2, 1.62, -12), Vector3(8, 1.5, -24)],
 	"yard_southeast": [Vector3(8, 1.62, 18), Vector3(24, 1.2, 34)],

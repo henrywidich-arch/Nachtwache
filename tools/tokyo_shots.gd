@@ -47,7 +47,16 @@ const VIEWS := {
 	"top": [Vector3(0, 46, 0.01), Vector3(0, 0, 0)],
 	# (v0.91) The rain on the street: splashes, rings in the puddles, spray.
 	"rain_puddle": [Vector3(-3, 1.7, 21), Vector3(-1, 0, 14)],
-	"rain_neon": [Vector3(20.6, 1.7, 26.5), Vector3(20.6, 2.0, 12)]
+	"rain_neon": [Vector3(20.6, 1.7, 26.5), Vector3(20.6, 2.0, 12)],
+	# (v0.91) The detailed vehicles (VehicleKit): the bus, the coupes, saloons, taxi and wrecks.
+	"bus": [Vector3(-9.0, 1.7, 38.0), Vector3(-4.5, 1.6, 44.5)],
+	"bus_door": [Vector3(-8.6, 1.7, 51.5), Vector3(-4.5, 1.4, 46.0)],
+	"bus_side": [Vector3(3.0, 2.0, 49.0), Vector3(-4.5, 1.4, 46.0)],
+	"jdm": [Vector3(-29.0, 1.6, 7.0), Vector3(-24.0, 0.6, 3.5)],
+	"jdm_black": [Vector3(21.0, 1.6, -31.5), Vector3(16.0, 0.6, -34.5)],
+	"sedan": [Vector3(8.5, 1.7, 8.0), Vector3(4.2, 0.7, 3.6)],
+	"taxi": [Vector3(9.5, 1.7, 23.5), Vector3(4.8, 0.7, 28.0)],
+	"wreck": [Vector3(-6.5, 1.7, 2.0), Vector3(-2.5, 0.6, -1.5)]
 }
 const FPS_VIEWS := ["crossing", "model", "side_street", "overview"]
 

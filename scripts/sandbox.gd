@@ -427,6 +427,9 @@ func visit_spot(def: String) -> Array:
 	if def == TOKYO_IZAKAYA and is_instance_valid(map.tokyo) and map.points.has("tokyo_izakaya"):
 		# (Looking south, at its front.)
 		return [map.points.tokyo_izakaya, PI]
+	# (v0.91) Beside the TOKYO NEXT BUS, on its door side, the cars further down (VehicleKit).
+	if def == TOKYO_CARS and is_instance_valid(map.tokyo):
+		return [map.tokyo.origin + Vector3(-9.0, 0.05, 38.5), atan2(-4.5, -6.5)]
 	for piece: Dictionary in map.night.get("pieces", []):
 		if str(piece.def) != def:
 			continue
@@ -467,7 +470,7 @@ func _place_visit() -> void:
 		return
 	var label := "Tokio-Simulationshalle"
 	if visit_id.begins_with(TOKYO_HOUSE):
-		label = "Tokio · " + str(TokyoLandmarks.HOUSES.get(visit_id.trim_prefix(TOKYO_HOUSE), {}).get("label", visit_id))
+		label = "Tokio · " + str(TokyoLandmarks.HOUSES.get(visit_id.trim_prefix(TOKYO_HOUSE), {}).get("label", "Bus & Autos" if visit_id == TOKYO_CARS else visit_id))
 	elif visit_id == TOKYO_IZAKAYA:
 		label = "Tokio · Ramen Izakaya"
 	elif visit_id != TOKYO_VISIT:
@@ -643,3 +646,7 @@ func try_skin(skin: String) -> void:
 		(player.inventory[weapon] as Dictionary).erase("tuned")
 	WeaponSkins.apply(player.weapon_models.get(weapon), game.rewards.skin_for(weapon))
 	game.hud.loadout()
+
+## (v0.91) The bus and the cars of the simulation hall (VehicleKit), visited like one of
+## its houses: standing beside the bus.
+const TOKYO_CARS := TOKYO_HOUSE + "autos"

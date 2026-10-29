@@ -260,6 +260,7 @@ func _ready() -> void:
 				lab_parts.append(instance)
 			if String(id).begins_with("Lab"):
 				hall_parts.append(instance)
+	_commit_bales()
 	_finish_paths()
 	_build_forest()
 	_build_grass()
@@ -1841,11 +1842,74 @@ func _rug(center: Vector3, size: Vector2, color: Color) -> void:
 
 func _bale(pos: Vector3, yaw: float = 0.0, solid: bool = true) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
-	_placed(frame, "straw", Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035))
-	for band in [-0.32, 0.32]:
-		_placed(frame, "plain", Vector3(0, 0.36, band), Vector3(0.915, 0.735, 0.025), Color("2b2416"))
+	var tint := _vary(Color("5b4d2c"), 0.035)
+	if not _bale_model(frame, tint):
+		_placed(frame, "straw", Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), tint)
+		for band in [-0.32, 0.32]:
+			_placed(frame, "plain", Vector3(0, 0.36, band), Vector3(0.915, 0.735, 0.025), Color("2b2416"))
 	if solid:
 		_solid(pos + Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), true, yaw)
+
+## (v0.91) The square bales are a model now (tools/blender_make_vehicles.py: three
+## variants, straws standing out all over and fanned at the cut ends, two strings along and
+## two across). _bale_model gathers them, _commit_bales draws them as one MultiMesh per
+## variant and 30 m tile, on the farm's straw surface, tinted as the boxes were. `frame`
+## is the bale's foot. False when the model is missing (then the box stays).
+const HAY_BALE := "res://assets/models/hay_bale.glb"
+var bale_meshes: Array[Mesh] = []
+var bale_tried := false
+var bale_places: Dictionary = {}
+
+func _bale_model(frame: Transform3D, tint: Color) -> bool:
+	if not bale_tried:
+		bale_tried = true
+		if not "--no-bale-model" in OS.get_cmdline_user_args() and ResourceLoader.exists(HAY_BALE):
+			var scene := (load(HAY_BALE) as PackedScene).instantiate()
+			var found := scene.find_children("*", "MeshInstance3D", true, false)
+			found.sort_custom(func(a: Node, b: Node) -> bool: return String(a.name) < String(b.name))
+			for node in found:
+				var mesh := (node as MeshInstance3D).mesh.duplicate() as Mesh
+				for s in range(mesh.get_surface_count()):
+					var look := mesh.surface_get_material(s)
+					var name := look.resource_name if look != null else ""
+					if name == "Straw" or name == "Strands":
+						mesh.surface_set_material(s, mats["straw"])
+					elif look is BaseMaterial3D:
+						# The twine: a little faded and dirty, as out in the rain.
+						var twine := look.duplicate() as BaseMaterial3D
+						twine.albedo_color = twine.albedo_color.darkened(0.25)
+						twine.roughness = 0.85
+						mesh.surface_set_material(s, twine)
+				bale_meshes.append(mesh)
+			scene.free()
+	if bale_meshes.is_empty():
+		return false
+	var at := frame.origin
+	var variant := posmod(int(floor(at.x * 7.3 + at.z * 3.1 + at.y * 5.0)), bale_meshes.size())
+	var key := "%d|%d_%d" % [variant, int(floor((at.x + 60.0) / 30.0)), int(floor((at.z + 60.0) / 30.0))]
+	if not bale_places.has(key):
+		bale_places[key] = []
+	(bale_places[key] as Array).append([frame, tint])
+	return true
+
+func _commit_bales() -> void:
+	for key in bale_places:
+		var list: Array = bale_places[key]
+		var many := MultiMesh.new()
+		many.transform_format = MultiMesh.TRANSFORM_3D
+		many.use_colors = true
+		many.mesh = bale_meshes[int(str(key).get_slice("|", 0))]
+		many.instance_count = list.size()
+		for i in range(list.size()):
+			many.set_instance_transform(i, list[i][0])
+			many.set_instance_color(i, list[i][1])
+		var node := MultiMeshInstance3D.new()
+		node.name = "Bales_" + str(key).replace("|", "_")
+		node.multimesh = many
+		node.visibility_range_end = 110.0
+		node.visibility_range_end_margin = 10.0
+		add_child(node)
+	bale_places.clear()
 
 ## Big round bale lying on its side; its axis points along local x.
 func _round_bale(pos: Vector3, yaw: float) -> void:
@@ -3801,8 +3865,13 @@ func _trailer(pos: Vector3, yaw: float) -> void:
 	batch.cylinder(mats["metal"], frame * Vector3(-1.0, 0.42, 0.5), 0.04, 0.04, 2.0, Color("191a1a"), 8, axle)
 	for i in range(6):
 		var bale := frame * Vector3(-0.47 + (i % 2) * 0.94, 0.92, -1.1 + floori(i * 0.5) * 1.22)
-		batch.box(mats["straw"], bale + Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035), frame.basis * Basis(Vector3.UP, random.randf_range(-0.08, 0.08)))
-	batch.box(mats["straw"], frame * Vector3(0.1, 2.0, -0.3), Vector3(0.9, 0.72, 1.2), _vary(Color("5b4d2c"), 0.035), frame.basis * Basis(Vector3.UP, 0.5))
+		var tint := _vary(Color("5b4d2c"), 0.035)
+		var turn := frame.basis * Basis(Vector3.UP, random.randf_range(-0.08, 0.08))
+		if not _bale_model(Transform3D(turn, bale), tint):
+			batch.box(mats["straw"], bale + Vector3(0, 0.36, 0), Vector3(0.9, 0.72, 1.2), tint, turn)
+	var top_tint := _vary(Color("5b4d2c"), 0.035)
+	if not _bale_model(Transform3D(frame.basis * Basis(Vector3.UP, 0.5), frame * Vector3(0.1, 1.64, -0.3)), top_tint):
+		batch.box(mats["straw"], frame * Vector3(0.1, 2.0, -0.3), Vector3(0.9, 0.72, 1.2), top_tint, frame.basis * Basis(Vector3.UP, 0.5))
 	_solid(frame * Vector3(0, 1.0, 0), Vector3(2.2, 2.0, 3.7), true, yaw)
 
 func _build_yard() -> void:

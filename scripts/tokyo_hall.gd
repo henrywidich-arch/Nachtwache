@@ -22,6 +22,8 @@ const TK_CEILING := 50.0
 ## Half the width of the box the rain falls in (see _tk_rain).
 const RAIN_HALF := 28.0
 const RainFx := preload("res://scripts/rain_fx.gd")
+## (v0.91) The detailed bus and cars (tools/blender_make_vehicles.py).
+const VehicleKit := preload("res://scripts/vehicle_kit.gd")
 const TK_DECK := 5.4
 ## The blocks between the streets, along x and along z alike: the main avenues are 16 m
 ## wide (|x| < 8 and |z| < 8), the side streets 8 m (around +-34).
@@ -2944,14 +2946,14 @@ func _tk_streets() -> void:
 	_tk_car(Vector3(4.8, 0, 28), deg_to_rad(12), Color("d9d9d4"), "taxi", false)
 	_tk_car(Vector3(-4.5, 0, 46), 0.0, Color("3a6f4a"), "bus", false)
 	_tk_car(Vector3(5.5, 0, -30), PI, Color("1d2c4a"), "car", false)
-	_tk_car(Vector3(-24, 0, 3.5), PI / 2, Color("8a1d22"), "car", false)
+	_tk_car(Vector3(-24, 0, 3.5), PI / 2, Color("ece9e1"), "jdm", false)
 	_tk_car(Vector3(30, 0, -3.8), deg_to_rad(104), Color("e0e0dc"), "police", true)
 	_tk_car(Vector3(-48, 0, -4.0), -PI / 2, Color("c48a2a"), "van", false)
 	_tk_car(Vector3(47, 0, 4.4), PI / 2, Color("26292e"), "car", false)
 	_tk_car(Vector3(-34, 0, -48), deg_to_rad(8), Color("e8e6df"), "van", false)
 	_tk_car(Vector3(34.5, 0, 50), deg_to_rad(-160), Color("d9d9d4"), "taxi", false)
 	_tk_car(Vector3(-50, 0, 33.5), PI / 2, Color("44484e"), "car", true)
-	_tk_car(Vector3(16, 0, -34.5), -PI / 2, Color("8a1d22"), "car", false)
+	_tk_car(Vector3(16, 0, -34.5), -PI / 2, Color("222326"), "jdm", false)
 	# Vending machines on the pavements.
 	for spot in [[Vector3(-27.5, 0, 9.0), Vector3(0, 0, -1)], [Vector3(12.0, 0, -9.0), Vector3(0, 0, 1)], [Vector3(30.8, 0, 22.0), Vector3(-1, 0, 0)], [Vector3(-9.2, 0, -32.0), Vector3(1, 0, 0)], [Vector3(-38.8, 0, -20.0), Vector3(1, 0, 0)], [Vector3(41.0, 0, -8.9), Vector3(0, 0, 1)]]:
 		_tk_vending(spot[0], spot[1])
@@ -3131,8 +3133,17 @@ func _tk_vending(base: Vector3, facing: Vector3) -> void:
 		map.batch.box(map.mats["neon"], at + turn * Vector3(0, 0.55, 0.38), Vector3(0.7, 0.08, 0.02), Color("9ff6ff"), turn)
 	map._solid(base + turn * Vector3(0, 0.92, 0), Vector3(2.1, 1.84, 0.75), true, atan2(facing.x, facing.z))
 
-## A car; `kind` taxi, car, police, van or bus. A wreck is burnt and stands askew.
+## A car; `kind` taxi, car, jdm, police, van or bus. A wreck is burnt and stands askew.
+## (v0.91) Bus, cars, taxis and police are the detailed models of VehicleKit now (a car
+## the saloon, "jdm" the wedge coupe); the van, and everything when a model is missing,
+## is still built of boxes here.
 func _tk_car(base: Vector3, yaw: float, paint: Color, kind: String, wreck: bool) -> void:
+	var model := "bus" if kind == "bus" else ("jdm" if kind == "jdm" else ("sedan" if kind in ["car", "taxi", "police"] else ""))
+	if model != "" and VehicleKit.has(model):
+		_tk_vehicle(base, yaw, paint, kind, model, wreck)
+		return
+	if kind == "jdm":
+		kind = "car"
 	var turn := Basis(Vector3.UP, yaw)
 	var long := 4.4
 	var wide := 1.75
@@ -3171,6 +3182,38 @@ func _tk_car(base: Vector3, yaw: float, paint: Color, kind: String, wreck: bool)
 	if wreck:
 		map.batch.box(map.mats["plain"], frame * Vector3(0, 0.02, 0), Vector3(wide + 1.2, 0.02, long + 1.0), Color("101010"), turn)
 	map._solid(base + Vector3(0, tall * 0.5, 0), Vector3(wide, tall, long), true, yaw)
+
+func _tk_vehicle(base: Vector3, yaw: float, paint: Color, kind: String, model: String, wreck: bool) -> void:
+	var turn := Basis(Vector3.UP, yaw)
+	var frame := Transform3D(turn, base)
+	if wreck:
+		# On its burst tyres: sunk a little, leaning to one side and forward.
+		frame = Transform3D(turn * Basis(Vector3.BACK, deg_to_rad(2.5)) * Basis(Vector3.RIGHT, deg_to_rad(-1.2)), base - Vector3(0, 0.06, 0))
+	VehicleKit.place(map, model, frame, paint, wreck)
+	var size: Vector3 = VehicleKit.SIZES[model]
+	if kind == "taxi":
+		# The roof sign of a Tokyo taxi, lit while it still has power.
+		map.batch.box(map.mats["plain"] if wreck else map.mats["neon"], frame * Vector3(0, 1.56, 0.05), Vector3(0.46, 0.17, 0.2), Color("1a1a1a") if wreck else Color("ffcc40"), frame.basis)
+		if not wreck:
+			_tk_text("空車", frame * Vector3(0.55, 0.9, -1.0), yaw + PI, 0.1, Color("ff4030"), 2.0)
+	elif kind == "police":
+		map.batch.box(map.mats["plain"], frame * Vector3(0, 1.5, 0.05), Vector3(1.1, 0.08, 0.3), Color("202020"), frame.basis)
+		if not wreck:
+			map.batch.box(map.mats["neon_buzz"], frame * Vector3(-0.3, 1.58, 0.05), Vector3(0.45, 0.12, 0.24), Color("ff2020"), frame.basis)
+			map.batch.box(map.mats["neon_buzz"], frame * Vector3(0.3, 1.58, 0.05), Vector3(0.45, 0.12, 0.24), Color("2050ff"), frame.basis)
+			_tk_light(base + Vector3(0, 2.0, 0), Color("ff3030"), 1.2, 9.0)
+			for side in [-1.0, 1.0]:
+				_tk_text("警視庁", frame * Vector3(side * 0.945, 0.72, 0.1), yaw + side * PI / 2.0, 0.16, Color("101010"), 1.0)
+	if wreck:
+		map.batch.box(map.mats["plain"], base + Vector3(0, 0.02, 0), Vector3(size.x + 1.2, 0.02, size.z + 1.0), Color("101010"), turn)
+	elif model == "bus":
+		# The lit inside, the cyan lamps in front.
+		_tk_light(base + turn * Vector3(0, 2.2, 0), Color("e8f4ff"), 1.2, 9.0, true)
+		_tk_light(base + turn * Vector3(0, 1.0, -6.4), Color("b8f6ff"), 0.45, 6.0, true)
+	elif model == "jdm":
+		# Its red underglow on the asphalt (always kept: there are only a few).
+		_tk_light(base + Vector3(0, 0.1, 0), Color("ff2418"), 2.2, 4.5)
+	map._solid(base + Vector3(0, size.y * 0.5, 0), size, true, yaw)
 
 # ---------------------------------------------------------------- the radio tower
 

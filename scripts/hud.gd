@@ -1739,6 +1739,8 @@ func _test_world(column: VBoxContainer, room: Sandbox) -> void:
 	_test_row(column, "MISSION 2  ·  AREALE (ALLEIN BEGEHEN)", pieces)
 	# The houses of the simulation hall, each built after a picture: stand before it.
 	var houses: Array = [_chip("RAMEN IZAKAYA", _test_do.bind("visit", Sandbox.TOKYO_IZAKAYA), room.visit_id == Sandbox.TOKYO_IZAKAYA, 230)]
+	# (v0.91) The bus and the cars (VehicleKit).
+	houses.append(_chip("BUS & AUTOS", _test_do.bind("visit", Sandbox.TOKYO_CARS), room.visit_id == Sandbox.TOKYO_CARS, 230))
 	for house: String in TokyoLandmarks.HOUSES:
 		var visit_id := Sandbox.TOKYO_HOUSE + house
 		houses.append(_chip(str(TokyoLandmarks.HOUSES[house].label), _test_do.bind("visit", visit_id), room.visit_id == visit_id, 230))
