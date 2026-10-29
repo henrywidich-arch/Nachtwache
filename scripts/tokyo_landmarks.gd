@@ -86,11 +86,11 @@ func _text(f: Dictionary, t: float, y: float, d: float, text: String, tall: floa
 func _lamp(at: Vector3, color: Color, energy: float, reach: float) -> void:
 	hall._tk_pool(at, minf(reach * 0.3, 3.5), color, 0.4)
 	# (The houses have lamps of their own, up to a limit.)
-	if lamps >= 34 or "--no-lm-lamps" in OS.get_cmdline_user_args():
+	if lamps >= 60 or "--no-lm-lamps" in OS.get_cmdline_user_args():
 		return
 	lamps += 1
-	var lamp := map._light(at, color, energy, reach, false, 0.0, 0.8, 46.0)
-	lamp.distance_fade_length = 10.0
+	var lamp := map._light(at, color, energy * TokyoHall.LAMP_GAIN, reach * TokyoHall.LAMP_REACH, false, 0.0, 0.8, 52.0)
+	lamp.distance_fade_length = 12.0
 
 ## The body of a house: its walls (a kind and a colour of TokyoHall.TK_WALLS) from `from`
 ## up, solid. `kind` -1: as the dice say.

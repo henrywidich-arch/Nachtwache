@@ -665,6 +665,11 @@ var kit_count := 0
 ## The gates in the walls where the infected are let in (where they stand once through),
 ## and the named places, both in the map's coordinates.
 var tk_gates: Array[Vector3] = []
+## (v0.90) The ways in of the infected in the hall, in its own frame (HiveMap._lay_tokyo_ways
+## turns them into the map's ways in, HiveEntries runs them): {kind, at, land, out, path,
+## look}. "drop": off the edge of a roof or the top of a fire escape onto the street;
+## "walk": out of the dark of a back door, out of the black face of a gate (SCHLEUSE).
+var tk_ways: Array[Dictionary] = []
 var places: Dictionary = {}
 var rain: GPUParticles3D
 var inside := -1
@@ -703,7 +708,7 @@ var tk_pools: Array = []
 var tk_glints: Array = []
 ## The cards of blossom (TK_BLOSSOM): [transform, colour].
 var tk_blossoms: Array = []
-const GLINTS_MAX := 110
+const GLINTS_MAX := 170
 var ad_on := false
 const ZONE := "tokyo"
 
@@ -978,13 +983,19 @@ func _tk_text(text: String, pos: Vector3, yaw: float, tall: float, color: Color,
 
 ## A lamp without shadows. The many lamps of signs and lanes (`optional`) stop at a limit,
 ## those of the streets, the supply point and the gates never.
+## (v0.90, Henry: where there were lights it still stayed dark - lit rooms and big signs
+## lit next to nothing. Every lamp of the hall is now LAMP_GAIN stronger and reaches
+## LAMP_REACH further, and far more of the optional ones are kept.)
+const LAMP_GAIN := 1.45
+const LAMP_REACH := 1.3
+const OPTIONAL_LAMPS := 120
 func _tk_light(pos: Vector3, color: Color, energy: float, reach: float, optional: bool = false) -> void:
 	if optional:
-		if tk_lights >= 44:
+		if tk_lights >= OPTIONAL_LAMPS:
 			return
 		tk_lights += 1
-	var lamp := map._light(pos, color, energy, reach, false, 0.0, 0.8, 46.0)
-	lamp.distance_fade_length = 10.0
+	var lamp := map._light(pos, color, energy * LAMP_GAIN, reach * LAMP_REACH, false, 0.0, 0.8, 52.0)
+	lamp.distance_fade_length = 12.0
 
 func _tk_neon() -> Color:
 	return TK_NEON[map.random.randi() % TK_NEON.size()]
@@ -1681,6 +1692,10 @@ func _tk_building(lot: Rect2, inner: Rect2, edge: bool, centre: bool) -> void:
 		else:
 			_tk_proc_front(face, tall, shop_kit, style)
 		_tk_street_props(face, 0.35 if shop_kit else 0.0)
+		# (v0.90) Off the roof of a lower house they drop onto the street before it.
+		if tall <= 15.0 and float(face.length) > 3.0 and map.random.randf() < 0.6:
+			var t := map.random.randf_range(1.0, float(face.length) - 1.0)
+			tk_ways.append({"kind": "drop", "at": _tk_point(face, t, tall + 0.2, 1.2), "land": _tk_point(face, t, 0.0, 2.9), "out": face.out})
 		if not signed and map.random.randf() < 0.42 and tall > 14.0:
 			signed = true
 			_tk_billboard(face, tall)
@@ -2023,6 +2038,8 @@ func _tk_proc_glass(face: Dictionary, t: float, w: float) -> void:
 	for k in range(3):
 		_tk_face_box("lampglass", face, a + w * (k + 0.5) / 3.0 - 0.08, a + w * (k + 0.5) / 3.0 + 0.08, 2.88, 2.9, 0.6, 0.76, Color("ffe6c0"))
 	_tk_face_solid(face, a, b, 0.0, 3.0, 0.0, 0.2)
+	# (v0.90) The lit shop lights the pavement before it.
+	_tk_face_pool(face, t, 1.3, w * 0.45, glass, 0.9)
 
 ## The name board over a shop, its neon edge, its name.
 func _tk_proc_board(face: Dictionary, t: float, w: float) -> void:
@@ -2040,10 +2057,20 @@ func _tk_proc_board(face: Dictionary, t: float, w: float) -> void:
 ## (v10: 1.2 cm off the wall flickered against it from afar; now 3 cm.)
 func _tk_kit_pane_lit(face: Dictionary, t: float, y: float, wide: float, high: float, color: Color, depth: float = 0.03) -> void:
 	var frame := Transform3D(Basis(Vector3.UP, _tk_yaw(face.out as Vector3)) * Basis.from_scale(Vector3(wide, high, 1.0)), _tk_point(face, t, y + high * 0.5, depth))
+	_tk_window_glint(face, t, y + high * 0.5, color)
 	var key := kit_block + "|pane"
 	if not kit_panes.has(key):
 		kit_panes[key] = []
 	kit_panes[key].append([frame, color, Color(1.0, map.random.randf(), 0.0, 0.0)])
+
+## (v0.90) A lit room throws its light out of the window onto the street and the front
+## round it: a lamp a little before the lower windows, now and then (_tk_glints_commit
+## keeps the strongest and never two close together).
+func _tk_window_glint(face: Dictionary, t: float, middle: float, color: Color) -> void:
+	if middle > 13.0 or map.random.randf() > 0.55:
+		return
+	var at := _tk_point(face, t, middle - 2.4, 1.1)
+	tk_glints.append([at, 2.0, color, 0.55])
 
 func _tk_kit_front(face: Dictionary, tall: float, shop: bool, style: Dictionary) -> void:
 	var length: float = face.length
@@ -2125,6 +2152,8 @@ func _tk_kit_pane(face: Dictionary, t: float, y: float, wide: float, high: float
 	if map.random.randf() < 0.06:
 		color = Color("ff6ec7")
 	var frame := Transform3D(Basis(Vector3.UP, _tk_yaw(face.out as Vector3)) * Basis.from_scale(Vector3(wide, high, 1.0)), _tk_point(face, t, y + high * 0.5, 0.012))
+	if on:
+		_tk_window_glint(face, t, y + high * 0.5, color)
 	var key := kit_block + "|pane"
 	if not kit_panes.has(key):
 		kit_panes[key] = []
@@ -2157,6 +2186,8 @@ func _tk_kit_door(face: Dictionary) -> void:
 		_tk_kit_put(eye, face, 0.4 if map.random.randf() < 0.5 else length - 0.4, 3.4, 0.0)
 	if kit_mesh.has("door_frame"):
 		_tk_face_box("plain", face, t - 0.62, t + 0.62, 0.0, 1.95, 0.0, 0.02, Color("07080a"))
+	# (v0.90) Out of the dark behind it they come into the lane.
+	tk_ways.append({"kind": "walk", "look": "gate", "at": _tk_point(face, t, 0.0, 0.05), "path": [_tk_point(face, t, 0.0, -0.7), _tk_point(face, t, 0.0, 0.4)], "land": _tk_point(face, t, 0.0, 1.8), "out": face.out})
 	if map.random.randf() < 0.5:
 		_tk_face_box("lantern", face, t + 1.0, t + 1.2, 2.3, 2.6, 0.0, 0.12, Color("ffcf90"))
 		_tk_light(_tk_point(face, t + 1.1, 2.4, 0.8), Color("ffc890"), 0.9, 6.0, true)
@@ -2256,6 +2287,9 @@ func _tk_fire_escape(face: Dictionary, tall: float, tint: Color) -> void:
 		_tk_beam("plate", from, to, Vector2(0.7, 0.06), steel)
 		flip = not flip
 		y += 3.2
+	# (v0.90) Off its highest landing they jump down into the lane.
+	if y > 3.6 + 3.2 and y - 3.2 <= 13.5:
+		tk_ways.append({"kind": "drop", "at": _tk_point(face, t0 + 1.7, y - 3.2 + 0.1, 0.8), "land": _tk_point(face, t0 + 1.7, 0.0, 2.3), "out": face.out})
 
 ## One side of a lot: where it starts, which way it runs, which way it looks.
 func _tk_face(lot: Rect2, side: int) -> Dictionary:
@@ -2621,7 +2655,7 @@ func _tk_glints_commit() -> void:
 		var at: Vector3 = g[0]
 		var near := false
 		for q: Vector3 in placed:
-			if Vector2(q.x - at.x, q.z - at.z).length() < 3.0:
+			if Vector2(q.x - at.x, q.z - at.z).length() < 2.6 and absf(q.y - at.y) < 3.0:
 				near = true
 				break
 		if near:
@@ -2630,15 +2664,16 @@ func _tk_glints_commit() -> void:
 		var lamp := OmniLight3D.new()
 		lamp.position = Vector3(at.x, maxf(at.y, 0.0) + 2.4, at.z)
 		lamp.light_color = g[2]
-		lamp.light_energy = clampf(2.4 * float(g[3]), 0.8, 3.2)
+		# (v0.90: stronger and further - a sign lights the street and the fronts round it.)
+		lamp.light_energy = clampf(3.4 * float(g[3]), 1.1, 4.6)
 		lamp.light_specular = 1.0
-		lamp.omni_range = clampf(float(g[1]) * 3.0, 5.5, 10.5)
-		lamp.omni_attenuation = 1.6
+		lamp.omni_range = clampf(float(g[1]) * 3.6, 7.0, 13.5)
+		lamp.omni_attenuation = 1.4
 		lamp.shadow_enabled = false
 		lamp.light_volumetric_fog_energy = 0.0
 		lamp.distance_fade_enabled = true
-		lamp.distance_fade_begin = 30.0
-		lamp.distance_fade_length = 12.0
+		lamp.distance_fade_begin = 40.0
+		lamp.distance_fade_length = 14.0
 		map.add_child(lamp)
 	tk_glints.clear()
 
@@ -2808,7 +2843,7 @@ func _tk_crossing() -> void:
 		map._part("plain", base + Vector3(0, 2.4, corner.y * -0.25), Vector3(0.4, 0.7, 0.2), Color("15171a"))
 		_tk_glow("neon", base + Vector3(0, 2.4, corner.y * -0.36), Vector3(0.24, 0.24, 0.02), Color("4dff88"))
 		map._solid(base + Vector3(0, 1.0, 0), Vector3(0.3, 2.0, 0.3))
-		_tk_light(base + Vector3(-corner.x * 2.0, 6.0, -corner.y * 2.0), Color("dfe8ff"), 1.4, 14.0)
+		_tk_light(base + Vector3(-corner.x * 2.0, 6.0, -corner.y * 2.0), Color("dfe8ff"), 2.2, 16.0)
 	# Litter and a burnt-out car in the middle: something went wrong here, again.
 	_tk_car(Vector3(-2.5, 0, -1.5), deg_to_rad(38), Color("d9d9d4"), "taxi", true)
 	_tk_car(Vector3(4.2, 0, 3.6), deg_to_rad(-112), Color("2a2c30"), "car", false)
@@ -3393,19 +3428,63 @@ func _tk_bridge() -> void:
 func _tk_locker() -> void:
 	map._station("upgrade", "WERKBANK", "250", Vector3(-11.1, 0, 18.0), 0.0, Color("dfce85"))
 	var bench: Dictionary = map.stations[map.stations.size() - 1]
+	bench["tokyo"] = door
 	bench["stand"] = Vector3(-10.2, 0, 18.0)
 	bench["view"] = {"position": Vector3(-8.8, 1.55, 18.0), "target": Vector3(-11.1, 1.0, 18.0)}
-	var at := Vector3(-11.15, 0, 20.8)
-	var frame := Transform3D(Basis.IDENTITY, at)
+	_tk_weapon_locker(Vector3(-11.15, 0, 20.8), 0.0)
+
+## A weapon locker (a station of the kind "shop": the weapon is changed there) at `at`, its
+## front toward Basis(UP, yaw).x; `yaw` a multiple of a quarter turn.
+func _tk_weapon_locker(at: Vector3, yaw: float) -> void:
+	var frame := Transform3D(Basis(Vector3.UP, yaw), at)
+	var front := frame.basis.x
 	map._placed(frame, "steel", Vector3(-0.1, 1.05, 0), Vector3(0.6, 2.1, 1.7), Color("2c3236"))
 	map._placed(frame, "plain", Vector3(0.21, 1.1, 0), Vector3(0.02, 1.8, 0.02), Color("0d0f10"))
 	for row in range(3):
 		map._placed(frame, "plain", Vector3(0.21, 0.5 + row * 0.6, 0), Vector3(0.02, 0.04, 1.5), Color("0d0f10"))
 	map._glow_box(frame * Vector3(0.22, 2.0, 0), Vector3(0.02, 0.05, 1.5), Color("e8bd79"), 2.2, frame.basis)
 	var label := map.lettering("WAFFENSCHRANK", frame * Vector3(0.25, 2.35, 0), 30, Color("e8bd79"))
-	label.rotation.y = PI / 2
-	map._solid(at + Vector3(-0.1, 1.05, 0), Vector3(0.6, 2.1, 1.7))
-	map.stations.append({"kind": "shop", "title": "WAFFENSCHRANK", "pos": at, "stand": at + Vector3(0.9, 0, 0), "view": {"position": at + Vector3(2.3, 1.55, 0), "target": at + Vector3(0, 1.2, 0)}})
+	label.rotation.y = yaw + PI / 2
+	var across := absf(front.x) > 0.5
+	map._solid(frame * Vector3(-0.1, 1.05, 0), Vector3(0.6, 2.1, 1.7) if across else Vector3(1.7, 2.1, 0.6))
+	map.stations.append({"kind": "shop", "title": "WAFFENSCHRANK", "pos": at, "stand": at + front * 0.9, "view": {"position": at + front * 2.3 + Vector3(0, 1.55, 0), "target": at + Vector3(0, 1.2, 0)}, "tokyo": door})
+
+## (v0.90, Henry: in the hall there was nowhere to change the weapon or buy equipment.)
+## In the second mission the hall has stops of its own: at the supply point of the crossing
+## a workbench and a weapon locker (as the hall on its own always had), and three more
+## against its walls, along the ring street - each a weapon locker or a workbench with an
+## equipment station beside it, under a lamp and a sign that are seen from afar.
+##   [where the middle of the stop stands against the wall, the way it looks, what stands
+##    there: "locker", or a look of HiveStations, and where along the wall from the middle]
+const TK_STOPS := [
+	[Vector3(17.0, 0, -72.0), Vector3(0, 0, 1), [["locker", -1.6], ["cabinet", 1.4]], "武器  ·  WAFFEN & AUSRÜSTUNG"],
+	[Vector3(72.0, 0, -13.0), Vector3(-1, 0, 0), [["bench", -1.5], ["rack", 1.5]], "工房  ·  WERKBANK & AUSRÜSTUNG"],
+	[Vector3(-15.0, 0, 72.0), Vector3(0, 0, -1), [["locker", -1.6], ["cabinet", 1.4]], "武器  ·  WAFFEN & AUSRÜSTUNG"]
+]
+
+func _tk_stops() -> void:
+	if not door or not map is HiveMap:
+		return
+	map._chunk("Stops", true)
+	for stop: Array in TK_STOPS:
+		var wall: Vector3 = stop[0]
+		var into: Vector3 = stop[1]
+		var along := Vector3(-into.z, 0, into.x)
+		for unit: Array in stop[2]:
+			var back := wall + along * float(unit[1]) + into * 0.08
+			if str(unit[0]) == "locker":
+				# (Its front looks along `into`: Basis(UP, yaw).x = into.)
+				_tk_weapon_locker(back + into * 0.42, atan2(-into.z, into.x))
+			else:
+				var made := HiveStations.put(map as HiveMap, str(unit[0]), back, into)
+				if not made.is_empty():
+					made["tokyo"] = true
+		# The sign over it, its frame lit, and a lamp before it.
+		var sign_at := wall + into * 0.2 + Vector3(0, 4.6, 0)
+		map._part("plate", sign_at - into * 0.1, Vector3(absf(along.x) * 6.4 + absf(into.x) * 0.15, 1.1, absf(along.z) * 6.4 + absf(into.z) * 0.15), Color("111317"))
+		_tk_glow("neon", sign_at + into * 0.0 - Vector3(0, 0.6, 0), Vector3(absf(along.x) * 6.2 + 0.05, 0.06, absf(along.z) * 6.2 + 0.05), Color("ffb84d"))
+		_tk_text(str(stop[3]), sign_at + into * 0.04, _tk_yaw(into), 0.5, Color("ffd27a"), 2.2)
+		_tk_light(wall + into * 2.6 + Vector3(0, 3.6, 0), Color("ffe2b0"), 2.2, 11.0)
 
 func _tk_supply() -> void:
 	map._chunk("Supply", true)
@@ -3414,8 +3493,8 @@ func _tk_supply() -> void:
 	map._station("health", "ERSTE HILFE", "100", Vector3(-11.1, 0, 15.7), 0.0, Color("f5b68e"))
 	# (In the second mission the hall is no supply point of its own: the four lockers and
 	# workbenches of the mission stay four. Only on its own does it have them.)
-	if not door:
-		_tk_locker()
+	_tk_locker()
+	_tk_stops()
 	map._part("plate", Vector3(-10.4, 3.2, 17.1), Vector3(1.6, 0.15, 9.0), Color("1d2024"))
 	_tk_glow("lampglass", Vector3(-9.7, 3.1, 17.1), Vector3(0.08, 0.06, 8.6), Color("e8f0ff"))
 	_tk_light(Vector3(-8.6, 2.8, 17.1), Color("e8f0ff"), 2.8, 10.0)
@@ -3468,6 +3547,11 @@ func _tk_gates() -> void:
 			_tk_text("SCHLEUSE %02d" % number, lintel + inward * 0.45 + Vector3(0, 0.9, 0), _tk_yaw(inward), 0.7, Color("ff4a4a"), 2.0)
 			_tk_light(at + Vector3(0, 5.5, 0) + inward * 2.0, Color("ff3030"), 1.6, 11.0)
 			tk_gates.append(at + inward * 5.0)
+			# (v0.90) In the second mission they walk out of the black of the gate too.
+			if not (door and side == HiveCore.WEST and k == 0.0):
+				for e in [-2.2, 2.2]:
+					var mouth := at + Vector3(along.x * e, 0, along.y * e)
+					tk_ways.append({"kind": "walk", "look": "gate", "at": mouth, "path": [mouth - inward * 0.6, mouth + inward * 0.6], "land": mouth + inward * 4.0, "out": inward})
 	for corner in [Vector2(-1, -1), Vector2(1, -1), Vector2(1, 1), Vector2(-1, 1)]:
 		tk_gates.append(Vector3(corner.x * 66.0, 0, corner.y * 66.0))
 

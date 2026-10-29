@@ -5870,14 +5870,46 @@ func _settle_ways() -> void:
 		var cell := _free_near(level, Vector2(wish.x, wish.z), 3)
 		entry.level = level
 		entry.land = Vector3(cell.x * CELL, level_height(level), cell.y * CELL) if cell.x < 99999 else Vector3.INF
+		# (A way in of the simulation hall lands where it was laid or not at all: moved, it
+		# would come down on the far side of a house.)
+		if bool(entry.get("tight", false)) and entry.land != Vector3.INF and Vector2(entry.land.x - wish.x, entry.land.z - wish.z).length() > 1.0:
+			entry.land = Vector3.INF
 
 ## Where they are. Along every long passage, in the halls that are held, and above all
 ## where a squad could sit tight: rooms with one door, dead ends, the supply points.
+## (v0.90, Henry: too few infected in the simulation hall.) Its ways in: off the roofs and
+## the fire escapes, out of back doors and out of the gates in its walls (TokyoHall.tk_ways).
+func _lay_tokyo_ways() -> void:
+	if tokyo == null:
+		return
+	_begin_zone(TokyoHall.ZONE)
+	var at0 := tokyo.origin
+	for way: Dictionary in tokyo.tk_ways:
+		var more := {"tight": true}
+		if way.has("look"):
+			more["look"] = way.look
+		if way.has("path"):
+			var points := PackedVector3Array()
+			for point: Vector3 in way.path:
+				points.append(point + at0)
+			more["path"] = points
+			more["pace"] = 3.6
+		_way(str(way.kind), "tk_streets", (way.at as Vector3) + at0, way.get("out", Vector3.ZERO), (way.land as Vector3) + at0, more)
+	_end_zone()
+
+## Whether a place lies in the simulation hall (its streets are under the open sky of the
+## simulation, yet they have ways in of their own).
+func in_tokyo(pos: Vector3) -> bool:
+	if tokyo == null:
+		return false
+	return TokyoHall.plan_of(tokyo.origin).has_point(Vector2(pos.x, pos.z)) and pos.y > tokyo.origin.y - 4.0 and pos.y < tokyo.origin.y + TokyoHall.TK_CEILING
+
 func _lay_entries() -> void:
 	# (--hive-no-ways: the map without them, to compare pictures and frame rates.)
 	if "--hive-no-ways" in OS.get_cmdline_user_args():
 		return
 	_own_dice(71090)
+	_lay_tokyo_ways()
 	# --- the house: its windows (those nobody boarded up), and the hatch of the cellar in
 	# the kitchen. (Nothing is cut into its walls or ceilings: they are seen from outside.)
 	for at in [-4.3, 4.3]:

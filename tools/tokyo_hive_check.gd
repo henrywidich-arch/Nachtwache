@@ -65,6 +65,29 @@ func _run() -> void:
 				route = map.path_between(map.points.tokyo_start, at + Vector3(-0.9, 0, 0))
 			if route.size() < 2:
 				faults.append(prefix + "no path to the %s at %s" % [station.kind, at])
+		# (v0.90) The hall has ways in of its own, and stops to change the weapon and buy gear.
+		var ways := {}
+		var landed := 0
+		var cut := 0
+		for entry: Dictionary in map.entries:
+			if str(entry.room) != "tk_streets":
+				continue
+			var name := str(entry.get("look", entry.kind))
+			ways[name] = int(ways.get(name, 0)) + 1
+			if entry.land == Vector3.INF:
+				continue
+			landed += 1
+			if map.path_between(entry.land, map.points.tokyo_start).size() < 2:
+				cut += 1
+		var kinds := {}
+		for station in map.stations:
+			if bool(station.get("tokyo", false)):
+				kinds[str(station.kind)] = int(kinds.get(str(station.kind), 0)) + 1
+		print("%sways in the hall %s, %d land, %d cut off; stops %s" % [prefix, ways, landed, cut, kinds])
+		if landed < 30 or cut > landed / 10 or int(ways.get("drop", 0)) < 10 or int(ways.get("gate", 0)) < 10:
+			faults.append(prefix + "too few ways in the hall")
+		if int(kinds.get("shop", 0)) < 3 or int(kinds.get("gear", 0)) < 3 or int(kinds.get("upgrade", 0)) < 2:
+			faults.append(prefix + "the stops of the hall are missing")
 		# Nothing else at the hall's height may lie over it.
 		var plan := TokyoHall.plan_of(map.tokyo.origin)
 		for index in range(map.floors.size()):

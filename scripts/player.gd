@@ -499,7 +499,8 @@ var landing := 0.0
 var airborne := false
 var shake_noise := FastNoiseLite.new()
 
-const TORCH_ENERGY := 34.0
+## (v0.90, Henry: a little weaker and less glaring - 34 before.)
+const TORCH_ENERGY := 25.0
 ## How much of TORCH_ENERGY the flashlight gives now (less right before a wall).
 var torch_near := 1.0
 
@@ -516,7 +517,7 @@ func _torch_near(delta: float) -> void:
 	var want := 1.0
 	if not hit.is_empty():
 		var gap := from.distance_to(hit.position)
-		want = clampf(remap(gap * gap, 0.16, 36.0, 0.13, 1.0), 0.13, 1.0)
+		want = clampf(remap(gap * gap, 0.16, 36.0, 0.1, 1.0), 0.1, 1.0)
 	torch_near = lerpf(torch_near, want, minf(1.0, delta * 10.0))
 	var share := _torch_map_share()
 	torch_map = share if torch_map < 0.0 else lerpf(torch_map, share, minf(1.0, delta * 3.0))
@@ -580,15 +581,17 @@ func _ready() -> void:
 	# itself (attenuation 0.9); now it is much stronger and falls off far more slowly,
 	# so that it still finds the street at 25-35 m, in a wider cone with a bright core and a
 	# soft rim. Close to a wall it dims itself (_torch_near) so that it does not burn white.)
-	flashlight.light_color = Color("eef0e2")
+	# (v0.90, Henry: the beam was glaring. Now it is a little warmer, wider and falls off
+	# from its middle to its rim more gently - no hard bright disc -, its shadows softer.)
+	flashlight.light_color = Color("f4ead2")
 	flashlight.light_energy = TORCH_ENERGY
-	flashlight.spot_range = 42
-	flashlight.spot_angle = 36
-	flashlight.spot_attenuation = 0.42
-	flashlight.spot_angle_attenuation = 1.35
+	flashlight.spot_range = 40
+	flashlight.spot_angle = 40
+	flashlight.spot_attenuation = 0.5
+	flashlight.spot_angle_attenuation = 1.9
 	flashlight.shadow_enabled = true
 	flashlight.shadow_bias = 0.06
-	flashlight.shadow_blur = 1.6
+	flashlight.shadow_blur = 2.4
 	flashlight.light_volumetric_fog_energy = 0.3
 	# The beam sits just beside the weapon, so it must not light the viewmodel itself.
 	flashlight.light_cull_mask = 1

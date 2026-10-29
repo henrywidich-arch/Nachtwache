@@ -1,5 +1,32 @@
 [
   {
+    "version": "0.90",
+    "title": "Helleres Tokio, mehr Infizierte, Stationen in der Halle",
+    "sections": [
+      {
+        "title": "Simulationshalle Tokio",
+        "items": [
+          "Leuchtreklamen, Ladenfronten und erleuchtete Fenster werfen jetzt deutlich mehr Licht auf Straße und Fassaden; Straßenlaternen und Kreuzung sind heller, die Dunkelheit zwischen den Lichtinseln ist etwas weicher.",
+          "Viel mehr Infizierte: Sie springen von Dächern und Feuertreppen auf die Straße, drängen aus Hintertüren in die Gassen und laufen aus den Schleusen in den Hallenwänden – auch hinter euch. In der Halle sind mehr gleichzeitig unterwegs, und sie kommen schneller nach.",
+          "In Einsatz 2 hat die Halle jetzt eigene Stationen: an der Versorgung an der Kreuzung eine Werkbank und ein Waffenschrank, dazu an der Ringstraße zwei Waffenschränke mit Ausrüstungsstation und eine Werkbank mit Ausrüstungsstation, jeweils unter einem leuchtenden Schild."
+        ]
+      },
+      {
+        "title": "Taschenlampe",
+        "items": [
+          "Die Taschenlampe ist etwas schwächer und weniger grell: wärmeres Licht, ein breiterer Kegel mit weichem Rand und weichere Schatten."
+        ]
+      },
+      {
+        "title": "Maschinengewehr und G36",
+        "items": [
+          "Der Patronengurt des Maschinengewehrs lebt: Mit jedem Schuss rückt er um eine Patrone in die Waffe nach, die Leuchtspurpatronen wandern mit, und gegen Ende des Kastens wird der Gurt sichtbar kürzer, bis er leer ist. Nach dem Nachladen kommt der neue Kasten mit vollem Gurt.",
+          "Das eingebaute Rotpunktvisier des G36 ist viel detaillierter: graphitgrau mit abgegriffenen Kanten, Ringen um beide Fenster und dem Leuchtpunkt-Sender unten im Rohr, einer verschraubten Deckplatte und Griffrillen an den Seiten, einem gerändelten Helligkeitsrad mit Markierungen, einem Batteriedeckel mit Münzschlitz, einem gerändelten Turm und zwei Knöpfen oben, einem Sockel mit ausgefrästen Taschen und einem Schnellspannhebel an der Schiene."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.89",
     "title": "Lebendigere Infizierte, wechselnde Wege in Einsatz 2",
     "sections": [

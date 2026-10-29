@@ -38,7 +38,7 @@ const FLASH_RANGE := 0.9
 const REACH := 1.25
 ## The flashlight's light coming back: its strength from a wall right ahead, how far the
 ## lit spot may be before nothing returns, and how near the weapon its source is drawn.
-const BEAM_BACK := 0.38
+const BEAM_BACK := 0.3
 const BEAM_FAR := 9.0
 const BEAM_NEAR := 1.1
 const BEAM_SOURCE_MAX := 3.5

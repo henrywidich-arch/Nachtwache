@@ -64,7 +64,7 @@ const MOODS := {
 	"ward": {"ambient": Color(0.44, 0.52, 0.62), "energy": 0.32, "fog": 0.003, "haze": 0.012, "glow": 0.0, "sky": 0.0, "moon": 0.0, "tint": Color(0.1, 0.13, 0.18)},
 	# The simulation hall (TokyoHall): a violet night, neon in a light haze of rain.
 	# (Darker between its lights than before, the haze thicker and lit by the neon.)
-	"sim": {"ambient": Color(0.3, 0.27, 0.42), "energy": 0.38, "fog": 0.005, "haze": 0.017, "glow": 0.9, "sky": 0.0, "moon": 0.0, "tint": Color(0.18, 0.07, 0.26)}
+	"sim": {"ambient": Color(0.3, 0.27, 0.42), "energy": 0.5, "fog": 0.005, "haze": 0.017, "glow": 0.9, "sky": 0.0, "moon": 0.0, "tint": Color(0.18, 0.07, 0.26)}
 }
 ## The moods of places under the ground (no moon, no shadows of it).
 const BELOW := ["under", "sodium", "cold", "alarm", "core", "plant", "sick", "deep", "water", "bio", "cryo", "reactor", "store", "ward", "sim"]

@@ -272,7 +272,7 @@ func send(kind: String, pack: int = 1, others: Array = []) -> bool:
 	if not on or not KINDS.has(kind) or director.stage_time < GRACE:
 		return false
 	# (Under the open sky they come over the wall of the park, as they always did.)
-	if not map.is_indoors(game.player.global_position):
+	if not map.is_indoors(game.player.global_position) and not map.in_tokyo(game.player.global_position):
 		return false
 	# (Whoever camps gets every one of them through a way in.)
 	if heat() <= 0.0 and randf() > SHARE:
@@ -297,7 +297,7 @@ func send(kind: String, pack: int = 1, others: Array = []) -> bool:
 ## Announces somebody at a way in: the warning now, the body WARN seconds later - and
 ## with `pack` (the kinds of all of them, the first included) the others behind him.
 func announce(index: int, kind: String, pack: Array[String] = []) -> void:
-	_tell(str(map.entries[index].kind))
+	_tell(str(map.entries[index].kind), str(map.entries[index].room))
 	var all: Array[String] = pack
 	if all.is_empty():
 		all = [kind]
@@ -387,14 +387,18 @@ func choose() -> int:
 ## The first time somebody comes through a window, the first time up from the track and
 ## the first time through a ceiling or a wall, the survivor is told once what the noise
 ## he hears means.
-func _tell(kind: String) -> void:
+func _tell(kind: String, room: String = "") -> void:
 	var what := "window" if kind in ["window", "cellar"] else ("edge" if kind == "edge" else "hole")
+	if room == "tk_streets":
+		what = "roofs"
 	if told.has(what):
 		return
 	told[what] = true
 	match what:
 		"window":
 			game.hud.announce("SIE KOMMEN DURCH DIE FENSTER", "Es klopft an der Scheibe – einen Augenblick später sind sie im Haus. Auch hinter dir.", 4.5)
+		"roofs":
+			game.hud.announce("SIE KOMMEN VON DEN DÄCHERN", "Sie springen von Dächern und Feuertreppen und drängen aus Hintertüren und Schleusen – auch hinter dir.", 4.5)
 		"edge":
 			game.hud.announce("SIE KOMMEN AUS DEM GLEISBETT", "Schotter klirrt unter der Bahnsteigkante – einen Augenblick später sind sie oben.", 4.5)
 		_:

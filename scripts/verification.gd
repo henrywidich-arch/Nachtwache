@@ -8664,6 +8664,9 @@ func _hive(game: Node3D) -> void:
 	var shops := 0
 	var benches := 0
 	for station in map.stations:
+		# (v0.90: the stops of the simulation hall come on top, see TokyoHall.TK_STOPS.)
+		if bool(station.get("tokyo", false)):
+			continue
 		shops += 1 if str(station.kind) == "shop" else 0
 		benches += 1 if str(station.kind) == "upgrade" and not station.get("outpost", false) else 0
 	# (A night with the simulation hall has its footbridge as a sixth floor.)
@@ -9778,6 +9781,9 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 	var shops := 0
 	var supply_looks: Array[String] = []
 	for station in map.stations:
+		# (v0.90: the stops of the simulation hall come on top, see TokyoHall.TK_STOPS.)
+		if bool(station.get("tokyo", false)):
+			continue
 		shops += 1 if str(station.kind) == "shop" else 0
 		if str(station.kind) == "upgrade" and not station.get("outpost", false):
 			supply_looks.append(str(station.get("look", "")))
@@ -9787,6 +9793,9 @@ func _hive_stations(game: Node3D, way: Array[Vector3]) -> void:
 	# side by side are one stop), and before every place that is held there is one of each
 	var functions := {"workbench": [], "counter": []}
 	for station in map.stations:
+		# (v0.90: the stops of the simulation hall come on top, see TokyoHall.TK_STOPS.)
+		if bool(station.get("tokyo", false)):
+			continue
 		var kind := str(station.kind)
 		if kind not in ["upgrade", "gear", "shop"]:
 			continue

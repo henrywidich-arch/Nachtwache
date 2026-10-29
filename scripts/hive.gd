@@ -109,6 +109,10 @@ const THIN := {"striker": 0.35, "charger": 0.88}
 ## squad's guns and the answer to camping come on top): what the frame rate was measured
 ## with.
 const CROWD_LIMIT := 24
+## (v0.90, Henry: the simulation hall felt empty.) While the squad is in it, this many more
+## may be alive at once, and they come this much sooner (its streets are wide and open).
+const TOKYO_MORE := 4
+const TOKYO_HASTE := 0.75
 ## Who the plain infected of this mission were. Besides the looks they have everywhere, a
 ## share of them wears what the people here wore: "above" (the villa and the station) now
 ## and then somebody of the guard, a worker or a civilian; "below" (the facility, from the
@@ -2664,7 +2668,8 @@ func _crowd() -> int:
 	var plan := _plan_now()
 	if plan.is_empty():
 		return 0
-	return mini(CROWD_LIMIT, roundi(int(plan[1]) * _horde())) + game.extra_guns() + entries.more() + run.more() + (tokyo_tasks.more() if tokyo_tasks != null else 0)
+	var in_hall := map.in_tokyo(game.player.global_position)
+	return mini(CROWD_LIMIT, roundi(int(plan[1]) * _horde())) + game.extra_guns() + entries.more() + run.more() + (tokyo_tasks.more() if tokyo_tasks != null else 0) + (TOKYO_MORE if in_hall else 0)
 
 func _run_pressure(delta: float) -> void:
 	var plan := _plan_now()
@@ -2681,7 +2686,7 @@ func _run_pressure(delta: float) -> void:
 	if pressure_left > 0.0 or room <= 0:
 		return
 	# (Whoever digs himself in gets them sooner.)
-	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste() * run.haste() * (tokyo_tasks.haste() if tokyo_tasks != null else 1.0)
+	pressure_left = float(plan[2]) * randf_range(0.8, 1.25) * entries.haste() * run.haste() * (tokyo_tasks.haste() if tokyo_tasks != null else 1.0) * (TOKYO_HASTE if map.in_tokyo(game.player.global_position) else 1.0)
 	var kinds: Array = plan[0]
 	var kind := pick(kinds)
 	# Nearly all of them come through a way in near the squad - out of a ceiling, out of a
