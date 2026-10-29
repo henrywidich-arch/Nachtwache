@@ -54,6 +54,8 @@ const VIEWS := {
 	"bus_side": [Vector3(3.0, 2.0, 49.0), Vector3(-4.5, 1.4, 46.0)],
 	"jdm": [Vector3(-29.0, 1.6, 7.0), Vector3(-24.0, 0.6, 3.5)],
 	"jdm_black": [Vector3(21.0, 1.6, -31.5), Vector3(16.0, 0.6, -34.5)],
+	"jdm_close": [Vector3(-26.8, 1.5, 6.0), Vector3(-24.0, 0.6, 3.3)],
+	"taxi_close": [Vector3(7.6, 1.5, 25.8), Vector3(4.8, 0.7, 28.0)],
 	"sedan": [Vector3(8.5, 1.7, 8.0), Vector3(4.2, 0.7, 3.6)],
 	"taxi": [Vector3(9.5, 1.7, 23.5), Vector3(4.8, 0.7, 28.0)],
 	"wreck": [Vector3(-6.5, 1.7, 2.0), Vector3(-2.5, 0.6, -1.5)]

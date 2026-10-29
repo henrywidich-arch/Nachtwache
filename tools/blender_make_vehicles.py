@@ -645,6 +645,9 @@ def build_jdm():
         blob("CraneCrown", (xo + s * 0.003, cy + 0.215, cz + 0.083), (Vector((0.002, 0, 0)), Vector((0, 0.014, 0)), Vector((0, 0, 0.009))), red, 6, 4)
         text("天狗", 0.22, black, (x + s * 0.004, 0.22, 0.6), (s, 0, 0))
         text("NIGHT RUN  SPEC-R", 0.04, black, (x + s * 0.004, 0.22, 0.44), (s, 0, 0))
+        # (Henry's retouched picture) race numbers: 東京 23 on the black rear quarter.
+        text("東京", 0.1, white, (s * 0.866, -1.42, 0.74), (s, 0, 0))
+        text("23", 0.15, white, (s * 0.866, -1.42, 0.6), (s, 0, 0))
         cyl("SillPipe", (s * 0.93, -0.75, 0.2), (s * 0.93, 0.75, 0.2), 0.03, mat("PipeSteel", "3a3c40", 0.35, 0.8), 10)
         # Red light under the sills, side pipes before the rear wheels.
         bx("SideSkirt", (s * 0.83, -0.75, 0.15), (s * 0.95, 0.8, 0.25), black)
@@ -672,6 +675,10 @@ def build_jdm():
     bx("Grille", (-0.36, yf + 0.0, 0.38), (0.36, yf + 0.022, 0.48), mat("GrilleDark", "0a0a0b", 0.6))
     text("夜走り", 0.08, m["red"], (0, yf + 0.024, 0.43), (0, 1, 0))
     mat("PlateBlack", "141414", 0.5)
+    # 東京 23 on the black hood, beside the middle, reading towards the windscreen.
+    hood_n = Vector((0.0, 0.21, 0.98))
+    text("東京", 0.14, white, (0.36, 1.2, 0.8), hood_n, up=(0, -1, 0))
+    text("23", 0.2, white, (0.36, 1.0, 0.84), hood_n, up=(0, -1, 0))
     # Underglow: a lit panel under the floor.
     bx("Underglow", (-0.6, -1.6, 0.11), (0.6, 1.6, 0.125), m["red"])
     # Rear: the wing on its stands, a black panel with a red light bar, the pipes, the plate.
