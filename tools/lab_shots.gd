@@ -167,12 +167,13 @@ func _darken(dark: bool) -> void:
 ## The rain as it is, or ("rain") every drop as a thick red streak and ten times as many
 ## of them, to see where roofs really keep it out.
 func _rain_look(red: bool) -> void:
-	var drops := 30000 if red else 3000
+	var drops := 30000 if red else 3000  # (RainFx: amount stays as cabin.gd sets it)
 	if map.rain.amount != drops:
 		map.rain.amount = drops
 	var streak := map.rain.draw_pass_1 as QuadMesh
-	streak.size = Vector2(0.03, 0.6) if red else Vector2(0.009, 0.42)
-	(streak.material as StandardMaterial3D).albedo_color = Color(1.0, 0.12, 0.08, 1.0) if red else Color(0.62, 0.7, 0.8, 0.13)
+	# (v0.91: the streaks are RainFx shader material now.)
+	streak.size = Vector2(0.03, 0.6) if red else Vector2(0.011, 0.45)
+	(streak.material as ShaderMaterial).set_shader_parameter("tint", Color(1.0, 0.12, 0.08, 1.0) if red else Color(0.64, 0.72, 0.84, 0.2))
 
 func _run() -> void:
 	var folder := "user://"

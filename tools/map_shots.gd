@@ -46,6 +46,8 @@ const VIEWS := {
 	"shed_out": [Vector3(21, 1.62, 14.5), Vector3(27.5, 1.3, 23)],
 	"shed_in": [Vector3(27.5, 1.62, 22.3), Vector3(27.0, 1.2, 25.4)],
 	"yard_gate": [Vector3(0.5, 1.62, 45), Vector3(0, 3, 9)],
+	# (v0.91) The rain in the yard: splashes, rings in the puddles, spray, the porch lamp.
+	"rain_yard": [Vector3(-3, 1.62, 22), Vector3(-1, 0.2, 15)],
 	"yard_from_porch": [Vector3(0, 1.62, 11.2), Vector3(1, 1.6, 40)],
 	"yard_north": [Vector3(-2, 1.62, -12), Vector3(8, 1.5, -24)],
 	"yard_southeast": [Vector3(8, 1.62, 18), Vector3(24, 1.2, 34)],

@@ -44,7 +44,10 @@ const VIEWS := {
 	"supply": [Vector3(-5, 1.7, 15.5), Vector3(-11, 1.3, 17.5)],
 	"edge": [Vector3(28, 1.7, 66), Vector3(62, 6, 71)],
 	"lock": [Vector3(-60, 1.7, 0), Vector3(-72, 2, 0)],
-	"top": [Vector3(0, 46, 0.01), Vector3(0, 0, 0)]
+	"top": [Vector3(0, 46, 0.01), Vector3(0, 0, 0)],
+	# (v0.91) The rain on the street: splashes, rings in the puddles, spray.
+	"rain_puddle": [Vector3(-3, 1.7, 21), Vector3(-1, 0, 14)],
+	"rain_neon": [Vector3(20.6, 1.7, 26.5), Vector3(20.6, 2.0, 12)]
 }
 const FPS_VIEWS := ["crossing", "model", "side_street", "overview"]
 

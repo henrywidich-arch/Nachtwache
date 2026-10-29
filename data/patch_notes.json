@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.91",
+    "title": "Neuer Regen auf dem Hof und in Tokio",
+    "sections": [
+      {
+        "title": "Regen",
+        "items": [
+          "Der Regen auf dem Hof (Karte 1) und in der Simulationshalle Tokio ist neu: Die Tropfen sind unterschiedlich lang, wehen in Böen leicht schräg und leuchten auf, wo sie an Laternen, Leuchtreklamen und eurer Taschenlampe vorbeifallen. Weiter hinten gibt ein feinerer Schleier aus Regen dem Bild Tiefe.",
+          "Wo ein Tropfen aufschlägt – auf Boden, Dächern, Autos oder Infizierten – spritzt er kurz auf und zieht einen kleinen Ring über die Fläche. Unter Dächern und in Gebäuden bleibt es trocken.",
+          "Auf den nassen Straßen in Tokio laufen jetzt Ringe über die Pfützen, die Spiegelungen der Neonlichter zittern im Regen. Über dem Boden ziehen in Tokio und auf dem Hof dünne Sprühnebelschwaden."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.90",
     "title": "Helleres Tokio, mehr Infizierte, Stationen in der Halle",
     "sections": [

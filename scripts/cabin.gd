@@ -14,6 +14,7 @@ extends Node3D
 
 signal thunder(delay: float)
 
+const RainFx := preload("res://scripts/rain_fx.gd")
 const HX := 13.0          # farmhouse half width (X)
 const HZ := 9.0           # farmhouse half depth (Z)
 const STOREY := 3.3       # walking height of the upper floor
@@ -6705,38 +6706,15 @@ func _build_gas() -> void:
 		add_child(volume)
 
 func _build_weather() -> void:
-	rain = GPUParticles3D.new()
-	rain.name = "Rain"
-	rain.amount = 3000
-	rain.lifetime = 0.85
-	rain.preprocess = 0.85
+	# (v0.91) RainFx: lit streaks of their own lengths, a far layer for depth, splashes and
+	# rings where the drops hit (roofs, the yard, the zombies), veils of spray in the open.
 	# The drops move in 60 steps a second. With the usual 30, each sinks up to a metre and
 	# a half into a roof before it is taken away, and shows as a streak under the ceiling.
-	rain.fixed_fps = 60
-	rain.local_coords = false
-	rain.visibility_aabb = AABB(Vector3(-40, -30, -40), Vector3(80, 60, 80))
-	rain.transform_align = GPUParticles3D.TRANSFORM_ALIGN_Z_BILLBOARD_Y_TO_VELOCITY
+	rain = RainFx.make({"name": "Rain", "amount": 3000, "lifetime": 0.85, "half": 17.0, "speed": [16.0, 20.0],
+		"gravity": 5.0, "fall": Vector3(0.1, -1, 0.04), "width": 0.011, "length": 0.45, "colour": Color(0.64, 0.72, 0.84, 0.2),
+		"glow": 1.1, "far_amount": 800, "splash_amount": 1300, "mist_amount": 22, "mist_colour": Color(0.5, 0.56, 0.66, 0.05),
+		"ground_y": 0.0, "top": 15.0, "fixed_fps": 60})
 	rain.position = Vector3(0, 13, 0)
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(17, 0.5, 17)
-	process.direction = Vector3(0.1, -1, 0.04)
-	process.spread = 1.5
-	process.initial_velocity_min = 16.0
-	process.initial_velocity_max = 20.0
-	process.gravity = Vector3(0, -5, 0)
-	process.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
-	rain.process_material = process
-	var streak := QuadMesh.new()
-	streak.size = Vector2(0.009, 0.42)
-	var streak_material := StandardMaterial3D.new()
-	streak_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	streak_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	streak_material.albedo_color = Color(0.62, 0.7, 0.8, 0.13)
-	streak_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	streak.material = streak_material
-	rain.draw_pass_1 = streak
-	rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(rain)
 	# Roofs stop the rain. A drop is taken away up to two steps of the particles after it
 	# has entered one of these boxes (see fixed_fps above), so the two over the bunker

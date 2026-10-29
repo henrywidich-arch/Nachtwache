@@ -21,6 +21,7 @@ const TK_CITY := 62.0
 const TK_CEILING := 50.0
 ## Half the width of the box the rain falls in (see _tk_rain).
 const RAIN_HALF := 28.0
+const RainFx := preload("res://scripts/rain_fx.gd")
 const TK_DECK := 5.4
 ## The blocks between the streets, along x and along z alike: the main avenues are 16 m
 ## wide (|x| < 8 and |z| < 8), the side streets 8 m (around +-34).
@@ -296,7 +297,27 @@ uniform float gain = 2.2;
 uniform float textured = 0.0;
 // (A pavement: slabs of 1 x 0.5 m in offset rows, their joints sunk and darker.)
 uniform float slabs = 0.0;
+// (v0.91) How hard it rains on the street: rings from the drops on the puddles.
+uniform float rain = 1.0;
+vec2 ripples(vec2 p, float t) {
+	vec2 slope = vec2(0.0);
+	for (int layer = 0; layer < 3; layer++) {
+		vec2 q = p * (2.7 + float(layer) * 1.35) + float(layer) * 17.3;
+		vec2 cell = floor(q);
+		vec2 local = fract(q) - 0.5;
+		float a = h(cell + float(layer) * 41.0);
+		float b = h(cell * 1.7 + 9.1 + float(layer));
+		vec2 centre = (vec2(a, b) - 0.5) * 0.45;
+		float phase = fract(t * (0.85 + a * 0.7) + b);
+		vec2 d = local - centre;
+		float ring = length(d) - phase * 0.45;
+		float wave = sin(ring * 62.0) * exp(-ring * ring * 170.0) * (1.0 - phase) * (1.0 - smoothstep(0.3, 0.5, length(d)));
+		slope += normalize(d + 1e-4) * wave;
+	}
+	return slope * 0.45;
+}
 void fragment() {
+	vec3 nmap = vec3(0.5, 0.5, 1.0);
 	vec3 tint = pow(COLOR.rgb, vec3(2.2));
 	float n = noise(wpos.xz * 0.31) * 0.62 + noise(wpos.xz * 1.27) * 0.28 + noise(wpos.xz * 4.9) * 0.1;
 	// (v10: wetter - more of the street stands under water, the rest is damp and glossy.)
@@ -310,7 +331,7 @@ void fragment() {
 		float k = noise(wpos.xz * 0.13);
 		look = mix(texture(grain, uv).rgb, texture(grain, uv2).rgb, k * 0.6) * gain;
 		rough = 0.18 + texture(grain_rough, uv).r * 0.45;
-		NORMAL_MAP = mix(texture(grain_normal, uv).rgb, vec3(0.5, 0.5, 1.0), puddle);
+		nmap = mix(texture(grain_normal, uv).rgb, vec3(0.5, 0.5, 1.0), puddle);
 		// Patches of newer and older surface, oil where cars stood, dirt toward the edges -
 		// large enough that the picture never shows its repeat.
 		float patchy = noise(wpos.xz * 0.045 + 17.0);
@@ -327,9 +348,12 @@ void fragment() {
 			float stone = h(floor(s) + 9.0);
 			look *= (0.85 + 0.3 * stone) * (1.0 - 0.55 * joint);
 			rough = mix(rough, 0.3, joint);
-			NORMAL_MAP = mix(NORMAL_MAP, vec3(0.5, 0.5, 0.8), joint * 0.6);
+			nmap = mix(nmap, vec3(0.5, 0.5, 0.8), joint * 0.6);
 		}
 	}
+	// Rings run over the puddles where the drops fall; the damp rest only stirs a little.
+	nmap.xy += ripples(wpos.xz, TIME) * mix(0.12, 0.75, puddle) * rain;
+	NORMAL_MAP = nmap;
 	ALBEDO = tint * look * 1.25 * (1.0 - 0.5 * puddle);
 	ROUGHNESS = mix(rough * 0.8, 0.045, puddle);
 	SPECULAR = 0.75;
@@ -640,6 +664,9 @@ var deck := 0
 ## The opening in the west wall the passage from the terminal comes through (false: a
 ## hall on its own, closed all round).
 var door := false
+## (v0.91) Where along the west wall (local z) a second, barred way out lies, blown open in
+## the night of the rocket launcher (TokyoConvoy); INF for none.
+var breach_z := INF
 var tk_fonts: SystemFont
 var tk_lights := 0
 var tk_lots: Array[Rect2] = []
@@ -716,8 +743,9 @@ const ZONE := "tokyo"
 ## (HiveCore._floor) of the street and of the footbridge, the second one TK_DECK higher;
 ## both must cover the hall (see plan_of, deck_plan). With `door` the west wall has the
 ## lock the passage from the terminal ends at (see door_spot).
-static func build(into: HiveCore, at: Vector3, ground_level: int, deck_level: int, with_door: bool) -> TokyoHall:
+static func build(into: HiveCore, at: Vector3, ground_level: int, deck_level: int, with_door: bool, breach_at := INF) -> TokyoHall:
 	var hall := TokyoHall.new()
+	hall.breach_z = breach_at
 	hall.name = "TokyoHall"
 	hall.map = into
 	hall.origin = at
@@ -824,6 +852,8 @@ func _process(_delta: float) -> void:
 	if door:
 		# (From the passage the lock is open to it: seen from the terminal, it is drawn.)
 		near = near or Rect2(origin.x - TK_HALL - 34.0, origin.z - 6.0, 34.0, 12.0).has_point(Vector2(at.x, at.z))
+		if is_finite(breach_z):
+			near = near or Rect2(origin.x - TK_HALL - 30.0, origin.z + breach_z - 4.0, 30.0, 8.0).has_point(Vector2(at.x, at.z))
 	var state := 1 if near else 0
 	if state != inside and door:
 		inside = state
@@ -1025,7 +1055,15 @@ func _tk_hall() -> void:
 	var walls := [[Vector3(0, top * 0.5, -h - 0.6), Vector3(h * 2.0 + 2.4, top, 1.2)], [Vector3(0, top * 0.5, h + 0.6), Vector3(h * 2.0 + 2.4, top, 1.2)], [Vector3(h + 0.6, top * 0.5, 0), Vector3(1.2, top, h * 2.0)]]
 	if door:
 		# The west wall with the lock in it: 3.2 m wide, 3 m high.
-		walls.append([Vector3(-h - 0.6, top * 0.5, -h * 0.5 - 0.8), Vector3(1.2, top, h - 1.6)])
+		if is_finite(breach_z):
+			# (v0.91) North of the lock the barred way out (TokyoConvoy): 3.6 m wide, 3.4 m high.
+			var a := breach_z - 1.8
+			var c := breach_z + 1.8
+			walls.append([Vector3(-h - 0.6, top * 0.5, (-h + a) * 0.5), Vector3(1.2, top, a + h)])
+			walls.append([Vector3(-h - 0.6, top * 0.5, (c - 1.6) * 0.5), Vector3(1.2, top, -1.6 - c)])
+			walls.append([Vector3(-h - 0.6, (top + 3.4) * 0.5, breach_z), Vector3(1.2, top - 3.4, 3.6)])
+		else:
+			walls.append([Vector3(-h - 0.6, top * 0.5, -h * 0.5 - 0.8), Vector3(1.2, top, h - 1.6)])
 		walls.append([Vector3(-h - 0.6, top * 0.5, h * 0.5 + 0.8), Vector3(1.2, top, h - 1.6)])
 		walls.append([Vector3(-h - 0.6, (top + 3.0) * 0.5, 0), Vector3(1.2, top - 3.0, 3.2)])
 	else:
@@ -1039,6 +1077,9 @@ func _tk_hall() -> void:
 		# passage's at the outer one, so the 1.2 m in the wall had nothing to stand on.
 		map._part("betonfloor", Vector3(-h - 0.6, -0.25, 0), Vector3(1.4, 0.5, 3.4), Color(0.42, 0.43, 0.46))
 		map._firm_solid(Vector3(-h - 0.6, -0.25, 0), Vector3(1.6, 0.5, 3.6), false)
+		if is_finite(breach_z):
+			map._part("betonfloor", Vector3(-h - 0.6, -0.25, breach_z), Vector3(1.4, 0.5, 3.8), Color(0.42, 0.43, 0.46))
+			map._firm_solid(Vector3(-h - 0.6, -0.25, breach_z), Vector3(1.6, 0.5, 4.0), false)
 	map._part("simgrid", Vector3(0, top + 0.6, 0), Vector3(h * 2.0 + 2.4, 1.2, h * 2.0 + 2.4), Color.WHITE)
 	# Trusses under the ceiling, with rows of floodlights between them.
 	for z in range(-60, 61, 24):
@@ -3561,31 +3602,10 @@ func _tk_rain() -> void:
 	# (--no-rain: for pictures that measure flicker, where every drop would count.)
 	if "--no-rain" in OS.get_cmdline_user_args():
 		return
-	rain = GPUParticles3D.new()
-	rain.name = "SimRain"
-	rain.amount = 5000
-	rain.lifetime = 1.3
-	rain.preprocess = 1.3
-	rain.local_coords = false
-	rain.visibility_aabb = AABB(Vector3(-40, -30, -40), Vector3(80, 50, 80))
-	var process := ParticleProcessMaterial.new()
-	process.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
-	process.emission_box_extents = Vector3(RAIN_HALF, 1, RAIN_HALF)
-	process.direction = Vector3(0.05, -1, 0.02)
-	process.spread = 2.0
-	process.initial_velocity_min = 20.0
-	process.initial_velocity_max = 24.0
-	process.gravity = Vector3.ZERO
-	rain.process_material = process
-	var drop := QuadMesh.new()
-	drop.size = Vector2(0.014, 0.55)
-	var look := StandardMaterial3D.new()
-	look.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	look.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	look.albedo_color = Color(0.7, 0.78, 1.0, 0.28)
-	look.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
-	look.billboard_keep_scale = true
-	drop.material = look
-	rain.draw_pass_1 = drop
-	rain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# (v0.91) RainFx: the drops lit by the neon they fall past, splashes and rings on the
+	# street, the roofs, the cars and the infected, a far layer, spray low over the street.
+	rain = RainFx.make({"name": "SimRain", "amount": 5000, "lifetime": 1.3, "half": RAIN_HALF, "height": 1.0,
+		"speed": [20.0, 24.0], "gravity": 0.0, "fall": Vector3(0.05, -1, 0.02), "width": 0.015, "length": 0.6,
+		"colour": Color(0.7, 0.78, 1.0, 0.26), "glow": 1.1, "far_amount": 1100, "splash_amount": 1500,
+		"mist_amount": 30, "mist_colour": Color(0.55, 0.52, 0.72, 0.045), "ground_y": origin.y, "top": 20.0, "fixed_fps": 60})
 	add_child(rain)
