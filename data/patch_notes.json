@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.91",
+    "title": "Musik auch im installierten Spiel",
+    "sections": [
+      {
+        "title": "Ton",
+        "items": [
+          "Die Musik wird auch im fertig exportierten Spiel gefunden, das du über den Launcher installierst: Sie lag bisher nur im Projektordner und blieb dort stumm. Im Editor ändert sich nichts."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.90",
     "title": "Helleres Tokio, mehr Infizierte, Stationen in der Halle",
     "sections": [
