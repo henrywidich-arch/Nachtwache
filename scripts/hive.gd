@@ -336,6 +336,8 @@ var seed_wanted := -2
 ## Whether the night has the simulation hall: -1 as its seed says (HiveLayout.tokyo_of; the
 ## classic night never), 0 never, 1 always. The start options --tokyo and --no-tokyo set it.
 var tokyo_wanted := -1
+## (v0.91) The hall's job wanted for the night (TokyoTasks.STABLE / CONVOY), "" by its seed.
+var tokyo_job_wanted := ""
 ## The objectives of the simulation hall in a night that has it (TokyoTasks), else null.
 var tokyo_tasks: TokyoTasks
 var order: Array = ORDER
@@ -409,6 +411,14 @@ func prepare_night() -> Dictionary:
 			hall = 0
 		if hall >= 0:
 			night = HiveLayout.with_tokyo(night, hall == 1)
+		# (v0.91) Which job the hall has (TokyoTasks.job_of): --tokyo-konvoi, --tokyo-stabil.
+		if tokyo_job_wanted != "" and bool(night.get("tokyo", false)):
+			night["tokyo_job"] = tokyo_job_wanted
+		elif "--tokyo-konvoi" in OS.get_cmdline_user_args():
+			night = HiveLayout.with_tokyo(night, true)
+			night["tokyo_job"] = TokyoTasks.CONVOY
+		elif "--tokyo-stabil" in OS.get_cmdline_user_args():
+			night["tokyo_job"] = TokyoTasks.STABLE
 		# (v0.88) The endless night is held in the simulation hall: it is always there.
 		if _endless_wanted():
 			night = HiveLayout.with_tokyo(night, true)
@@ -886,7 +896,13 @@ func _enter(id: String) -> void:
 			talk("m2_arrived")
 			# (v0.86) On a night with the simulation hall it is the way on: the control room
 			# stays locked until its data core has been taken (see _tokyo_gate).
-			if _tokyo_pending():
+			if _tokyo_pending() and tokyo_tasks.convoy != null:
+				# (v0.91) The rocket launcher's night: the gate stays shut, the way on is the
+				# steel door in the hall (TokyoConvoy, _convoy_open).
+				goal = TOKYO_GOAL
+				marker = _point("tokyo_lock")
+				game.hud.announce("TOR ZUR ANLAGE VERKEILT", "Der Leitstand bekommt das Tor nicht auf. In der Tokio-Halle steht ein Raketenwerfer: bringt ihn zur Stahltür an ihrer Westwand und sprengt euch den Weg frei.", 8)
+			elif _tokyo_pending():
 				goal = TOKYO_GOAL
 				marker = _point("tokyo_lock")
 				game.hud.announce("LEITSTAND GESPERRT", "Die Tokio-Simulation hält das Tor zur Anlage zu. Stabilisiert sie und bergt den Datenkern - dann öffnet der Leitstand.", 7)
@@ -969,11 +985,20 @@ func _enter(id: String) -> void:
 
 ## Whether the night has the simulation hall and its data core has not been taken yet.
 func _tokyo_pending() -> bool:
-	return tokyo_tasks != null and not tokyo_tasks.terminals.is_empty() and str(tokyo_tasks.core.get("state", "")) != "taken"
+	return tokyo_tasks != null and tokyo_tasks.pending()
+
+## (v0.91) The rocket has blown the steel door of the hall: the way to the administration
+## is open, through the service passage to the checkpoint (and the gate besides).
+func _convoy_open() -> void:
+	if stage == "terminal":
+		marker = _point("checkpoint")
+		_enter("admin")
 
 ## The control room of the terminal opens once the simulation hall is done (v0.86).
 func _tokyo_gate() -> void:
 	if stage != "terminal" or use_key != "" or _tokyo_pending():
+		return
+	if tokyo_tasks != null and tokyo_tasks.convoy != null:
 		return
 	goal = map.control_goal()
 	marker = _point("control")
@@ -1246,7 +1271,7 @@ func use(who: Node3D = null, requested: String = "", at: Vector3 = Vector3.INF) 
 		return _switch_fuse(asked)
 	if requested in ["can", "tank"]:
 		return _use_fuel(who, requested)
-	if requested in ["tk_term", "tk_core"]:
+	if requested in ["tk_term", "tk_core", "tk_truck", "tk_fix"]:
 		return tokyo_tasks != null and tokyo_tasks.use(who, requested, at)
 	if who == game.player and requested == "" and tokyo_tasks != null and (use_at == Vector3.INF or who.global_position.distance_to(use_at) >= 2.9):
 		var asked_tk := tokyo_tasks.near_use(who.global_position)
@@ -3003,7 +3028,7 @@ func markers() -> Array:
 	if at == Vector3.INF or intro_left > 0.0:
 		return hall_marks
 	# (Inside the simulation hall its own marks lead; the way in is not marked any more.)
-	if stage == "terminal" and _tokyo_pending() and tokyo_tasks.told:
+	if stage == "terminal" and _tokyo_pending() and tokyo_tasks.heard():
 		return run.markers() + hall_marks
 	var fuses: Array = []
 	if stage in FUSE_STAGES:
@@ -3060,6 +3085,8 @@ func _process(delta: float) -> void:
 	_run_heli(delta)
 	_show_fuses()
 	_show_fuel()
+	if tokyo_tasks != null:
+		tokyo_tasks.display(delta)
 	if game.net.joined:
 		coop.move_friends(delta)
 		return

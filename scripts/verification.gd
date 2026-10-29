@@ -12387,3 +12387,112 @@ func _rewards_shots(game: Node3D) -> void:
 
 func _rewards_test_shot(game: Node3D) -> void:
 	await preload("res://scripts/rewards_check.gd").test_shot(self, game)
+
+# ---------------------------------------------------------------- the rocket launcher (v0.91)
+
+## The rocket launcher's night of the simulation hall (TokyoConvoy): in the test room the
+## whole job is played through - sent off, escorted round the hall, broken down and mended,
+## its firing place held, the rocket, the steel door blown open; then in a night of the
+## second mission the gate from the terminal stays jammed and the blown door leads on to the
+## administration. (tools/convoy_check.gd checks the road and the passage on their own.)
+func _convoy(game: Node3D) -> void:
+	var player: Survivor = game.player
+	var hive: HiveDirector = game.hive
+	var profile: Profile = game.profile
+	var kept_mission: int = profile.mission
+	game.return_to_menu()
+	await _idle_frames()
+	game.start_run(true)
+	await _idle_frames()
+	game.sandbox.visit(Sandbox.TOKYO_CONVOY)
+	await _idle_frames()
+	var convoy: TokyoConvoy = game.sandbox.convoy
+	var map := game.cabin as HiveMap
+	var built: bool = convoy != null and is_instance_valid(convoy.truck) and map != null and not map.door_open(TokyoConvoy.DOOR) and not hive.on
+	expect(built, "In the test room the button for the rocket launcher's job puts the survivor in the Tokyo hall beside the launcher, its steel door shut")
+	if not built:
+		return
+	var truck := convoy.truck
+	player.global_position = truck.to_global(Vector3(2.6, 0.05, -3.0))
+	var prompt: String = game.sandbox.convoy_prompt()
+	var sent: bool = game.sandbox.use_convoy()
+	expect(sent and prompt.contains("losschicken") and convoy.phase == "drive", "[E] at the launcher sends it off (%s)" % prompt)
+	# Alone it waits; beside it, it rolls and runs over what stands in front of it.
+	player.global_position = truck.global_position + Vector3(40, 0, 0)
+	for i in range(20):
+		convoy.update(0.1)
+	var waited: bool = convoy.travelled < 0.5 and convoy.stalled == "alone"
+	var ran_over := false
+	var broke_and_mended := false
+	for i in range(4000):
+		if convoy.phase in ["fire", "open"]:
+			break
+		player.global_position = truck.to_global(Vector3(3.2, 0.05, 0.0))
+		player.health = 100.0
+		if i == 60:
+			var victim: Infected = game.spawn_enemy("mauler")
+			victim.global_position = truck.to_global(Vector3(0, 0.1, -5.6))
+			convoy.update(0.05)
+			ran_over = victim.dead
+		if i == 200:
+			convoy.armour = 0.5
+			var at_it: Infected = game.spawn_enemy("mauler")
+			at_it.global_position = truck.to_global(Vector3(1.9, 0.1, 0.0))
+			at_it.set_physics_process(false)
+			for k in range(8):
+				convoy.update(0.1)
+			_wipe_all(game)
+			var broken: bool = convoy.broken
+			var near: Dictionary = convoy.near_use(player.global_position)
+			var fixing: bool = str(near.get("key", "")) == "tk_fix" and convoy.use(player, "tk_fix")
+			for k in range(100):
+				convoy.update(0.1)
+			broke_and_mended = broken and fixing and not convoy.broken and convoy.armour > 50.0
+		convoy.update(0.1)
+		convoy.display(0.1)
+		if i % 25 == 0:
+			_wipe_all(game)
+			await get_tree().process_frame
+	expect(waited and ran_over and broke_and_mended, "The launcher rolls only with somebody near it, runs over an infected in its way, breaks down when they wear it down and is mended with [E] (waited %s, ran over %s, mended %s)" % [waited, ran_over, broke_and_mended])
+	var raised: float = truck.raise
+	for i in range(40):
+		convoy.display(0.05)
+		await get_tree().process_frame
+	var opened: bool = convoy.phase == "open" and map.door_open(TokyoConvoy.DOOR) and is_instance_valid(convoy.wreck) and not is_instance_valid(convoy.door_node) and not is_instance_valid(convoy.rocket)
+	expect(opened and raised > 0.95, "At its firing place it raises its launcher, holds, and its rocket blows the steel door open (phase %s, raised %.2f)" % [convoy.phase, raised])
+	var road := map.path_between(map.tokyo.origin + Vector3(-60, 0.05, -25.4), map.points.checkpoint)
+	game.sandbox.leave_visit()
+	await _idle_frames()
+	expect(road.size() > 1, "Through the blown door a passage leads to the checkpoint of the administration")
+	# --- in a night of the second mission
+	game.return_to_menu()
+	await _idle_frames()
+	profile.mission = 2
+	hive.tokyo_wanted = 1
+	hive.tokyo_job_wanted = TokyoTasks.CONVOY
+	hive.resume_at = "terminal"
+	hive.night_fresh = false
+	game.start_run()
+	await _idle_frames()
+	map = game.cabin as HiveMap
+	var night_ok: bool = hive.on and hive.tokyo_tasks != null and hive.tokyo_tasks.convoy != null and hive.stage == "terminal" and hive._tokyo_pending()
+	var gate_shut: bool = night_ok and hive.use_key != "control"
+	expect(night_ok and gate_shut, "A night with the rocket launcher's job: the gate from the terminal stays shut while the hall's steel door holds")
+	if night_ok:
+		var c: TokyoConvoy = hive.tokyo_tasks.convoy
+		var snapshot: Dictionary = hive.coop.export_state().get("tokyo", {})
+		c.phase = "aim"
+		c.travelled = c.length
+		c.aim = 1.0
+		c.aim_time = 99.0
+		c._launch(true)
+		for i in range(40):
+			c.display(0.05)
+			await get_tree().process_frame
+		expect(c.phase == "open" and hive.stage in ["admin", "security"] and map.door_open(TokyoConvoy.DOOR) and not map.is_locked("admin") and snapshot.has("convoy"), "When the rocket has blown the door the night goes on into the administration (stage %s)" % hive.stage)
+	hive.tokyo_wanted = -1
+	hive.tokyo_job_wanted = ""
+	hive.resume_at = ""
+	profile.mission = kept_mission
+	game.return_to_menu()
+	await _idle_frames()

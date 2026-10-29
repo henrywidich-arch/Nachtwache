@@ -1150,7 +1150,7 @@ func show_way() -> void:
 ## The places the HUD and the map in the corner point at.
 func markers() -> Array:
 	# (In the second mission also the side goals: the weapon caches the survivor knows of.)
-	var all: Array = hive.markers() + hive.caches.markers() if hive.on else mission.markers()
+	var all: Array = hive.markers() + hive.caches.markers() if hive.on else mission.markers() + sandbox.convoy_marks()
 	return nearest_of_each(all, player.global_position if is_instance_valid(player) else Vector3.INF)
 
 ## Of several markers with the same word (canisters, fuses, switches, things to pick up)
@@ -2123,6 +2123,8 @@ func interaction_prompt() -> String:
 		var hint := hive.prompt()
 		if hint != "":
 			return hint
+	if sandbox.on and sandbox.convoy_prompt() != "":
+		return sandbox.convoy_prompt()
 	var task_prompt := mission.prompt()
 	if task_prompt != "":
 		return task_prompt
@@ -2199,6 +2201,8 @@ func interact() -> void:
 	if not hive.coop.fallen_nearby().is_empty():
 		return
 	if hive.on and hive.use():
+		return
+	if sandbox.on and sandbox.use_convoy():
 		return
 	if mission.interact():
 		return

@@ -17,6 +17,12 @@ extends RefCounted
 ## says (export / adopt, in HiveCoop) and asks the host with [E] (Net.request_hive_use,
 ## keys "tk_term" and "tk_core"). Told on the screen as the stages of the mission are.
 
+## (v0.91) Which job the hall has in a night: STABLE (the terminals and the data core) or
+## CONVOY (the rocket launcher, TokyoConvoy). See job_of.
+const STABLE := "stabil"
+const CONVOY := "konvoi"
+const CONVOY_CHANCE := 0.5
+
 const TERMINALS := ["pachinko", "yamashita", "tech"]
 const NAMES := {"pachinko": "PACHINKO-HALLE", "yamashita": "YAMASHITA-MARKT", "tech": "SHINSEKAI-TECH"}
 const HACK_SECONDS := 16.0
@@ -38,6 +44,22 @@ var terminals: Array = []
 var core: Dictionary = {}
 var told := false
 var active := -1
+## The rocket launcher, in a night whose job it is (else null).
+var convoy: TokyoConvoy
+
+## The job of the hall in a night: what the night says ("tokyo_job", set by the host for
+## --tokyo-konvoi / --tokyo-stabil and by the test room), else half and half by its seed. The
+## endless night keeps the terminals. "" for a night without the hall.
+static func job_of(night: Dictionary) -> String:
+	if not bool(night.get("tokyo", false)):
+		return ""
+	if night.has("tokyo_job"):
+		return str(night.tokyo_job)
+	if bool(night.get("endless", false)):
+		return STABLE
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("hive-tokio-job-%d" % int(night.get("seed", 0)))
+	return CONVOY if rng.randf() < CONVOY_CHANCE else STABLE
 
 func _init(owner: Node, the_hall: TokyoHall) -> void:
 	director = owner
@@ -47,6 +69,11 @@ func _init(owner: Node, the_hall: TokyoHall) -> void:
 ## Builds what can be seen of the objectives in the hall.
 func setup() -> void:
 	clear()
+	var map: HiveCore = hall.map
+	if is_finite(hall.breach_z) and map.door_of.has(TokyoConvoy.DOOR):
+		convoy = TokyoConvoy.new(game, hall, map, director)
+		convoy.setup()
+		return
 	for id: String in TERMINALS:
 		var key := "tokyo_task_" + id
 		if not hall.places.has(key):
@@ -68,6 +95,25 @@ func clear() -> void:
 	core = {}
 	told = false
 	active = -1
+	if convoy != null:
+		convoy.clear()
+	convoy = null
+
+## Whether the hall still holds the way on: its data core not taken, or (the rocket
+## launcher's night) its steel door not blown yet.
+func pending() -> bool:
+	if convoy != null:
+		return convoy.pending()
+	return not terminals.is_empty() and str(core.get("state", "")) != "taken"
+
+## Whether the squad has been told what the hall wants of it.
+func heard() -> bool:
+	return convoy.told if convoy != null else told
+
+## Both machines, each frame: what is shown of the rocket launcher.
+func display(delta: float) -> void:
+	if convoy != null:
+		convoy.display(delta)
 
 func _done_count() -> int:
 	var n := 0
@@ -81,6 +127,9 @@ func inside(at: Vector3) -> bool:
 
 ## The host, each frame.
 func update(delta: float) -> void:
+	if convoy != null:
+		convoy.update(delta)
+		return
 	if terminals.is_empty():
 		return
 	var humans: Array = [game.player]
@@ -117,6 +166,8 @@ func update(delta: float) -> void:
 
 ## The objectives: in the list on the screen.
 func summary() -> Array[String]:
+	if convoy != null:
+		return convoy.summary()
 	var out: Array[String] = []
 	if terminals.is_empty() or not told or str(core.get("state", "")) == "taken":
 		return out
@@ -135,6 +186,8 @@ func _anyone_near(t: Dictionary) -> bool:
 	return game.net.hosting and is_instance_valid(game.net.remote) and game.net.remote.global_position.distance_to(t.at) < NEAR
 
 func markers() -> Array:
+	if convoy != null:
+		return convoy.markers()
 	var out: Array = []
 	if terminals.is_empty() or not told:
 		return out
@@ -148,6 +201,8 @@ func markers() -> Array:
 
 ## What [E] would do for the one at `at` (empty for nothing).
 func near_use(at: Vector3) -> Dictionary:
+	if convoy != null:
+		return convoy.near_use(at)
 	if terminals.is_empty():
 		return {}
 	for i in range(terminals.size()):
@@ -166,6 +221,8 @@ func prompt() -> String:
 
 ## [E] on the host (who: the one who pressed it, the guest's body for his).
 func use(who: Node3D, key: String, at: Vector3) -> bool:
+	if convoy != null:
+		return convoy.use(who, key)
 	if key == "tk_term":
 		for i in range(terminals.size()):
 			var t: Dictionary = terminals[i]
@@ -194,20 +251,29 @@ func use(who: Node3D, key: String, at: Vector3) -> bool:
 
 ## More of them, sooner, while a terminal runs.
 func haste() -> float:
+	if convoy != null:
+		return convoy.haste()
 	return HASTE if active >= 0 else 1.0
 
 func more() -> int:
+	if convoy != null:
+		return convoy.more()
 	return MORE if active >= 0 else 0
 
 # ---------------------------------------------------------------- co-op
 
 func export() -> Dictionary:
+	if convoy != null:
+		return {"convoy": convoy.export()}
 	var states: Array = []
 	for t: Dictionary in terminals:
 		states.append([str(t.state), float(t.progress)])
 	return {"terms": states, "core": str(core.get("state", "locked")), "told": told, "active": active}
 
 func adopt(state: Dictionary) -> void:
+	if convoy != null:
+		convoy.adopt(state.get("convoy", {}))
+		return
 	if terminals.is_empty() or state.is_empty():
 		return
 	told = bool(state.told)

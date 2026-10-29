@@ -129,7 +129,7 @@ func _ready() -> void:
 	plan = PLAN_SCRIPT.new()
 	add_child(plan)
 	build_times["setup"] = Time.get_ticks_msec() - began
-	for part in [_lay_grounds, _lay_villa, _lay_descent, _lay_station, _lay_terminal, _lay_tokyo, _lay_admin, _lay_canteen, _lay_atrium, _lay_research, _lay_entries]:
+	for part in [_lay_grounds, _lay_villa, _lay_descent, _lay_station, _lay_terminal, _lay_tokyo, _lay_admin, _lay_tokyo_breach, _lay_canteen, _lay_atrium, _lay_research, _lay_entries]:
 		var from := Time.get_ticks_msec()
 		(part as Callable).call()
 		build_times[str((part as Callable).get_method())] = Time.get_ticks_msec() - from
@@ -2740,11 +2740,43 @@ func _lay_tokyo() -> void:
 		_glow_box(Vector3(x + 0.95, UNDER + 0.02, z + 0.35), Vector3(0.5, 0.02, 0.1), Color("2ff3ff"), 3.0, Basis(Vector3.UP, -0.6))
 	_shared_dice()
 	_end_zone()
-	tokyo = TokyoHall.build(self, TOKYO_AT, deep, tokyo_deck, true)
+	# (v0.91) In the night of the rocket launcher (TokyoConvoy) the hall has a second, barred
+	# way out in its west wall: see _lay_tokyo_breach.
+	var breach := TokyoConvoy.DOOR_Z if TokyoTasks.job_of(night) == TokyoTasks.CONVOY else INF
+	tokyo = TokyoHall.build(self, TOKYO_AT, deep, tokyo_deck, true, breach)
 	_zones_see("tokyo_gang", TokyoHall.ZONE)
 	# (v0.89) An open doorway, not a sliding door: from the passage one looks into the hall and
 	# from the hall back into the passage (the closed leaves were a black wall from both sides).
 	_door("tokyo_gang", "tk_streets", z, 2.6, {"kind": "frame", "height": 2.9, "name": "tokyo_lock"})
+
+## (v0.91) The night of the rocket launcher: from the steel door in the hall's west wall, north
+## of the lock, a service passage runs west to the guard room of the checkpoint. The door is
+## barred (a script door that only the rocket opens, TokyoConvoy); the guard room's end is a
+## gate of the administration, open once its area is.
+func _lay_tokyo_breach() -> void:
+	if tokyo == null or not is_finite(tokyo.breach_z):
+		return
+	var z := TOKYO_AT.z + tokyo.breach_z
+	var lock_x := TOKYO_AT.x - TokyoHall.TK_HALL - 1.2
+	var west := 15.0
+	_own_dice(71032)
+	_begin_zone("tokyo_breach", "cold", ["admin"])
+	area = ""
+	_room("tokyo_breach", deep, Rect2(west, z - 1.8, lock_x - west, 3.6), 3.4, "panel", {"look": {"stripe": Color("c9a227")}})
+	_door("guard", "tokyo_breach", z, 1.8, {"kind": "gate", "area": "admin", "name": "tk_breach_guard", "height": 2.4})
+	_chunk("Kit", false)
+	for k in range(1, int((lock_x - west) / 6.0)):
+		var x := west + k * 6.0
+		_glow_box(Vector3(x, UNDER + 0.02, z), Vector3(1.6, 0.02, 0.12), Color("ffb84d"), 3.0, Basis(Vector3.UP, 0.0))
+		_glow_box(Vector3(x - 0.95, UNDER + 0.02, z - 0.35), Vector3(0.5, 0.02, 0.1), Color("ffb84d"), 3.0, Basis(Vector3.UP, -0.6))
+		_glow_box(Vector3(x - 0.95, UNDER + 0.02, z + 0.35), Vector3(0.5, 0.02, 0.1), Color("ffb84d"), 3.0, Basis(Vector3.UP, 0.6))
+	var sign := lettering("◄  KONTROLLPUNKT  ·  VERWALTUNG", Vector3(lock_x - 0.3, UNDER + 2.7, z), 34, Color("ffcf8a"))
+	sign.rotation.y = -PI / 2
+	sign.outline_size = 0
+	_shared_dice()
+	_end_zone()
+	_zones_see("tokyo_breach", TokyoHall.ZONE)
+	_door("tokyo_breach", "tk_streets", z, 3.4, {"kind": "script", "name": TokyoConvoy.DOOR, "height": 3.2, "leaf": "shutter"})
 
 # ---------------------------------------------------------------- offices and corridors
 

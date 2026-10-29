@@ -1,7 +1,7 @@
 [
   {
     "version": "0.91",
-    "title": "Neuer Regen auf dem Hof und in Tokio",
+    "title": "Neuer Regen, neue Fahrzeuge und der Raketenwerfer in Tokio",
     "sections": [
       {
         "title": "Regen",
@@ -18,6 +18,18 @@
           "Die Autos in Tokio sind neu: eine moderne Mittelklasse-Limousine (NORIKA AURA) mit großem Kühlergrill, schmalen LED-Scheinwerfern und dunklen Mehrspeichen-Felgen in mehreren Farben – auch als Taxi und als Polizeiwagen – und ein breites 80er-Jahre-Keilcoupé mit rot leuchtenden Scheinwerfern und „夜走り“ im Grill, Heckflügel, Seitenauspuff, roter Unterbodenbeleuchtung, roten Leuchtringen in den Felgen und einer Lackierung mit roter Sonne, Kranich und „天狗“. Ausgebrannte Wracks stehen schief auf ihren Felgen.",
           "Die Heuballen auf dem Hof (Karte 1) sind neu: goldene, faserige Strohballen mit abstehenden Halmen, an den Schnittkanten ausgefranst, mit zwei Jute-Schnüren längs und zwei quer – in der Scheune, auf dem Heuboden, im Hof und auf dem Traktor-Anhänger.",
           "Testraum: Unter „TOKIO · GEBÄUDE DER SIMULATIONSHALLE“ bringt euch „BUS & AUTOS“ direkt neben den Bus."
+        ]
+      },
+      {
+        "title": "Mission: Der Raketenwerfer (Tokio)",
+        "items": [
+          "In etwa jeder zweiten Nacht mit der Simulationshalle ist das Tor vom Terminal zur Anlage verkeilt. Der Weg weiter führt dann durch eine verschweißte Stahltür in der Westwand der Halle – und die bekommt nur eine Rakete auf.",
+          "Im Osten der Halle wartet ein Raketenwerfer: ein abgenutzter, olivgrüner 8x8-Lastwagen mit gepanzerter Kabine und zwei Raketenkästen mit je neun Rohren, gefahren von einem Wachmann der Anlage. [E] am Fahrzeug schickt ihn los.",
+          "Er fährt den Ring um die Halle entlang, aber nur, solange ihr in seiner Nähe seid. Infizierte vor seiner Stoßstange überfährt er, vor großen Brocken und vor euch hält er an und hupt. Unterwegs warten Hinterhalte.",
+          "Infizierte, die sich um ihn drängen, setzen ihm zu (Panzerung in der Auftragsliste). Ist sie aufgebraucht, bleibt er brennend liegen: [E] am Fahrzeug repariert ihn, solange jemand dabeibleibt.",
+          "In der Feuerstellung hebt er die Startrampe, schwenkt sie auf die Stahltür und braucht 60 Sekunden zum Zielen – währenddessen schickt die Halle alles, was sie hat. Dann steigt eine Rakete auf, die Tür fliegt aus der Wand, und ein Gang führt zum Kontrollpunkt der Verwaltung. Dafür gibt es 500 ◈.",
+          "Der Auftrag läuft auch im Koop: Der Host lenkt das Geschehen, beide sehen den Werfer, die Rakete und die gesprengte Tür, und auch der Mitspieler kann ihn losschicken und reparieren.",
+          "Testraum: Unter „MISSION 2 · AREALE“ bringt euch „TOKIO · RAKETENWERFER-AUFTRAG“ neben den Werfer, und ihr könnt den ganzen Auftrag durchspielen."
         ]
       }
     ]

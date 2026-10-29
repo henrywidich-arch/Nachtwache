@@ -978,6 +978,8 @@ func _process(delta: float) -> void:
 	var lines: Array[String] = game.hive.summary() if game.hive.on else game.mission.summary()
 	if not game.hive.on and not game.sandbox.on and game.phase == "preparing":
 		lines = ["F gedrückt halten, um die nächste Runde zu starten"]
+	if game.sandbox.on and not game.hive.on:
+		lines.append_array(game.sandbox.convoy_lines())
 	task_label.text = "\n".join(lines)
 	if game.hive.on:
 		enemy_label.text = ("%d Gegner in der Nähe" % game.alive_count) if game.alive_count > 0 else "Kein Kontakt"
@@ -1732,6 +1734,8 @@ func _test_world(column: VBoxContainer, room: Sandbox) -> void:
 			pieces.append(_chip(str(HiveLayout.info(str(def)).get("name", def)).to_upper(), _test_do.bind("visit", str(def)), room.visit_id == str(def), 270))
 	# (The simulation hall, which a night of mission two may have: TokyoHall.)
 	pieces.append(_chip("TOKIO-SIMULATIONSHALLE", _test_do.bind("visit", Sandbox.TOKYO_VISIT), room.visit_id == Sandbox.TOKYO_VISIT, 270))
+	# (v0.91) The hall in the rocket launcher's night, the job to play through (TokyoConvoy).
+	pieces.append(_chip("TOKIO  ·  RAKETENWERFER-AUFTRAG", _test_do.bind("visit", Sandbox.TOKYO_CONVOY), room.visit_id == Sandbox.TOKYO_CONVOY, 300))
 	# (The end of every night: the reactor hall with the end boss, BossArena and BossFight.)
 	pieces.append(_chip("ENDBOSS-RAUM  ·  REAKTORHALLE", _test_do.bind("visit", Sandbox.BOSS_VISIT), room.visit_id == Sandbox.BOSS_VISIT, 270))
 	if room.visit_id != "":

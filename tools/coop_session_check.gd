@@ -286,6 +286,9 @@ func villa(other: Dictionary) -> void:
 	game.player.global_position = game.hive_map.points.front_door + Vector3(0, 0.05, 0)
 	game.net.teleport_to_partner()
 	expect(game.player.global_position.distance_to(game.net.remote.global_position) < 4.0, "The host can also teleport safely to the guest")
+	# (v0.91, with --tokyo-konvoi) The rocket launcher of the Tokyo hall on both machines.
+	if game.hive.tokyo_tasks != null and game.hive.tokyo_tasks.convoy != null:
+		await convoy_sync()
 	game.hive._enter("board")
 	game.hive._enter("ride")
 	game.hive.stage_time = 1.7
@@ -303,6 +306,25 @@ func villa(other: Dictionary) -> void:
 	await wait(0.8)
 	other = await probe("inspect")
 	expect(game.hive.checkpoint == "descent" and str(other.get("checkpoint", "")) == "descent" and str(other.get("layout", "")) == layout and bool(other.get("visible", false)), "The host restarts both players at the checkpoint with the same layout and visible characters")
+
+var near_text := ""
+
+func convoy_sync() -> void:
+	var c: TokyoConvoy = game.hive.tokyo_tasks.convoy
+	var beside := c.truck.to_global(Vector3(2.6, 0.05, -3.0))
+	game.player.global_position = beside + Vector3(1.2, 0, 0)
+	var other := await probe("convoy_use", {"at": beside})
+	expect(c.phase == "drive" and str(other.get("convoy_phase", "")) == "drive", "The guest sends the rocket launcher off with [E] on the host, and both see it go (%s / %s)" % [c.phase, other.get("convoy_phase", "")])
+	c.travelled = 100.0
+	await wait(1.5)
+	other = await probe("inspect")
+	var gap := (other.get("truck_at", Vector3.INF) as Vector3).distance_to(c.truck.global_position)
+	expect(gap < 3.0, "The guest's launcher follows the host's along the road (%.1f m apart)" % gap)
+	c.phase = "fire"
+	c._launch(true)
+	await wait(2.2)
+	other = await probe("inspect")
+	expect(c.phase == "open" and str(other.get("convoy_phase", "")) == "open" and bool(other.get("breach_open", false)), "The rocket blows the steel door open on both machines")
 
 func probe(action: String, args: Dictionary = {}) -> Dictionary:
 	serial += 1
@@ -389,6 +411,13 @@ func _probe(id: int, action: String, args: Dictionary) -> void:
 		"teleport":
 			game.net.teleport_to_partner()
 			await wait(0.6)
+		"convoy_use":
+			game.player.global_position = args.at
+			game.player.velocity = Vector3.ZERO
+			await wait(0.5)
+			near_text = str(game.hive.tokyo_tasks.near_use(game.player.global_position)) if game.hive.tokyo_tasks != null else "none"
+			game.hive.use()
+			await wait(0.6)
 	_reply.rpc_id(1, id, snapshot())
 
 func feed_count(kind: String) -> int:
@@ -431,7 +460,14 @@ func snapshot() -> Dictionary:
 		"saved_mission": game.profile.mission, "checkpoint": game.hive.checkpoint,
 		"descent_locked": game.cabin.is_locked("descent") if game.hive.on else false,
 		"completed_items": completed, "farm_picked": farm_picked, "at": game.player.global_position,
-		"riding": game.hive_map.riding if is_instance_valid(game.hive_map) else false, "waits_for_host": waits}
+		"riding": game.hive_map.riding if is_instance_valid(game.hive_map) else false, "waits_for_host": waits,
+		"near": near_text,
+		"convoy_phase": _convoy().phase if _convoy() != null else "",
+		"truck_at": _convoy().truck.global_position if _convoy() != null and is_instance_valid(_convoy().truck) else Vector3.INF,
+		"breach_open": is_instance_valid(game.hive_map) and game.hive_map.door_open(TokyoConvoy.DOOR)}
+
+func _convoy() -> TokyoConvoy:
+	return game.hive.tokyo_tasks.convoy if game.hive.on and game.hive.tokyo_tasks != null else null
 
 @rpc("any_peer", "call_remote", "reliable")
 func _reply(id: int, data: Dictionary) -> void:

@@ -120,6 +120,12 @@ func _process(delta: float) -> void:
 	_keep_look(delta)
 	if not on or not game.is_playing() or get_tree().paused:
 		return
+	if convoy != null:
+		if not is_instance_valid(convoy.truck) or not is_instance_valid(convoy.hall):
+			drop_convoy()
+		else:
+			convoy.update(delta)
+			convoy.display(delta)
 	# One line after the other.
 	voice_left -= delta
 	if voice_left <= 0.0:
@@ -390,8 +396,11 @@ func visit(def: String) -> void:
 		game.visit_night = HiveLayout.classic()
 		game.start_run(true)
 		return
-	if def == TOKYO_VISIT or def == TOKYO_IZAKAYA or def.begins_with(TOKYO_HOUSE):
+	drop_convoy()
+	if def == TOKYO_VISIT or def == TOKYO_IZAKAYA or def.begins_with(TOKYO_HOUSE) or def == TOKYO_CONVOY:
 		game.visit_night = HiveLayout.with_tokyo(HiveLayout.classic(), true)
+		# (v0.91) The hall's job: the rocket launcher only for its own visit.
+		game.visit_night["tokyo_job"] = TokyoTasks.CONVOY if def == TOKYO_CONVOY else TokyoTasks.STABLE
 	elif str(game.visit_night.get("key", "")).ends_with("+tokio"):
 		game.visit_night = {}
 	game.start_run(true)
@@ -405,9 +414,36 @@ const TOKYO_IZAKAYA := "tokyo_izakaya"
 const TOKYO_HOUSE := "tokyo:"
 ## The reactor hall with the end boss of mission two (BossArena, BossFight): at its gate.
 const BOSS_VISIT := "boss"
+## (v0.91) The hall in the rocket launcher's night (TokyoConvoy): beside the launcher, the
+## whole job to play through - escort, firing place, rocket, the door blown open.
+const TOKYO_CONVOY := "tokyo_konvoi"
+## That job while it runs in the test room (no director there: see _process).
+var convoy: TokyoConvoy
+
+func drop_convoy() -> void:
+	if convoy != null:
+		convoy.clear()
+	convoy = null
+
+## [E] for the launcher of the test room's visit. True if it was for it.
+func use_convoy() -> bool:
+	if convoy == null:
+		return false
+	var near := convoy.near_use(game.player.global_position)
+	return not near.is_empty() and convoy.use(game.player, str(near.key))
+
+func convoy_prompt() -> String:
+	return "" if convoy == null else str(convoy.near_use(game.player.global_position).get("text", ""))
+
+func convoy_lines() -> Array[String]:
+	return [] as Array[String] if convoy == null else convoy.summary()
+
+func convoy_marks() -> Array:
+	return [] if convoy == null else convoy.markers()
 
 ## Back to the test room on the farm.
 func leave_visit() -> void:
+	drop_convoy()
 	visit_id = ""
 	game.start_run(true)
 
@@ -418,6 +454,9 @@ func visit_spot(def: String) -> Array:
 		return []
 	if def == TOKYO_VISIT and is_instance_valid(map.tokyo):
 		return [map.points.tokyo_start, 0.0]
+	if def == TOKYO_CONVOY and is_instance_valid(map.tokyo):
+		# (Behind and beside the launcher, looking at it.)
+		return [map.tokyo.origin + Vector3(61.0, 0.05, 31.0), atan2(-5.0, 7.0)]
 	if def == BOSS_VISIT and map.points.has("boss_vorraum"):
 		return [map.points.boss_vorraum, 0.0]
 	if def.begins_with(TOKYO_HOUSE) and is_instance_valid(map.tokyo) and map.tokyo.landmarks != null:
@@ -467,6 +506,13 @@ func _place_visit() -> void:
 	if visit_id == BOSS_VISIT:
 		game.hive.boss.game = game
 		game.hive.boss.start_test()
+		return
+	if visit_id == TOKYO_CONVOY and is_instance_valid(map.tokyo) and is_finite(map.tokyo.breach_z):
+		drop_convoy()
+		convoy = TokyoConvoy.new(game, map.tokyo, map, null)
+		convoy.setup()
+		convoy.told = true
+		game.hud.announce("TESTRAUM  ·  RAKETENWERFER", "Tokio-Halle, Auftrag Raketenwerfer: [E] am Fahrzeug schickt ihn los. Begleite ihn zur Stahltür an der Westwand, halte die Feuerstellung – dann fliegt die Rakete.", 8)
 		return
 	var label := "Tokio-Simulationshalle"
 	if visit_id.begins_with(TOKYO_HOUSE):
