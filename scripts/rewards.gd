@@ -28,15 +28,15 @@ const GEAR := {
 	"medpack": {"label": "MEDPACK", "icon": "heal",
 		"note": "Zwei Medpacks zum Hinlegen (Taste K): Alle 2 Sekunden heilt es jeden in der Nähe, bis sein Vorrat aufgebraucht ist – dann zerplatzt es."},
 	"rucksack": {"label": "RUCKSACK", "icon": "gear",
-		"note": "Ein Waffenplatz mehr für jede Art: Du kannst zwei Waffen aus dem Spind mitnehmen und Funde aufheben, ohne etwas fallen zu lassen."}
+		"note": "Ein Waffenplatz mehr für jede Art, und eine Waffe mit Skin aus dem Spind kommt mit: Hake sie an, dann startest du mit ihr. Ohne Rucksack findest du Waffen wie gewohnt im Einsatz."}
 }
 ## The filter of the crate's mask lasts this much longer (Survivor.filter_capacity).
 const MASK_BONUS := 0.5
 const MASK_LEVEL := 2
 const MEDPACKS := 2
-## Weapons from the locker a survivor may take along: one, two with the backpack.
-const WEAPON_SLOTS := 1
-## Every survivor starts with these anyway: their skins need no place, only to be put on.
+## Every survivor starts with these anyway. (v0.88, Henry) A skin brings its weapon along
+## only with the backpack taken, and then one: else the weapon is found in the mission as
+## before, and wears its skin from then on.
 const START := ["rifle", "pistol"]
 
 var stored := true
@@ -189,8 +189,7 @@ func prune() -> void:
 		if not known(id):
 			waiting.erase(id)
 	taken = taken.filter(func(id: Variant) -> bool: return holds(str(id)) and not weapon_of(str(id)) in START)
-	if taken.filter(func(id: Variant) -> bool: return "/" in str(id)).size() > weapon_slots():
-		_trim_weapons()
+	_trim_weapons()
 
 ## Gives an item for `days`. One that runs already gets the days on top; a new one waits
 ## in the locker and its days start only when it is activated (v0.86: put on or ticked to
@@ -209,13 +208,14 @@ func add(id: String, days: int) -> void:
 ## (Henry, v0.79) Crates are worth more on the two hard levels: on EASY and NORMAL a won
 ## mission seldom gives one, and that plain crate gives only things for one day and no
 ## legendary skin; SCHWER always gives a crate with everything for 1, 3 or 7 days, and
-## ALBTRAUM a crate whose prizes last longer.
+## ALBTRAUM a crate whose prizes last longer. (v0.88) That one is a special crate: it
+## gives two prizes (prizes), the second shown under the first.
 const CRATE_CHANCE := {"easy": 0.1, "normal": 0.2, "hard": 1.0, "nightmare": 1.0}
 const TIER_OF := {"easy": "plain", "normal": "plain", "hard": "hard", "nightmare": "nightmare"}
 const TIERS := {
 	"plain": {"label": "EINFACHE KISTE", "durations": [[1, 1]], "legendary": false},
 	"hard": {"label": "SCHWERE KISTE", "durations": [[1, 62], [3, 28], [7, 10]], "legendary": true},
-	"nightmare": {"label": "ALBTRAUM-KISTE", "durations": [[1, 35], [3, 40], [7, 25]], "legendary": true}
+	"nightmare": {"label": "ALBTRAUM-SPEZIALKISTE", "durations": [[1, 35], [3, 40], [7, 25]], "legendary": true, "prizes": 2}
 }
 ## How many crates of each kind wait (the best is opened first).
 var stock := {"plain": 0, "hard": 0, "nightmare": 0}
@@ -229,6 +229,71 @@ func earn(level: String, rng: RandomNumberGenerator = null) -> bool:
 		return false
 	grant_crate(str(TIER_OF.get(level, "plain")))
 	return true
+
+## (v0.88) The second mission's length (HiveLayout.LENGTHS) makes a won night worth more:
+##   chance  times the level's CRATE_CHANCE (at most sure), count  crates, up  tiers better.
+## KURZ as before, MITTEL twice the chance, LANG a sure crate one tier better, MAXIMAL two
+## of them; on ALBTRAUM LANG and MAXIMAL give one crate more.
+const LENGTH_CRATES := {
+	"short": {"chance": 1.0, "count": 1, "up": 0},
+	"medium": {"chance": 2.0, "count": 1, "up": 0},
+	"long": {"chance": 99.0, "count": 1, "up": 1},
+	"max": {"chance": 99.0, "count": 2, "up": 1}
+}
+const TIER_UP := {"plain": "hard", "hard": "nightmare", "nightmare": "nightmare"}
+## (v0.88) The endless night (on both maps): at each plateau of time survived [seconds,
+## tier] a crate - the longer, the better. SCHWER lifts each a tier, ALBTRAUM as well and
+## gives two of them.
+const ENDLESS_STEPS := [[600.0, "plain"], [1200.0, "hard"], [1800.0, "nightmare"], [2700.0, "nightmare"]]
+
+## A won night of the second mission: the crates it gives (their tiers; none, one or more).
+func earn_night(level: String, length: String, rng: RandomNumberGenerator = null) -> Array[String]:
+	if rng == null:
+		rng = RandomNumberGenerator.new()
+		rng.randomize()
+	var rule: Dictionary = LENGTH_CRATES.get(length, LENGTH_CRATES.medium)
+	var out: Array[String] = []
+	if rng.randf() >= float(CRATE_CHANCE.get(level, 0.2)) * float(rule.chance):
+		return out
+	var tier := str(TIER_OF.get(level, "plain"))
+	if int(rule.up) > 0:
+		tier = str(TIER_UP[tier])
+	var count := int(rule.count) + int(int(rule.up) > 0 and level == "nightmare")
+	for i in range(count):
+		grant_crate(tier)
+		out.append(tier)
+	return out
+
+## What a plateau of the endless night (an index of ENDLESS_STEPS) gives on a level: its
+## crates' tiers.
+static func endless_tiers(level: String, step: int) -> Array[String]:
+	var tier := str(ENDLESS_STEPS[clampi(step, 0, ENDLESS_STEPS.size() - 1)][1])
+	if level in ["hard", "nightmare"]:
+		tier = str(TIER_UP[tier])
+	var out: Array[String] = [tier]
+	if level == "nightmare":
+		out.append(tier)
+	return out
+
+## What a length of the second mission gives, in words for the play menu.
+static func length_words(length: String) -> String:
+	match length:
+		"short":
+			return "2 Areale  ·  Kiste wie gewohnt"
+		"long":
+			return "5 Areale  ·  sichere Kiste, eine Stufe besser (Albtraum: zwei)"
+		"max":
+			return "6 Areale  ·  zwei Kisten, eine Stufe besser (Albtraum: drei)"
+	return "3–4 Areale  ·  doppelte Kistenchance"
+
+## Tiers in words: "2× ALBTRAUM-KISTE, 1× SCHWERE KISTE".
+static func tiers_words(tiers: Array) -> String:
+	var said: Array[String] = []
+	for tier: String in ["nightmare", "hard", "plain"]:
+		var n := tiers.count(tier)
+		if n > 0:
+			said.append("%d× %s" % [n, str(TIERS[tier].label)])
+	return ", ".join(said)
 
 func grant_crate(tier: String = "hard") -> void:
 	if not stock.has(tier):
@@ -306,7 +371,12 @@ func open_crate(rng: RandomNumberGenerator = null, length: int = 48, at: int = 4
 	for i in range(length):
 		strip.append(prize if i == at else draw(rng, tier))
 	add(str(prize.id), int(prize.days))
-	return {"prize": prize, "strip": strip, "at": at, "tier": tier}
+	var extra: Array = []
+	for i in range(int(TIERS[tier].get("prizes", 1)) - 1):
+		var more := draw(rng, tier)
+		add(str(more.id), int(more.days))
+		extra.append(more)
+	return {"prize": prize, "strip": strip, "at": at, "tier": tier, "extra": extra}
 
 # ---------------------------------------------------------------- locker and loadout
 
@@ -331,47 +401,51 @@ func wear(id: String) -> void:
 		worn[weapon_of(id)] = skin_of(id)
 	save()
 
-func weapon_slots() -> int:
-	return WEAPON_SLOTS + int(holds("rucksack") and taken.has("rucksack"))
+## Whether a weapon skin can be ticked to come along: only with the backpack taken.
+func carries_weapon() -> bool:
+	return gear_on("rucksack")
 
-## Ticks an item to come along, or unticks it. A third weapon (a second without the
-## backpack) lets the one ticked longest ago go. Taking a weapon puts the skin on it.
+## Ticks an item to come along, or unticks it. A weapon skin only with the backpack (one
+## weapon: another ticked lets the first go); ticking it puts the skin on.
 func take(id: String) -> void:
 	if weapon_of(id) in START:
+		return
+	if "/" in id and not taken.has(id) and not carries_weapon():
 		return
 	activate(id)
 	if not holds(id):
 		return
 	if taken.has(id):
 		taken.erase(id)
-		if id == "rucksack":
-			_trim_weapons()
 	else:
 		taken.append(id)
 		if "/" in id:
 			worn[weapon_of(id)] = skin_of(id)
 			for other: Variant in taken.duplicate():
-				if str(other) != id and "/" in str(other) and weapon_of(str(other)) == weapon_of(id):
+				if str(other) != id and "/" in str(other):
 					taken.erase(other)
-			_trim_weapons()
+	_trim_weapons()
 	save()
 
+## Without the backpack no weapon skin stays ticked to come along.
 func _trim_weapons() -> void:
-	var weapons: Array = taken.filter(func(other: Variant) -> bool: return "/" in str(other))
-	while weapons.size() > weapon_slots():
-		taken.erase(weapons.pop_front())
+	if carries_weapon():
+		return
+	taken = taken.filter(func(other: Variant) -> bool: return not "/" in str(other))
+
+## The weapon that comes along from the locker (with the backpack only), or none.
+func weapons_taken() -> Array:
+	var out: Array = []
+	if not carries_weapon():
+		return out
+	for id: Variant in taken:
+		if "/" in str(id) and holds(str(id)) and not weapon_of(str(id)) in START:
+			out.append(weapon_of(str(id)))
+	return out.slice(0, 1)
 
 ## Whether a piece of gear comes along.
 func gear_on(id: String) -> bool:
 	return holds(id) and taken.has(id)
-
-## The weapons that come along from the locker.
-func weapons_taken() -> Array:
-	var out: Array = []
-	for id: Variant in taken:
-		if "/" in str(id) and holds(str(id)) and not weapon_of(str(id)) in START:
-			out.append(weapon_of(str(id)))
-	return out
 
 ## What a skin gives the weapon it is on (Survivor.rare).
 func boost(weapon: String, line: String) -> float:
@@ -379,7 +453,8 @@ func boost(weapon: String, line: String) -> float:
 	return float((WeaponSkins.SKINS[skin].boost as Dictionary).get(line, 0.0)) if skin != "" else 0.0
 
 ## Gives the survivor what comes along, at the start of a mission (after reset_survivor):
-## skins on his weapons, the weapons from the locker, the backpack, the mask and medpacks.
+## skins on his weapons, the backpack (and with it the weapon ticked), the mask and
+## medpacks. (A weapon found later is painted already: every model gets its skin here.)
 func equip(player: Survivor) -> void:
 	prune()
 	player.backpack = gear_on("rucksack")
@@ -390,9 +465,7 @@ func equip(player: Survivor) -> void:
 		if not player.inventory.has(weapon):
 			if not player.room_for(weapon):
 				continue
-			player.inventory[weapon] = {"ammo": 0, "reserve": 0, "level": 0}
-			player.inventory[weapon].ammo = player.magazine_of(weapon)
-			player.inventory[weapon].reserve = player.reserve_cap(weapon)
+			player.inventory[weapon] = player.new_record(weapon)
 		if first == "":
 			first = weapon
 	if gear_on("gasmaske"):

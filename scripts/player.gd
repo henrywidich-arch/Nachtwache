@@ -143,7 +143,7 @@ const ATTACHMENTS := {
 		"laser": LASER_PART
 	},
 	"g36": {
-		"reddot": {"label": "ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Rundes Rotpunktvisier über Kimme und Korn: heller Leuchtpunkt im klaren Glas, genauer beim Zielen", "set": {"zoom": 40.0, "aim_spread": 0.55}},
+		"reddot": {"label": "KOMPAKTES ROTPUNKTVISIER", "price": 120, "slot": "sight", "note": "Ab Werk auf dem Tragegriff: das eigene, kompakte Rotpunktvisier des G36 – heller Leuchtpunkt im kantigen Gehäuse, genauer beim Zielen. Abnehmbar, wenn das Zielfernrohr drauf soll", "set": {"zoom": 40.0, "aim_spread": 0.55}},
 		"scope": {"label": "ZIELFERNROHR 4×", "price": 260, "slot": "sight", "note": "Vierfache Vergrößerung für Schüsse quer über den Hof", "set": {"scope": 18.0, "scope_turn": 0.36, "aim_spread": 0.35}},
 		"silencer": {"label": "SCHALLDÄMPFER", "price": 180, "slot": "muzzle", "note": "Leise, wenig Mündungsfeuer – die C.R.U. weicht nicht mehr aus", "set": {"sound": "g36_sil", "flash": 0.35, "quiet": true}, "scale": {"kick": 0.8, "spread": 0.92, "damage": 0.95}},
 		"laser": LASER_PART
@@ -1335,10 +1335,26 @@ func set_crouched(low: bool) -> void:
 func chest_height() -> float:
 	return 0.72 if crouched else 1.15
 
+## (v0.88) Parts a weapon comes with, owned and fitted from the start: the G36 its own
+## compact red dot (WeaponView.COMPACT_DOT).
+const STOCK_PARTS := {"g36": ["reddot"]}
+
+## The record of a weapon just come by: a full load, and its parts from the factory.
+func new_record(id: String) -> Dictionary:
+	var record := {"ammo": int(WEAPONS[id].magazine), "reserve": reserve_cap(id), "level": 0}
+	var parts: Array = STOCK_PARTS.get(id, [])
+	if not parts.is_empty():
+		var on := {}
+		for part: String in parts:
+			on[str(ATTACHMENTS[id][part].slot)] = part
+		record["mods"] = parts.duplicate()
+		record["fitted"] = on
+	return record
+
 ## Adds a bought weapon with a full load and takes it in hand.
 func unlock(id: String) -> bool:
 	if inventory.has(id) or not WEAPONS.has(id): return false
-	inventory[id] = {"ammo": int(WEAPONS[id].magazine), "reserve": reserve_cap(id), "level": 0}
+	inventory[id] = new_record(id)
 	equip_weapon(id)
 	return true
 

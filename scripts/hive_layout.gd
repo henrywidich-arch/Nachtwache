@@ -77,6 +77,16 @@ const LIFT_DEF := "aufzug"
 ## How many areas a night has in all its seams together: count -> weight (two to six,
 ## mostly three to five; where there are more than seams, a chain gets two in a row).
 const AREA_COUNTS := {2: 1, 3: 4, 4: 5, 5: 3, 6: 2}
+## (v0.88) How long a night of the second mission is, chosen in the play menu
+## (Profile.length): how many areas it has in all. A longer night gives more and better
+## crates when it is won (Rewards.earn_night). "" (the checks, old calls) dices AREA_COUNTS.
+const LENGTHS := {
+	"short": {"label": "KURZ", "counts": {2: 1}},
+	"medium": {"label": "MITTEL", "counts": {3: 1, 4: 1}},
+	"long": {"label": "LANG", "counts": {5: 1}},
+	"max": {"label": "MAXIMAL", "counts": {6: 1}}
+}
+const LENGTH_ORDER := ["short", "medium", "long", "max"]
 ## The chains of a night lie this far apart (each has floors of its own).
 const CHAIN_SPACING := 700.0
 ## How often a night tries to lay itself out before it falls back to a straight way.
@@ -186,21 +196,32 @@ static func room_label(id: String) -> String:
 ## The night of a seed: the old route as its spine, chains of areas in some of its seams
 ## (see SEAMS), and perhaps the simulation hall (tokyo_of). With `must` (an area of the
 ## pool, or ROOM_TOKYO) that room is surely in it; the rest stays as the dice say.
-static func plan(seed_value: int, must: String = "") -> Dictionary:
+## With a `length` (LENGTHS) it has that many areas; the night keeps it (its "length").
+static func plan(seed_value: int, must: String = "", length: String = "") -> Dictionary:
+	if not LENGTHS.has(length):
+		length = ""
+	var night: Dictionary
 	if must == ROOM_TOKYO:
-		return with_tokyo(_plan(seed_value), true)
-	if not pool().has(must):
-		must = ""
-	return with_tokyo(_plan(seed_value, must), tokyo_of(seed_value))
+		night = with_tokyo(_plan(seed_value, "", length), true)
+	else:
+		if not pool().has(must):
+			must = ""
+		night = with_tokyo(_plan(seed_value, must, length), tokyo_of(seed_value))
+	if length != "":
+		# (Before "+tokio", which with_tokyo takes off and puts on again.)
+		night["length"] = length
+		var hall := bool(night.get("tokyo", false))
+		night["key"] = str(night.get("key", "")).trim_suffix("+tokio") + "+" + length + ("+tokio" if hall else "")
+	return night
 
 ## On a night with a crash the first chain begins in the tunnel.
-static func _plan(seed_value: int, must: String = "") -> Dictionary:
+static func _plan(seed_value: int, must: String = "", length: String = "") -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("hive-areale-%d" % seed_value)
 	var crash := rng.randf() < 0.5
 	var order := pool()
 	_shuffle(rng, order)
-	var count := mini(_weighted(rng, AREA_COUNTS), order.size())
+	var count := mini(_weighted(rng, LENGTHS[length].counts if LENGTHS.has(length) else AREA_COUNTS), order.size())
 	var per := seams_for(rng, crash, count)
 	for attempt in range(ATTEMPTS):
 		var night := _night(rng, seed_value, crash, per, order, false, must)

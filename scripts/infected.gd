@@ -277,6 +277,13 @@ const SLIDE_APART := ["prowler", "shark", "crusher"]
 ## A killing melee blow throws the body at this share of how hard it shoves, this much upwards.
 const MELEE_THROW := 0.7
 const MELEE_LIFT := 0.22
+## (v0.88, Henry) The plain infected do not all keep the same pace: [share, factor on its
+## speed] - most shamble as they did, some walk briskly, a few nearly run.
+const MAULER_GAITS := [[0.6, 1.0], [0.28, 1.3], [0.12, 1.65]]
+## (v0.88, Henry) The hound does not always leap when it could: this often it runs on
+## instead, and tries again a little later (POUNCE_SKIP_WAIT seconds).
+const POUNCE_SKIP := 0.45
+const POUNCE_SKIP_WAIT := Vector2(1.6, 3.2)
 ## The Ripper leaps from this far away (metres), the Crusher from here.
 const POUNCE_RANGE := Vector2(3.2, 8.5)
 const LEAP_RANGE := Vector2(5.0, 12.0)
@@ -538,6 +545,9 @@ func _ready() -> void:
 		max_health *= 0.55 if wave <= 6 else 0.75
 		health = max_health
 	speed = (float(spec.speed) + float(spec.speed_per_round) * (mini(wave, SPEED_ROUNDS) - 1)) * randf_range(0.93, 1.08) * float(game.rules.pace)
+	# (Not in the checks, which count on the old pace: gait_factor is checked on its own.)
+	if kind == "mauler" and not game.check_mode:
+		speed *= gait_factor(randf())
 	var capsule := CapsuleShape3D.new()
 	capsule.radius = spec.radius
 	capsule.height = spec.height
@@ -1371,6 +1381,14 @@ func _begin_attack(clip: String, duration: float, strike_at: float, reach: float
 	attack_damage = damage
 	cue("attack", [clip, duration, strike_at])
 
+## The pace of a plain infected for a roll of 0..1 (MAULER_GAITS).
+static func gait_factor(roll: float) -> float:
+	for gait: Array in MAULER_GAITS:
+		roll -= float(gait[0])
+		if roll < 0.0:
+			return float(gait[1])
+	return float(MAULER_GAITS[0][1])
+
 ## The Ripper's pounce: a short crouch, a flat leap at the prey, a skidding landing.
 ## Returns true while the leap is in charge of the body.
 func _pounce(delta: float, target: Vector3, distance: float, same_floor: bool) -> bool:
@@ -1380,6 +1398,10 @@ func _pounce(delta: float, target: Vector3, distance: float, same_floor: bool) -
 			if not alert or held_left > 0.0 or attack_clock >= 0.0 or special_cooldown > 0.0 or not same_floor:
 				return false
 			if distance < POUNCE_RANGE.x or distance > POUNCE_RANGE.y or not is_on_floor() or not _clear_line(target, true):
+				return false
+			# (Now and then it just runs at its prey; the next chance comes a little later.)
+			if randf() < POUNCE_SKIP and not game.check_mode:
+				special_cooldown = randf_range(POUNCE_SKIP_WAIT.x, POUNCE_SKIP_WAIT.y)
 				return false
 			leap = "crouch"
 			leap_left = 0.26

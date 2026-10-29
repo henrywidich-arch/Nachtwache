@@ -12,7 +12,7 @@ extends Node
 const PORT := 24565
 ## The version of the game. Two players can only play together with the same one: each
 ## says his on connecting (NetHello), and the lobby tells both when they differ.
-const VERSION := "0.87"
+const VERSION := "0.88"
 ## Seconds the other side has to say its version; one that stays silent is older than this
 ## greeting (v0.18 and before).
 const HELLO_WAIT := 3.0
@@ -254,7 +254,7 @@ func broadcast_lobby() -> void:
 	if hosting and matched() and game.state == "menu":
 		_lobby.rpc_id(partner, {"mission": game.profile.mission, "level": game.profile.difficulty,
 			"label": game.profile.rules().label, "mode": game.profile.mode,
-			"modifiers": game.profile.modifiers, "bots": game.team_enabled, "company": game.profile.company, "picks": game.profile.picks, "room": game.profile.room})
+			"modifiers": game.profile.modifiers, "bots": game.team_enabled, "company": game.profile.company, "picks": game.profile.picks, "room": game.profile.room, "length": game.profile.length, "hive_mode": game.profile.hive_mode})
 
 @rpc("authority", "call_remote", "reliable")
 func _lobby(settings: Dictionary) -> void:

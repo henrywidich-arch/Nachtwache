@@ -201,10 +201,10 @@ static func _spin(hud: SurvivalHUD, open: Button, locker: Button, strip: HBoxCon
 		open.disabled = rewards.crates <= 0
 		locker.disabled = false
 		if is_instance_valid(result):
-			_reveal(hud, result, outcome.prize))
+			_reveal(hud, result, outcome.prize, outcome.get("extra", [])))
 
 ## What came out: big, in its rarity's colour, with the weapon turning in its skin.
-static func _reveal(hud: SurvivalHUD, result: HBoxContainer, prize: Dictionary) -> void:
+static func _reveal(hud: SurvivalHUD, result: HBoxContainer, prize: Dictionary, extra: Array = []) -> void:
 	var rewards: Rewards = hud.game.rewards
 	var id := str(prize.id)
 	var tint: Color = WeaponSkins.RARITIES[Rewards.rarity(id)].color
@@ -222,6 +222,12 @@ static func _reveal(hud: SurvivalHUD, result: HBoxContainer, prize: Dictionary) 
 	note.custom_minimum_size.x = 520
 	words.add_child(note)
 	words.add_child(hud.label("Im Spind  ·  %s  ·  die Zeit läuft erst, wenn du es dort aufträgst oder mitnimmst" % rewards.left_words(id) if rewards.dormant(id) else "Im Spind: noch %s" % rewards.left_words(id), 13, UI.MINT, true))
+	# (v0.88) A special crate gives more than one prize: the others under the first.
+	for more: Dictionary in extra:
+		var other := str(more.id)
+		var line := hud.label("+ SPEZIALKISTE, ZWEITER GEWINN:  %s  ·  %d %s" % [Rewards.title(other), int(more.days), "TAG" if int(more.days) == 1 else "TAGE"], 16, WeaponSkins.RARITIES[Rewards.rarity(other)].color, true)
+		line.name = "PrizeExtra"
+		words.add_child(line)
 
 ## A prize large: the weapon in its skin, turning (WeaponShow), or the gear's symbol.
 static func _show(id: String, size: Vector2) -> Control:
@@ -247,7 +253,7 @@ static func locker(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	var game: Node3D = hud.game
 	var rewards: Rewards = game.rewards
 	rewards.prune()
-	UI.header(hud, column, "SPIND", "WAS DU ANHAKST, NIMMST DU IN DIE NÄCHSTE MISSION MIT  ·  DIE LAUFZEIT STARTET ERST BEIM AUFTRAGEN ODER MITNEHMEN", "main")
+	UI.header(hud, column, "SPIND", "WAS DU ANHAKST, NIMMST DU MIT  ·  EINE WAFFE MIT SKIN NUR MIT RUCKSACK  ·  DIE LAUFZEIT STARTET ERST BEIM AUFTRAGEN ODER MITNEHMEN", "main")
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 30)
 	column.add_child(row)
@@ -282,6 +288,8 @@ static func locker(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 		list.add_child(line)
 		if first == null:
 			first = line.find_child("Take", true, false) as Control
+			if first != null and (first as Button).disabled:
+				first = line.find_child("Wear", true, false) as Control
 	var right := VBoxContainer.new()
 	right.add_theme_constant_override("separation", 8)
 	right.custom_minimum_size.x = 480
@@ -297,7 +305,10 @@ static func locker(hud: SurvivalHUD, column: VBoxContainer) -> Control:
 	hud._gap(right, 8)
 	UI.section(hud, right, "FÜR DEN NÄCHSTEN EINSATZ", 13)
 	var weapons := rewards.weapons_taken()
-	right.add_child(hud.label("Waffen aus dem Spind: %d / %d%s" % [weapons.size(), rewards.weapon_slots(), "  (Rucksack)" if rewards.weapon_slots() > 1 else ""], 13, SurvivalHUD.IVORY))
+	var found := hud.label(("Mit Rucksack: %s kommt mit." % str(Survivor.WEAPONS[weapons[0]].label)) if not weapons.is_empty() else ("Mit Rucksack kann eine Waffe mit Skin mitkommen." if rewards.carries_weapon() else "Ohne Rucksack findest du Waffen im Einsatz: eine mit aufgetragenem Skin trägt ihn, sobald du sie aufhebst."), 13, SurvivalHUD.IVORY)
+	found.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	found.custom_minimum_size.x = 470
+	right.add_child(found)
 	var along: Array[String] = []
 	for id: Variant in rewards.taken:
 		along.append(Rewards.title(str(id)))
@@ -367,6 +378,11 @@ static func _row(hud: SurvivalHUD, rewards: Rewards, id: String) -> Control:
 		take.text = "STARTWAFFE"
 		take.disabled = true
 		take.tooltip_text = "Hat jeder von Anfang an dabei – der aufgetragene Skin gilt automatisch."
+	elif "/" in id and not taken and not rewards.carries_weapon():
+		# (v0.88) Without the backpack a skin does not bring its weapon: it is found in the mission.
+		take.text = "NUR MIT RUCKSACK"
+		take.disabled = true
+		take.tooltip_text = "Ohne Rucksack schaltet der Skin die Waffe nicht frei: Findest du sie im Einsatz, trägt sie den aufgetragenen Skin. Mit Rucksack kannst du eine Waffe mit Skin mitnehmen."
 	line.add_child(take)
 	return panel
 

@@ -67,7 +67,7 @@ static func run(v: Node, game: Node3D) -> void:
 	v.expect(extended and worn_at_once and not rewards.holds("toxin/rifle") and not rewards.owned.has("toxin/rifle") and rewards.skin_for("rifle") == "vektor" and rewards.holds("vektor/rifle") and rewards.left_words("vektor/rifle").begins_with("2 T") and not Rewards.known("drache/ak"),
 		"The same prize again adds its days, a skin goes on its weapon when it is put on, what has run out is gone, and skins that were taken out of the game are not known any more")
 	rewards.clock_shift = 0
-	# --- the loadout: weapons from the locker, backpack, mask, medpacks
+	# --- the loadout: skins (no weapons: v0.88), backpack, mask, medpacks
 	rewards.owned.clear()
 	rewards.waiting.clear()
 	rewards.worn.clear()
@@ -87,13 +87,16 @@ static func run(v: Node, game: Node3D) -> void:
 	rewards.wear("vektor/rifle")
 	rewards.take("gasmaske")
 	rewards.take("medpack")
-	rewards.take(first_id)
+	rewards.wear(first_id)
+	# (Without the backpack a weapon skin cannot be ticked to come along: only put on.)
 	rewards.take(second_id)
-	var one_slot: bool = rewards.weapons_taken() == [wb]
+	var one_slot: bool = not rewards.taken.has(second_id) and rewards.weapons_taken().is_empty() and rewards.skin_for(wa) == Rewards.skin_of(first_id)
+	# With it one weapon comes along: the one ticked last.
 	rewards.add("rucksack", 1)
 	rewards.take("rucksack")
+	rewards.take(second_id)
 	rewards.take(first_id)
-	var two_slots: bool = rewards.weapons_taken().size() == 2 and rewards.weapon_slots() == 2
+	var two_slots: bool = rewards.weapons_taken() == [wa]
 	game.profile.mission = 1
 	game.profile.mode = "story"
 	game.team_enabled = false
@@ -102,7 +105,7 @@ static func run(v: Node, game: Node3D) -> void:
 	game.preparation_left = 9999.0
 	await v.wait(0.2)
 	var player: Survivor = game.player
-	var carried: bool = extra.size() >= 2 and player.inventory.has(wa) and player.inventory.has(wb) and player.inventory.has("rifle") and player.inventory.has("pistol")
+	var carried: bool = extra.size() >= 2 and player.inventory.has(wa) and not player.inventory.has(wb) and player.inventory.has("rifle") and player.inventory.has("pistol")
 	var limits: bool = player.backpack and player.carry_limit("primary") == 3 and player.carry_limit("heavy") == 2
 	var skinned: bool = str(player.weapon_models[wa].get_meta("skin", "")) == Rewards.skin_of(first_id) and str(player.weapon_models["rifle"].get_meta("skin", "")) == "vektor" and str(player.weapon_models["pistol"].get_meta("skin", "")) == ""
 	var stronger := true
@@ -111,7 +114,7 @@ static func run(v: Node, game: Node3D) -> void:
 	stronger = stronger and player.magazine_of("rifle") == int(round(30 * 1.1))
 	var masked: bool = player.mask_level == Rewards.MASK_LEVEL and is_equal_approx(player.filter_capacity(), Survivor.MASK_SECONDS[2] * (1.0 + game.skills.value("filter") + Rewards.MASK_BONUS)) and player.filter_left > 0.0
 	v.expect(one_slot and two_slots and carried and limits and skinned and stronger and masked and int(player.items.medpack) == Rewards.MEDPACKS,
-		"From the locker the survivor starts with the skinned %s and %s (two with the backpack, one without), a place more for each kind, the crate's mask and two medpacks; skins give their small boost (carried %s limits %s skinned %s stronger %s masked %s)" % [wa, wb, carried, limits, skinned, stronger, masked])
+		"A skin brings its weapon only with the backpack, and one (%s comes along, %s stays to be found); the backpack gives a place more for each kind, the crate's mask and two medpacks come along; skins give their small boost (carried %s limits %s skinned %s stronger %s masked %s)" % [wa, wb, carried, limits, skinned, stronger, masked])
 	# A skin can be taken off again; the plain look comes back.
 	var painted: bool = player.weapon_models[wa].find_children("*", "MeshInstance3D", true, false).any(func(m: Node) -> bool: return (m as MeshInstance3D).get_surface_override_material(0) is BaseMaterial3D and ((m as MeshInstance3D).get_surface_override_material(0) as BaseMaterial3D).detail_enabled)
 	WeaponSkins.apply(player.weapon_models[wa], "")

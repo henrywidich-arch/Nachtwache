@@ -1568,18 +1568,21 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 			var mid := radius + thick * 0.5
 			var chord := TAU * mid / pieces * 1.1
 			body.box(holo_material, Vector3(cos(angle) * mid, centre + sin(angle) * mid, at_z), Vector3(chord, thick, long), Color.WHITE, Basis(Vector3.BACK, angle - PI / 2))
-	hoop.call(inner, DOT_WALL * size, z, length)
-	# Lips at both ends, a little proud of the tube.
-	hoop.call(inner - 0.0006 * size, (DOT_WALL + 0.0016) * size, z + length * 0.5 - 0.002 * size, 0.004 * size)
-	hoop.call(inner - 0.0004 * size, (DOT_WALL + 0.0012) * size, z - length * 0.5 + 0.0015 * size, 0.003 * size)
-	# The mount down to the rail with its clamp, and the knob for the brightness.
 	var rail_top := mount.y + float(gun.rail)
-	var stand := centre - outer + 0.001 - rail_top
-	if stand > 0.0:
-		body.box(holo_material, Vector3(0, rail_top + stand * 0.5, z), Vector3(0.017 * size, stand, length * 0.8), Color.WHITE)
-	body.box(holo_material, Vector3(0, rail_top + 0.0035 * size, z), Vector3(0.026 * size, 0.007 * size, length * 0.9), Color.WHITE)
-	body.cylinder(holo_material, Vector3(0.013 * size, rail_top + 0.0035 * size, z), 0.0025 * size, 0.0025 * size, 0.004 * size, Color.WHITE, 8, Basis(Vector3.BACK, -PI / 2))
-	body.cylinder(holo_material, Vector3(outer, centre - inner * 0.35, z - length * 0.1), 0.0055 * size, 0.0055 * size, 0.0035 * size, Color.WHITE, 14, Basis(Vector3.BACK, -PI / 2))
+	if id in COMPACT_DOT:
+		_compact_dot(body, hoop, inner, outer, length, centre, z, rail_top)
+	else:
+		hoop.call(inner, DOT_WALL * size, z, length)
+		# Lips at both ends, a little proud of the tube.
+		hoop.call(inner - 0.0006 * size, (DOT_WALL + 0.0016) * size, z + length * 0.5 - 0.002 * size, 0.004 * size)
+		hoop.call(inner - 0.0004 * size, (DOT_WALL + 0.0012) * size, z - length * 0.5 + 0.0015 * size, 0.003 * size)
+		# The mount down to the rail with its clamp, and the knob for the brightness.
+		var stand := centre - outer + 0.001 - rail_top
+		if stand > 0.0:
+			body.box(holo_material, Vector3(0, rail_top + stand * 0.5, z), Vector3(0.017 * size, stand, length * 0.8), Color.WHITE)
+		body.box(holo_material, Vector3(0, rail_top + 0.0035 * size, z), Vector3(0.026 * size, 0.007 * size, length * 0.9), Color.WHITE)
+		body.cylinder(holo_material, Vector3(0.013 * size, rail_top + 0.0035 * size, z), 0.0025 * size, 0.0025 * size, 0.004 * size, Color.WHITE, 8, Basis(Vector3.BACK, -PI / 2))
+		body.cylinder(holo_material, Vector3(outer, centre - inner * 0.35, z - length * 0.1), 0.0055 * size, 0.0055 * size, 0.0035 * size, Color.WHITE, 14, Basis(Vector3.BACK, -PI / 2))
 	for mesh in body.commit(reflex, "Part", false):
 		mesh.layers = 2
 		mesh.set_surface_override_material(0, holo_material)
@@ -1633,6 +1636,54 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 	# --- Laser module: on the right side of the handguard (the guns of GUNS only).
 	if GUNS.has(id):
 		LaserSight.fit_module(view, id)
+
+## (v0.88) Guns whose red dot is a compact sight of their own (_compact_dot), and that come
+## with it fitted (Survivor.STOCK_PARTS): the G36, after Henry.
+const COMPACT_DOT := ["g36"]
+
+## The G36's own red dot: a compact sight in the manner of a micro dot on the carry handle -
+## its round window (the same lens and dot as the round sight, so it is aimed alike) in a
+## squared, flat-sided housing with a sun hood ahead, sitting low on one solid riser block
+## with a cross bolt, the brightness dial on its right and the windage cap on top.
+static func _compact_dot(body: MeshBatch, hoop: Callable, inner: float, outer: float, length: float, centre: float, z: float, rail_top: float) -> void:
+	var m := holo_material
+	# The round tube inside, thin: only its edge is seen through the square face.
+	hoop.call(inner, DOT_WALL * 0.6, z, length)
+	var half := outer + 0.0016
+	var wall := 0.0032
+	# The square housing round it: top, floor and both flanks, chamfered at the corners.
+	body.box(m, Vector3(0, centre + half - wall * 0.5, z), Vector3(half * 2.0, wall, length), Color.WHITE)
+	body.box(m, Vector3(0, centre - half + wall * 0.5, z), Vector3(half * 2.0, wall, length), Color.WHITE)
+	for side: float in [-1.0, 1.0]:
+		body.box(m, Vector3(side * (half - wall * 0.5), centre, z), Vector3(wall, half * 2.0, length), Color.WHITE)
+		for up: float in [-1.0, 1.0]:
+			body.box(m, Vector3(side * (half - wall * 0.9), centre + up * (half - wall * 0.9), z), Vector3(wall * 1.3, wall * 1.3, length * 1.02), Color.WHITE, Basis(Vector3.BACK, PI / 4))
+	# Between the square face and the round window: the face plates at both ends.
+	var gap := half - wall - inner
+	for end: float in [length * 0.5 - 0.0015, -length * 0.5 + 0.0015]:
+		var at_z: float = z + end
+		if gap > 0.0:
+			body.box(m, Vector3(0, centre + inner + gap * 0.5, at_z), Vector3(half * 2.0 - wall, gap, 0.003), Color.WHITE)
+			body.box(m, Vector3(0, centre - inner - gap * 0.5, at_z), Vector3(half * 2.0 - wall, gap, 0.003), Color.WHITE)
+			for side: float in [-1.0, 1.0]:
+				body.box(m, Vector3(side * (inner + gap * 0.5), centre, at_z), Vector3(gap, inner * 2.0, 0.003), Color.WHITE)
+	# The sun hood: the top and flanks run on a little past the front face.
+	var hood := 0.011
+	var front := z - length * 0.5 - hood * 0.5
+	body.box(m, Vector3(0, centre + half - wall * 0.5, front), Vector3(half * 2.0, wall, hood), Color.WHITE)
+	for side: float in [-1.0, 1.0]:
+		body.box(m, Vector3(side * (half - wall * 0.5), centre + half * 0.2, front), Vector3(wall, half * 1.6, hood), Color.WHITE)
+	# The riser: one block from the housing's floor down to the rail, a clamp with its bolt.
+	var floor_y := centre - half
+	var stand := floor_y - rail_top
+	if stand > 0.0:
+		body.box(m, Vector3(0, rail_top + stand * 0.5, z), Vector3(half * 1.5, stand, length * 0.95), Color.WHITE)
+	body.box(m, Vector3(0, rail_top + 0.004, z), Vector3(0.03, 0.008, length * 1.1), Color.WHITE)
+	body.cylinder(m, Vector3(-0.016, rail_top + 0.004, z + 0.004), 0.003, 0.003, 0.005, Color.WHITE, 10, Basis(Vector3.BACK, -PI / 2))
+	body.box(m, Vector3(0.0155, rail_top + 0.004, z + 0.004), Vector3(0.004, 0.006, 0.008), Color.WHITE)
+	# The brightness dial on the right, the windage cap on top.
+	body.cylinder(m, Vector3(half + 0.003, centre, z + length * 0.1), 0.0065, 0.0065, 0.006, Color.WHITE, 16, Basis(Vector3.BACK, -PI / 2))
+	body.cylinder(m, Vector3(0, centre + half + 0.0025, z + length * 0.1), 0.0045, 0.0045, 0.005, Color.WHITE, 14)
 
 ## Where the magazine and the hand that changes it are at a moment of the reload (0 to 1),
 ## as offsets from where they rest.

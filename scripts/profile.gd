@@ -61,6 +61,10 @@ var mode := "story"
 ## The room the second mission surely has (HiveLayout.rooms(): "" leaves it to chance,
 ## "tokio" the simulation hall, else an area of HiveLayout.POOL). Chosen in the play menu.
 var room := ""
+## (v0.88) How long the second mission's night is (HiveLayout.LENGTHS), chosen in the play menu.
+var length := "medium"
+## (v0.88) What a night of the second mission is: "mission" or "endless" (HiveDirector.endless).
+var hive_mode := "mission"
 var modifiers := false
 ## Difficulty -> finished runs, best first.
 var runs: Dictionary = {}
@@ -115,6 +119,10 @@ func read(parsed: Dictionary) -> void:
 	modifiers = bool(parsed.get("modifiers", false))
 	if str(parsed.get("room", "")) in HiveLayout.rooms():
 		room = str(parsed.get("room", ""))
+	if str(parsed.get("hive_mode", "")) in ["mission", "endless"]:
+		hive_mode = str(parsed.get("hive_mode", ""))
+	if HiveLayout.LENGTHS.has(str(parsed.get("length", ""))):
+		length = str(parsed.get("length", ""))
 	if parsed.get("runs") is Dictionary:
 		# (Also the lists of the levels that are gone: they stay in the file.)
 		for level in ORDER + RETIRED:
@@ -157,7 +165,7 @@ func save() -> void:
 
 ## What is written to the file.
 func kept() -> Dictionary:
-	var out := {"difficulty": difficulty, "mission": mission, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad, "picks": picks, "room": room}
+	var out := {"difficulty": difficulty, "mission": mission, "mode": mode, "modifiers": modifiers, "runs": runs, "totals": totals, "skin": skin, "squad": squad, "picks": picks, "room": room, "length": length, "hive_mode": hive_mode}
 	if not skills.is_empty():
 		out["skills"] = skills
 	if skill_tree != "":

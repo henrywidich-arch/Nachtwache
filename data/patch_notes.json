@@ -1,5 +1,40 @@
 [
   {
+    "version": "0.88",
+    "title": "Endlos auf Karte 2, Rundenlänge und neue Kisten",
+    "sections": [
+      {
+        "title": "Einsatz 2",
+        "items": [
+          "Neuer Modus ENDLOS für Karte 2: Ihr startet in der Tokio-Simulation mit 1500 ◈ und haltet durch, solange ihr könnt. Alle zwei Minuten wird es härter: mehr Infizierte gleichzeitig, schneller hintereinander, größere Gruppen, zähere Arten. Im Koop zählt die Wahl des Hosts.",
+          "Neue Einstellung RUNDENLÄNGE: KURZ (2 Areale), MITTEL (3–4), LANG (5) oder MAXIMAL (6). Längere Nächte geben beim Sieg mehr und bessere Kisten: KURZ wie bisher, MITTEL doppelte Kistenchance, LANG eine sichere Kiste eine Stufe besser, MAXIMAL zwei solche Kisten. Auf ALBTRAUM gibt es bei LANG und MAXIMAL eine Kiste mehr.",
+          "Im Gang zur Tokio-Halle fällt man nicht mehr durch den Boden: Die Schleuse in der Hallenwand hat jetzt einen festen Boden."
+        ]
+      },
+      {
+        "title": "Kisten",
+        "items": [
+          "Endlos-Modus (beide Karten): Kisten gibt es nach 10, 20, 30 und 45 Minuten Überlebenszeit. Je länger, desto besser: erst eine einfache, dann eine schwere, danach Albtraum-Kisten. SCHWER hebt jede Kiste eine Stufe an, ALBTRAUM ebenfalls und gibt jeweils zwei. Die Kisten bleiben dir, auch wenn die Nacht danach verloren geht.",
+          "Die Albtraum-Kiste ist jetzt eine Spezialkiste: Sie gibt zwei Gewinne statt einem."
+        ]
+      },
+      {
+        "title": "Skins und Waffen",
+        "items": [
+          "Ein Waffenskin schaltet die Waffe nicht mehr einfach frei. Ohne Rucksack findest oder kaufst du die Waffe wie gewohnt im Einsatz, dann trägt sie den Skin. Mit Rucksack kannst du im Spind eine Waffe mit Skin anhaken und startest mit ihr.",
+          "Das G36 kommt ab Werk mit seinem eigenen, kompakten Rotpunktvisier auf dem Tragegriff statt mit dem runden Aufsatzvisier. Es lässt sich abnehmen, wenn das Zielfernrohr drauf soll."
+        ]
+      },
+      {
+        "title": "Gegner",
+        "items": [
+          "Die normalen Zombies sind nicht mehr alle gleich schnell: Die meisten schlurfen wie bisher, manche gehen zügig und einige rennen fast.",
+          "Der kleine Mutantenhund springt nicht mehr jedes Mal: Oft rennt er einfach auf dich zu und versucht den Sprung erst etwas später."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.87",
     "title": "Infizierte stehen schon herum",
     "sections": [

@@ -360,7 +360,7 @@ func arsenal() -> void:
 		# (The table also names the two kinds, which are no weapons.)
 		if not player.weapon_models.has(id) or player.inventory.has(id):
 			continue
-		player.inventory[id] = {"ammo": int(Survivor.WEAPONS[id].magazine), "reserve": player.reserve_cap(id), "level": 0}
+		player.inventory[id] = player.new_record(id)
 	game.hud.loadout()
 
 func heal() -> void:
@@ -633,7 +633,7 @@ func try_skin(skin: String) -> void:
 	if skin != "" and WeaponSkins.SKINS[skin].has("weapons") and not weapon in WeaponSkins.SKINS[skin].weapons:
 		weapon = str(WeaponSkins.SKINS[skin].weapons[0])
 		if not player.inventory.has(weapon):
-			player.inventory[weapon] = {"ammo": int(Survivor.WEAPONS[weapon].magazine), "reserve": player.reserve_cap(weapon), "level": 0}
+			player.inventory[weapon] = player.new_record(weapon)
 		player.equip_weapon(weapon, true)
 	if skin == "":
 		game.rewards.trial[weapon] = ""

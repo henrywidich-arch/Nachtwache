@@ -2387,8 +2387,9 @@ func _loadout(game: Node3D) -> void:
 	var heard_g36 := true
 	for kind in ["g36", "g36_sil", "g36_mag_out", "g36_mag_in", "g36_bolt"]:
 		heard_g36 = heard_g36 and bool(game.sounds.recorded.get(kind, false))
-	var sighted: bool = game.buy_part("g36", "reddot") and (g36.get_node("Mod_reddot") as Node3D).visible and game.buy_part("g36", "scope") and (g36.get_node("Mod_scope") as Node3D).visible and not (g36.get_node("Mod_reddot") as Node3D).visible and player.gun().has("scope")
-	var hushed: bool = game.buy_part("g36", "silencer") and (g36.get_node("Mod_silencer") as Node3D).visible and str(player.gun().sound) == "g36_sil" and bool(player.gun().quiet) and game.credits == 2000 - 450 - 120 - 260 - 180
+	# (v0.88) It comes with its own compact red dot fitted (Survivor.STOCK_PARTS).
+	var sighted: bool = player.fitted("sight") == "reddot" and player.owns_part("g36", "reddot") and (g36.get_node("Mod_reddot") as Node3D).visible and game.buy_part("g36", "scope") and (g36.get_node("Mod_scope") as Node3D).visible and not (g36.get_node("Mod_reddot") as Node3D).visible and player.gun().has("scope")
+	var hushed: bool = game.buy_part("g36", "silencer") and (g36.get_node("Mod_silencer") as Node3D).visible and str(player.gun().sound) == "g36_sil" and bool(player.gun().quiet) and game.credits == 2000 - 450 - 260 - 180
 	# Every suppressed shot is known as one, also when a co-op guest fires it.
 	for id in Survivor.ATTACHMENTS:
 		for part in Survivor.ATTACHMENTS[id]:
@@ -8633,7 +8634,7 @@ func _hive(game: Node3D) -> void:
 	for node in hud.modal.find_children("*", "Button", true, false):
 		if node.name == "MODUS":
 			mode_button = node as Button
-	expect(words.contains("MISSION STARTEN") and words.contains("RAUM ÖFFNEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and words.contains("MODUS") and mode_button != null and mode_button.disabled and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen on the play page; the second has leaderboards of its own and disables endless mode and modifiers")
+	expect(words.contains("MISSION STARTEN") and words.contains("RAUM ÖFFNEN") and first_play == "story" and profile.mission == 2 and profile.play() == "villa" and profile.mode == "story" and words.contains("MODUS") and mode_button != null and not mode_button.disabled and profile.hive_mode in ["mission", "endless"] and Profile.board("normal", "villa") == "villa_normal" and Profile.board("normal", "story") == "normal", "Both missions are chosen on the play page; the second has leaderboards of its own and a mode of its own (v0.88: MISSION or ENDLOS), which leaves the farm's alone")
 	profile.mode = "endless"
 	hud._next_board()
 	var after_villa: String = profile.play()
@@ -12331,6 +12332,42 @@ func _room_shell_slam(game: Node3D) -> void:
 	player.shoot()
 	var jolt: float = player.weapon.rotation.x - before.x
 	expect(player.current_weapon == "autoshotgun" and jolt > 0.1 and player.recoil >= 3.0, "The automatic shotgun jolts up and back with every shot (%.2f rad)" % jolt)
+
+## (v0.88) The endless night of the second mission: set down in the simulation hall, a
+## stage without end that gets worse, crates at the plateaus of the time survived.
+func _hive_endless(game: Node3D) -> void:
+	var hive: HiveDirector = game.hive
+	var kept_mission: int = game.profile.mission
+	var kept_skipped: bool = game.intro_skipped
+	var kept_stored: bool = game.rewards.stored
+	game.rewards.stored = false
+	game.profile.mission = 2
+	game.intro_skipped = true
+	hive.endless_wanted = true
+	game.start_run()
+	await frames(3)
+	hive.endless_wanted = false
+	var player: Survivor = game.player
+	var inside: bool = is_instance_valid(hive.map.tokyo) and TokyoHall.plan_of(hive.map.tokyo.origin).has_point(Vector2(player.global_position.x, player.global_position.z))
+	var started: bool = hive.endless and hive.stage == "endless" and inside and game.credits == HiveDirector.ENDLESS_CREDITS and not is_instance_valid(hive.nadja)
+	var first: Array = hive._endless_plan()
+	hive.stage_time = HiveDirector.ENDLESS_RAMP * 4.0 + 1.0
+	var later: Array = hive._endless_plan()
+	var worse: bool = int(later[1]) > int(first[1]) and float(later[2]) < float(first[2]) and (later[0] as Array).size() > (first[0] as Array).size() and hive._crowd() > 0
+	# (The checks drive the game by hand: game._process is off here.)
+	hive._update(0.016)
+	var stronger: bool = game.wave > int(HiveDirector.STAGES.endless[3])
+	var before: int = game.rewards.crates
+	game.level = "normal"
+	game.elapsed = float(Rewards.ENDLESS_STEPS[0][0]) + 1.0
+	game._endless_crates()
+	game._endless_crates()
+	var crated: bool = game.rewards.crates == before + 1 and game.crates_won == ["plain"] and game.endless_steps == 1
+	expect(started and worse and stronger and crated, "The endless night of the second mission sets the squad down in the simulation hall with money to spend and no end but its fall; it gets worse with time (%d -> %d alive, %.1f -> %.1f s) and gives a crate at the first plateau (started %s worse %s stronger %s crated %s)" % [int(first[1]), int(later[1]), float(first[2]), float(later[2]), started, worse, stronger, crated])
+	game.return_to_menu()
+	game.profile.mission = kept_mission
+	game.intro_skipped = kept_skipped
+	game.rewards.stored = kept_stored
 
 ## (v0.79) Crates, skins, the locker, the medpack and gas leaks: see rewards_check.gd.
 func _rewards(game: Node3D) -> void:

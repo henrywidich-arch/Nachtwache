@@ -1024,6 +1024,10 @@ func _tk_hall() -> void:
 		map._firm_solid(wall[0], wall[1])
 	if door:
 		_tk_lock()
+		# (v0.88) The floor through the lock: the hall's floor ends at its inner face and the
+		# passage's at the outer one, so the 1.2 m in the wall had nothing to stand on.
+		map._part("betonfloor", Vector3(-h - 0.6, -0.25, 0), Vector3(1.4, 0.5, 3.4), Color(0.42, 0.43, 0.46))
+		map._firm_solid(Vector3(-h - 0.6, -0.25, 0), Vector3(1.6, 0.5, 3.6), false)
 	map._part("simgrid", Vector3(0, top + 0.6, 0), Vector3(h * 2.0 + 2.4, 1.2, h * 2.0 + 2.4), Color.WHITE)
 	# Trusses under the ceiling, with rows of floodlights between them.
 	for z in range(-60, 61, 24):

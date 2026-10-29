@@ -706,7 +706,7 @@ func _foot(help: String, text: String, callback: Callable, usable: bool, bright:
 
 func _parts_on(id: String) -> Array:
 	var player: Survivor = game.player
-	return (player.inventory[id].get("fitted", {}) as Dictionary).values() if player.inventory.has(id) else []
+	return (player.inventory[id].get("fitted", {}) as Dictionary).values() if player.inventory.has(id) else Survivor.STOCK_PARTS.get(id, [])
 
 # --- the panel of numbers
 

@@ -85,9 +85,10 @@ static func build(hud: SurvivalHUD, column: VBoxContainer, mode: String) -> Cont
 			text += "   ·   %s je Weg: im Hauptmenü unter FÄHIGKEITEN vergeben" % ("1 neuer Punkt" if int(gain.raised) == 1 else "%d neue Punkte" % int(gain.raised))
 		earned = hud.label(text, 16, SurvivalHUD.MINT, true)
 		column.add_child(earned)
-	# (v0.79) A won mission gives a crate (Rewards).
-	if win and game.crate_won:
-		var crate := hud.label("+1 %s   ·   im Hauptmenü unter KISTEN öffnen  (%d bereit)" % [str(Rewards.TIERS[Rewards.TIER_OF.get(game.level, "hard")].label), game.rewards.crates], 16, Color("f5c542"), true)
+	# (v0.79) A won mission gives a crate (Rewards); v0.88: a long night more, and the
+	# endless night some for the time survived, even though it ends lost.
+	if game.crate_won and not game.crates_won.is_empty():
+		var crate := hud.label("+%s   ·   im Hauptmenü unter KISTEN öffnen  (%d bereit)" % [Rewards.tiers_words(game.crates_won), game.rewards.crates], 16, Color("f5c542"), true)
 		crate.name = "CrateEarned"
 		column.add_child(crate)
 	hud._gap(column, 4)

@@ -230,6 +230,10 @@ var medpacks: MedpackField
 var rewards := Rewards.new()
 ## Whether the night just ended gave a crate (the end screen says so).
 var crate_won := false
+## (v0.88) The crates this night gave (their tiers): a won mission's, and the endless
+## night's for the time survived (endless_crates).
+var crates_won: Array[String] = []
+var endless_steps := 0
 ## True while a blast is being worked out: a shield does not stop that.
 ## (Also set for a bullet that an ability lets through a shield.)
 var blasting := false
@@ -836,6 +840,7 @@ func _process(delta: float) -> void:
 	# [E] held beside somebody who is down: he is helped up for as long as it is held.
 	if Input.is_action_pressed("interact") and player.controlled and not player.menu_open:
 		help_up(delta)
+	_endless_crates()
 	if partner_lift_held > 0.0:
 		partner_lift_held -= delta
 		if partner_lift_held <= 0.0:
@@ -866,6 +871,21 @@ func _process(delta: float) -> void:
 			spawn_left = maxf(0.4, 1.5 - wave * 0.09) / (1.0 + 0.3 * extra_guns()) * mission.interval_factor()
 		if spawn_queue.is_empty() and alive_count == 0 and mission.round_clear():
 			complete_wave()
+
+## (v0.88) The endless night gives crates at plateaus of the time survived
+## (Rewards.ENDLESS_STEPS): each player his own (a guest counts by the host's clock).
+func _endless_crates() -> void:
+	if not (endless or hive.endless) or sandbox.on or endless_steps >= Rewards.ENDLESS_STEPS.size():
+		return
+	if elapsed < float(Rewards.ENDLESS_STEPS[endless_steps][0]):
+		return
+	var got := Rewards.endless_tiers(level, endless_steps)
+	endless_steps += 1
+	for tier: String in got:
+		rewards.grant_crate(tier)
+	crates_won.append_array(got)
+	crate_won = true
+	hud.announce("%d MINUTEN ÜBERLEBT" % int(elapsed / 60.0), "+" + Rewards.tiers_words(got) + "  ·  im Hauptmenü unter KISTEN", 4.0)
 
 func can_start_wave() -> bool:
 	return state == "playing" and phase == "preparing" and not hive.on and not sandbox.on and overlay == "" and player.controlled and not player.menu_open and not player.down
@@ -1015,6 +1035,9 @@ func start_run(test: bool = false) -> void:
 	tally = Tally.blank()
 	holes.clear()
 	elapsed = 0
+	crates_won.clear()
+	crate_won = false
+	endless_steps = 0
 	alive_count = 0
 	# Where the last squad of the night before came in means nothing tonight (and on the
 	# other map there may be no such place at all).
@@ -2764,7 +2787,13 @@ func finish(victory: bool) -> void:
 	last_gain = {"xp": after - before, "level": Skills.level_of(after), "raised": Skills.level_of(after) - Skills.level_of(before)}
 	# A won mission may give a crate, opened in the menu (KISTEN): seldom on the easy
 	# levels, always on the hard ones (Rewards.earn).
-	crate_won = victory and rewards.earn(level)
+	# (v0.88) In the second mission the night's length makes the win worth more
+	# (Rewards.earn_night); the endless night has given its crates while it ran.
+	if victory and hive.on:
+		crates_won.append_array(rewards.earn_night(level, str(hive.night.get("length", "medium"))))
+	elif victory and rewards.earn(level):
+		crates_won.append(str(Rewards.TIER_OF.get(level, "hard")))
+	crate_won = not crates_won.is_empty()
 	overlay = ""
 	player.menu_open = false
 	state = "win" if victory else "lose"

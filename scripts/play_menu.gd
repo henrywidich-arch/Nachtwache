@@ -71,8 +71,12 @@ static func _settings(hud: SurvivalHUD, parent: VBoxContainer, selected: int) ->
 		profile.difficulty = str(value)
 		refresh.call(), guest)
 	var mode: String = str(net.lobby_settings.get("mode", profile.mode)) if guest else profile.mode
+	var hive_mode: String = str(net.lobby_settings.get("hive_mode", profile.hive_mode)) if guest else str(profile.hive_mode)
 	if selected == 2:
-		UI.segments(hud, rows, "MODUS", [["MISSION", "mission"]], "mission", func(_value: Variant) -> void: pass, true)
+		# (v0.88) The second map has an endless night too: in the simulation hall.
+		UI.segments(hud, rows, "MODUS", [["MISSION", "mission"], ["ENDLOS", "endless"]], hive_mode, func(value: Variant) -> void:
+			profile.hive_mode = str(value)
+			refresh.call(), guest)
 	else:
 		UI.segments(hud, rows, "MODUS", [["GESCHICHTE", "story"], ["ENDLOS", "endless"]], mode, func(value: Variant) -> void:
 			profile.mode = str(value)
@@ -87,7 +91,7 @@ static func _settings(hud: SurvivalHUD, parent: VBoxContainer, selected: int) ->
 		refresh.call(), guest)
 	# (The second mission: one room of the random part that is surely in the night. The
 	# host's choice counts; a guest sees it.)
-	if selected == 2:
+	if selected == 2 and hive_mode != "endless":
 		var room: String = str(net.lobby_settings.get("room", profile.room)) if guest else str(profile.room)
 		var row := HBoxContainer.new()
 		row.name = "RaumRow"
@@ -113,6 +117,17 @@ static func _settings(hud: SurvivalHUD, parent: VBoxContainer, selected: int) ->
 		on.disabled = guest
 		row.add_child(on)
 		rows.add_child(row)
+		# (v0.88) How long the night is: a longer one gives more and better crates.
+		var length: String = str(net.lobby_settings.get("length", profile.length)) if guest else str(profile.length)
+		var lengths: Array = []
+		for id: String in HiveLayout.LENGTH_ORDER:
+			lengths.append([str(HiveLayout.LENGTHS[id].label), id])
+		UI.segments(hud, rows, "RUNDENLÄNGE", lengths, length, func(value: Variant) -> void:
+			profile.length = str(value)
+			refresh.call(), guest)
+		var said := hud.label(Rewards.length_words(length), 12, SurvivalHUD.MUTED)
+		said.name = "LengthNote"
+		rows.add_child(said)
 
 # ---------------------------------------------------------------- map cards
 
@@ -388,6 +403,7 @@ static func _preview(hud: SurvivalHUD, selected: int) -> Control:
 	lines.add_child(about)
 	var level: String = str(net.lobby_settings.get("label", game.profile.rules().label)) if net.joined else str(game.profile.rules().label)
 	var mode: String = str(net.lobby_settings.get("mode", game.profile.mode)) if net.joined else game.profile.mode
-	var facts := "%s  ·  %s" % [level, "MISSION" if selected == 2 else str({"story": "GESCHICHTE", "endless": "ENDLOS"}.get(mode, mode))]
+	var hive_mode: String = str(net.lobby_settings.get("hive_mode", game.profile.hive_mode)) if net.joined else str(game.profile.hive_mode)
+	var facts := "%s  ·  %s" % [level, ("ENDLOS" if hive_mode == "endless" else "MISSION") if selected == 2 else str({"story": "GESCHICHTE", "endless": "ENDLOS"}.get(mode, mode))]
 	lines.add_child(hud.label(facts, 12, UI.GOLD, true))
 	return box

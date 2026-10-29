@@ -40,8 +40,15 @@ const STAGES := {
 	"decon": ["DIE SCHLEUSE", "Durch die Dekontamination in den Forschungstrakt", "decon", 7],
 	"labs": ["DIE FORSCHUNG", "Durch den Laborgang zur Eindämmungshalle", "cross", 8],
 	"hall": ["DIE EINDÄMMUNG", "Die Halle freikämpfen", "hall_end", 9],
-	"exit": ["DIE EINDÄMMUNG", "Zum Frachtaufzug", "lift", 9]
+	"exit": ["DIE EINDÄMMUNG", "Zum Frachtaufzug", "lift", 9],
+	# (v0.88) The endless night of the second mission (see endless): not in ORDER.
+	"endless": ["TOKIO-SIMULATION", "Überlebt so lange wie möglich", "", 5]
 }
+## Whether this night is the endless one (the host's choice, Profile.hive_mode; it goes to a
+## co-op guest with the night).
+var endless: bool:
+	get: return on and bool(night.get("endless", false))
+
 ## Where a defeat can be taken up again: the stage, the place the squad stands at then,
 ## the areas that are open by then, and what there is to spend at the supply point there.
 const CHECKPOINTS := {
@@ -79,8 +86,20 @@ const PRESSURE := {
 	"atrium": [["mauler", "striker", "ripper", "leech"], 8, 10.0, "hidden", [2, 4]],
 	"generator": [["ripper", "ripper", "leech", "mauler", "striker"], 9, 9.0, "hidden", [2, 4]],
 	"labs": [["mauler", "striker", "ripper", "leech", "healer"], 9, 9.5, "hidden", [2, 4]],
-	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 10, 6.5, "hidden", [3, 4]]
+	"hall": [["mauler", "striker", "ripper", "charger", "leech", "cru_assault", "cru_shotgunner"], 10, 6.5, "hidden", [3, 4]],
+	# (The endless night begins here and gets worse with every minute: _endless_plan.)
+	"endless": [["mauler", "mauler", "mauler", "striker", "ripper"], 8, 7.0, "hidden", [2, 3]]
 }
+## (v0.88) The endless night of the second mission (Henry): the squad is set down in the
+## simulation hall and holds out there as long as it can, no goal, no end but its fall.
+## Every ENDLESS_RAMP seconds it gets worse: more alive at once, deliveries sooner, bigger
+## packs, tougher kinds (ENDLESS_KINDS, one list more each step) and stronger infected
+## (game.wave). Crates come at plateaus of the time survived (Rewards.ENDLESS_STEPS).
+const ENDLESS_RAMP := 120.0
+const ENDLESS_KINDS := [["charger", "leech"], ["healer", "ripper"], ["cru_assault", "charger"], ["cru_shotgunner", "leech", "ripper"], ["cru_elite", "charger"]]
+const ENDLESS_CREDITS := 1500
+## (For the checks: the next night is the endless one whatever the profile says.)
+var endless_wanted := false
 const LONE := 0.5
 ## How often a kind that the dice chose really comes; a Mauler comes in its place the
 ## other times. (The Striker stands in nearly every list above and left its growths
@@ -378,7 +397,7 @@ func prepare_night() -> Dictionary:
 		elif wanted == -3:
 			night = HiveLayout.showcase()
 		else:
-			night = HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted, _room_wanted())
+			night = HiveLayout.classic() if wanted < 0 else HiveLayout.plan(wanted, _room_wanted(), _length_wanted())
 		var hall := tokyo_wanted
 		if "--tokyo" in OS.get_cmdline_user_args():
 			hall = 1
@@ -386,8 +405,19 @@ func prepare_night() -> Dictionary:
 			hall = 0
 		if hall >= 0:
 			night = HiveLayout.with_tokyo(night, hall == 1)
+		# (v0.88) The endless night is held in the simulation hall: it is always there.
+		if _endless_wanted():
+			night = HiveLayout.with_tokyo(night, true)
+			night["endless"] = true
+			night["key"] = str(night.key).trim_suffix("+tokio") + "+endlos+tokio"
 	night_fresh = true
 	return night
+
+## Whether the night is to be the endless one: --hive-endless, else the play menu's choice.
+func _endless_wanted() -> bool:
+	if endless_wanted or "--hive-endless" in OS.get_cmdline_user_args():
+		return true
+	return not game.check_mode and str(game.profile.hive_mode) == "endless"
 
 ## The room the night must have: --hive-room= on the command line, else the one chosen in
 ## the play menu (Profile.room; not in a check, so that the checks keep their nights).
@@ -396,6 +426,14 @@ func _room_wanted() -> String:
 		if arg.begins_with("--hive-room="):
 			return arg.trim_prefix("--hive-room=")
 	return "" if game.check_mode else str(game.profile.room)
+
+## How long the night is (HiveLayout.LENGTHS): --hive-length= on the command line, else the
+## one chosen in the play menu (Profile.length; not in a check: "" keeps the old dice).
+func _length_wanted() -> String:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--hive-length="):
+			return arg.trim_prefix("--hive-length=")
+	return "" if game.check_mode else str(game.profile.length)
 
 func _seed_for_night() -> int:
 	if seed_wanted != -2:
@@ -477,6 +515,9 @@ func begin() -> void:
 	for id in start.open:
 		map.unlock(str(id), true)
 	game.credits = int(start.credits)
+	if bool(night.get("endless", false)) and is_instance_valid(map.tokyo):
+		_begin_endless()
+		return
 	# Nobody lands at a Helix site in a shirt: half a vest from the start.
 	game.player.armor = maxf(game.player.armor, START_ARMOUR)
 	game.preparation_left = 99999.0
@@ -505,6 +546,43 @@ func begin() -> void:
 		_arrive()
 	else:
 		game.hud.announce("KONTROLLPUNKT", "%s  ·  %s" % [stages[from][0], stages[from][1]], 6)
+
+## (v0.88) The endless night: set down in the simulation hall, nobody else but the squad,
+## straight into the stage that never ends.
+func _begin_endless() -> void:
+	game.player.armor = maxf(game.player.armor, START_ARMOUR)
+	game.preparation_left = 99999.0
+	game.sounds.dry = true
+	nadja_gone = true
+	checkpoint = "landing"
+	game.credits = ENDLESS_CREDITS
+	var at: Vector3 = map.points.get("tokyo_start", map.player_start)
+	if game.net.joined:
+		_place_squad(at + Vector3(1.4, 0, 0.6), 0.0)
+		stage = "endless"
+		goal = str(stages.endless[1])
+		return
+	_place_squad(at, 0.0)
+	_enter("endless")
+	game.hud.announce("ENDLOS  ·  TOKIO-SIMULATION", "Haltet durch, solange ihr könnt. Je länger ihr überlebt, desto besser die Kisten.", 7)
+
+## Who keeps coming in the endless night now: the base plan, worse with every ENDLESS_RAMP.
+func _endless_plan() -> Array:
+	var base: Array = PRESSURE.endless
+	var step := int(stage_time / ENDLESS_RAMP)
+	var kinds: Array = (base[0] as Array).duplicate()
+	for k in range(mini(step, ENDLESS_KINDS.size())):
+		kinds.append_array(ENDLESS_KINDS[k])
+	var alive := mini(CROWD_LIMIT, int(base[1]) + step * 2)
+	var every := maxf(2.2, float(base[2]) * pow(0.88, step))
+	var low := mini(5, 2 + step / 3)
+	return [kinds, alive, every, base[3], [low, low + 1 + mini(2, step / 4)]]
+
+## The plan of who keeps coming in the stage that runs ([] for none).
+func _plan_now() -> Array:
+	if stage == "endless":
+		return _endless_plan()
+	return pressure.get(stage, [])
 
 ## Called when the night is over or left.
 func end() -> void:
@@ -1068,6 +1146,10 @@ func _update(delta: float) -> void:
 					game.mission.stalker = game.spawn_stalker(lair, "hunt", player)
 			if here.distance_to(_point("cross")) < 6.0:
 				_enter("hall")
+		"endless":
+			# Stronger with every step (the infected: game.wave); the clock stands in the goal.
+			game.wave = mini(14, int(stages.endless[3]) + int(stage_time / ENDLESS_RAMP))
+			goal = "Überlebt so lange wie möglich  ·  %s" % game.time_string()
 		"hall":
 			if room_id == "containment":
 				progress = minf(1.0, progress + delta / HOLD_HALL)
@@ -2386,7 +2468,7 @@ func _run_loiterers(delta: float) -> void:
 	if loiter_left > 0.0:
 		return
 	loiter_left = randf_range(LOITER_EVERY.x, LOITER_EVERY.y)
-	if not pressure.has(stage) or _holding() or safe_now or stage in ["ride", "board", "nadja", "deal", "exit"] or standing >= LOITER_MOST:
+	if _plan_now().is_empty() or _holding() or safe_now or stage in ["ride", "board", "nadja", "deal", "exit"] or standing >= LOITER_MOST:
 		return
 	var room: int = _crowd() - int(game.alive_count) - entries.coming() - 2
 	if room <= 0:
@@ -2576,14 +2658,15 @@ static func pick(kinds: Array) -> String:
 ## How many may be alive at once in the stage that runs. (Whoever digs himself in gets a
 ## few more: see HiveEntries.)
 func _crowd() -> int:
-	if not pressure.has(stage):
+	var plan := _plan_now()
+	if plan.is_empty():
 		return 0
-	return mini(CROWD_LIMIT, roundi(int(pressure[stage][1]) * _horde())) + game.extra_guns() + entries.more() + run.more() + (tokyo_tasks.more() if tokyo_tasks != null else 0)
+	return mini(CROWD_LIMIT, roundi(int(plan[1]) * _horde())) + game.extra_guns() + entries.more() + run.more() + (tokyo_tasks.more() if tokyo_tasks != null else 0)
 
 func _run_pressure(delta: float) -> void:
-	if not pressure.has(stage) or intro_left > 0.0:
+	var plan := _plan_now()
+	if plan.is_empty() or intro_left > 0.0:
 		return
-	var plan: Array = pressure[stage]
 	# (At a counter it is quiet: nothing new comes, or while a place is held only slower.)
 	if safe_now:
 		if not _holding():
