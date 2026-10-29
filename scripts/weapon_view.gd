@@ -126,7 +126,13 @@ const GUNS := {
 		"scene": "res://assets/models/mg_built.glb", "mount": Vector3(0, -0.085, 0.085), "muzzle": Vector3(0, 0.1217, -0.6683), "bore": 0.0118,
 		"rail": 0.17, "optic": -0.15, "irons": 0.1897,
 		"support": Vector3(0, 0.0907, -0.3539), "handle": Vector3(0.0377, 0.1327, -0.1011),
-		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.009, -0.052, -0.176)
+		"magazine_out": Vector3(-0.4512, -0.8924, 0.0), "magazine_foot": Vector3(-0.009, -0.052, -0.176),
+		# (v0.90, Henry) belt: where the rounds of the belt lie, from the mouth of the box up to
+		# the feed opening - x, y and the angle the belt runs at there (radians about +z, 0
+		# straight up) -, printed by the script. The model brings one round and one tracer
+		# ("BeltRound", "BeltTracer"); build_gun lays copies along these places and
+		# pose_belt moves them on with every shot.
+		"belt": [Vector3(-0.0330, 0.0160, 0.0776), Vector3(-0.0338, 0.0262, 0.0776), Vector3(-0.0346, 0.0363, 0.0776), Vector3(-0.0354, 0.0465, 0.0776), Vector3(-0.0362, 0.0567, 0.0776), Vector3(-0.0370, 0.0668, 0.0776), Vector3(-0.0367, 0.0770, -0.0642), Vector3(-0.0361, 0.0872, -0.0642), Vector3(-0.0354, 0.0974, -0.0642), Vector3(-0.0347, 0.1076, -0.1892), Vector3(-0.0303, 0.1166, -0.6892), Vector3(-0.0235, 0.1242, -0.8618), Vector3(-0.0141, 0.1276, -1.4289)]
 	},
 	# The M21E, the second machine gun (its id is mg2; tools/blender_make_mg2_built.py, which
 	# prints these places): built by us after the model it replaced (mg2.glb, made from two
@@ -1255,6 +1261,8 @@ static func build_gun(id: String) -> Node3D:
 	magazine.get_parent().remove_child(magazine)
 	clip.add_child(magazine)
 	magazine.position += mount
+	if gun.has("belt"):
+		_lay_belt(model, clip, gun)
 	# A slide that runs with the shots: the model's "Breech" under a holder of its own.
 	var slide := model.find_child("Breech", true, false) as Node3D
 	if slide != null:
@@ -1293,6 +1301,88 @@ static func build_gun(id: String) -> Node3D:
 	_finish(view, batch)
 	Reticle.register(view)
 	return view
+
+## A belt-fed gun's belt: copies of the model's round ("BeltRound") and tracer
+## ("BeltTracer") laid along gun.belt under the magazine's node (so that they come off with
+## the box), one more than there are places - the one that comes up out of the box as the
+## belt moves on. pose_belt places and shows them.
+static func _lay_belt(model: Node3D, clip: Node3D, gun: Dictionary) -> void:
+	var plain := model.find_child("BeltRound", true, false) as MeshInstance3D
+	var tracer := model.find_child("BeltTracer", true, false) as MeshInstance3D
+	if plain == null or tracer == null:
+		return
+	var belt := Node3D.new()
+	belt.name = "Belt"
+	belt.position = gun.mount
+	clip.add_child(belt)
+	for k in range((gun.belt as Array).size() + 1):
+		for source: MeshInstance3D in [plain, tracer]:
+			var round := MeshInstance3D.new()
+			round.name = ("Tracer%d" if source == tracer else "Round%d") % k
+			round.mesh = source.mesh
+			for surface in range(source.mesh.get_surface_count()):
+				round.set_surface_override_material(surface, source.get_surface_override_material(surface))
+			round.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			round.layers = 2
+			belt.add_child(round)
+	for source: MeshInstance3D in [plain, tracer]:
+		source.get_parent().remove_child(source)
+		source.free()
+	_pose_belt(belt, gun.belt, 1000, 0.0)
+
+## How long the belt takes to move on by one round after a shot (seconds; the MG fires every
+## 0.085 s, so it has settled before the next).
+const BELT_STEP := 0.05
+
+## Lays the belt of a belt-fed gun for this moment: `ammo` rounds left in the box (the belt
+## shows as many of them as it has places, from the feed opening back, so that it grows
+## shorter at the end of a box), `since` seconds after the last shot (in the first
+## BELT_STEP of it the whole belt slides on by one place towards the feed), `reload` 0 to 1
+## through a reload (1 when none: from its middle on the fresh box brings a full belt).
+## Every fifth round is a tracer, and it travels with its round.
+static func pose_belt(view: Node3D, ammo: int, since: float, reload: float = 1.0) -> void:
+	var belt := view.find_child("Belt", true, false) as Node3D
+	var gun: Dictionary = GUNS.get(str(view.name), {})
+	if belt == null or not gun.has("belt"):
+		return
+	var left := ammo
+	if reload < 1.0 and reload >= 0.5:
+		left = 1000
+	# 1 a moment after the shot (each round still one place back), 0 when it has settled.
+	_pose_belt(belt, gun.belt, left, 1.0 - smoothstep(0.0, BELT_STEP, since))
+
+static func _pose_belt(belt: Node3D, slots: Array, left: int, behind: float) -> void:
+	var last := slots.size() - 1
+	for k in range(slots.size() + 1):
+		# Round k counts from the feed: 0 is the next to be fired.
+		var at := float(last - k) - behind
+		var shown := k < left and at >= -1.0
+		var tracer := (left - k) % 5 == 0
+		var plain_node := belt.get_node_or_null("Round%d" % k) as Node3D
+		var tracer_node := belt.get_node_or_null("Tracer%d" % k) as Node3D
+		if plain_node == null or tracer_node == null:
+			continue
+		plain_node.visible = shown and not tracer
+		tracer_node.visible = shown and tracer
+		if not shown:
+			continue
+		var place := _belt_at(slots, at)
+		var where := Transform3D(Basis(Vector3.BACK, place.z), Vector3(place.x, place.y, 0.0))
+		plain_node.transform = where
+		tracer_node.transform = where
+
+## A place along a belt (x, y, angle) at a fractional slot; before the first slot it runs on
+## down into the box.
+static func _belt_at(slots: Array, at: float) -> Vector3:
+	if at <= 0.0:
+		var first: Vector3 = slots[0]
+		var down: Vector3 = first - (slots[1] as Vector3)
+		return Vector3(first.x + down.x * -at, first.y + down.y * -at, first.z)
+	var i := mini(int(floor(at)), slots.size() - 2)
+	var t := at - float(i)
+	var a: Vector3 = slots[i]
+	var b: Vector3 = slots[i + 1]
+	return Vector3(lerpf(a.x, b.x, t), lerpf(a.y, b.y, t), lerp_angle(a.z, b.z, t))
 
 ## The reticle of a built-in ring sight (the P90's): a thin glowing ring with a dot in its
 ## middle, hung in the front of its tunnel. Lit like tritium: faint, warm, seen by day and
@@ -1585,7 +1675,9 @@ static func _gun_mods(view: Node3D, id: String) -> void:
 		body.cylinder(holo_material, Vector3(outer, centre - inner * 0.35, z - length * 0.1), 0.0055 * size, 0.0055 * size, 0.0035 * size, Color.WHITE, 14, Basis(Vector3.BACK, -PI / 2))
 	for mesh in body.commit(reflex, "Part", false):
 		mesh.layers = 2
-		mesh.set_surface_override_material(0, holo_material)
+		# (One mesh per material: the compact dot brings materials of its own.)
+		if not id in COMPACT_DOT or mesh.mesh.surface_get_material(0) == holo_material:
+			mesh.set_surface_override_material(0, holo_material)
 	# The lens sits near the front; the dot keeps the size it has to the eye, whatever the
 	# distance of the lens: far easier to see than the old fine mark.
 	var lens_z := z - length * 0.2
@@ -1643,47 +1735,176 @@ const COMPACT_DOT := ["g36"]
 
 ## The G36's own red dot: a compact sight in the manner of a micro dot on the carry handle -
 ## its round window (the same lens and dot as the round sight, so it is aimed alike) in a
-## squared, flat-sided housing with a sun hood ahead, sitting low on one solid riser block
-## with a cross bolt, the brightness dial on its right and the windage cap on top.
+## squared, flat-sided housing with a sun hood ahead, sitting low on a riser with a quick-
+## release lever. (v0.90, Henry: more detail.) Worn edges, bezels round both ends of the
+## window, the emitter under the window's back, a cover plate with its screws and grip
+## serrations on each flank, the knurled brightness dial on the right, the battery cap with
+## its coin slot on the left, the knurled windage turret and the two buttons on top, a riser
+## with pockets milled out of it, clamp jaws round the rail, the lever and its nut.
 static func _compact_dot(body: MeshBatch, hoop: Callable, inner: float, outer: float, length: float, centre: float, z: float, rail_top: float) -> void:
-	var m := holo_material
+	var paint := _dot_paint()
+	var m := paint
+	var steel := shared("steel")
+	# The housing graphite grey with its edges worn lighter; the knobs black, the slots and
+	# pockets darker still.
+	var shell := Color(0.2, 0.205, 0.215)
+	var edge := Color(0.42, 0.425, 0.43)
+	var worn := Color(0.28, 0.285, 0.29)
+	var deep := Color(0.03, 0.032, 0.036)
+	var black := Color(0.085, 0.088, 0.094)
+	var bright := Color(0.62, 0.63, 0.64)
+	var white := Color(0.92, 0.92, 0.88)
+	var red := Color(0.78, 0.1, 0.06)
+	var out_x := Basis(Vector3.BACK, -PI / 2)
+	var ahead := Basis(Quaternion(Vector3.UP, Vector3.FORWARD))
+	# A ring of short boxes round the line of sight (as hoop, in a colour of its own).
+	var ring := func(material: Material, color: Color, radius: float, thick: float, at_z: float, long: float, pieces: int = 28) -> void:
+		for k in range(pieces):
+			var angle := TAU * k / pieces
+			var mid := radius + thick * 0.5
+			body.box(material, Vector3(cos(angle) * mid, centre + sin(angle) * mid, at_z), Vector3(TAU * mid / pieces * 1.1, thick, long), color, Basis(Vector3.BACK, angle - PI / 2))
+	# Ridges round a knob whose axis is `axis` (a unit vector), from `base` along it.
+	var knurl := func(base: Vector3, axis: Vector3, radius: float, tall: float, count: int, color: Color) -> void:
+		var across := axis.cross(Vector3.FORWARD if absf(axis.z) < 0.9 else Vector3.UP).normalized()
+		var third := axis.cross(across).normalized()
+		for k in range(count):
+			var angle := TAU * k / count
+			var out := across * cos(angle) + third * sin(angle)
+			var turn := Basis(out.cross(axis).normalized(), axis, out)
+			body.box(paint, base + axis * (tall * 0.5) + out * radius, Vector3(TAU * radius / count * 0.45, tall * 0.92, 0.0012), color, turn)
+	var front := z - length * 0.5
+	var rear := z + length * 0.5
 	# The round tube inside, thin: only its edge is seen through the square face.
 	hoop.call(inner, DOT_WALL * 0.6, z, length)
 	var half := outer + 0.0016
 	var wall := 0.0032
-	# The square housing round it: top, floor and both flanks, chamfered at the corners.
-	body.box(m, Vector3(0, centre + half - wall * 0.5, z), Vector3(half * 2.0, wall, length), Color.WHITE)
-	body.box(m, Vector3(0, centre - half + wall * 0.5, z), Vector3(half * 2.0, wall, length), Color.WHITE)
+	# The square housing round it: top, floor and both flanks; the corners chamfered and worn
+	# bright along their edges.
+	body.box(m, Vector3(0, centre + half - wall * 0.5, z), Vector3(half * 2.0, wall, length), shell)
+	body.box(m, Vector3(0, centre - half + wall * 0.5, z), Vector3(half * 2.0, wall, length), shell)
 	for side: float in [-1.0, 1.0]:
-		body.box(m, Vector3(side * (half - wall * 0.5), centre, z), Vector3(wall, half * 2.0, length), Color.WHITE)
+		body.box(m, Vector3(side * (half - wall * 0.5), centre, z), Vector3(wall, half * 2.0, length), shell)
 		for up: float in [-1.0, 1.0]:
-			body.box(m, Vector3(side * (half - wall * 0.9), centre + up * (half - wall * 0.9), z), Vector3(wall * 1.3, wall * 1.3, length * 1.02), Color.WHITE, Basis(Vector3.BACK, PI / 4))
+			body.box(paint, Vector3(side * (half - wall * 0.9), centre + up * (half - wall * 0.9), z), Vector3(wall * 1.3, wall * 1.3, length * 1.004), worn, Basis(Vector3.BACK, PI / 4))
 	# Between the square face and the round window: the face plates at both ends.
 	var gap := half - wall - inner
 	for end: float in [length * 0.5 - 0.0015, -length * 0.5 + 0.0015]:
 		var at_z: float = z + end
 		if gap > 0.0:
-			body.box(m, Vector3(0, centre + inner + gap * 0.5, at_z), Vector3(half * 2.0 - wall, gap, 0.003), Color.WHITE)
-			body.box(m, Vector3(0, centre - inner - gap * 0.5, at_z), Vector3(half * 2.0 - wall, gap, 0.003), Color.WHITE)
+			body.box(m, Vector3(0, centre + inner + gap * 0.5, at_z), Vector3(half * 2.0 - wall, gap, 0.003), shell)
+			body.box(m, Vector3(0, centre - inner - gap * 0.5, at_z), Vector3(half * 2.0 - wall, gap, 0.003), shell)
 			for side: float in [-1.0, 1.0]:
-				body.box(m, Vector3(side * (inner + gap * 0.5), centre, at_z), Vector3(gap, inner * 2.0, 0.003), Color.WHITE)
-	# The sun hood: the top and flanks run on a little past the front face.
+				body.box(m, Vector3(side * (inner + gap * 0.5), centre, at_z), Vector3(gap, inner * 2.0, 0.003), shell)
+	# Bezels round the window: a worn ring proud of the front face, a dark one at the back,
+	# and the black rim of the lens inside.
+	ring.call(paint, edge, inner - 0.0004, 0.0019, front - 0.0007, 0.0024)
+	ring.call(paint, black, inner - 0.0003, 0.0015, rear + 0.0005, 0.0018)
+	ring.call(paint, deep, inner - 0.0011, 0.0012, z - length * 0.2, 0.0016)
+	# The emitter: a small dark housing low in the back of the tube, its lens a red pin.
+	body.box(paint, Vector3(0, centre - inner + 0.0012, rear - 0.0055), Vector3(0.0052, 0.0026, 0.0048), deep)
+	body.box(paint, Vector3(0, centre - inner + 0.0026, rear - 0.0078), Vector3(0.0016, 0.0008, 0.0006), red)
+	# The sun hood: the top and flanks run on a little past the front face, their front edges
+	# worn bright.
 	var hood := 0.011
-	var front := z - length * 0.5 - hood * 0.5
-	body.box(m, Vector3(0, centre + half - wall * 0.5, front), Vector3(half * 2.0, wall, hood), Color.WHITE)
+	var hood_z := front - hood * 0.5
+	body.box(m, Vector3(0, centre + half - wall * 0.5, hood_z), Vector3(half * 2.0, wall, hood), shell)
+	body.box(paint, Vector3(0, centre + half - wall * 0.5, front - hood + 0.0004), Vector3(half * 2.0 + 0.0002, wall + 0.0002, 0.0008), edge)
 	for side: float in [-1.0, 1.0]:
-		body.box(m, Vector3(side * (half - wall * 0.5), centre + half * 0.2, front), Vector3(wall, half * 1.6, hood), Color.WHITE)
-	# The riser: one block from the housing's floor down to the rail, a clamp with its bolt.
+		body.box(m, Vector3(side * (half - wall * 0.5), centre + half * 0.2, hood_z), Vector3(wall, half * 1.6, hood), shell)
+		body.box(paint, Vector3(side * (half - wall * 0.5), centre + half * 0.2, front - hood + 0.0004), Vector3(wall + 0.0002, half * 1.6, 0.0008), edge)
+		# The flanks' cover plates, a little proud, with a screw at each corner, and the grip
+		# serrations behind them.
+		var plate_z := z - length * 0.2
+		var plate := Vector3(0.0006, half * 1.25, length * 0.38)
+		body.box(m, Vector3(side * (half + plate.x * 0.5), centre, plate_z), plate, black)
+		for corner: Vector2 in [Vector2(-1, -1), Vector2(-1, 1), Vector2(1, -1), Vector2(1, 1)]:
+			var at := Vector3(side * (half + plate.x), centre + corner.y * (plate.y * 0.5 - 0.0018), plate_z + corner.x * (plate.z * 0.5 - 0.0018))
+			var turn := out_x if side > 0.0 else Basis(Vector3.BACK, PI / 2)
+			body.cylinder(steel, at, 0.0011, 0.0011, 0.0006, bright, 10, turn)
+			body.cylinder(paint, at + Vector3(side * 0.0006, 0, 0), 0.0005, 0.0005, 0.0002, deep, 6, turn)
+		for k in range(4):
+			body.box(paint, Vector3(side * (half + 0.00035), centre, rear - 0.0018 - k * 0.0021), Vector3(0.0007, half * 1.3, 0.0009), worn)
+	# The brightness dial on the right: a collar, the knurled dial, its steel cap with the
+	# white index line, and the white marks of its settings round it on the flank.
+	var dial_at := Vector3(half, centre, z + 0.004)
+	body.cylinder(m, dial_at, 0.0076, 0.0076, 0.0012, shell, 20, out_x)
+	body.cylinder(paint, dial_at + Vector3(0.0012, 0, 0), 0.0066, 0.0066, 0.0052, black, 24, out_x)
+	knurl.call(dial_at + Vector3(0.0012, 0, 0), Vector3.RIGHT, 0.0066, 0.0052, 22, edge)
+	body.cylinder(steel, dial_at + Vector3(0.0064, 0, 0), 0.0036, 0.0036, 0.0006, bright, 16, out_x)
+	body.box(paint, dial_at + Vector3(0.0071, 0.0034, 0), Vector3(0.0003, 0.0026, 0.0007), white)
+	for k in range(7):
+		var angle := PI * 0.5 + (float(k) - 3.0) * 0.36
+		body.box(paint, Vector3(half + 0.00025, centre + sin(angle) * 0.0088, dial_at.z + cos(angle) * 0.0088), Vector3(0.0004, 0.0011, 0.0006), white if k > 0 else red)
+	# The battery cap on the left: a knurled rim, its face with the coin slot.
+	var cap_at := Vector3(-half, centre, z + 0.004)
+	var out_left := Basis(Vector3.BACK, PI / 2)
+	body.cylinder(paint, cap_at, 0.0064, 0.0064, 0.0026, black, 24, out_left)
+	knurl.call(cap_at, Vector3.LEFT, 0.0064, 0.0026, 26, edge)
+	body.cylinder(paint, cap_at + Vector3(-0.0026, 0, 0), 0.0052, 0.0052, 0.0004, edge, 20, out_left)
+	body.box(paint, cap_at + Vector3(-0.0031, 0, 0), Vector3(0.0004, 0.0062, 0.0011), deep)
+	# The windage turret on top: its base, the knurled cap, the slot and the index mark; the
+	# two buttons (brighter, dimmer) behind it.
+	var top := centre + half
+	body.box(m, Vector3(0, top + 0.0006, z - 0.002), Vector3(0.0128, 0.0012, 0.0128), shell)
+	body.cylinder(paint, Vector3(0, top + 0.0012, z - 0.002), 0.0049, 0.0049, 0.0042, black, 22)
+	knurl.call(Vector3(0, top + 0.0012, z - 0.002), Vector3.UP, 0.0049, 0.0042, 18, edge)
+	body.cylinder(steel, Vector3(0, top + 0.0054, z - 0.002), 0.003, 0.003, 0.0004, bright, 14)
+	body.box(paint, Vector3(0, top + 0.0059, z - 0.002), Vector3(0.0045, 0.0003, 0.0008), deep)
+	body.box(paint, Vector3(0, top + 0.0013, z - 0.0089), Vector3(0.0008, 0.0002, 0.0012), white)
+	for side: float in [-1.0, 1.0]:
+		var button := Vector3(side * 0.0064, top, rear - 0.0042)
+		body.cylinder(m, button, 0.0024, 0.0024, 0.0006, shell, 14)
+		body.cylinder(paint, button + Vector3(0, 0.0006, 0), 0.0018, 0.0015, 0.0011, deep, 14)
+		body.box(paint, button + Vector3(0, 0.0018, 0), Vector3(0.0012, 0.0002, 0.0003), white)
+		if side > 0.0:
+			body.box(paint, button + Vector3(0, 0.0018, 0), Vector3(0.0003, 0.0002, 0.0012), white)
+	# The riser: one block from the housing's floor down to the rail, its edges worn and a
+	# pocket milled out of each flank.
 	var floor_y := centre - half
 	var stand := floor_y - rail_top
 	if stand > 0.0:
-		body.box(m, Vector3(0, rail_top + stand * 0.5, z), Vector3(half * 1.5, stand, length * 0.95), Color.WHITE)
-	body.box(m, Vector3(0, rail_top + 0.004, z), Vector3(0.03, 0.008, length * 1.1), Color.WHITE)
-	body.cylinder(m, Vector3(-0.016, rail_top + 0.004, z + 0.004), 0.003, 0.003, 0.005, Color.WHITE, 10, Basis(Vector3.BACK, -PI / 2))
-	body.box(m, Vector3(0.0155, rail_top + 0.004, z + 0.004), Vector3(0.004, 0.006, 0.008), Color.WHITE)
-	# The brightness dial on the right, the windage cap on top.
-	body.cylinder(m, Vector3(half + 0.003, centre, z + length * 0.1), 0.0065, 0.0065, 0.006, Color.WHITE, 16, Basis(Vector3.BACK, -PI / 2))
-	body.cylinder(m, Vector3(0, centre + half + 0.0025, z + length * 0.1), 0.0045, 0.0045, 0.005, Color.WHITE, 14)
+		body.box(m, Vector3(0, rail_top + stand * 0.5, z), Vector3(half * 1.5, stand, length * 0.95), shell)
+		for side: float in [-1.0, 1.0]:
+			body.box(paint, Vector3(side * half * 0.75, floor_y - 0.0004, z), Vector3(0.0009, 0.0009, length * 0.96), edge)
+			if stand > 0.008:
+				body.box(paint, Vector3(side * (half * 0.75 + 0.00012), rail_top + stand * 0.55, z), Vector3(0.0004, stand * 0.5, length * 0.55), deep)
+				body.box(paint, Vector3(side * (half * 0.75 + 0.0002), rail_top + stand * 0.55 + stand * 0.25, z), Vector3(0.0005, 0.0006, length * 0.57), edge)
+	# The clamp on the rail: its base, the jaws that hook under the rail's edges and the
+	# recoil lug in its slot.
+	body.box(m, Vector3(0, rail_top + 0.004, z), Vector3(0.03, 0.008, length * 1.1), shell)
+	for side: float in [-1.0, 1.0]:
+		body.box(m, Vector3(side * 0.0128, rail_top - 0.0006, z), Vector3(0.0044, 0.0052, length * 1.05), shell)
+		body.box(paint, Vector3(side * 0.0151, rail_top + 0.0079, z), Vector3(0.0008, 0.0008, length * 1.1), edge)
+	body.box(paint, Vector3(0, rail_top - 0.0012, z + 0.004), Vector3(0.02, 0.0024, 0.0035), deep)
+	# The quick-release lever on the left: its pivot, the arm laid forward along the clamp
+	# with a red catch, its rounded tab; on the right the nut of its cross bolt.
+	var pivot := Vector3(-0.0152, rail_top + 0.004, z + 0.007)
+	var out_l := Basis(Vector3.BACK, PI / 2)
+	body.cylinder(steel, pivot, 0.003, 0.003, 0.0024, bright, 14, out_l)
+	body.cylinder(paint, pivot + Vector3(-0.0024, 0, 0), 0.0013, 0.0013, 0.0004, deep, 6, out_l)
+	var arm := Basis(Vector3.RIGHT, -0.06)
+	body.box(paint, pivot + Vector3(-0.0019, -0.0004, -0.0105), Vector3(0.0028, 0.0042, 0.021), black, arm)
+	body.box(paint, pivot + Vector3(-0.0019, 0.0017, -0.0105), Vector3(0.0029, 0.0005, 0.021), edge, arm)
+	body.cylinder(paint, pivot + Vector3(-0.0005, -0.0006, -0.021), 0.0027, 0.0027, 0.0028, black, 14, out_l)
+	body.box(paint, pivot + Vector3(-0.0035, -0.0004, -0.004), Vector3(0.0006, 0.002, 0.0028), red)
+	var nut := Vector3(0.0151, rail_top + 0.004, z + 0.007)
+	body.cylinder(steel, nut, 0.0031, 0.0031, 0.0026, bright, 6, out_x)
+	body.cylinder(paint, nut + Vector3(0.0026, 0, 0), 0.0014, 0.0014, 0.0004, deep, 10, out_x)
+
+## The paint of the G36's red dot where its parts differ in colour (vertex colours: worn
+## edges, the white marks, the dark slots), the same finish as holo_material.
+static var dot_paint: StandardMaterial3D
+
+static func _dot_paint() -> StandardMaterial3D:
+	if dot_paint == null:
+		dot_paint = StandardMaterial3D.new()
+		dot_paint.vertex_color_use_as_albedo = true
+		dot_paint.vertex_color_is_srgb = true
+		dot_paint.roughness = 0.48
+		dot_paint.metallic = 0.3
+		dot_paint.metallic_specular = 0.4
+		tune(dot_paint)
+	return dot_paint
 
 ## Where the magazine and the hand that changes it are at a moment of the reload (0 to 1),
 ## as offsets from where they rest.

@@ -449,6 +449,9 @@ var climb := 0.0
 var pump_clock := -1.0
 ## Seconds since the slide of the weapon in hand was last sent back by a shot.
 var slide_clock := 1.0
+## Seconds since the last shot of the weapon in hand: the machine gun's belt moves on by one
+## round in the first moments after it (WeaponView.pose_belt).
+var belt_clock := 1.0
 var pump_cued := false
 ## Sniper rifle: seconds since the shot while the bolt is still to be worked.
 var bolt_clock := -1.0
@@ -2058,6 +2061,9 @@ func _animate_weapon(delta: float, aiming: bool, sprinting: bool, moving: bool) 
 		var step: Dictionary = WeaponView.reload_step(current_weapon, done)
 		clip.position = step.magazine
 		(weapon.get_node("Support") as Node3D).position = step.hand
+		# A belt-fed gun: the rounds of its belt move on with the shots, fewer as the box empties.
+		belt_clock += delta
+		WeaponView.pose_belt(weapon, ammo, belt_clock, done)
 	# The WIRBEL: its drum turns, its bolt runs back, its trigger is pulled. The FALKE (cycle):
 	# its charging handle and its trigger.
 	if WEAPONS[current_weapon].has("rotor") or WEAPONS[current_weapon].has("cycle"):
@@ -2280,6 +2286,7 @@ func shoot(hand: int = 1) -> void:
 	if dual:
 		dual_kick[hand] = punch
 	game.sounds.play_sound(data.sound)
+	belt_clock = 0.0
 	if data.has("casing"):
 		slide_clock = 0.0
 		_eject_case()

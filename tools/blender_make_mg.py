@@ -10,8 +10,9 @@
 # and baked into one texture set (base colour, roughness and metal, normal). Written as a
 # GLB with the nodes
 #   MG > Body / Feed (the feed tray and the belt guide at the opening; stays when the box
-#   comes off) / Magazine (the box and its belt; origin where the old model had it) /
-#   Sights (the rear sight)
+#   comes off) / Magazine (the box; origin where the old model had it) /
+#   Sights (the rear sight) / BeltRound, BeltTracer (one round of the belt each, which the
+#   game lays along the belt and moves with every shot)
 #
 #   blender --background --factory-startup --python tools/blender_make_mg.py -- [--round 4] [--tex 2048]
 #           [--out assets/models/mg_built.glb] [--render <folder> --prefix mg_r1] [--only links] [--nobake] [--gpu]
@@ -482,15 +483,26 @@ def build(m):
         if ROUND >= 3:
             # (Between the ribs: its count, a hundred rounds.)
             mag.append(engrave_left("100", Vector((BOX_X[0] - 0.0004, BOX_Y[1] - 0.0265, -0.008)), 0.0105, m["marking"]))
-    # The belt: rounds and links, every fifth a tracer.
-    path = belt_path()
-    for k, (p, d) in enumerate(path):
+    # The belt (v0.90): no longer part of the box. One round with its link ("BeltRound") and
+    # one tracer ("BeltTracer"), each lying on the axis x = z = 0 with the belt running up
+    # (+z) there; the game lays copies of them along belt_slots() and moves them one place
+    # on with every shot (WeaponView.pose_belt).
+    plain = cartridge(m, 0.0, 0.0, False)
+    tracer = cartridge(m, 0.0, 0.0, True)
+    if ROUND >= 2:
+        plain.extend(belt_link(m, 0.0, 0.0, Vector((0.0, 1.0))))
+        tracer.extend(belt_link(m, 0.0, 0.0, Vector((0.0, 1.0))))
+    return body, feed, mag, sights, plain, tracer
+
+
+def belt_slots():
+    """The places of the rounds along the belt, from the box mouth to the feed opening."""
+    out = []
+    for p, d in belt_path():
         if p.y > REC_Z[1] - 0.004 or p.x > -0.010:
             break
-        mag.extend(cartridge(m, p.x, p.y, k % 5 == 4))
-        if ROUND >= 2:
-            mag.extend(belt_link(m, p.x, p.y, d))
-    return body, feed, mag, sights
+        out.append((p, d))
+    return out
 
 
 VIEWS = [
@@ -511,12 +523,14 @@ CENTRE = (0.0, 0.22, 0.07)
 def main():
     clear()
     m = make_materials()
-    body_parts, feed_parts, mag_parts, sight_parts = build(m)
+    body_parts, feed_parts, mag_parts, sight_parts, round_parts, tracer_parts = build(m)
     body = join(body_parts, "Body")
     feed = join(feed_parts, "Feed")
     magazine = join(mag_parts, "Magazine")
     sights = join(sight_parts, "Sights")
-    parts = (body, feed, magazine, sights)
+    belt_round = join(round_parts, "BeltRound")
+    belt_tracer = join(tracer_parts, "BeltTracer")
+    parts = (body, feed, magazine, sights, belt_round, belt_tracer)
     for o in parts:
         bpy.context.view_layer.objects.active = o
         bpy.ops.object.select_all(action="DESELECT")
@@ -551,6 +565,9 @@ def main():
     print("SPEC muzzle", godot((0, MUZZLE_Y, BORE_Z)), "rail %.4f irons %.4f rear %s post %s" % (RAIL_TOP, SIGHT_Z, godot((0, REAR_Y, SIGHT_Z)), godot((0, POST_Y, SIGHT_Z))))
     print("SPEC handle", godot(HANDLE), "magazine", godot(MAG_ORIGIN), "support", godot(SUPPORT),
           "magazine_foot", godot(((BOX_X[0] + BOX_X[1]) * 0.5, (BOX_Y[0] + BOX_Y[1]) * 0.5, BOX_Z[0])))
+    # Where the rounds of the belt lie, in Godot space: x, y and the angle the belt runs at
+    # there (radians about +z, 0 = straight up). WeaponView.GUNS["mg"].belt.
+    print("SPEC belt [" + ", ".join("Vector3(%.4f, %.4f, %.4f)" % (p.x, p.y, math.atan2(-d.x, d.y)) for p, d in belt_slots()) + "]")
     if NOBAKE:
         return
     export(parts + (root,), OUT)
