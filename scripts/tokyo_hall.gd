@@ -3446,7 +3446,18 @@ func _tk_gates() -> void:
 			var at := Vector3(at2.x, 0, at2.y)
 			var inward := Vector3(-out.x, 0, -out.y)
 			var size := Vector3(absf(along.x) * 8.0 + absf(out.x) * 0.1, 7.0, absf(along.y) * 8.0 + absf(out.y) * 0.1)
-			map._part("plain", at + Vector3(0, 3.5, 0) + inward * 0.02, size, Color("030303"))
+			if door and side == HiveCore.WEST and k == 0.0:
+				# (v0.89) This gate frames the lock from the terminal: its black face is cut
+				# round the doorway, else it stood in it like a wall (from both sides).
+				for piece: Array in [[-2.875, 2.25, 0.0, 7.0], [2.875, 2.25, 0.0, 7.0], [0.0, 3.5, 3.4, 7.0]]:
+					var mid := float(piece[0])
+					var wide := float(piece[1])
+					var low := float(piece[2])
+					var high := float(piece[3])
+					var piece_size := Vector3(absf(along.x) * wide + absf(out.x) * 0.1, high - low, absf(along.y) * wide + absf(out.y) * 0.1)
+					map._part("plain", at + Vector3(along.x * mid, (low + high) * 0.5, along.y * mid) + inward * 0.02, piece_size, Color("030303"))
+			else:
+				map._part("plain", at + Vector3(0, 3.5, 0) + inward * 0.02, size, Color("030303"))
 			for e in [-4.2, 4.2]:
 				var post := at + Vector3(along.x * e, 3.6, along.y * e) + inward * 0.25
 				map._part("plate", post, Vector3(0.6 + absf(out.x) * 0.0, 7.2, 0.6), Color("2a2d31"))

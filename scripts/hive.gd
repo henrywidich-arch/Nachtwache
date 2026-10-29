@@ -887,20 +887,23 @@ func _enter(id: String) -> void:
 				marker = _point("tokyo_lock")
 				game.hud.announce("LEITSTAND GESPERRT", "Die Tokio-Simulation hält das Tor zur Anlage zu. Stabilisiert sie und bergt den Datenkern - dann öffnet der Leitstand.", 7)
 			else:
+				goal = map.control_goal()
 				_use("control", "control", "[E] Tor zur Anlage öffnen")
 			var hall := _point("terminal")
 			_post(["mauler", "mauler", "striker", "mauler", "charger"], [hall + Vector3(-14, 0, -8), hall + Vector3(12, 0, -10), hall + Vector3(0, 0, -14), hall + Vector3(18, 0, -4), hall + Vector3(-22, 0, -3)], false)
-			_post(["striker", "mauler"], [_point("control") + Vector3(-14, 0, 0.5), _point("control") + Vector3(-24, 0, 0.5)], false)
+			# (On the gallery, wherever the gate is opened from this night: see HiveMap.old_route.)
+			_post(["striker", "mauler"], [Vector3(17.0, HiveMap.DECK, -339.9), Vector3(7.0, HiveMap.DECK, -339.9)], false)
 		"admin":
 			map.unlock("admin")
 			game.sounds.play_at("shutter_open", _point("gate_admin"))
 			line("m2_terminal")
 			_post(["mauler", "mauler", "mauler", "striker"], [_point("checkpoint") + Vector3(-2, 0, -6), _point("checkpoint") + Vector3(2, 0, -8), _point("junction") + Vector3(-8, 0, 0), _point("junction") + Vector3(9, 0, 0)], false)
 		"security":
+			goal = map.lock_goal()
 			_use("security", "security", "[E] Sperre aufheben")
 			line("m2_security")
 			talk("m2_offices")
-			_post(["mauler", "mauler", "striker", "ripper", "ripper"], [_point("office") + Vector3(-6, 0, -4), _point("office") + Vector3(5, 0, 3), _point("office") + Vector3(0, 0, -8), _point("security") + Vector3(-4, 0, -3), _point("server") + Vector3(0, 0, -6)], false)
+			_post(["mauler", "mauler", "striker", "ripper", "ripper"], [_point("office") + Vector3(-6, 0, -4), _point("office") + Vector3(5, 0, 3), _point("office") + Vector3(0, 0, -8), Vector3(17.0, HiveMap.UNDER, -386.3), _point("server") + Vector3(0, 0, -6)], false)
 		"cafe":
 			map.unlock("cafe")
 			game.sounds.play_at("shutter_open", _point("junction"))
@@ -968,7 +971,7 @@ func _tokyo_pending() -> bool:
 func _tokyo_gate() -> void:
 	if stage != "terminal" or use_key != "" or _tokyo_pending():
 		return
-	goal = str(stages["terminal"][1])
+	goal = map.control_goal()
 	marker = _point("control")
 	_use("control", "control", "[E] Tor zur Anlage öffnen")
 	game.hud.announce("LEITSTAND FREI", "Die Simulation hält. Zurück zum Leitstand im Terminal: das Tor zur Anlage öffnen.", 6)

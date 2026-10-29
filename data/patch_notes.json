@@ -1,5 +1,31 @@
 [
   {
+    "version": "0.89",
+    "title": "Lebendigere Infizierte, wechselnde Wege in Einsatz 2",
+    "sections": [
+      {
+        "title": "Infizierte",
+        "items": [
+          "Die leuchtenden Augen ziehen jetzt eine Leuchtspur hinter sich her und glühen weich, auch aus der Ferne gut im Dunkeln zu sehen.",
+          "Infizierte, die herumstehen, frieren nicht mehr ein: Sie schlurfen um ihren Platz, drehen sich um, zucken mit dem Kopf, knien zum Fressen am Boden oder krümmen sich. Kommt ihr nah, springen sie sofort auf.",
+          "Stehende Infizierte wiegen sich, atmen und lassen die Arme hängen statt starr zu stehen.",
+          "Rennende Infizierte und Striker springen beim Anstürmen ab und zu seitlich weg, manchmal auch nach einem Treffer, und lehnen sich dabei in den Schritt.",
+          "Mehr Abwechslung in der Horde: Gänge, Rennen, Tritte und Treffer-Reaktionen gibt es jetzt auch seitenverkehrt, jeder Infizierte hat seine eigene Seite."
+        ]
+      },
+      {
+        "title": "Einsatz 2",
+        "items": [
+          "Der Weg nach dem Zug ist nicht mehr jedes Mal gleich: Das Pult, das die Sperre aufhebt, steht mal in der Sicherheitszentrale, mal im Archiv, im Serverraum oder im Personalraum.",
+          "Der lange Gang der Verwaltung ist in manchen Nächten links oder rechts eingestürzt: Dann führt der Weg durch die Poststelle oder durch Besprechungsraum und Großraumbüro.",
+          "Manchmal klemmt das Tor zur Kantine; dann öffnet sich stattdessen ein Tor im Personalraum.",
+          "Im Terminal ist der Leitstand in manchen Nächten ausgefallen: Das Tor zur Anlage wird dann an einem Notpult in der Halle geöffnet.",
+          "Der Übergang zwischen Terminal und Tokio-Simulation ist jetzt ein offener Durchgang: Die schwarze Wand in der Schleuse ist weg, man sieht von beiden Seiten hindurch."
+        ]
+      }
+    ]
+  },
+  {
     "version": "0.88",
     "title": "Endlos auf Karte 2, Rundenlänge und neue Kisten",
     "sections": [

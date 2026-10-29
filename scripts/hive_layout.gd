@@ -144,6 +144,47 @@ static func transitions() -> Array[String]:
 			out.append(id)
 	return out
 
+## (v0.89) The old route after the ride is not the same every night either: its rooms stay
+## (they are the building blocks), but where its desks stand and which ways through them
+## are open is diced from the night's seed (dice of their own: the areas of a seed stay as
+## they were). Both sides of a co-op night build the same from the seed.
+##   desk     the room whose desk lifts the lockdown: security, archive, server, staff
+##   block    a stretch of the long corridor of the administration that has caved in
+##            ("" none, "east": round through the post room, "west": through the meeting room)
+##   cafe     the way on to the canteen: "ring" (the gate off the corridor) or "staff" (that
+##            gate is jammed; a gate from the staff room opens instead)
+##   control  where the gate of the facility is opened in the terminal: "deck" (the control
+##            room on the gallery) or an emergency desk on the floor of the hall ("west", "east")
+## The classic night, the showcase and the checks keep the route as it always was.
+const OLD_DESKS := ["security", "archive", "server", "staff"]
+const OLD_BLOCKS := ["", "east", "west"]
+const OLD_CAFE := ["ring", "staff"]
+const OLD_CONTROLS := ["deck", "west", "east"]
+
+static func old_route(night: Dictionary) -> Dictionary:
+	var out := {"desk": "security", "block": "", "cafe": "ring", "control": "deck"}
+	for arg in OS.get_cmdline_user_args():
+		# (For pictures and checks: --hive-old=desk,block,cafe,control.)
+		if arg.begins_with("--hive-old="):
+			var words := arg.trim_prefix("--hive-old=").split(",")
+			for i in range(mini(words.size(), 4)):
+				out[["desk", "block", "cafe", "control"][i]] = words[i]
+			return out
+	var seed_value := int(night.get("seed", 0))
+	if bool(night.get("classic", true)) or seed_value <= 0:
+		return out
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("hive-altbau-%d" % seed_value)
+	out.desk = OLD_DESKS[rng.randi_range(0, OLD_DESKS.size() - 1)]
+	out.block = OLD_BLOCKS[rng.randi_range(0, OLD_BLOCKS.size() - 1)]
+	out.cafe = OLD_CAFE[rng.randi_range(0, OLD_CAFE.size() - 1)]
+	out.control = OLD_CONTROLS[rng.randi_range(0, OLD_CONTROLS.size() - 1)]
+	# Never quite the night one knows by heart: the desk in the security centre with the
+	# corridor whole and the usual gate comes with the corridor caved in before it.
+	if out.desk == "security" and out.block == "" and out.cafe == "ring":
+		out.block = "east"
+	return out
+
 static func classic() -> Dictionary:
 	return {"classic": true, "key": "classic", "seed": 0, "pieces": [], "links": []}
 

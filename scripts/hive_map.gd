@@ -86,6 +86,15 @@ var shark_waters: Dictionary = {}
 ## The lamps that run past the windows while the train runs (the classic ride's or a
 ## ride of the random part's).
 var ride_set: Array = []
+## (v0.89) How the old route after the ride is laid out this night (HiveLayout.old_route):
+## the room of the lockdown desk, a caved-in stretch of the corridor, the way to the canteen,
+## the place the facility's gate is opened from.
+var old_route: Dictionary = {}
+## Where the desks of this night stand (merged into `points` as "security" and "control").
+var old_spots: Dictionary = {}
+const DESK_ROOMS := {
+	"security": "der Sicherheitszentrale", "archive": "dem Archiv", "server": "dem Serverraum", "staff": "dem Personalraum"
+}
 
 func _ready() -> void:
 	var began := Time.get_ticks_msec()
@@ -94,6 +103,8 @@ func _ready() -> void:
 		if "--tokyo" in OS.get_cmdline_user_args():
 			night = HiveLayout.with_tokyo(night, true)
 	layout_key = str(night.get("key", "classic"))
+	if old_route.is_empty():
+		old_route = HiveLayout.old_route(night)
 	# (The simulation hall only on a night that has it: HiveLayout.tokyo_of.)
 	var hall := bool(night.get("tokyo", false))
 	_begin_build()
@@ -1371,10 +1382,14 @@ func _desk(pos: Vector3, yaw: float, picture: int = 1) -> void:
 
 ## A control desk along a side of a room from `a` to `b`: a slanted board of screens and
 ## lamps over a steel foot.
-func _console(room_id: String, side: int, a: float, b: float, pictures: Array = [1, 3, 5]) -> void:
+## (v0.89) `device`: the key the console is used by ("" none; "?" the rule of old: the
+## booth, the control room and the security centre have their consoles used).
+func _console(room_id: String, side: int, a: float, b: float, pictures: Array = [1, 3, 5], device: String = "?") -> void:
 	var room: Dictionary = room_of[room_id]
 	var previous_batch := batch
-	var interactive := room_id in ["booth", "control", "security"]
+	if device == "?":
+		device = room_id if room_id in ["booth", "control", "security"] else ""
+	var interactive := device != ""
 	if interactive:
 		batch = MeshBatch.new()
 	_face_box(room, side, "steel", a, b, 0.0, 0.8, -0.7, 0.0, Color("2f3539"))
@@ -1391,12 +1406,77 @@ func _console(room_id: String, side: int, a: float, b: float, pictures: Array = 
 			_led(_face_point(room, side, at - 0.24 + k * 0.16, 0.875, -0.5), Vector3(0.05, 0.012, 0.05), [Color("5ee07a"), Color("ffb347"), Color("5ee07a"), Color("ff3a2a")][k], 3.0, [1.0, 0.7, 1.0, 0.4][k])
 	_solid(_face_centre(room, side, a, b, 0.0, 1.36, -0.76, 0.0), _face_size(side, a, b, 0.0, 1.36, -0.76, 0.0))
 	if interactive:
-		var device := Node3D.new()
-		device.name = "Console_" + room_id
-		add_child(device)
-		batch.commit(device, "Control", true)
-		interaction_devices[room_id] = device
+		var node := Node3D.new()
+		node.name = "Console_" + device
+		add_child(node)
+		batch.commit(node, "Control", true)
+		interaction_devices[device] = node
 		batch = previous_batch
+
+## (v0.89) A desk that stands free in a room (see HiveLayout.old_route): a steel body with
+## a sloped panel of screens and lamps, an upright screen behind it, a warning lamp and its
+## name over it. `face` points from it to whoever uses it; `device` is the key it is used by
+## (see _console). Returns where one stands to use it.
+func _pult(pos: Vector3, face: Vector3, device: String, title: String, tint: Color) -> Vector3:
+	var previous_batch := batch
+	batch = MeshBatch.new()
+	var yaw := atan2(face.x, face.z)
+	var frame := Transform3D(Basis(Vector3.UP, yaw), pos)
+	_placed(frame, "steel", Vector3(0, 0.45, 0), Vector3(1.8, 0.9, 0.7), Color("2f3539"))
+	_placed(frame, "plain", Vector3(0, 0.05, 0.02), Vector3(1.82, 0.1, 0.72), Color("0d0f10"))
+	_placed(frame, "steel", Vector3(0, 0.97, -0.02), Vector3(1.84, 0.06, 0.7), Color("454c51"), Vector3(25, 0, 0))
+	for i in range(3):
+		_screen(frame, Vector3(-0.58 + i * 0.58, 1.02, 0.0), Vector2(0.48, 0.3), [3, 1, 5][i], -1.0, 65.0)
+	_placed(frame, "steel", Vector3(0, 1.5, -0.31), Vector3(1.8, 0.9, 0.08), Color("272c30"))
+	_screen(frame, Vector3(0, 1.52, -0.265), Vector2(1.5, 0.7), 4)
+	for k in range(6):
+		_led(frame * Vector3(-0.5 + k * 0.2, 0.74, 0.356), Vector3(0.06, 0.05, 0.012), [Color("5ee07a"), Color("ffb347"), Color("ff3a2a")][k % 3], 3.0, [1.0, 0.7, 0.4][k % 3], frame.basis)
+	_glow_box(frame * Vector3(0.78, 2.03, -0.31), Vector3(0.14, 0.14, 0.14), tint, 5.0)
+	_solid(pos + Vector3(0, 0.95, 0), Vector3(1.8, 1.9, 0.75), true, yaw)
+	var node := Node3D.new()
+	node.name = "Console_" + device
+	add_child(node)
+	batch.commit(node, "Control", true)
+	interaction_devices[device] = node
+	batch = previous_batch
+	var name_plate := lettering(title, frame * Vector3(0, 2.12, -0.3), 34, tint)
+	name_plate.rotation.y = yaw
+	name_plate.outline_size = 0
+	_light(frame * Vector3(0, 1.9, 0.9), tint.lerp(Color.WHITE, 0.6), 0.9, 5.0, false, 0.0, 0.4, LAMP_FADE)
+	return pos + face.normalized() * 1.2
+
+## (v0.89) Where the ceiling of a corridor running east-west has come down (HiveLayout
+## old_route "block"): slabs leaning from the ceiling, rubble, bent rebar, a dead lamp,
+## dust, tape on the floor on both sides - wall to wall and up to the ceiling, so that the
+## way goes round through the rooms beside it. `z0`, `z1`: the corridor's walls.
+func _cave_in(x: float, z0: float, z1: float, tall: float) -> void:
+	var mid := (z0 + z1) * 0.5
+	var wide := absf(z1 - z0)
+	var frame := Transform3D(Basis.IDENTITY, Vector3(x, UNDER, mid))
+	var grey := Color(0.46, 0.46, 0.44)
+	# Two slabs of the ceiling, broken off and leaning from either side.
+	_placed(frame, "beton", Vector3(-0.55, tall * 0.5, -wide * 0.22), Vector3(0.35, tall * 1.08, wide * 0.5), _vary(grey, 0.04), Vector3(4, 0, 24))
+	_placed(frame, "beton", Vector3(0.6, tall * 0.48, wide * 0.24), Vector3(0.32, tall * 1.06, wide * 0.48), _vary(grey, 0.04), Vector3(-6, 0, -27))
+	_placed(frame, "beton", Vector3(0.0, tall - 0.25, 0.0), Vector3(1.6, 0.4, wide), grey.darkened(0.2))
+	# Rubble, heaped in the middle, spilling out to both sides.
+	for i in range(26):
+		var size := Vector3(random.randf_range(0.25, 0.9), random.randf_range(0.2, 0.6), random.randf_range(0.25, 0.9))
+		var spread := random.randf_range(-1.0, 1.0)
+		var at := Vector3(spread * 1.9, size.y * 0.5 + (1.0 - absf(spread)) * random.randf_range(0.0, 1.3), random.randf_range(-wide * 0.47, wide * 0.47))
+		_placed(frame, "beton", at, size, _vary(grey, 0.06), Vector3(random.randf_range(-25, 25), random.randf_range(0, 90), random.randf_range(-25, 25)))
+	for i in range(7):
+		var from := frame * Vector3(random.randf_range(-0.6, 0.6), tall - 0.3, random.randf_range(-wide * 0.4, wide * 0.4))
+		_pipe(from, from + Vector3(random.randf_range(-0.9, 0.9), -random.randf_range(0.9, 2.0), random.randf_range(-0.5, 0.5)), 0.018, Color("3a2a22"), 5)
+	# The lamp that hung here, on the heap.
+	_placed(frame, "plate", Vector3(1.1, 0.35, -0.6), Vector3(1.2, 0.08, 0.3), Color("2a2e31"), Vector3(0, 30, 18))
+	for side in [-1.0, 1.0]:
+		_stripe(Vector3(x + side * 2.4, UNDER, z0 + 0.3), Vector3(x + side * 2.4, UNDER, z1 - 0.3), 0.22, Color("c9a227"))
+		var warn := _floor_text("EINSTURZ", Vector3(x + side * 3.2, UNDER, mid), 80, Color("c94a2a"), -PI / 2 if side < 0.0 else PI / 2)
+		warn.modulate.a = 0.9
+	_haze(Vector3(x, UNDER + 1.4, mid), Vector3(6.0, 2.8, wide), 0.05, Color(0.7, 0.68, 0.64))
+	_blot(Vector3(x - 2.0, UNDER, mid + 1.0), 1.6, 1.2, Color(0.3, 0.3, 0.28, 0.5))
+	_blot(Vector3(x + 2.1, UNDER, mid - 1.4), 1.4, 1.0, Color(0.3, 0.3, 0.28, 0.5))
+	_solid(Vector3(x, UNDER + tall * 0.5, mid), Vector3(2.6, tall, wide))
 
 ## Steel lockers along a side of a room.
 func _lockers(room_id: String, side: int, a: float, b: float, color: Color = Color("4a5a66")) -> void:
@@ -2577,7 +2657,15 @@ func _lay_terminal() -> void:
 		_part("plate", Vector3(x, UNDER + 1.95, -339.3), Vector3(0.3, 3.9, 0.3), Color("1d2124"))
 		_solid(Vector3(x, UNDER + 1.95, -339.3), Vector3(0.3, 3.9, 0.3))
 	_deck_stairs(Vector3(-26, UNDER, -333.7), Vector3(-26, DECK, -341.0), deep, deck, Vector3(-26, UNDER, -333.0), Vector3(-26, DECK, -342.0))
-	_console("control", SOUTH, 25.0, 37.0, [3, 1, 5, 4])
+	# (v0.89) On some nights the console of the control room is dead and the gate of the
+	# facility is opened from an emergency desk on the floor of the hall (old_route).
+	var control_at := str(old_route.get("control", "deck"))
+	_console("control", SOUTH, 25.0, 37.0, [3, 1, 5, 4], "control" if control_at == "deck" else "")
+	if control_at in ["west", "east"]:
+		var desk_at := Vector3(-22.0, UNDER, -337.0) if control_at == "west" else Vector3(22.0, UNDER, -330.0)
+		old_spots["control"] = _pult(desk_at, Vector3(0, 0, 1), "control", "NOTSTEUERUNG  ·  TOR ANLAGE", Color("ffb347"))
+		var dead := lettering("STEUERUNG AUSGEFALLEN", Vector3(31.0, DECK + 1.9, -339.45), 30, Color("ff3a2a"))
+		dead.outline_size = 0
 	_desk(Vector3(36.5, DECK, -343.0), PI / 2, 2)
 	for row in [-326.0, -334.0]:
 		for x in [-30.0, -15.0, 15.0, 30.0]:
@@ -2654,7 +2742,9 @@ func _lay_tokyo() -> void:
 	_end_zone()
 	tokyo = TokyoHall.build(self, TOKYO_AT, deep, tokyo_deck, true)
 	_zones_see("tokyo_gang", TokyoHall.ZONE)
-	_door("tokyo_gang", "tk_streets", z, 2.6, {"kind": "slide", "name": "tokyo_lock"})
+	# (v0.89) An open doorway, not a sliding door: from the passage one looks into the hall and
+	# from the hall back into the passage (the closed leaves were a black wall from both sides).
+	_door("tokyo_gang", "tk_streets", z, 2.6, {"kind": "frame", "height": 2.9, "name": "tokyo_lock"})
 
 # ---------------------------------------------------------------- offices and corridors
 
@@ -2688,13 +2778,28 @@ func _lay_admin() -> void:
 	_room("server", deep, Rect2(30, -393, 14, 24), 3.8, "panel", {"look": {"light": Color("7fb2ff"), "energy": 1.0, "floor": ["darkfloor", Color(0.5, 0.52, 0.56)], "stripe": red, "panel": Color(0.42, 0.45, 0.5), "strip_color": Color("5a9cff"), "strip_glow": 3.0}})
 	_door("ring_s", "server", 37.0, 2.0, {"kind": "slide"})
 	_door("security", "server", -377.0, 2.0, {"kind": "slide"})
+	# (v0.89) Where a stretch of the corridor has caved in, a way round through the rooms
+	# beside it (old_route): the post room and the security centre, or the meeting room and
+	# the open office.
+	var block := str(old_route.get("block", ""))
+	var desk_room := str(old_route.get("desk", "security"))
+	var cafe_way := str(old_route.get("cafe", "ring"))
+	if block == "east":
+		_door("copy", "security", -382.3, 1.6, {"kind": "slide"})
+	elif block == "west":
+		_door("meeting", "office", -379.0, 1.6, {"kind": "slide"})
 	_room("archive", deep, Rect2(-44, -409, 20, 16), 3.6, "office", {"look": {"energy": 1.0, "dead": 0.34, "flicker": 0.25, "stripe": blue}})
 	_door("office", "archive", -34.0, 2.0, {"kind": "slide"})
 	_room("staff", deep, Rect2(-24, -405, 20, 12), 3.6, "office", {"look": {"stripe": blue}})
 	_door("office", "staff", -20.0, 2.0, {"kind": "slide"})
 	area = "cafe"
 	_room("spine", deep, Rect2(-4, -405, 8, 36), 5.0, "panel", {"lamps": "none", "look": {"stripe": gold}})
-	_door("ring_s", "spine", 0.0, 4.0, {"kind": "gate", "area": "cafe", "name": "gate_cafe", "height": 3.0})
+	if cafe_way == "staff":
+		# (v0.89) The gate off the corridor is jammed; the one from the staff room opens.
+		_door("ring_s", "spine", 0.0, 4.0, {"kind": "script", "name": "gate_jammed", "height": 3.0})
+		_door("staff", "spine", -396.2, 1.8, {"kind": "gate", "area": "cafe", "name": "gate_cafe", "height": 2.5})
+	else:
+		_door("ring_s", "spine", 0.0, 4.0, {"kind": "gate", "area": "cafe", "name": "gate_cafe", "height": 3.0})
 	area = "admin"
 	_chunk("Kit", false)
 	# --- the way in: two lanes through scanner arches, a booth between them, a belt for
@@ -2765,8 +2870,17 @@ func _lay_admin() -> void:
 	_model("metal_trash_can", Vector3(27.0, UNDER, -361.9), 0.0, {"height": 0.9, "far": 40.0})
 	_plant(Vector3(-3.3, UNDER, -361.75), 1.3)
 	_plant(Vector3(3.3, UNDER, -361.75), 1.3)
-	_bench(Vector3(-17.5, UNDER, -361.55), PI, 2.4)
-	_bench(Vector3(17.5, UNDER, -361.55), PI, 2.4)
+	if block != "west":
+		_bench(Vector3(-17.5, UNDER, -361.55), PI, 2.4)
+	if block != "east":
+		_bench(Vector3(17.5, UNDER, -361.55), PI, 2.4)
+	if block == "east":
+		_cave_in(16.0, -369.0, -361.0, 4.6)
+	elif block == "west":
+		_cave_in(-17.0, -369.0, -361.0, 4.6)
+	if cafe_way == "staff":
+		_floor_text("TOR BLOCKIERT", Vector3(0, UNDER, -367.4), 70, Color("c94a2a"))
+		_floor_text("◄  UMWEG ÜBER PERSONALRAUM", Vector3(0, UNDER, -366.2), 44, Color("c9a227"))
 	# Somebody tried to hold the east wing.
 	_barricade(Vector3(30.5, UNDER, -366.3), PI / 2, 4.6)
 	_blot(Vector3(28.6, UNDER, -364.2), 1.0, 0.7)
@@ -2819,7 +2933,8 @@ func _lay_admin() -> void:
 	_screen(Transform3D(Basis(Vector3.UP, 0.0), _face_point(meeting, NORTH, -10.0, 1.9, -0.06)), Vector3.ZERO, Vector2(2.6, 1.4), 8, 0.3)
 	_board("meeting", WEST, -376.0, 2.6)
 	_counter("meeting", EAST, -379.8, -377.2, Color(0.3, 0.33, 0.36), Color(0.6, 0.62, 0.63), 0.5)
-	_plant(Vector3(-15.0, UNDER, -380.0), 1.5)
+	if block != "west":
+		_plant(Vector3(-15.0, UNDER, -380.0), 1.5)
 	_litter(Vector3(-10.0, UNDER + 0.77, -375.5), 0.8, 8)
 	# --- the post room: copiers, pigeonholes, parcels nobody fetched
 	_against("copy", EAST, -372.0, "steel_frame_shelves_01", {"height": 2.2})
@@ -2837,10 +2952,13 @@ func _lay_admin() -> void:
 		for column in range(6):
 			_screen(Transform3D(Basis(Vector3.UP, 0.0), _face_point(security, NORTH, 14.5 + column * 2.6, 1.75 + row * 0.85, -0.07)), Vector3.ZERO, Vector2(1.3, 0.75), [4, 1, 9, 5, 3, 8][(row * 2 + column) % 6], -1.0)
 	_face_box(security, NORTH, "plate", 13.4, 28.6, 1.3, 3.1, -0.06, 0.0, Color("101214"))
-	_console("security", NORTH, 16.0, 26.0, [5, 3, 1, 4])
+	_console("security", NORTH, 16.0, 26.0, [5, 3, 1, 4], "security" if desk_room == "security" else "")
 	_desk(Vector3(15.0, UNDER, -374.0), PI / 2, 4)
 	_desk(Vector3(27.0, UNDER, -374.0), -PI / 2, 5)
-	_lockers("security", WEST, -384.0, -380.0, Color("3d4a54"))
+	if block == "east":
+		_lockers("security", WEST, -380.6, -378.4, Color("3d4a54"))
+	else:
+		_lockers("security", WEST, -384.0, -380.0, Color("3d4a54"))
 	_lockers("security", EAST, -383.8, -380.2, Color("2c3236"))
 	_door_tag("security", EAST, -375.45, "S-02", "SERVER", red.lightened(0.45))
 	_display(_face_point(security, WEST, -374.4, 1.98, 0.0), _model_yaw(WEST), 2.6, "security")
@@ -2889,7 +3007,8 @@ func _lay_admin() -> void:
 	_mess_table(Vector3(-17.0, UNDER, -399.2))
 	_mess_table(Vector3(-11.6, UNDER, -401.4))
 	_board("staff", SOUTH, -13.0, 2.2, true)
-	_plant(Vector3(-5.0, UNDER, -394.0), 1.3)
+	if cafe_way != "staff":
+		_plant(Vector3(-5.0, UNDER, -394.0), 1.3)
 	_litter(Vector3(-14.0, UNDER, -396.4), 1.0, 6)
 	# --- the spine to the canteen: somebody built a barricade here, and it did not hold
 	_passage("spine", {"step": 5.93, "energy": 2.4, "reach": 10.0, "lines": [[-0.9, gold], [0.9, gold]], "tray": WEST, "fail": [3]})
@@ -2899,7 +3018,16 @@ func _lay_admin() -> void:
 	for z in [-374.0, -386.5, -401.5]:
 		_floor_arrow(Vector3(0, UNDER, z), 0.0, gold)
 	_bench(Vector3(3.3, UNDER, -372.2), -PI / 2, 2.2)
-	_barricade(Vector3(-1.5, UNDER, -397.4), 0.0, 4.2)
+	_barricade(Vector3(-1.5, UNDER, -401.0 if cafe_way == "staff" else -397.4), 0.0, 4.2)
+	# (v0.89) The desk that lifts the lockdown, where this night has it (old_route).
+	var red_tint := Color("ff5a3a")
+	match desk_room:
+		"archive":
+			old_spots["security"] = _pult(Vector3(-24.75, UNDER, -401.0), Vector3(-1, 0, 0), "security", "SPERRSTEUERUNG", red_tint)
+		"server":
+			old_spots["security"] = _pult(Vector3(43.25, UNDER, -379.5), Vector3(-1, 0, 0), "security", "SPERRSTEUERUNG", red_tint)
+		"staff":
+			old_spots["security"] = _pult(Vector3(-11.5, UNDER, -404.25), Vector3(0, 0, 1), "security", "SPERRSTEUERUNG", red_tint)
 	_stores(Vector3(-2.4, UNDER, -399.6), 2)
 	_blot(Vector3(2.0, UNDER, -396.4), 1.1, 0.8)
 	_smear(Vector3(2.1, UNDER, -396.8), Vector3(1.5, UNDER, -403.6), 0.3)
@@ -2907,6 +3035,17 @@ func _lay_admin() -> void:
 	_litter(Vector3(1.4, UNDER, -392.5), 1.2, 7)
 	_shared_dice()
 	_end_zone()
+
+## (v0.89) What the squad is told to do where the lockdown is lifted, and where the gate
+## of the facility is opened, this night (old_route).
+func lock_goal() -> String:
+	var room := str(old_route.get("desk", "security"))
+	return "In %s die Sperre aufheben" % str(DESK_ROOMS.get(room, DESK_ROOMS.security))
+
+func control_goal() -> String:
+	if str(old_route.get("control", "deck")) == "deck":
+		return "Im Leitstand das Tor zur Anlage öffnen"
+	return "Der Leitstand ist tot: am Notpult in der Halle das Tor zur Anlage öffnen"
 
 ## An office chair on wheels; one that has fallen over lies in the way.
 func _office_chair(pos: Vector3, yaw: float, fallen: bool = false) -> void:
@@ -4920,7 +5059,7 @@ func _lay_terminals() -> void:
 		["checkpoint", NORTH, 4.0, "crucible", "A-02", "ANLAGE  ·  LAGEPLAN"],
 		["ring_s", SOUTH, 5.8, "crucible", "A-03", "ANLAGE  ·  LAGEPLAN"],
 		["security", SOUTH, 25.6, "crucible", "S-03", "SICHERHEIT  ·  SEKTOREN"],
-		["spine", WEST, -396.0, "crucible", "A-04", "ANLAGE  ·  LAGEPLAN"],
+		["spine", WEST, -386.8 if str(old_route.get("cafe", "ring")) == "staff" else -396.0, "crucible", "A-04", "ANLAGE  ·  LAGEPLAN"],
 		["north_link", WEST, -442.6, "crucible", "B-01", "ZENTRALRAUM  ·  LAGEPLAN"],
 		["atrium", SOUTH, 6.5, "crucible", "B-02", "ANLAGE  ·  LAGEPLAN"],
 		["maint", NORTH, 33.0, "crucible", "T-02", "TECHNIK  ·  SCHÄCHTE"],
@@ -6189,6 +6328,7 @@ func _after_build() -> void:
 		"pump": Vector3(50.0, UNDER, -481.0), "generator": Vector3(50.0, UNDER, -446.7), "decon": Vector3(0, UNDER, -495.0), "labs_south": Vector3(0, UNDER, -505.0),
 		"labs": Vector3(0, UNDER, -535.0), "cross": Vector3(0, UNDER, -573.0), "hall_end": HALL_MIDDLE, "lift": HALL_LIFT
 	}
+	points.merge(old_spots, true)
 	facings = {"landing": 0.0, "landing_out": 0.0}
 	points.merge(areal_points, true)
 	if tokyo != null:
