@@ -2,7 +2,7 @@
 # reference pictures), from nothing, as plain coloured parts (no baked textures):
 #   assets/tokyo/vehicles/bus.glb    the "TOKYO NEXT BUS" e-bus, fleet no. 2307, line 都23
 #   assets/tokyo/vehicles/sedan.glb  a midsize saloon ("NORIKA AURA"), multi-spoke alloys
-#   assets/tokyo/vehicles/jdm.glb    a widebody 80s wedge coupe with pop-up lamps, "天狗" livery
+#   assets/tokyo/vehicles/jdm.glb    a widebody 80s wedge coupe with red-lit lamps, "天狗" livery
 #   assets/models/hay_bale.glb       three small square bales (Bale0..Bale2), straws and twine
 #
 #   blender --background --factory-startup --python tools/blender_make_vehicles.py -- [--only bus,sedan,jdm,hay]
@@ -321,6 +321,9 @@ def build_bus():
         for a, b in zip(posts, posts[1:]):
             if side < 0 and ((a, b) == door_mid or (a, b) == door_front):
                 continue
+            if a == -5.25:
+                bx("RearPanel", (x - 0.012, a + 0.07, 1.31), (x + 0.012, b - 0.07, 2.56), paint)
+                continue
             bx("Pane", (x - 0.008, a + 0.07, 1.31), (x + 0.008, b - 0.07, 2.56), m["glass"])
         # The magenta stripe and the cyan line under the roof.
         beam("Stripe", (x, -L2 + 0.2, 1.06), (x, L2 - 0.3, 1.0), 0.012, 0.06, magenta, up=(0, 0, 1))
@@ -330,20 +333,24 @@ def build_bus():
         nrm = (side, 0, 0)
         text("東京ネクストバス", 0.2, ink, (x + side * 0.004, -1.6, 2.78), nrm)
         text("TOKYO NEXT BUS", 0.13, ink, (x + side * 0.004, 1.5 if side > 0 else -3.6, 2.78), nrm)
+        text("東京ネクストバス", 0.09, ink, (x + side * 0.016, -4.72, 1.5), nrm)
         text("2307", 0.16, ink, (x + side * 0.004, 4.0 if side > 0 else 3.85, 1.15), nrm)
         # Sakura logos: five petals round a dot.
-        for cy, cz, size in ((-4.55, 2.78, 0.11), (3.95, 2.78, 0.09)):
+        for cy, cz, size in ((-4.72, 1.98, 0.32), (3.95, 2.78, 0.09)):
             for k in range(5):
                 a = math.tau * k / 5 + 0.3
                 d = Vector((0, math.cos(a), math.sin(a)))
-                blob("Petal", Vector((x + side * 0.006, cy, cz)) + d * size * 0.55, (Vector((0.004, 0, 0)), d * size * 0.5, d.cross(Vector((1, 0, 0))) * size * 0.32), sakura, 8, 4)
-            blob("Heart", (x + side * 0.009, cy, cz), (Vector((0.004, 0, 0)), Vector((0, size * 0.18, 0)), Vector((0, 0, size * 0.18))), magenta, 8, 4)
+                blob("Petal", Vector((x + side * 0.016, cy, cz)) + d * size * 0.55, (Vector((0.004, 0, 0)), d * size * 0.5, d.cross(Vector((1, 0, 0))) * size * 0.32), sakura, 8, 4)
+            blob("Heart", (x + side * 0.019, cy, cz), (Vector((0.004, 0, 0)), Vector((0, size * 0.18, 0)), Vector((0, 0, size * 0.18))), magenta, 8, 4)
         # Marker lights along the top edge, orange.
         for k in range(5):
             bx("Marker", (x - 0.015, -4.4 + k * 2.2, 2.95), (x + 0.015, -4.25 + k * 2.2, 2.99), m["orange"])
         # Wheels with cyan rings.
         for ay in axles:
-            wheel(side * (hw - 0.17), ay, r, 0.32, side, m["rubber"], m["rim"], 8, m["cyan"], 0.035)
+            wheel(side * (hw - 0.17), ay, r, 0.32, side, m["rubber"], m["rim"], 3, m["cyan"], 0.035, spoke_mat=black, hub=black)
+            # (Henry's picture: a silver hubcap under the three spokes.)
+            out = side * (hw - 0.17) + side * (0.16 - 0.035)
+            cyl("Hubcap", (out - side * 0.014, ay, r), (out - side * 0.006, ay, r), r * 0.6, mat("Hubcap", "cfd3d8", 0.3, 0.6), 24)
     # Doors on the left (the kerb side in Japan): double door in the middle, one at the front.
     for (a, b), split in ((door_mid, True), (door_front, False)):
         x = -(hw + 0.01)
@@ -387,7 +394,7 @@ def build_bus():
 
     # Front: big windscreen, the destination sign above it, split lamps, plate, mirrors.
     yf = L2 + 0.002
-    for low, high in (((-hw + 0.02, yf - 0.03, 0.98), (hw - 0.02, yf + 0.02, 1.08)), ((-hw + 0.02, yf - 0.03, 2.52), (hw - 0.02, yf + 0.02, 2.62)),
+    for low, high in (((-hw + 0.02, yf - 0.03, 1.24), (hw - 0.02, yf + 0.02, 1.32)), ((-hw + 0.02, yf - 0.03, 2.52), (hw - 0.02, yf + 0.02, 2.62)),
                       ((-hw + 0.02, yf - 0.03, 0.98), (-hw + 0.1, yf + 0.02, 2.62)), ((hw - 0.1, yf - 0.03, 0.98), (hw - 0.02, yf + 0.02, 2.62))):
         bx("FrontFrame", low, high, black)
     # The driver's place behind it: dashboard, wheel, seat.
@@ -396,8 +403,21 @@ def build_bus():
     ring("SteeringWheel", (0.62, L2 - 0.62, 1.62), (0, 0.6, 0.8), 0.22, 0.02, m["trim"], 20)
     bx("DriverSeat", (0.4, L2 - 1.4, 1.3), (0.85, L2 - 0.95, 1.45), m["seat"], 0.03)
     bx("DriverBack", (0.4, L2 - 1.5, 1.45), (0.85, L2 - 1.38, 2.1), m["seat"], 0.03)
-    beam("Windscreen", (0, yf + 0.025, 1.06), (0, yf - 0.03, 2.55), 2.28, 0.012, mat("Windscreen", "1b2530", 0.03, 0.0, alpha=0.5), up=(0, 1, 0))
+    beam("Windscreen", (0, yf + 0.025, 1.3), (0, yf - 0.03, 2.55), 2.28, 0.012, mat("Windscreen", "1b2530", 0.03, 0.0, alpha=0.5), up=(0, 1, 0))
     bx("SignBox", (-1.05, yf - 0.01, 2.64), (1.05, yf + 0.035, 2.98), black)
+    # (Henry's picture) a sakura left of the sign, the wheelchair right of it (as one looks at it).
+    for k in range(5):
+        a = math.tau * k / 5 + 0.3
+        d = Vector((math.cos(a), 0, math.sin(a)))
+        blob("SignPetal", Vector((0.93, yf + 0.04, 2.81)) + d * 0.05, (d * 0.045, Vector((0, 0.003, 0)), d.cross(Vector((0, 1, 0))) * 0.03), magenta, 8, 4)
+    white = MATS.get("White") or mat("White", "f4f4f4", 0.4)
+    bx("SignWheelchair", (-1.0, yf + 0.03, 2.71), (-0.82, yf + 0.04, 2.91), MATS.get("SignBlue") or mat("SignBlue", "1f5fc8", 0.4))
+    ring("SignWcWheel", (-0.91, yf + 0.043, 2.77), (0, 1, 0), 0.04, 0.007, white, 16)
+    blob("SignWcHead", (-0.92, yf + 0.043, 2.875), (Vector((0.014, 0, 0)), Vector((0, 0.003, 0)), Vector((0, 0, 0.014))), white, 8, 4)
+    add(_prism_y("NamePanel", [(-0.98, 0.88), (0.98, 0.88), (1.12, 1.25), (-1.12, 1.25)], yf - 0.01, yf + 0.03, black))
+    text("東京ネクストバス", 0.14, white, (0.0, yf + 0.031, 1.12), (0, 1, 0))
+    text("— TOKYO NEXT BUS —", 0.055, white, (0.0, yf + 0.031, 0.97), (0, 1, 0))
+    ring("NameLogo", (0.0, yf + 0.033, 1.21), (0, 1, 0), 0.03, 0.006, white, 16)
     text("都23  新海町・未来駅", 0.15, sign, (0.0, yf + 0.036, 2.86), (0, 1, 0))
     text("Shinkai-cho · Mirai Station", 0.075, sign, (0.0, yf + 0.036, 2.71), (0, 1, 0))
     for side in (-1, 1):
@@ -407,6 +427,8 @@ def build_bus():
         for k in range(3):
             beam("Lamp", (sx * (1.14 - k * 0.15), yf + 0.03, 0.69 - k * 0.012), (sx * (1.03 - k * 0.15), yf + 0.03, 0.68 - k * 0.012), 0.012, 0.06, m["head"], up=(0, 0, 1))
         bx("CornerMarker", (sx * 1.18 - 0.07, yf - 0.03, 2.98), (sx * 1.18 + 0.07, yf + 0.03, 3.02), m["orange"])
+        bx("CornerAmber", (sx * 1.2 - 0.02, yf - 0.01, 0.42), (sx * 1.2 + 0.02, yf + 0.035, 0.7), m["orange"])
+        beam("BumperAmber", (sx * 1.12, yf + 0.065, 0.36), (sx * 0.8, yf + 0.065, 0.33), 0.02, 0.02, m["orange"], up=(0, 0, 1))
         # Mirror on its stalk, reaching forward over the screen.
         beam("MirrorArm", (sx * 1.2, L2 - 0.05, 2.62), (sx * 1.36, L2 + 0.32, 2.66), 0.04, 0.04, black)
         beam("MirrorArm2", (sx * 1.36, L2 + 0.32, 2.66), (sx * 1.36, L2 + 0.36, 2.25), 0.04, 0.04, black, up=(0, 1, 0))
@@ -416,7 +438,7 @@ def build_bus():
     white_ink = mat("PlateWhite", "f2f2ea", 0.4)
     text("東京 230", 0.05, white_ink, (0.0, yf + 0.061, 0.68), (0, 1, 0))
     text("あ 23-07", 0.095, white_ink, (0.02, yf + 0.061, 0.57), (0, 1, 0))
-    text("2307", 0.08, ink, (0.82, yf + 0.03, 0.96), (0, 1, 0))
+    text("2307", 0.08, ink, (0.95, yf + 0.03, 0.8), (0, 1, 0))
     # Rear: small window, tall tail lamps, lettering.
     yb = -L2 - 0.002
     bx("RearWall", (-hw + 0.04, yb + 0.005, 1.27), (hw - 0.04, yb + 0.06, 2.61), paint)
@@ -592,7 +614,7 @@ def build_jdm():
     ys = stations(-L2, L2, 0.09, axles, 0.035, 0.55)
     body = add(loft("Body", [body_ring(y) for y in ys], paint))
     # The livery: black hood and lower body, white sides and roof.
-    recolour(body, lambda c, n: black if (c.z < 0.4 and abs(n.x) > 0.3) or (c.y > 0.72 and n.z > 0.55) or c.z < 0.25 else None)
+    recolour(body, lambda c, n: black if (c.z < 0.4 and abs(n.x) > 0.3) or (c.y > 0.72 and n.z > 0.55) or c.z < 0.25 or c.y < -0.95 or c.y > 1.95 else None)
     smooth(body, 28)
     outline = fillet([(0.74, 0.865, 0.0), (0.02, 1.2, 0.07), (-0.75, 1.21, 0.12), (-1.85, 0.935, 0.0)], 4)
     cab = add(slab("Cabin", outline, -0.82, 0.82, m["glass"]))
@@ -606,7 +628,7 @@ def build_jdm():
         beam("CPillar", (s * 0.83 * k(0.95), -1.62, 0.95), (s * 0.835 * k(1.2), -0.82, 1.2), 0.02, 0.07, black, up=(s, 0, 0))
         # Door art: the red sun, a white crane across it, the name behind.
         x = s * 0.868
-        sun = (x, -0.12, 0.6)
+        sun = (x, -0.42, 0.6)
         cyl("Sun", (x - s * 0.003, sun[1], sun[2]), (x + s * 0.004, sun[1], sun[2]), 0.25, red, 32)
         xo = x + s * 0.0055
         cy, cz = sun[1] + 0.03, sun[2] + 0.0
@@ -621,8 +643,9 @@ def build_jdm():
         crane([(-0.09, -0.012), (-0.25, -0.05), (-0.25, -0.058), (-0.09, -0.02)], black)
         crane([(0.225, 0.085), (0.235, 0.075), (0.3, 0.07), (0.235, 0.08)], black)
         blob("CraneCrown", (xo + s * 0.003, cy + 0.215, cz + 0.083), (Vector((0.002, 0, 0)), Vector((0, 0.014, 0)), Vector((0, 0, 0.009))), red, 6, 4)
-        text("天狗", 0.13, black, (s * 0.866, -1.98, 0.8), (s, 0, 0))
-        text("NIGHT RUN", 0.045, black, (x + s * 0.004, 0.6, 0.47), (s, 0, 0))
+        text("天狗", 0.22, black, (x + s * 0.004, 0.22, 0.6), (s, 0, 0))
+        text("NIGHT RUN  SPEC-R", 0.04, black, (x + s * 0.004, 0.22, 0.44), (s, 0, 0))
+        cyl("SillPipe", (s * 0.93, -0.75, 0.2), (s * 0.93, 0.75, 0.2), 0.03, mat("PipeSteel", "3a3c40", 0.35, 0.8), 10)
         # Red light under the sills, side pipes before the rear wheels.
         bx("SideSkirt", (s * 0.83, -0.75, 0.15), (s * 0.95, 0.8, 0.25), black)
         bx("SkirtLed", (s * 0.9, -0.7, 0.145), (s * 0.94, 0.75, 0.155), m["red"])
@@ -632,20 +655,23 @@ def build_jdm():
         for ay in axles:
             wheel(s * 0.84, ay, r, 0.27, s, m["rubber"], mat("DishBlack", "151517", 0.3, 0.6), 12, m["red"], 0.05, spoke_mat=mat("SpokeBlack", "202124", 0.35, 0.7), hub=m["red"])
         blob("Mirror", (s * 0.93, 0.6, 0.93), (Vector((0.07, 0, 0)), Vector((0, 0.05, 0)), Vector((0, 0, 0.04))), black, 10, 6)
-    # Front: the pop-up lamps standing up, red LED edges, the splitter, the plate "夜走り".
+    # Front (Henry's picture): a black face with low red-lit lamps, "夜走り" lit in the grille,
+    # red strips in the bumper, the splitter.
     yf = L2
+    bx("FrontFace", (-0.74, yf - 0.03, 0.3), (0.74, yf + 0.012, 0.5), m["gloss"])
     for s in (-1, 1):
-        cx = s * 0.6
-        bx("PopUp", (cx - 0.2, 1.72, 0.66), (cx + 0.2, 1.98, 0.83), white, 0.015)
-        bx("PopUpFace", (cx - 0.18, 1.985, 0.68), (cx + 0.18, 1.995, 0.81), m["trim"])
-        for k in (-1, 1):
-            blob("PopLamp", (cx + k * 0.085, 1.998, 0.745), (Vector((0.07, 0, 0)), Vector((0, 0.008, 0)), Vector((0, 0, 0.05))), m["head"], 12, 4)
-        bx("PopLed", (cx - 0.19, 1.99, 0.665), (cx + 0.19, 2.0, 0.678), m["red"])
+        lo, hi = sorted((s * 0.44, s * 0.72))
+        bx("LampHousing", (lo, yf - 0.02, 0.38), (hi, yf + 0.02, 0.48), black)
+        for k in range(3):
+            bx("RedLamp", (lo + 0.02, yf + 0.02, 0.395 + k * 0.028), (hi - 0.02, yf + 0.03, 0.41 + k * 0.028), m["red"])
+        lo2, hi2 = sorted((s * 0.73, s * 0.79))
+        bx("CornerLamp", (lo2, yf - 0.08, 0.36), (hi2, yf - 0.03, 0.48), m["red"])
         beam("BumperLed", (s * 0.25, yf + 0.004, 0.42), (s * 0.78, yf - 0.06, 0.44), 0.015, 0.018, m["red"], up=(0, 1, 0))
     bx("Splitter", (-0.85, 1.98, 0.13), (0.85, 2.24, 0.155), mat("Carbon", "18191b", 0.35, 0.3))
     bx("Intake", (-0.55, yf - 0.02, 0.24), (0.55, yf + 0.015, 0.36), m["gloss"])
-    bx("PlateF", (-0.16, yf + 0.01, 0.37), (0.16, yf + 0.025, 0.5), m["plate"])
-    text("夜走り", 0.07, mat("PlateBlack", "141414", 0.5), (0, yf + 0.026, 0.435), (0, 1, 0))
+    bx("Grille", (-0.36, yf + 0.0, 0.38), (0.36, yf + 0.022, 0.48), mat("GrilleDark", "0a0a0b", 0.6))
+    text("夜走り", 0.08, m["red"], (0, yf + 0.024, 0.43), (0, 1, 0))
+    mat("PlateBlack", "141414", 0.5)
     # Underglow: a lit panel under the floor.
     bx("Underglow", (-0.6, -1.6, 0.11), (0.6, 1.6, 0.125), m["red"])
     # Rear: the wing on its stands, a black panel with a red light bar, the pipes, the plate.
@@ -680,7 +706,7 @@ def build_bale(index):
     along it and two across, straws standing out everywhere and fanned out at the cut ends."""
     rnd = random.Random(31 + index * 97)
     straw = mat("Straw", "d9b765", 0.85)
-    twine = mat("Twine", "c4652a", 0.7)
+    twine = mat("Twine", "8a7350", 0.85)
     hx, hy, hz = 0.45, 0.6, 0.36
     bm = bmesh.new()
     bmesh.ops.create_cube(bm, size=2.0)
@@ -752,7 +778,7 @@ def build_bale(index):
     colours = sm.loops.layers.color.new("Col")
     tones = [(1.0, 0.95, 0.82), (0.93, 0.86, 0.66), (0.84, 0.74, 0.52), (1.0, 1.0, 0.92), (0.72, 0.64, 0.46)]
     count = 0
-    for k in range(720):
+    for k in range(1100):
         face = rnd.random()
         if face < 0.36:  # the cut ends: brushy
             sy = rnd.choice((-1, 1))
