@@ -6,6 +6,9 @@ extends Node
 ## next start, without the editor having to import anything.
 
 const FOLDER := "res://assets/music"
+## In an exported game the folder is not packed (it is hidden from the import): the release
+## script puts it next to the program as "music", on the Mac inside the app's Resources.
+const EXPORTED_FOLDERS := ["music", "../Resources/music"]
 ## The parts of the night, as the beginnings of the file names:
 ##   warten         the menu and lobby, the breaks between rounds, calm stretches
 ##   anfang         the arrival, before the first round
@@ -53,10 +56,22 @@ func _ready() -> void:
 		player.finished.connect(_on_finished.bind(i))
 	scan()
 
+## Where the tracks lie: in the project, or next to the exported program.
+func music_folder() -> String:
+	if DirAccess.dir_exists_absolute(FOLDER):
+		return FOLDER
+	var program := OS.get_executable_path().get_base_dir()
+	for relative in EXPORTED_FOLDERS:
+		var path := program.path_join(relative).simplify_path()
+		if DirAccess.dir_exists_absolute(path):
+			return path
+	return FOLDER
+
 ## Looks through the folder for tracks and sorts them by the part of the night.
 func scan() -> void:
 	tracks.clear()
-	var folder := DirAccess.open(FOLDER)
+	var path := music_folder()
+	var folder := DirAccess.open(path)
 	if folder == null:
 		return
 	for file_name in folder.get_files():
@@ -67,7 +82,7 @@ func scan() -> void:
 			if lower.begins_with(key + "_") or lower.get_basename() == key:
 				if not tracks.has(key):
 					tracks[key] = []
-				(tracks[key] as Array).append(FOLDER + "/" + file_name)
+				(tracks[key] as Array).append(path.path_join(file_name))
 
 func _stream(path: String) -> AudioStream:
 	if not streams.has(path):
