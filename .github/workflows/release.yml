@@ -10,8 +10,6 @@ on:
         description: Only build, do not publish
         type: boolean
         default: false
-  push:
-    branches: [release-workflow]
 
 permissions:
   contents: write
@@ -54,7 +52,7 @@ jobs:
 
       - name: Build and publish
         run: |
-          if [ "${{ github.event_name == 'push' || inputs.dry_run }}" = "true" ]; then
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
             bash tools/release.sh --dry-run
           else
             bash tools/release.sh
