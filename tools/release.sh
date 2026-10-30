@@ -7,6 +7,8 @@
 #
 # Before publishing: raise VERSION in scripts/net.gd, add the release to data/patch_notes.json,
 # commit and push. The release is tagged v<VERSION> on the pushed commit.
+# Also runs on GitHub: Actions > Release > Run workflow (.github/workflows/release.yml), which is
+# the way to go when the upload from your own connection is too slow for the 1.5 GB files.
 # Needs Godot 4.7.2 with its export templates (Editor > Manage Export Templates) and the
 # GitHub CLI (gh auth login). Godot is looked for like in SPIELEN.command; or set GODOT.
 #
@@ -81,24 +83,31 @@ export_one() { # preset, output
 	"$GODOT_BIN" --headless --path . --export-release "$1" "$2" >build/export-"$1".log 2>&1 || { tail -20 build/export-"$1".log; exit 1; }
 	[ -e "$2" ] || { echo "Export $1 hat nichts erzeugt (build/export-$1.log)"; exit 1; }
 }
-export_one Windows build/windows/$NAME.exe
-export_one macOS build/macos/$NAME.zip
-export_one Linux build/linux/$NAME.x86_64
-
 copy_music() { mkdir -p "$1"; rsync -a --exclude .gdignore --exclude .DS_Store "$MUSIC"/ "$1"/; }
 
-echo "Packe ..."
+# One system after the other, and what is packed is deleted at once: all three exports side by
+# side would need about 5 GB more than a GitHub runner has to spare.
+export_one Windows build/windows/$NAME.exe
+echo "Packe Windows ..."
 copy_music build/windows/music
-copy_music build/linux/music
 (cd build/windows && zip -qr -X ../release/$NAME-windows.zip . -x '*.DS_Store')
+rm -rf build/windows
+
+export_one Linux build/linux/$NAME.x86_64
+echo "Packe Linux ..."
+copy_music build/linux/music
 (cd build/linux && zip -qr -X ../release/$NAME-linux.zip . -x '*.DS_Store')
+rm -rf build/linux
 
 # macOS: the music goes into the app; then it is signed again (ad hoc), or the changed bundle
 # would not start on Apple Silicon.
+export_one macOS build/macos/$NAME.zip
+echo "Packe macOS ..."
 (cd build/macos && ditto -x -k $NAME.zip . && rm $NAME.zip)
 copy_music "build/macos/$NAME.app/Contents/Resources/music"
 codesign --force --deep --sign - "build/macos/$NAME.app"
 ditto -c -k --keepParent "build/macos/$NAME.app" build/release/$NAME-macos.zip
+rm -rf build/macos build/macos_template.zip
 
 cp "$NOTES" build/release/changelog.json
 python3 - "$NOTES" "$VERSION" >build/release/notes.md <<'EOF'

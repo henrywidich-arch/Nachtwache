@@ -1,0 +1,67 @@
+# Builds Nachtwache for Windows, macOS and Linux with tools/release.sh and publishes it as a
+# GitHub release for the Double W Launcher. Run it from Actions > Release > Run workflow, on
+# main, after the version in scripts/net.gd and data/patch_notes.json are updated and pushed.
+# "dry_run" only builds (nothing is published); the job summary then lists the files.
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only build, do not publish
+        type: boolean
+        default: false
+  push:
+    branches: [release-workflow]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 180
+    env:
+      GODOT_VERSION: "4.7.2"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Disk before
+        run: df -h /
+
+      - name: Godot and export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_macos.universal.zip"
+          unzip -q godot.zip && rm godot.zip
+          ls
+          curl -fsSL -o tpl.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          dest="$HOME/Library/Application Support/Godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dest"
+          unzip -q -j tpl.tpz 'templates/version.txt' 'templates/macos.zip' 'templates/windows_*_x86_64.exe' 'templates/linux_*.x86_64' -d "$dest"
+          rm tpl.tpz
+          ls -la "$dest"
+          echo "GODOT=$RUNNER_TEMP/Godot.app" >> "$GITHUB_ENV"
+
+      # The first import of the project takes a while; Godot sometimes stops right after it,
+      # so it runs again until the second pass is quick.
+      - name: Import the project
+        run: |
+          "$GODOT/Contents/MacOS/Godot" --headless --path . --import || true
+          "$GODOT/Contents/MacOS/Godot" --headless --path . --import
+          df -h /
+
+      - name: Build and publish
+        run: |
+          if [ "${{ github.event_name == 'push' || inputs.dry_run }}" = "true" ]; then
+            bash tools/release.sh --dry-run
+          else
+            bash tools/release.sh
+          fi
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -d build/release ] && ls -lh build/release | tee -a "$GITHUB_STEP_SUMMARY" || true
+          df -h /
