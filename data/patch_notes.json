@@ -1,6 +1,6 @@
 [
   {
-    "version": "0.91",
+    "version": "0.92",
     "title": "Neuer Regen, neue Fahrzeuge und der Raketenwerfer in Tokio",
     "sections": [
       {
@@ -30,6 +30,18 @@
           "In der Feuerstellung hebt er die Startrampe, schwenkt sie auf die Stahltür und braucht 60 Sekunden zum Zielen – währenddessen schickt die Halle alles, was sie hat. Dann steigt eine Rakete auf, die Tür fliegt aus der Wand, und ein Gang führt zum Kontrollpunkt der Verwaltung. Dafür gibt es 500 ◈.",
           "Der Auftrag läuft auch im Koop: Der Host lenkt das Geschehen, beide sehen den Werfer, die Rakete und die gesprengte Tür, und auch der Mitspieler kann ihn losschicken und reparieren.",
           "Testraum: Unter „MISSION 2 · AREALE“ bringt euch „TOKIO · RAKETENWERFER-AUFTRAG“ neben den Werfer, und ihr könnt den ganzen Auftrag durchspielen."
+        ]
+      }
+    ]
+  },
+  {
+    "version": "0.91",
+    "title": "Musik auch im installierten Spiel",
+    "sections": [
+      {
+        "title": "Ton",
+        "items": [
+          "Die Musik wird auch im fertig exportierten Spiel gefunden, das du über den Launcher installierst: Sie lag bisher nur im Projektordner und blieb dort stumm. Im Editor ändert sich nichts."
         ]
       }
     ]
