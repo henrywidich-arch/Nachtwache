@@ -2749,34 +2749,40 @@ func _lay_tokyo() -> void:
 	# from the hall back into the passage (the closed leaves were a black wall from both sides).
 	_door("tokyo_gang", "tk_streets", z, 2.6, {"kind": "frame", "height": 2.9, "name": "tokyo_lock"})
 
-## (v0.91) The night of the rocket launcher: from the steel door in the hall's west wall, north
-## of the lock, a service passage runs west to the guard room of the checkpoint. The door is
-## barred (a script door that only the rocket opens, TokyoConvoy); the guard room's end is a
-## gate of the administration, open once its area is.
+## (v0.91) The night of the rocket launcher: behind the steel door in the hall's west wall
+## (at the end of its north side street, TokyoConvoy.DOOR_Z) a lock chamber, and from it a
+## service passage west to the guard room of the checkpoint. The door is barred (a script
+## door that only the rocket opens); the guard room's end of the passage opens with it.
+const BREACH_Z := -358.8
 func _lay_tokyo_breach() -> void:
 	if tokyo == null or not is_finite(tokyo.breach_z):
 		return
-	var z := TOKYO_AT.z + tokyo.breach_z
+	var door_z := TOKYO_AT.z + tokyo.breach_z
+	var z := BREACH_Z
 	var lock_x := TOKYO_AT.x - TokyoHall.TK_HALL - 1.2
 	var west := 15.0
+	var chamber_x := lock_x - 8.0
 	_own_dice(71032)
 	_begin_zone("tokyo_breach", "cold", ["admin"])
 	area = ""
-	_room("tokyo_breach", deep, Rect2(west, z - 1.8, lock_x - west, 3.6), 3.4, "panel", {"look": {"stripe": Color("c9a227")}})
-	_door("guard", "tokyo_breach", z, 1.8, {"kind": "gate", "area": "admin", "name": "tk_breach_guard", "height": 2.4})
+	# (v0.92) The chamber behind the door, from the door's line to the passage's.
+	var low := minf(door_z, z) - 2.0
+	var high := maxf(door_z, z) + 1.8
+	_room("tokyo_breach_lock", deep, Rect2(chamber_x, low, 8.0, high - low), 4.0, "panel", {"look": {"stripe": Color("c9a227")}})
+	_room("tokyo_breach", deep, Rect2(west, z - 1.8, chamber_x - west, 3.6), 3.4, "panel", {"look": {"stripe": Color("c9a227")}})
+	_door("tokyo_breach", "tokyo_breach_lock", z, 3.0, {"kind": "frame", "height": 3.0})
+	_door("guard", "tokyo_breach", z, 1.8, {"kind": "script", "name": "tk_breach_guard", "height": 2.4})
 	_chunk("Kit", false)
-	for k in range(1, int((lock_x - west) / 6.0)):
+	_sign_board("tokyo_breach_lock", HiveCore.WEST, z, 3.0, [["◄   KONTROLLPUNKT  ·  VERWALTUNG", Color("ffcf8a")]], 3.0, 30)
+	for k in range(1, int((chamber_x - west) / 6.0)):
 		var x := west + k * 6.0
 		_glow_box(Vector3(x, UNDER + 0.02, z), Vector3(1.6, 0.02, 0.12), Color("ffb84d"), 3.0, Basis(Vector3.UP, 0.0))
 		_glow_box(Vector3(x - 0.95, UNDER + 0.02, z - 0.35), Vector3(0.5, 0.02, 0.1), Color("ffb84d"), 3.0, Basis(Vector3.UP, -0.6))
 		_glow_box(Vector3(x - 0.95, UNDER + 0.02, z + 0.35), Vector3(0.5, 0.02, 0.1), Color("ffb84d"), 3.0, Basis(Vector3.UP, 0.6))
-	var sign := lettering("◄  KONTROLLPUNKT  ·  VERWALTUNG", Vector3(lock_x - 0.3, UNDER + 2.7, z), 34, Color("ffcf8a"))
-	sign.rotation.y = -PI / 2
-	sign.outline_size = 0
 	_shared_dice()
 	_end_zone()
 	_zones_see("tokyo_breach", TokyoHall.ZONE)
-	_door("tokyo_breach", "tk_streets", z, 3.4, {"kind": "script", "name": TokyoConvoy.DOOR, "height": 3.2, "leaf": "shutter"})
+	_door("tokyo_breach_lock", "tk_streets", door_z, 3.4, {"kind": "script", "name": TokyoConvoy.DOOR, "height": 3.2, "leaf": "shutter"})
 
 # ---------------------------------------------------------------- offices and corridors
 

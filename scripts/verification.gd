@@ -12460,7 +12460,7 @@ func _convoy(game: Node3D) -> void:
 		await get_tree().process_frame
 	var opened: bool = convoy.phase == "open" and map.door_open(TokyoConvoy.DOOR) and is_instance_valid(convoy.wreck) and not is_instance_valid(convoy.door_node) and not is_instance_valid(convoy.rocket)
 	expect(opened and raised > 0.95, "At its firing place it raises its launcher, holds, and its rocket blows the steel door open (phase %s, raised %.2f)" % [convoy.phase, raised])
-	var road := map.path_between(map.tokyo.origin + Vector3(-60, 0.05, -25.4), map.points.checkpoint)
+	var road := map.path_between(map.tokyo.origin + Vector3(-60, 0.05, TokyoConvoy.DOOR_Z), map.points.checkpoint)
 	game.sandbox.leave_visit()
 	await _idle_frames()
 	expect(road.size() > 1, "Through the blown door a passage leads to the checkpoint of the administration")

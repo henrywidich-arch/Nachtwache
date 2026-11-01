@@ -49,9 +49,8 @@ const TK_FACADES := [Color("2a2f38"), Color("3a3530"), Color("23272e"), Color("4
 ## Words on the signs: no real brand anywhere, the shops of the simulation are its own.
 const TK_JP := ["ラーメン", "カラオケ", "居酒屋", "ホテル", "寿司", "薬局", "ゲーム", "焼肉", "喫茶", "本屋", "餃子", "うどん", "酒場", "東京", "渋谷", "電気", "占い", "銭湯"]
 const TK_BRANDS := ["NEKO MART", "KAWA COLA", "ROBO SUSHI", "SAKURA AIR", "HOSHI DENKI", "NEON 7", "UMI BANK", "KIRA KARAOKE", "TOKAI HOTEL", "MIRAI", "OKAMI RAMEN", "TAIYO", "YUME CAFE", "KUMO NET", "HELIX MEDIC", "GINGA GAMES", "TSUKI BAR", "24H MART"]
-## The buildings that are models of their own (see _tk_model_building).
-const BUILDING_A := "res://assets/tokyo/building_a.glb"
-const BUILDING_A_SCALE := 0.45
+## (v0.92) Henry's first building, a Meshy model (assets/tokyo/building_a.glb), is no longer
+## built: the HOSHI KISSATEN stands in its place (_tk_kissaten).
 ## The parts of the fronts (see _tk_kit_load), the kinds of window a building of parts
 ## has, and how many of the buildings that would be drawn are built of them.
 const KIT := "res://assets/tokyo/kit/"
@@ -669,6 +668,9 @@ var door := false
 ## (v0.91) Where along the west wall (local z) a second, barred way out lies, blown open in
 ## the night of the rocket launcher (TokyoConvoy); INF for none.
 var breach_z := INF
+## (v0.92) Where nothing may stand in that night: the launcher's road (TokyoConvoy.lanes),
+## in the hall's own plan. Cars parked there are left out.
+var keep_clear: Array[Rect2] = []
 var tk_fonts: SystemFont
 var tk_lights := 0
 var tk_lots: Array[Rect2] = []
@@ -748,6 +750,8 @@ const ZONE := "tokyo"
 static func build(into: HiveCore, at: Vector3, ground_level: int, deck_level: int, with_door: bool, breach_at := INF) -> TokyoHall:
 	var hall := TokyoHall.new()
 	hall.breach_z = breach_at
+	if is_finite(breach_at):
+		hall.keep_clear = TokyoConvoy.lanes()
 	hall.name = "TokyoHall"
 	hall.map = into
 	hall.origin = at
@@ -836,6 +840,13 @@ func _build() -> void:
 		local["tokyo_task_" + id] = landmarks.spots[id]
 	for key in local:
 		places[key] = (local[key] as Vector3) + origin
+
+## (v0.92) Whether a spot of the hall's plan lies on the launcher's road (within `reach`).
+func on_road(at: Vector3, reach: float = 0.0) -> bool:
+	for lane: Rect2 in keep_clear:
+		if lane.grow(reach).has_point(Vector2(at.x, at.z)):
+			return true
+	return false
 
 ## A round thing's collision as a square post (the map's own round collider ignores the
 ## offset the hall is built with).
@@ -1231,12 +1242,12 @@ func _tk_city() -> void:
 				# Beside the plaza of the tower: one narrow row each.
 				var clip := Rect2(inner.position.x, inner.position.y, inner.size.x - 8.0, inner.size.y) if ix == 1 else Rect2(inner.position.x + 8.0, inner.position.y, inner.size.x - 8.0, inner.size.y)
 				lots = _tk_split(clip, 1, true)
-			elif ix == 1 and iz == 1 and ResourceLoader.exists(BUILDING_A):
-				# Henry's first building as a model, at the corner of the crossing.
-				# (Made at Meshy's size it was 30 m high, with a ground floor of 8 m: shrunk to the
-				# storeys of its neighbours, it stands at the corner toward the crossing, and the
-				# rest of the block is built up as usual.)
-				var foot := _tk_model_building(BUILDING_A, Vector2(inner.end.x, inner.end.y), 0.0, BUILDING_A_SCALE)
+			elif ix == 1 and iz == 1:
+				# (v0.92) At the corner toward the crossing the HOSHI KISSATEN & KARAOKE (built
+				# like the izakaya; it replaced Henry's first building, a Meshy model), the rest
+				# of the block built up as usual.
+				var foot := Rect2(inner.end.x - KS_W, inner.end.y - KS_D, KS_W, KS_D)
+				_tk_kissaten(foot)
 				lots = _tk_split(Rect2(inner.position.x, inner.position.y, inner.size.x - foot.size.x - 0.3, inner.size.y), 1, false)
 				lots.append_array(_tk_split(Rect2(foot.position.x, inner.position.y, foot.size.x, inner.size.y - foot.size.y - 0.3), 1, false))
 			elif ix == 2 and iz == 1:
@@ -1303,6 +1314,147 @@ func _tk_model_building(path: String, corner: Vector2, yaw: float, scale: float)
 	_tk_light(Vector3(corner.x + 2.5, 4.0, corner.y + 2.5), Color("ffd2a0"), 1.6, 12.0)
 	_tk_light(Vector3(corner.x + 1.5, size.y * 0.6, lot.get_center().y), Color("9fc8ff"), 1.2, 10.0)
 	return lot
+
+## (v0.92) The corner house toward the crossing (in place of Henry's first building, the
+## Meshy model): HOSHI KISSATEN & KARAOKE, built like the TOKYO RAMEN IZAKAYA. A coffee house
+## behind a long glass front on the ground floor, two storeys of karaoke rooms lit pink,
+## violet and cyan above, a tall カラオケ sign on the corner and a star on the roof. Its
+## fronts look south (to the avenue) and east (to the crossing). Built in its own frame: u
+## along the south front from the corner westward, y up, v from the front back (north).
+const KS_W := 10.5
+const KS_D := 10.0
+var ks_at := Vector2.ZERO
+
+func _ks_p(u: float, y: float, v: float) -> Vector3:
+	return Vector3(ks_at.x - u, y, ks_at.y - v)
+
+func _ks_box(mat: String, u0: float, u1: float, y0: float, y1: float, v0: float, v1: float, color: Color) -> void:
+	map.batch.box(map.mats[mat], _ks_p((u0 + u1) * 0.5, (y0 + y1) * 0.5, (v0 + v1) * 0.5), Vector3(absf(u1 - u0), absf(y1 - y0), absf(v1 - v0)), color)
+
+## The same box on the east flank, given in the flank's own terms: w along it from the
+## corner northward, `out` how far before it (east).
+func _ks_side(mat: String, w0: float, w1: float, y0: float, y1: float, out0: float, out1: float, color: Color) -> void:
+	_ks_box(mat, -out1, -out0, y0, y1, w0, w1, color)
+
+func _tk_kissaten(lot: Rect2) -> void:
+	ks_at = Vector2(lot.end.x, lot.end.y)
+	kit_house += 1
+	kit_group = "h%d" % kit_house
+	var black := Color("1b1c1f")
+	var steel := Color("2c2f34")
+	var concrete := Color("55565a")
+	var wood := Color("7a4a26")
+	var pink := Color("ff4fb4")
+	var cyan := Color("2ff3ff")
+	var warm := Color("ffc890")
+	var top := 11.2
+	var front_yaw := 0.0
+	var side_yaw := PI * 0.5
+	# --- the body: a steel ground floor round the glass, concrete above, slabs between.
+	_ks_box("plate", 0.9, KS_W, 0.0, 4.2, 0.9, KS_D, steel)
+	_ks_box("formwork", 0.0, KS_W, 4.5, top, 0.3, KS_D, concrete)
+	for y in [4.2, 7.7]:
+		_ks_box("metal", -0.15, KS_W + 0.1, y, y + 0.3, -0.15, KS_D, black)
+	_ks_box("metal", -0.1, KS_W + 0.08, top, top + 0.4, -0.1, KS_D + 0.05, black)
+	map._solid(_ks_p(KS_W * 0.5, top * 0.5, KS_D * 0.5), Vector3(KS_W, top, KS_D))
+	tk_lots.append(lot)
+	# --- the coffee house: a long glass front to the south and round the corner, the warm
+	# room behind it, a counter and lamps hanging in it; wooden slats at the west end.
+	_ks_box("roomglow", 0.6, 8.2, 0.3, 3.4, 0.86, 0.9, warm)
+	_ks_side("roomglow", 0.9, 6.5, 0.3, 3.4, -0.9, -0.86, warm)
+	_ks_box("glass", 0.6, 8.2, 0.3, 3.4, 0.6, 0.62, Color(1, 1, 1, 0.1))
+	_ks_side("glass", 0.6, 6.5, 0.3, 3.4, -0.62, -0.6, Color(1, 1, 1, 0.1))
+	for u in [0.6, 2.5, 4.4, 6.3, 8.2]:
+		_ks_box("metal", u - 0.04, u + 0.04, 0.3, 3.4, 0.55, 0.65, black)
+	for w in [0.6, 2.6, 4.6, 6.5]:
+		_ks_side("metal", w - 0.04, w + 0.04, 0.3, 3.4, -0.65, -0.55, black)
+	_ks_box("metal", 0.6, 8.2, 3.35, 3.45, 0.55, 0.65, black)
+	_ks_side("metal", 0.6, 6.5, 3.35, 3.45, -0.65, -0.55, black)
+	_ks_box("panelwood", 0.6, 8.2, 0.3, 0.95, 1.2, 1.7, wood)
+	for u in [1.6, 3.5, 5.4, 7.3]:
+		map.batch.ellipsoid(map.mats["lantern"], _ks_p(u, 2.6, 1.6), Vector3(0.22, 0.18, 0.22), Color("ffd9a0"), Basis.IDENTITY, 10, 6)
+	for k in range(int((KS_W - 8.4) / 0.11)):
+		var u := 8.4 + k * 0.11
+		_ks_box("panelwood", u, u + 0.07, 0.3, 4.1, -0.06, 0.0, wood)
+	# The entrance at the corner: the corner itself cut back, a glass door in it, a red
+	# noren with 喫茶, a lamp over it, three lit steps.
+
+	for k in range(3):
+		_ks_box("lacquer", 0.62 + k * 0.42, 1.0 + k * 0.42, 2.25, 2.95, 0.5, 0.52, Color("8a1a1a"))
+	_tk_text("喫茶", _ks_p(1.25, 2.6, 0.48), front_yaw, 0.32, Color(1, 1, 1), 1.4)
+	for k in range(3):
+		var v0 := -1.2 + k * 0.4
+		_ks_box("formwork", -1.2 + k * 0.4, 8.2, 0.0, 0.1 * (k + 1), v0, 0.6, Color("3a3b3e"))
+		_tk_glow("softglow", _ks_p(3.6, 0.1 * (k + 1) - 0.015, v0 - 0.005), Vector3(9.2, 0.02, 0.02), Color("ffd8a0"))
+	# The canopy along both fronts with its downlights, and the name on its edge.
+	_ks_box("metal", -1.0, 8.4, 3.5, 3.68, -1.2, 0.6, black)
+	_ks_side("metal", -1.0, 6.7, 3.5, 3.68, -1.2, 0.6, black)
+	for u in [0.8, 2.6, 4.4, 6.2, 8.0]:
+		_tk_glow("lampglass", _ks_p(u, 3.48, -0.6), Vector3(0.16, 0.03, 0.16), Color("ffe6c0"))
+	for w in [1.6, 3.6, 5.6]:
+		_tk_glow("lampglass", _ks_p(-0.6, 3.48, w), Vector3(0.16, 0.03, 0.16), Color("ffe6c0"))
+	_tk_text("HOSHI  KISSATEN  ·  星 珈琲", _ks_p(4.3, 3.59, -1.22), front_yaw, 0.2, Color("ffe2b0"), 1.8)
+	_tk_text("COFFEE  ·  KARAOKE  2F 3F", _ks_p(-1.22, 3.59, 3.0), side_yaw, 0.2, Color("ffe2b0"), 1.8)
+	_tk_light(_ks_p(3.0, 2.8, -0.8), Color("ffc88a"), 1.8, 9.0)
+	_tk_light(_ks_p(-0.8, 2.8, 3.0), Color("ffc88a"), 1.4, 8.0)
+	# --- two storeys of karaoke rooms: a row of windows on both fronts, each room lit in a
+	# colour of its own, a thin neon line under each row.
+	var tints := [Color("ff5fbf"), Color("a64dff"), Color("2ff3ff"), Color("ff7a5a"), Color("5f8bff")]
+	var n := 0
+	for floor_y in [4.5, 8.0]:
+		for k in range(4):
+			var u0 := 0.7 + k * 2.4
+			n += 1
+			_ks_box("roomglow", u0, u0 + 1.9, floor_y + 0.6, floor_y + 2.7, 0.26, 0.28, tints[n % tints.size()])
+			_ks_box("glass", u0, u0 + 1.9, floor_y + 0.6, floor_y + 2.7, 0.22, 0.24, Color(1, 1, 1, 0.08))
+			_ks_box("metal", u0 - 0.06, u0 + 1.96, floor_y + 0.52, floor_y + 0.6, 0.12, 0.3, black)
+			_ks_box("metal", u0 - 0.06, u0 + 1.96, floor_y + 2.7, floor_y + 2.8, 0.12, 0.3, black)
+		for k in range(3):
+			var w0 := 0.8 + k * 2.9
+			n += 1
+			_ks_side("roomglow", w0, w0 + 2.2, floor_y + 0.6, floor_y + 2.7, 0.02, 0.04, tints[n % tints.size()])
+			_ks_side("glass", w0, w0 + 2.2, floor_y + 0.6, floor_y + 2.7, 0.06, 0.08, Color(1, 1, 1, 0.08))
+			_ks_side("metal", w0 - 0.06, w0 + 2.26, floor_y + 0.52, floor_y + 0.6, 0.0, 0.18, black)
+		_tk_glow("neon", _ks_p(KS_W * 0.5, floor_y + 0.45, -0.18), Vector3(KS_W - 0.4, 0.04, 0.04), pink)
+		_tk_glow("neon", _ks_p(-0.18, floor_y + 0.45, KS_D * 0.5), Vector3(0.04, 0.04, KS_D - 0.4), pink)
+	_tk_light(_ks_p(4.0, 6.5, -1.6), Color("ff6fc0"), 1.2, 9.0, true)
+	_tk_light(_ks_p(-1.6, 6.5, 4.5), Color("8f6fff"), 1.0, 8.0, true)
+	# --- the tall sign on the corner: カラオケ down a steel frame lined with neon, a star on
+	# top of it.
+	var frame := [-0.85, -0.25]
+	_ks_box("metal", frame[0], frame[1], 4.6, top + 1.6, -0.85, -0.25, Color("0a0a0c"))
+	for e in [[-0.85, -0.79, 4.6, top + 1.6], [-0.31, -0.25, 4.6, top + 1.6]]:
+		_tk_glow("neon", _ks_p((e[0] + e[1]) * 0.5, (e[2] + e[3]) * 0.5, -0.87), Vector3(absf(e[1] - e[0]), e[3] - e[2], 0.03), cyan)
+	_tk_text(_tk_vertical("カラオケ"), _ks_p(-0.55, 9.2, -0.88), front_yaw, 0.62, pink, 2.6)
+	_tk_text(_tk_vertical("カラオケ"), _ks_p(-0.88, 9.2, -0.55), side_yaw, 0.62, pink, 2.6)
+	_tk_text("★", _ks_p(-0.55, top + 2.2, -0.55), front_yaw, 0.9, Color("ffd84d"), 3.0)
+	_tk_light(_ks_p(-1.4, 9.0, -1.4), Color("ff4fb4"), 1.4, 9.0, true)
+	# --- the roof: a parapet lined in neon, a billboard 星 HOSHI with a light under it, air
+	# conditioners.
+	_tk_glow("neon", _ks_p(KS_W * 0.5, top + 0.38, -0.12), Vector3(KS_W + 0.2, 0.03, 0.03), cyan)
+	_tk_glow("neon", _ks_p(-0.12, top + 0.38, KS_D * 0.5), Vector3(0.03, 0.03, KS_D + 0.2), cyan)
+	_ks_box("metal", 2.0, 8.5, top + 0.4, top + 3.2, 3.0, 3.25, Color("0c0c10"))
+	_ks_box("softglow", 2.15, 8.35, top + 0.55, top + 3.05, 2.96, 2.98, Color("2a1030"))
+	_tk_text("星  HOSHI", _ks_p(5.25, top + 2.0, 2.94), front_yaw, 0.9, Color("ffd84d"), 2.8)
+	_tk_text("KARAOKE  ·  ALL NIGHT", _ks_p(5.25, top + 1.05, 2.94), front_yaw, 0.32, pink, 2.2)
+	for u in [2.3, 8.2]:
+		_tk_beam("metal", _ks_p(u, top + 0.4, 3.6), _ks_p(u, top + 2.4, 3.3), Vector2(0.06, 0.06), black)
+	var unit := _tk_cc("cc_aircon")
+	if unit != "":
+		for spot in [[1.2, 6.0], [3.0, 7.5], [9.4, 6.5]]:
+			_tk_kit_at(unit, Transform3D(Basis.IDENTITY, _ks_p(float(spot[0]), top + 0.4, float(spot[1]))))
+	# Planters with bamboo before the glass, a menu stand by the door.
+	for u in [3.4, 6.9]:
+		_iz_planter_at(_ks_p(u, 0.3, -0.95))
+	_tk_light(_ks_p(KS_W * 0.5, 9.5, -3.0), Color("ffd2a0"), 1.0, 12.0, true)
+
+## A planter with bamboo at a spot of the map (for the corner house).
+func _iz_planter_at(at: Vector3) -> void:
+	map.batch.box(map.mats["metal"], at + Vector3(0, 0.3, 0), Vector3(0.9, 0.6, 0.45), Color("141518"))
+	for k in range(5):
+		var lean := Basis(Vector3.FORWARD, (k - 2) * 0.06)
+		map.batch.cylinder(map.mats["plain"], at + Vector3((k - 2) * 0.15, 0.55, 0), 0.025, 0.02, 2.0 + k % 2 * 0.4, Color("4a6a2a"), 6, lean)
+		map.batch.ellipsoid(map.mats["plain"], at + lean * Vector3((k - 2) * 0.15, 2.5 + k % 2 * 0.4, 0), Vector3(0.22, 0.32, 0.2), Color("3e6a2a"), Basis.IDENTITY, 6, 4)
 
 ## The TOKYO RAMEN IZAKAYA (after Henry's picture): a two-storey corner house of dark metal
 ## and concrete with wooden slats and red neon. Its front looks north (toward the avenue
@@ -3085,11 +3237,15 @@ func _tk_stand_sign(at: Vector3, yaw: float) -> void:
 	map.batch.box(map.mats["shopglow"], at + turn * Vector3(0, 0.55, 0.15), Vector3(0.42, 0.7, 0.01), [Color("ffd9a0"), Color("ff9ec7"), Color("9ff6ff")][map.random.randi() % 3], turn * lean)
 
 func _tk_cone(at: Vector3) -> void:
+	if on_road(at, 0.5):
+		return
 	map.batch.box(map.mats["lacquer"], at + Vector3(0, 0.02, 0), Vector3(0.42, 0.04, 0.42), Color("d45a16"))
 	map.batch.cylinder(map.mats["lacquer"], at + Vector3(0, 0.04, 0), 0.16, 0.03, 0.66, Color("e8661c"), 10)
 	map.batch.cylinder(map.mats["lacquer"], at + Vector3(0, 0.32, 0), 0.105, 0.08, 0.1, Color("e8e8e0"), 10)
 
 func _tk_barrier(at: Vector3, yaw: float) -> void:
+	if on_road(at, 1.2):
+		return
 	var turn := Basis(Vector3.UP, yaw)
 	for x in [-0.9, 0.9]:
 		map.batch.box(map.mats["metal"], at + turn * Vector3(x, 0.45, 0), Vector3(0.06, 0.9, 0.5), Color("bfbfb8"), turn)
@@ -3138,6 +3294,8 @@ func _tk_vending(base: Vector3, facing: Vector3) -> void:
 ## the saloon, "jdm" the wedge coupe); the van, and everything when a model is missing,
 ## is still built of boxes here.
 func _tk_car(base: Vector3, yaw: float, paint: Color, kind: String, wreck: bool) -> void:
+	if on_road(base, 2.6):
+		return
 	var model := "bus" if kind == "bus" else ("jdm" if kind == "jdm" else ("sedan" if kind in ["car", "taxi", "police"] else ""))
 	if model != "" and VehicleKit.has(model):
 		_tk_vehicle(base, yaw, paint, kind, model, wreck)
@@ -3609,10 +3767,16 @@ func _tk_gates() -> void:
 			var at := Vector3(at2.x, 0, at2.y)
 			var inward := Vector3(-out.x, 0, -out.y)
 			var size := Vector3(absf(along.x) * 8.0 + absf(out.x) * 0.1, 7.0, absf(along.y) * 8.0 + absf(out.y) * 0.1)
-			if door and side == HiveCore.WEST and k == 0.0:
+			# (v0.92) In the rocket launcher's night the gate at the end of the north side street
+			# is its steel door (TokyoConvoy): cut round like the lock, nobody comes out of it.
+			var breach := is_finite(breach_z) and side == HiveCore.WEST and absf(at2.y - breach_z) < 1.0
+			if door and side == HiveCore.WEST and k == 0.0 or breach:
 				# (v0.89) This gate frames the lock from the terminal: its black face is cut
 				# round the doorway, else it stood in it like a wall (from both sides).
-				for piece: Array in [[-2.875, 2.25, 0.0, 7.0], [2.875, 2.25, 0.0, 7.0], [0.0, 3.5, 3.4, 7.0]]:
+				var cut: Array = [[-2.875, 2.25, 0.0, 7.0], [2.875, 2.25, 0.0, 7.0], [0.0, 3.5, 3.4, 7.0]]
+				if breach:
+					cut = [[-2.9, 2.2, 0.0, 7.0], [2.9, 2.2, 0.0, 7.0], [0.0, 3.6, 3.4, 7.0]]
+				for piece: Array in cut:
 					var mid := float(piece[0])
 					var wide := float(piece[1])
 					var low := float(piece[2])
@@ -3632,7 +3796,7 @@ func _tk_gates() -> void:
 			_tk_light(at + Vector3(0, 5.5, 0) + inward * 2.0, Color("ff3030"), 1.6, 11.0)
 			tk_gates.append(at + inward * 5.0)
 			# (v0.90) In the second mission they walk out of the black of the gate too.
-			if not (door and side == HiveCore.WEST and k == 0.0):
+			if not (door and side == HiveCore.WEST and k == 0.0) and not breach:
 				for e in [-2.2, 2.2]:
 					var mouth := at + Vector3(along.x * e, 0, along.y * e)
 					tk_ways.append({"kind": "walk", "look": "gate", "at": mouth, "path": [mouth - inward * 0.6, mouth + inward * 0.6], "land": mouth + inward * 4.0, "out": inward})

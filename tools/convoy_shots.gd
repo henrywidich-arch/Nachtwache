@@ -57,7 +57,8 @@ func _run() -> void:
 	for i in range(10):
 		c.display(0.05)
 		await process_frame
-	await _shot("convoy_drive", t.to_global(Vector3(-5.0, 1.7, -14.0)), t.to_global(Vector3(0, 2.2, 0)))
+	await _shot("convoy_drive", t.to_global(Vector3(-6.0, 2.0, -15.0)), t.to_global(Vector3(0, 2.2, 0)))
+	await _shot("convoy_ring", t.to_global(Vector3(4.0, 14.0, 22.0)), t.to_global(Vector3(0, 0, -4.0)))
 	c.travelled = c.length
 	c.phase = "aim"
 	c.aim_time = 99.0
@@ -65,19 +66,19 @@ func _run() -> void:
 		c.display(0.05)
 		if i % 10 == 0:
 			await process_frame
-	await _shot("convoy_aim", o + Vector3(-62.0, 2.2, 22.0), t.to_global(Vector3(0, 3.2, -2.0)))
-	await _shot("convoy_door", o + Vector3(-62.0, 1.8, -16.0), c.door_at(), 30)
+	await _shot("convoy_aim", o + Vector3(-28.0, 3.0, -38.5), t.to_global(Vector3(0, 3.2, -2.0)))
+	await _shot("convoy_door", o + Vector3(-58.0, 1.8, -36.5), c.door_at(), 30)
 	c.phase = "fire"
 	c._launch(false)
 	for i in range(12):
 		c.display(0.05)
 		await process_frame
-	await _shot("convoy_rocket", o + Vector3(-60.0, 2.0, 18.0), (c.rocket.global_position if is_instance_valid(c.rocket) else c.door_at()), 1)
+	await _shot("convoy_rocket", o + Vector3(-40.0, 3.0, -30.5), (c.rocket.global_position if is_instance_valid(c.rocket) else c.door_at()), 1)
 	for i in range(60):
 		c.display(0.05)
 		await process_frame
 	c.phase = "open"
 	c._show_open()
-	await _shot("convoy_open", o + Vector3(-60.0, 1.8, -20.0), c.door_at() + Vector3(-3, -0.5, 0), 40)
-	await _shot("convoy_passage", o + Vector3(-71.5, 1.7, -25.4), o + Vector3(-90.0, 1.4, -25.4), 30)
+	await _shot("convoy_open", o + Vector3(-60.0, 1.8, -36.0), c.door_at() + Vector3(-3, -0.5, 0), 40)
+	await _shot("convoy_passage", o + Vector3(-70.5, 1.7, -34.0), o + Vector3(-80.0, 1.4, -26.0), 30)
 	quit(0)

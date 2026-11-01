@@ -23,13 +23,20 @@
       {
         "title": "Mission: Der Raketenwerfer (Tokio)",
         "items": [
-          "In etwa jeder zweiten Nacht mit der Simulationshalle ist das Tor vom Terminal zur Anlage verkeilt. Der Weg weiter führt dann durch eine verschweißte Stahltür in der Westwand der Halle – und die bekommt nur eine Rakete auf.",
-          "Im Osten der Halle wartet ein Raketenwerfer: ein abgenutzter, olivgrüner 8x8-Lastwagen mit gepanzerter Kabine und zwei Raketenkästen mit je neun Rohren, gefahren von einem Wachmann der Anlage. [E] am Fahrzeug schickt ihn los.",
-          "Er fährt den Ring um die Halle entlang, aber nur, solange ihr in seiner Nähe seid. Infizierte vor seiner Stoßstange überfährt er, vor großen Brocken und vor euch hält er an und hupt. Unterwegs warten Hinterhalte.",
-          "Infizierte, die sich um ihn drängen, setzen ihm zu (Panzerung in der Auftragsliste). Ist sie aufgebraucht, bleibt er brennend liegen: [E] am Fahrzeug repariert ihn, solange jemand dabeibleibt.",
-          "In der Feuerstellung hebt er die Startrampe, schwenkt sie auf die Stahltür und braucht 60 Sekunden zum Zielen – währenddessen schickt die Halle alles, was sie hat. Dann steigt eine Rakete auf, die Tür fliegt aus der Wand, und ein Gang führt zum Kontrollpunkt der Verwaltung. Dafür gibt es 500 ◈.",
-          "Der Auftrag läuft auch im Koop: Der Host lenkt das Geschehen, beide sehen den Werfer, die Rakete und die gesprengte Tür, und auch der Mitspieler kann ihn losschicken und reparieren.",
+          "In etwa jeder zweiten Nacht mit der Simulationshalle ist das Tor vom Terminal zur Anlage verkeilt. Der Weg weiter führt dann durch eine verschweißte Stahltür in der Nordwest-Schleuse der Halle – und die bekommt nur eine Rakete auf.",
+          "Am Ostende der großen Allee wartet ein Raketenwerfer: ein abgenutzter, olivgrüner 8x8-Lastwagen mit kantiger Panzerkabine und zwei langen Raketenkästen mit je neun Rohren, gefahren von einem Wachmann der Anlage. [E] am Fahrzeug schickt ihn los.",
+          "Er fährt mitten durch die Stadt: die Allee entlang über die große Kreuzung, die Seitenstraße hinauf und die nördliche Querstraße entlang, an deren Ende die Stahltür steht. Autos, Kegel und Absperrungen stehen in dieser Nacht nicht auf seinem Weg.",
+          "Um den Werfer leuchtet ein Kreis auf dem Boden: Wer ihn verlässt, wird gewarnt und nach fünf Sekunden von der Simulation verbrannt, bis er zurück ist. Ohne euch in der Nähe fährt er nicht weiter.",
+          "Infizierte vor seiner Stoßstange überfährt er, vor großen Brocken und vor euch hält er an und hupt. Unterwegs warten Hinterhalte. Wer sich um ihn drängt, setzt ihm zu (Panzerung in der Auftragsliste); ist sie aufgebraucht, bleibt er brennend liegen und [E] repariert ihn, solange jemand dabeibleibt.",
+          "Am Ende der Straße hebt er die Startrampe, richtet sie auf die Stahltür und braucht 60 Sekunden zum Zielen – währenddessen schickt die Halle alles, was sie hat. Dann fliegt eine Rakete die Straße hinunter, die Tür fliegt aus der Wand, und durch eine Schleusenkammer und einen Gang geht es weiter zum Kontrollpunkt der Verwaltung (markiert als „DURCHGANG“). Dafür gibt es 500 ◈.",
+          "Der Auftrag läuft auch im Koop: Beide sehen den Werfer, den Lichtkreis, die Rakete und die gesprengte Tür, und auch der Mitspieler kann ihn losschicken und reparieren.",
           "Testraum: Unter „MISSION 2 · AREALE“ bringt euch „TOKIO · RAKETENWERFER-AUFTRAG“ neben den Werfer, und ihr könnt den ganzen Auftrag durchspielen."
+        ]
+      },
+      {
+        "title": "Simulationshalle Tokio",
+        "items": [
+          "Das Eckhaus an der großen Kreuzung (das alte Modellgebäude) ist ersetzt durch das HOSHI KISSATEN & KARAOKE: ein Café hinter einer langen Glasfront mit Laternen und Holzlatten, darüber zwei Etagen Karaoke-Räume in Pink, Violett und Cyan, ein hohes カラオケ-Schild an der Ecke und ein Stern auf dem Dach."
         ]
       }
     ]

@@ -5,19 +5,24 @@ extends RefCounted
 ## way on is the barred steel door in the hall's west wall, north of the lock (HiveMap.
 ## _lay_tokyo_breach), and only a rocket opens it.
 ##
-##   parked  the launcher (RocketTruck) stands in the east of the hall, its driver at the
-##           wheel. [E] at it sends it off.
-##   drive   it rolls along the ring road round the hall - south, west, north - to its
-##           firing place before the lock, at walking pace and only while one of the humans
-##           is near it (ESCORT). What stands in front of it is run over (the big ones and
+##   parked  the launcher (RocketTruck) stands at the east end of the main avenue, its
+##           driver at the wheel. [E] at it sends it off.
+##   drive   (v0.92) it rolls through the middle of the city: west along the avenue, over the
+##           crossing, north up the side street and west along the north side street, at
+##           whose end the steel door is - at walking pace and only while one of the humans
+##           is near it (ESCORT). Whoever leaves the ring of light round it (RADIUS) is
+##           warned, and after OUT_GRACE seconds the simulation burns him (OUT_HARM). The
+##           cars on its road are not parked there that night (TokyoHall.keep_clear). What
+##           stands in front of it is run over (the big ones and
 ##           the humans stop it, it hoots); the infected that crowd round it wear it down
 ##           (HARM). Worn down it breaks down: smoke and fire, [E] mends it (FIX_SECONDS
 ##           while somebody stays at it).
 ##   aim     at its place it raises its launcher and turns it on the door; the squad holds
 ##           it AIM_SECONDS while the hall throws everything it has at them.
-##   fire    a rocket leaves the left pod, arcs over the ring and strikes the door.
-##   open    the door is torn out; the way to the administration is free (the director
-##           goes on to its next stage, Hive._convoy_open).
+##   fire    a rocket leaves the left pod, arcs down the street and strikes the door.
+##   open    the door is torn out; behind it a lock chamber and a passage lead to the
+##           checkpoint of the administration, marked until somebody has gone through (the
+##           director goes on to its next stage, Hive._convoy_open).
 ##
 ## The host runs it (update, from TokyoTasks); both machines show it (display). The guest
 ## follows the host's snapshot (export / adopt in TokyoTasks) and asks with [E] (keys
@@ -26,15 +31,21 @@ extends RefCounted
 
 ## The steel door: its name in the map, and where it lies along the west wall (hall's z).
 const DOOR := "tk_breach"
-const DOOR_Z := -25.4
+const DOOR_Z := -34.0
 ## The road of the launcher in the hall's own plan (x, z), its corners rounded (CORNER).
-const ROUTE := [Vector2(66.0, 24.0), Vector2(66.0, 66.0), Vector2(-66.0, 66.0), Vector2(-66.0, 9.0)]
-const CORNER := 8.0
-const SPEED := 3.3
+const ROUTE := [Vector2(64.0, 0.0), Vector2(-34.0, 0.0), Vector2(-34.0, -34.0), Vector2(-46.0, -34.0)]
+const CORNER := 6.0
+const SPEED := 2.8
 const ACCEL := 1.1
-## How near a human has to be for it to roll on; how near to mend it or send it off.
-const ESCORT := 20.0
+## How near a human has to be for it to roll on (from its flank); how near to mend it or
+## send it off.
+const ESCORT := 16.0
 const REACH := 3.2
+## The ring round it that the squad must keep inside (from its middle), the seconds one may
+## be outside, and what the simulation takes each second after.
+const RADIUS := 18.0
+const OUT_GRACE := 5.0
+const OUT_HARM := 9.0
 ## Its strength, and what each infected at its flanks takes from it each second.
 const ARMOUR := 100.0
 const HARM := 1.5
@@ -88,6 +99,12 @@ var shown_phase := "parked"
 var hoot_left := 0.0
 var harm_left := 0.0
 var posted := {}
+## The ring of light round it, and how long this machine's survivor has been outside it.
+var ring: MeshInstance3D
+var out_time := 0.0
+var warned := false
+## Somebody has gone through the blown door (the mark on it goes then).
+var through := false
 
 func _init(the_game: Node3D, the_hall: TokyoHall, the_map: HiveCore, the_director: Node) -> void:
 	game = the_game
@@ -106,16 +123,31 @@ func setup() -> void:
 	game.add_child(truck)
 	_place_truck(0.0, 0.0)
 	_build_door()
+	_build_ring()
 	map.set_door(DOOR, false, true)
+	map.set_door("tk_breach_guard", false, true)
+
+## The launcher's road as strips of the hall's plan, 7 m wide (TokyoHall.keep_clear).
+static func lanes() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for i in range(ROUTE.size() - 1):
+		var a: Vector2 = ROUTE[i]
+		var b: Vector2 = ROUTE[i + 1]
+		out.append(Rect2(minf(a.x, b.x), minf(a.y, b.y), absf(b.x - a.x), absf(b.y - a.y)).grow(3.5))
+	return out
 
 func clear() -> void:
-	for node in [truck, door_node, wreck, rocket]:
+	for node in [truck, door_node, wreck, rocket, ring]:
 		if is_instance_valid(node):
 			(node as Node3D).queue_free()
 	truck = null
 	door_node = null
 	wreck = null
 	rocket = null
+	ring = null
+	out_time = 0.0
+	warned = false
+	through = false
 	phase = "parked"
 	shown_phase = "parked"
 	travelled = 0.0
@@ -231,9 +263,29 @@ func _build_door() -> void:
 	words.rotation.y = PI
 	door_node.add_child(words)
 
+## The ring of light on the floor round the launcher: the squad keeps inside it.
+func _build_ring() -> void:
+	ring = MeshInstance3D.new()
+	ring.name = "ConvoyRing"
+	var torus := TorusMesh.new()
+	torus.inner_radius = RADIUS - 0.12
+	torus.outer_radius = RADIUS + 0.12
+	torus.rings = 96
+	torus.ring_segments = 4
+	ring.mesh = torus
+	ring.scale = Vector3(1.0, 0.15, 1.0)
+	var glow := StandardMaterial3D.new()
+	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow.albedo_color = Color(1.0, 0.62, 0.15, 0.55)
+	ring.material_override = glow
+	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ring.visible = false
+	game.add_child(ring)
+
 ## The middle of the door, on the hall's side.
 func door_at() -> Vector3:
-	return hall.origin + Vector3(-TokyoHall.TK_HALL + 0.15, 1.6, DOOR_Z)
+	return hall.origin + Vector3(-TokyoHall.TK_HALL + 0.3, 1.6, DOOR_Z)
 
 func truck_at() -> Vector3:
 	return truck.global_position if is_instance_valid(truck) else Vector3.INF
@@ -271,7 +323,7 @@ func update(delta: float) -> void:
 		for who: Node3D in _humans():
 			if TokyoHall.plan_of(hall.origin).has_point(Vector2(who.global_position.x, who.global_position.z)):
 				told = true
-				game.hud.announce("RAKETENWERFER", "Der Weg zur Anlage ist zu. Bringt den Raketenwerfer im Osten der Halle zur Stahltür an der Westwand – er sprengt sie auf.", 8)
+				game.hud.announce("RAKETENWERFER", "Der Weg zur Anlage ist zu. Der Raketenwerfer am Ostende der großen Allee bringt euch durch die Stadt zur Stahltür in der Nordwest-Schleuse – er sprengt sie auf.", 8)
 				game.sounds.play_sound("beep")
 				break
 	if broken and fixing:
@@ -293,6 +345,11 @@ func update(delta: float) -> void:
 			pass
 	if phase in ["drive", "aim"] and not broken:
 		_wear(delta)
+	# (After the blast: the mark on the doorway goes once somebody has gone through it.)
+	if phase == "open" and not through:
+		for who: Node3D in _humans():
+			if who.global_position.x < hall.origin.x - TokyoHall.TK_HALL - 1.0:
+				through = true
 
 func _drive(delta: float) -> void:
 	stalled = ""
@@ -505,12 +562,15 @@ func _blow() -> void:
 	game.earn_tokens(REWARD)
 	game.stats.objectives += 1
 	game.sounds.play_sound("clear")
-	game.hud.announce("WEG FREI", "+%d ◈  ·  Die Stahltür ist weg. Durch die Schleuse zum Kontrollpunkt der Verwaltung." % REWARD, 7)
+	game.hud.announce("WEG FREI", "+%d ◈  ·  Die Stahltür ist weg. Durch die Schleuse und den Gang dahinter zum Kontrollpunkt der Verwaltung." % REWARD, 7)
 	if director != null and director.has_method("_convoy_open"):
 		director._convoy_open()
 
 func _show_open() -> void:
 	map.set_door(DOOR, true, true)
+	map.set_door("tk_breach_guard", true, true)
+	if is_instance_valid(ring):
+		ring.visible = false
 	if is_instance_valid(door_node):
 		door_node.queue_free()
 	door_node = null
@@ -584,6 +644,7 @@ func display(delta: float) -> void:
 			voice.play()
 			voice.finished.connect(voice.queue_free)
 	truck.display(delta, phase != "parked", phase in ["drive", "aim"], 1.0 - armour / ARMOUR, broken)
+	_keep_near(delta)
 	# What the guest learns from the snapshot: the rocket and the open door.
 	if shown_phase != phase:
 		if game.net.joined and phase == "fire" and rocket_time < 0.0 and not is_instance_valid(rocket):
@@ -594,6 +655,46 @@ func display(delta: float) -> void:
 				truck.spend()
 		shown_phase = phase
 	_fly(delta, not game.net.joined)
+
+## The ring round the launcher: shown while it is on its way and while it aims; this
+## machine's survivor is warned outside it and, after OUT_GRACE seconds, burnt by the
+## simulation (each machine for its own survivor).
+func _keep_near(delta: float) -> void:
+	var on := phase in ["drive", "aim"]
+	if is_instance_valid(ring):
+		ring.visible = on
+		if on:
+			ring.global_position = truck.global_position + Vector3(0, 0.06, 0)
+			var paint := ring.material_override as StandardMaterial3D
+			if out_time > 0.0:
+				paint.albedo_color = Color(1.0, 0.25, 0.15, 0.6 + 0.3 * sin(Time.get_ticks_msec() * 0.008))
+			else:
+				paint.albedo_color = Color(1.0, 0.62, 0.15, 0.5)
+	var player: Survivor = game.player
+	if not on or player == null or player.down or player.health <= 0.0:
+		out_time = 0.0
+		warned = false
+		return
+	var gap := Vector2(player.global_position.x - truck.global_position.x, player.global_position.z - truck.global_position.z).length()
+	if gap <= RADIUS:
+		if out_time > 0.0:
+			game.hud.announce("WIEDER BEIM WERFER", "", 1.5)
+		out_time = 0.0
+		warned = false
+		return
+	out_time += delta
+	if not warned:
+		warned = true
+		game.hud.announce("ZURÜCK ZUM WERFER", "Bleibt im Lichtkreis um den Raketenwerfer – in %d Sekunden greift die Simulation ein." % int(OUT_GRACE), 3)
+		game.sounds.play_sound("beep")
+	if out_time > OUT_GRACE:
+		player.receive_damage(OUT_HARM * delta, truck.global_position, "burst")
+		if fmod(out_time, 1.0) < delta:
+			game.hud.flash(Color(1.0, 0.3, 0.1), 0.35)
+
+## Whether this machine's survivor is outside the ring (for the list on the screen).
+func outside() -> bool:
+	return out_time > 0.0
 
 # ---------------------------------------------------------------- [E], the screen
 
@@ -628,7 +729,11 @@ func use(who: Node3D, key: String) -> bool:
 
 func summary() -> Array[String]:
 	var out: Array[String] = []
-	if not told or phase == "open":
+	if not told:
+		return out
+	if phase == "open":
+		if not through:
+			out.append("▸  TOKIO: Durch die gesprengte Schleuse zum Kontrollpunkt")
 		return out
 	var state := "  ·  Panzerung %d %%" % int(round(armour / ARMOUR * 100.0))
 	match phase:
@@ -638,6 +743,8 @@ func summary() -> Array[String]:
 			out.append("▸  TOKIO: Raketenwerfer zur Stahltür begleiten  ·  %d %%%s" % [int(travelled / maxf(1.0, length) * 100.0), state])
 		"aim", "fire":
 			out.append("▸  TOKIO: Feuerstellung halten  ·  Zielerfassung %d %%%s" % [int(aim * 100.0), state])
+	if outside():
+		out.append("   ZURÜCK IN DEN LICHTKREIS!" + ("  ·  die Simulation brennt" if out_time > OUT_GRACE else "  ·  %d s" % int(ceil(OUT_GRACE - out_time))))
 	if broken:
 		out.append("   LIEGT FEST  ·  " + ("Reparatur %d %%" % int(fix * 100.0) if fixing else "[E] am Fahrzeug reparieren"))
 	elif phase == "drive":
@@ -654,7 +761,11 @@ func summary() -> Array[String]:
 
 func markers() -> Array:
 	var out: Array = []
-	if not told or not is_instance_valid(truck) or phase == "open":
+	if not told or not is_instance_valid(truck):
+		return out
+	if phase == "open":
+		if not through:
+			out.append({"pos": door_at() + Vector3(0, 1.4, 0), "text": "DURCHGANG"})
 		return out
 	if phase in ["parked", "drive"] or broken:
 		out.append({"pos": truck.global_position + Vector3(0, 4.2, 0), "text": "RAKETENWERFER"})
@@ -674,7 +785,7 @@ func pending() -> bool:
 # ---------------------------------------------------------------- co-op
 
 func export() -> Dictionary:
-	return {"ph": phase, "s": travelled, "ar": armour, "br": broken, "fx": fixing, "fp": fix, "aim": aim, "at": aim_time, "told": told, "st": stalled}
+	return {"ph": phase, "s": travelled, "ar": armour, "br": broken, "fx": fixing, "fp": fix, "aim": aim, "at": aim_time, "told": told, "st": stalled, "thr": through}
 
 func adopt(state: Dictionary) -> void:
 	if state.is_empty():
@@ -689,3 +800,4 @@ func adopt(state: Dictionary) -> void:
 	aim_time = float(state.get("at", aim_time))
 	told = bool(state.get("told", told))
 	stalled = str(state.get("st", stalled))
+	through = bool(state.get("thr", through))

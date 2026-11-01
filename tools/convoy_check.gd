@@ -5,6 +5,15 @@ extends SceneTree
 ## and that the way from the hall to the administration opens with the door. Headless:
 ##   Godot --headless --path . -s res://tools/convoy_check.gd [-- --nights=classic,6,11]
 
+func _shape_of(hit: Dictionary) -> String:
+	var body := hit.collider as CollisionObject3D
+	if body == null:
+		return ""
+	var owner_id := body.shape_find_owner(int(hit.shape))
+	var owner := body.shape_owner_get_owner(owner_id) as Node3D
+	var shape := body.shape_owner_get_shape(owner_id, 0)
+	return "%s at %s (%s)" % [shape, owner.global_position if owner != null else Vector3.ZERO, (shape as BoxShape3D).size if shape is BoxShape3D else ""]
+
 func _initialize() -> void:
 	_run.call_deferred()
 
@@ -66,18 +75,19 @@ func _run() -> void:
 					var hit := space.intersect_ray(q)
 					if not hit.is_empty():
 						hits += 1
-						if hits <= 6:
-							print("%sroad blocked at s=%.0f (%s, h=%.1f) by %s" % [prefix, s, (hit.position as Vector3) - map.tokyo.origin, h, hit.collider])
+						if hits <= 30:
+							print("%sroad blocked at s=%.0f (%s, h=%.1f) by %s %s" % [prefix, s, (hit.position as Vector3) - map.tokyo.origin, h, hit.collider, _shape_of(hit)])
 			s += 1.0
 		if hits > 0:
 			faults.append(prefix + "%d blocked samples on the road" % hits)
 		# The door is shut at first; with it and the administration open the passage leads on.
 		map.lock_all()
 		var start: Vector3 = map.points.tokyo_start
-		var guard_side := Vector3(14.0, HiveMap.UNDER, map.tokyo.origin.z + map.tokyo.breach_z)
+		var guard_side := Vector3(14.0, HiveMap.UNDER, HiveMap.BREACH_Z)
 		if map.door_open(TokyoConvoy.DOOR):
 			faults.append(prefix + "the steel door starts open")
 		map.set_door(TokyoConvoy.DOOR, true, true)
+		map.set_door("tk_breach_guard", true, true)
 		map.unlock("admin", true)
 		await physics_frame
 		var route: PackedVector3Array = map.path_between(start, map.points.junction)
